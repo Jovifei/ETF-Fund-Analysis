@@ -1,0 +1,103 @@
+name: china-fund-decision
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fund_decision}
+      POSTGRES_USER: ${POSTGRES_USER:-fundapp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      TZ: Asia/Shanghai
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fundapp} -d ${POSTGRES_DB:-fund_decision}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-fundapp}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-fund_decision}
+      APP_ENV: production
+      AUTO_CREATE_SCHEMA: "false"
+      TZ: Asia/Shanghai
+    command: ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips '*' "]
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8000"
+    volumes:
+      - ./config:/app/config:ro
+      - ./reports:/app/reports
+      - ./backups:/app/backups
+    networks: [backend]
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    command: ["python", "-m", "app.scheduler"]
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-fundapp}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-fund_decision}
+      APP_ENV: production
+      AUTO_CREATE_SCHEMA: "false"
+      TZ: Asia/Shanghai
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config:ro
+      - ./reports:/app/reports
+      - ./backups:/app/backups
+    networks: [backend]
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  postgres_data:

@@ -1,0 +1,34 @@
+{
+  "project": "china-fund-decision",
+  "version": "0.4.0",
+  "generated_at": "2026-08-27T10:20:00+08:00",
+  "target": "private Alibaba Cloud ECS deployment",
+  "runtime_architecture": {
+    "api": "FastAPI + dependency-free static dashboard",
+    "database": "PostgreSQL 16 in production; SQLite in tests",
+    "scheduler": "independent Python process with PostgreSQL advisory lock",
+    "market_data": "Tushare primary + AKShare fallback + explicit Mock test provider",
+    "news": "Tushare plus optional RSS/Atom/RSSHub-compatible feeds",
+    "llm": "optional OpenAI-compatible structured news analysis"
+  },
+  "reviewed_github_revisions": {
+    "thincat75/fund-rotation-analyst": "474e554f6d7f0219637883fd775c3df06b545fb1",
+    "illusionno/fund-analysis-matrix": "2c68d2ec65c31ed61e1970a7f7c7383ac99fc6b9",
+    "simonlin1212/vibe-astock": "d3af182b43aa75a5604ee467794ef7cfc70d1c01",
+    "zhangsensen/etf-rotation-strategy": "4e5d1fbde56b0094db976cbebb6cf5020105bd98",
+    "hsliuping/TradingAgents-CN": "74783e8817d6cf6de29867880631cc555153f36b",
+    "fadaiba/a-share-etf-rotation": "6e2a6e20b0a98f4b8a062aa40bf64da1c5d4b306"
+  },
+  "source_policy": "Core runtime is independently implemented. Optional upstream references are isolated under vendor/src, excluded from Git/Docker/Python path, pinned to reviewed revisions, and retain their own terms. Repositories with credential-history risk are blocked from automatic fetch.",
+  "validation": {
+    "pytest": "8 passed",
+    "python_compile": "passed",
+    "javascript_syntax": "passed",
+    "alembic_clean_database": "passed, 14 tables",
+    "mock_pipeline": "passed",
+    "forecast_walk_forward": "passed",
+    "rotation_event_backtest": "passed",
+    "docker_runtime": "not available in build environment",
+    "live_tushare_openai_aliyun": "not tested"
+  }
+}

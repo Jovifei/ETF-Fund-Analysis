@@ -1,0 +1,58 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pip && pip install -e '.[dev]'
+      - name: Unit and integration tests
+        run: pytest -q
+      - name: Compile Python
+        run: python -m compileall -q backend/app
+      - name: Validate browser JavaScript
+        run: node --check backend/app/static/app.js
+      - name: Basic committed-secret scan
+        run: python codex/skills/fund-research/scripts/check_no_secrets.py
+      - name: Validate Alembic on a clean database
+        env:
+          APP_ENV: test
+          AUTH_ENABLED: 'false'
+          PRIVATE_ACCESS_TOKEN: CHANGE_ME_CI_TEST_TOKEN_LONG_ENOUGH
+          MARKET_PROVIDER: mock
+          AUTO_CREATE_SCHEMA: 'false'
+          DATABASE_URL: sqlite:////tmp/fund-migration.sqlite3
+        run: alembic upgrade head
+      - name: Validate shell scripts
+        run: sudo apt-get update && sudo apt-get install -y shellcheck && shellcheck deploy/aliyun/*.sh scripts/*.sh
+      - name: Validate Compose
+        env:
+          POSTGRES_PASSWORD: CHANGE_ME_CI_DATABASE_PASSWORD
+          PRIVATE_ACCESS_TOKEN: CHANGE_ME_CI_PRIVATE_TOKEN_LONG_ENOUGH
+        run: |
+          cp deploy/.env.production.example .env
+          sed -i 's/CHANGE_ME_LONG_RANDOM_DB_PASSWORD/CHANGE_ME_CI_DATABASE_PASSWORD/' .env
+          sed -i 's/CHANGE_ME_AT_LEAST_32_RANDOM_CHARS/CHANGE_ME_CI_PRIVATE_TOKEN_LONG_ENOUGH/' .env
+          docker compose config >/dev/null
+      - name: Build production image
+        run: docker build -f backend/Dockerfile -t china-fund-decision:ci .

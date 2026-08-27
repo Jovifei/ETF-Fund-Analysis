@@ -1,0 +1,15 @@
+.git
+.github
+.pytest_cache
+**/__pycache__
+**/*.py[cod]
+*.sqlite3
+.env
+reports/*
+!reports/.gitkeep
+backups/*
+!backups/.gitkeep
+examples
+vendor/src
+*.zip
+*.tar.gz

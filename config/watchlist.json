@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "description": "第一版演示 ETF/LOF 池；部署时由 Codex 使用真实自选池替换或扩充",
+  "instruments": [
+    {"ts_code": "510300.SH", "symbol": "510300", "name": "沪深300ETF", "kind": "ETF", "theme_l1": "宽基", "theme_l2": "大盘核心", "benchmark": "000300.SH", "enabled": true},
+    {"ts_code": "510500.SH", "symbol": "510500", "name": "中证500ETF", "kind": "ETF", "theme_l1": "宽基", "theme_l2": "中盘成长", "benchmark": "000905.SH", "enabled": true},
+    {"ts_code": "159915.SZ", "symbol": "159915", "name": "创业板ETF", "kind": "ETF", "theme_l1": "科技成长", "theme_l2": "创业板", "benchmark": "399006.SZ", "enabled": true},
+    {"ts_code": "588000.SH", "symbol": "588000", "name": "科创50ETF", "kind": "ETF", "theme_l1": "科技", "theme_l2": "科创50", "benchmark": "000688.SH", "enabled": true},
+    {"ts_code": "512480.SH", "symbol": "512480", "name": "半导体ETF", "kind": "ETF", "theme_l1": "科技", "theme_l2": "半导体", "benchmark": null, "enabled": true},
+    {"ts_code": "512660.SH", "symbol": "512660", "name": "军工ETF", "kind": "ETF", "theme_l1": "制造", "theme_l2": "国防军工", "benchmark": null, "enabled": true},
+    {"ts_code": "512170.SH", "symbol": "512170", "name": "医疗ETF", "kind": "ETF", "theme_l1": "医药", "theme_l2": "医疗", "benchmark": null, "enabled": true},
+    {"ts_code": "515030.SH", "symbol": "515030", "name": "新能源车ETF", "kind": "ETF", "theme_l1": "制造", "theme_l2": "新能源车", "benchmark": null, "enabled": true},
+    {"ts_code": "518880.SH", "symbol": "518880", "name": "黄金ETF", "kind": "ETF", "theme_l1": "资源能源", "theme_l2": "黄金", "benchmark": null, "enabled": true},
+    {"ts_code": "501018.SH", "symbol": "501018", "name": "南方原油LOF", "kind": "LOF", "theme_l1": "资源能源", "theme_l2": "原油", "benchmark": null, "enabled": false}
+  ]
+}

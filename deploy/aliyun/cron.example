@@ -1,0 +1,2 @@
+# Daily PostgreSQL backup at 02:20 Beijing time; logs to syslog through logger.
+20 2 * * * cd /opt/china-fund-decision && ./scripts/backup_postgres.sh 2>&1 | logger -t fund-decision-backup

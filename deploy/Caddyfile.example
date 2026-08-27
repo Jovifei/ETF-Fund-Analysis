@@ -1,0 +1,21 @@
+# Replace the domain and email, then install this file as /etc/caddy/Caddyfile.
+# The application itself still requires PRIVATE_ACCESS_TOKEN.
+{
+  email admin@example.com
+}
+
+fund.example.com {
+  encode zstd gzip
+  reverse_proxy 127.0.0.1:8080
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Frame-Options "SAMEORIGIN"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "same-origin"
+    -Server
+  }
+  log {
+    output file /var/log/caddy/fund-decision-access.log
+    format json
+  }
+}
