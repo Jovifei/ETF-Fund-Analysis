@@ -33,6 +33,10 @@
 | hsliuping/TradingAgents-CN | 混合许可证和项目特定条款 | 仅研究 Provider/配置/容器架构；未复制受限前后端源码 |
 | fadaiba/a-share-etf-rotation | 未确认明确许可证 | 仅研究聚类和风险建模思路，不复制源码 |
 | DIYgod/RSSHub | AGPL-3.0 | 可由用户单独自建 RSS 服务；本项目只消费标准 RSS/Atom，不捆绑 RSSHub |
+| wukan1986/ta_cn | MIT | 中国市场技术指标与筹码分布研究参考；ETF/LOF 采用独立实现的成交量价格分布近似，并显式标记 estimated |
+| bukosabino/ta | MIT | ADX/DMI、MFI、CMF、OBV、CCI、Williams %R 等标准指标公式/测试口径参考 |
+| Travisun/Opptrix | Apache-2.0 | RSRS high~low OLS、beta×R²、滚动 z-score 口径参考 |
+| Super-YYQ/stock_selector | 未声明许可证 | 仅参考公开策略说明中的箱体/海龟/RPS/价量回踩条件，不复制源码 |
 
 ## 重要提醒
 
