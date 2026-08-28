@@ -2,7 +2,7 @@
 
 一个面向中国场内 ETF/LOF 的**个人私有研究系统**。它把行情、日线、技术指标、主题新闻、持仓和多期限预测整理成可审计的信号看板，并按北京时间自动刷新。
 
-当前版本：`0.5.0`
+当前版本：`0.4.0`
 
 > 本项目不连接券商、不自动下单。技术指标、仓位约束和信号状态由确定性程序计算；OpenAI-compatible 模型仅用于把新闻整理成结构化事实、推断和风险项。预测基线默认处于 `not_calibrated`，在完成真实数据的 walk-forward 验证前，不应作为确定性收益判断。
 
@@ -11,14 +11,10 @@
 - Tushare 主数据源、AKShare 备用源，禁止生产环境静默回退到 Mock。
 - 可选 RSS/Atom 新闻源，兼容自建 RSSHub 路由。
 - ETF/LOF 自选池、日线、盘中快照、数据源审计和退化标记。
-- 指标引擎 v0.5：MA、MACD、KDJ、RSI、ATR、BOLL、量比、OBV、MFI、CMF、VWAP、ADX/DMI、CCI、WR、ROC、TD Setup。
-- 结构/形态：20/55/120 日箱体、海龟 20/55 日突破、放量突破、缩量回踩、二次启动、假突破风险。
-- 中国化扩展：RSRS 择时、20/60/120 日 RPS 横截面强度、ETF/LOF 近 120 日成交量价格分布近似（筹码峰/成本分位/获利盘）。
-- 多策略家族评分：趋势、动量、资金流、突破、回踩、结构、相对强度、反转八类分开评分并聚合。
+- MA、MACD、KDJ、RSI、ATR、BOLL、量比、收益/波动/回撤、TD Setup。
 - 1、5、20 个交易日相似样本预测：上涨概率、期望值、Q10/Q50/Q90、样本数和置信度。
 - 手工 walk-forward 预测验证：方向准确率、Brier、MAE、区间覆盖率和校准桶。
 - 事件驱动 ETF 轮动回测：收盘决策、次日开盘执行、整手、费率、滑点、迟滞、主题分散和市场暴露门控。
-- 策略消融回测：在相同执行引擎下依次比较“动量基线 → 资金流 → 突破/结构 → v0.5 全因子”，避免只因指标变多就误判为策略提升。
 - 结合持仓成本、当前权重、目标权重的信号状态机。
 - 以沪深 300 ETF 为代理的市场风险门控和组合总暴露上限。
 - 信号迟滞：最短状态持续时间和最小分数变化，避免频繁反转。
@@ -27,8 +23,6 @@
 - 暗色网页看板、K 线/MACD Canvas 图、持仓录入、SSE 增量更新、HTML 报告。
 - PostgreSQL、Alembic、FastAPI 和独立调度进程。
 - Docker Compose、阿里云 ECS 部署脚本、备份/恢复、CI 和 Codex 交接规范。
-
-> v0.5 的新增指标已经进入研究引擎，但尚未封版为“更优策略”。同执行引擎 Mock 消融中，`full_v050` 没有跑赢动量基线；因此真实 ETF/LOF 历史数据验证前，新增因子只作为研究证据，不自动宣称提升收益。详见 `VALIDATION.md`。
 
 ## 设计原则
 
@@ -55,10 +49,6 @@ FastAPI / SSE / HTML 报告
 - `etf-rotation-strategy`：WFO→向量化→事件驱动验证、迟滞、波动率仓位门控、参数冻结。
 - `fund-analysis-matrix`：暗色卡片布局、自选池和图表详情交互。
 - `RSSHub`：通过标准 RSS/Atom 接口扩展新闻源的思路。
-- `wukan1986/ta_cn`：中国化指标和筹码分布研究口径。
-- `bukosabino/ta`：ADX/DMI、MFI、CMF、OBV、CCI、Williams %R 等标准技术指标实现参考。
-- `Travisun/Opptrix`：RSRS（high~low OLS、β×R²、滚动 z-score）研究口径。
-- `Super-YYQ/stock_selector`：箱体、海龟、RPS、价量突破/缩量回踩等策略家族的条件化思路；因仓库未声明许可证，本项目只参考公开说明与行为，不复制其源码。
 
 具体来源、版本和风险见 [`docs/GITHUB_RESEARCH.md`](docs/GITHUB_RESEARCH.md) 与 [`vendor/manifest.json`](vendor/manifest.json)。
 
@@ -151,7 +141,6 @@ fund-decision run-task refresh_forecasts
 fund-decision run-task refresh_signals
 fund-decision run-task validate_forecasts
 fund-decision run-task backtest_rotation
-fund-decision run-task backtest_ablation
 fund-decision run-task generate_report
 fund-decision bootstrap --lookback-days 900
 ```

@@ -1,42 +1,102 @@
 {
-  "version": "signal-v0.5.0",
-  "indicator_version": "indicator-v0.5.0",
+  "version": "signal-v0.4.0",
+  "indicator_version": "indicator-v0.2.0",
   "forecast_version": "similarity-v0.2.0",
-  "intervals": {"quote_minutes": 3, "signal_minutes": 15, "news_minutes": 30, "lunch_news_minutes": 10},
-  "indicator": {
-    "ma_windows": [5, 10, 20, 30, 60],
-    "macd": {"fast": 12, "slow": 26, "signal": 9},
-    "kdj": {"period": 9, "k_smooth": 3, "d_smooth": 3, "initial": 50},
-    "rsi_windows": [6, 12, 14], "atr_window": 14, "boll_window": 20, "boll_std": 2.0, "td_setup_length": 9,
-    "volume": {"short_window": 5, "window": 20, "breakout_ratio": 1.35},
-    "money_flow": {"mfi_window": 14, "cmf_window": 20},
-    "trend_strength": {"adx_window": 14, "cci_window": 20, "wr_window": 14, "wr_long_window": 28, "roc_window": 12},
-    "box_windows": [20, 55, 120],
-    "rsrs": {"regression_window": 18, "zscore_window": 60, "buy_threshold": 0.7, "sell_threshold": -0.7},
-    "chip": {"window": 120, "bins": 80, "half_life": 60, "method": "volume_profile_approx"},
-    "pullback": {"max_age": 12, "ignition_return": 0.02, "ignition_volume_ratio": 1.35, "contraction_max": 0.9, "support_ratio": 0.97, "platform_ratio": 0.96}
+  "intervals": {
+    "quote_minutes": 3,
+    "signal_minutes": 15,
+    "news_minutes": 30,
+    "lunch_news_minutes": 10
   },
-  "forecast": {"horizons": [1,5,20], "min_history": 180, "neighbors": 80, "minimum_neighbors": 25, "maximum_confidence_uncalibrated": 55, "validation_step": 5, "validation_max_points": 120},
+  "indicator": {
+    "ma_windows": [
+      5,
+      10,
+      20,
+      30,
+      60
+    ],
+    "macd": {
+      "fast": 12,
+      "slow": 26,
+      "signal": 9
+    },
+    "kdj": {
+      "period": 9,
+      "k_smooth": 3,
+      "d_smooth": 3,
+      "initial": 50
+    },
+    "rsi_windows": [
+      6,
+      12,
+      14
+    ],
+    "atr_window": 14,
+    "boll_window": 20,
+    "boll_std": 2.0,
+    "td_setup_length": 9
+  },
+  "forecast": {
+    "horizons": [
+      1,
+      5,
+      20
+    ],
+    "min_history": 180,
+    "neighbors": 80,
+    "minimum_neighbors": 25,
+    "maximum_confidence_uncalibrated": 55,
+    "validation_step": 5,
+    "validation_max_points": 120
+  },
   "signal": {
-    "entry_score": 68, "probe_score": 58, "reduce_score": 38, "hard_reduce_score": 28,
-    "minimum_data_quality": 65, "maximum_quote_age_minutes": 12, "maximum_bar_age_trading_days": 3,
-    "single_fund_target_cap": 0.25, "single_theme_target_cap": 0.4, "one_step_adjustment_cap": 0.1,
-    "add_threshold_weight_points": 0.05, "small_add_threshold_weight_points": 0.02, "reduce_threshold_weight_points": 0.02,
-    "state_min_hold_minutes": 30, "state_change_score_delta": 5,
-    "portfolio_exposure_caps": {"low_risk": 1.0, "normal": 0.7, "high_risk": 0.4, "extreme_risk": 0.1},
+    "entry_score": 68,
+    "probe_score": 58,
+    "reduce_score": 38,
+    "hard_reduce_score": 28,
+    "minimum_data_quality": 65,
+    "maximum_quote_age_minutes": 12,
+    "maximum_bar_age_trading_days": 3,
+    "single_fund_target_cap": 0.25,
+    "single_theme_target_cap": 0.4,
+    "one_step_adjustment_cap": 0.1,
+    "add_threshold_weight_points": 0.05,
+    "small_add_threshold_weight_points": 0.02,
+    "reduce_threshold_weight_points": 0.02,
+    "state_min_hold_minutes": 30,
+    "state_change_score_delta": 5,
+    "portfolio_exposure_caps": {
+      "low_risk": 1.0,
+      "normal": 0.7,
+      "high_risk": 0.4,
+      "extreme_risk": 0.1
+    },
     "regime_benchmark": "510300.SH"
   },
   "backtest": {
-    "initial_cash": 1000000.0, "benchmark": "510300.SH", "minimum_history": 120, "rebalance_days": 5,
-    "top_n": 4, "minimum_hold_days": 9, "rank_hysteresis": 0.1, "minimum_cross_section_score": 0.5,
+    "initial_cash": 1000000.0,
+    "benchmark": "510300.SH",
+    "minimum_history": 120,
+    "rebalance_days": 5,
+    "top_n": 4,
+    "minimum_hold_days": 9,
+    "rank_hysteresis": 0.1,
+    "minimum_cross_section_score": 0.5,
     "minimum_absolute_momentum": 0.0,
-    "factor_weights": {"return_5": 0.1, "return_20": 0.2, "return_60": 0.15, "trend_20": 0.1, "low_volatility": 0.1, "volume_flow": 0.12, "breakout": 0.1, "rsrs": 0.06, "structure": 0.04, "pullback": 0.03},
-    "commission_rate": 0.0002, "minimum_commission": 5.0, "slippage_rate": 0.0005, "lot_size": 100,
-    "extreme_return_warning": 0.2, "max_per_theme": 1, "single_fund_target_cap": 0.25,
-    "portfolio_exposure_caps": {"low_risk": 1.0, "normal": 0.7, "high_risk": 0.4, "extreme_risk": 0.1}
-  },
-  "strategy_engine": {
-    "family_weights": {"trend": 0.18, "momentum": 0.12, "volume_flow": 0.16, "breakout": 0.16, "pullback": 0.1, "structure": 0.1, "relative_strength": 0.12, "reversal": 0.06},
-    "notes": "Deterministic family aggregation; strategy hits are research observations, not orders."
+    "factor_weights": {
+      "return_5": 0.15,
+      "return_20": 0.35,
+      "return_60": 0.25,
+      "trend_20": 0.15,
+      "low_volatility": 0.1
+    },
+    "commission_rate": 0.0002,
+    "minimum_commission": 5.0,
+    "slippage_rate": 0.0005,
+    "lot_size": 100,
+    "extreme_return_warning": 0.2,
+    "max_per_theme": 1,
+    "single_fund_target_cap": 0.25
   }
 }

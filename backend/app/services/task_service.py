@@ -13,14 +13,14 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.models import Instrument, TaskRun
 from app.providers.factory import create_provider
-from app.services.backtest_v05_service import RotationBacktestV05Service
+from app.services.backtest_service import RotationBacktestService
 from app.services.forecast_service import ForecastService
 from app.services.indicator_service import IndicatorService
 from app.services.market_service import MarketService
 from app.services.news_service import NewsService
 from app.services.report_service import ReportService
 from app.services.runtime_service import RuntimeService
-from app.services.signal_v05_service import SignalV05Service
+from app.services.signal_service import SignalService
 from app.services.validation_service import ForecastValidationService
 
 logger = logging.getLogger(__name__)
@@ -73,11 +73,11 @@ class TaskService:
         self.indicators = IndicatorService(self.settings)
         self.forecasts = ForecastService(self.settings)
         self.news = NewsService(self.provider, self.settings)
-        self.signals = SignalV05Service(self.settings)
+        self.signals = SignalService(self.settings)
         self.runtime = RuntimeService(self.settings)
         self.reports = ReportService(self.settings)
         self.validation = ForecastValidationService(self.settings)
-        self.backtest = RotationBacktestV05Service(self.settings)
+        self.backtest = RotationBacktestService(self.settings)
 
     @property
     def task_names(self) -> tuple[str, ...]:
@@ -92,7 +92,6 @@ class TaskService:
             "generate_report",
             "validate_forecasts",
             "backtest_rotation",
-            "backtest_ablation",
             "bootstrap",
             "full_pipeline",
         )
@@ -131,8 +130,6 @@ class TaskService:
             return self.validation.run(db, run_id=run_id)
         if task_name == "backtest_rotation":
             return self.backtest.run(db, run_id=run_id)
-        if task_name == "backtest_ablation":
-            return self.backtest.run_ablation(db, run_id=run_id)
         if task_name in {"bootstrap", "full_pipeline"}:
             results: dict[str, dict] = {}
             results["sync_instruments"] = self.market.sync_instruments(db, run_id=run_id)
@@ -145,7 +142,7 @@ class TaskService:
             results["refresh_forecasts"] = self.forecasts.refresh_all(db, run_id=run_id)
             try:
                 results["refresh_quotes"] = self.market.refresh_quotes(db, run_id=run_id)
-            except Exception as exc:
+            except Exception as exc:  # bars/indicators remain useful in off-market smoke tests
                 results["refresh_quotes"] = {"error": f"{type(exc).__name__}: {exc}"}
             try:
                 results["refresh_news"] = self.news.refresh(db, since_hours=72, run_id=run_id)
