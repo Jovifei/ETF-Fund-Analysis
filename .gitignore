@@ -19,3 +19,4 @@ deployment_reports/
 vendor/src/
 coverage.xml
 htmlcov/
+backend/*.egg-info/

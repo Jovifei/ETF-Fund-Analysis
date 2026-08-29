@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>中国 ETF/LOF 私有决策看板</title>
-  <link rel="stylesheet" href="/assets/app.css">
+  <link rel="stylesheet" href="/assets/app.css?v=0.6.0">
 </head>
 <body>
   <div id="authOverlay" class="overlay auth-overlay hidden">
@@ -25,6 +25,7 @@
     </div>
     <nav id="tabs" class="tabs">
       <button data-tab="dashboard" class="active">决策看板</button>
+      <button data-tab="signals">信号中心</button>
       <button data-tab="holdings">持仓</button>
       <button data-tab="news">新闻事件</button>
       <button data-tab="system">系统</button>
@@ -52,6 +53,43 @@
         <div class="table-wrap"><table id="instrumentTable" class="signal-table"><thead><tr>
           <th>标的</th><th>今日</th><th>量能</th><th>均线/趋势</th><th>MACD</th><th>KDJ</th><th>RSI</th><th>TD</th><th>近1月</th><th>明日</th><th>一周</th><th>一月</th><th>建议</th>
         </tr></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <section id="view-signals" class="view">
+      <div id="signalWarning" class="warning-banner hidden"></div>
+      <div id="signalSummaryCards" class="summary-grid compact"></div>
+      <div class="panel">
+        <div class="panel-head"><div><div class="eyebrow">SIGNAL MARKET</div><h2>信号行情</h2></div><div id="signalCurveMeta" class="muted"></div></div>
+        <div class="chart-wrap curve-wrap"><canvas id="signalCurveCanvas"></canvas></div>
+        <div class="curve-legend">
+          <span class="legend-item"><i class="dot" style="background:var(--up)"></i>机会</span>
+          <span class="legend-item"><i class="dot" style="background:var(--blue)"></i>风险</span>
+          <span class="legend-item"><i class="dot" style="background:var(--down)"></i>止盈</span>
+        </div>
+        <p class="muted small curve-note">曲线按交易日统计各类信号数量，随系统运行逐日累积；系数变化会以当前口径重算历史分类。</p>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div><div class="eyebrow">SECTOR STRENGTH</div><h2>板块强度</h2></div><div id="sectorMeta" class="muted"></div></div>
+        <div id="sectorList" class="sector-list"><div class="loading-row">等待信号中心数据...</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <div><div class="eyebrow">FRONT RANKING</div><h2>信号前排</h2></div>
+          <div class="front-tabs" id="frontTabs">
+            <button data-front="opportunity" class="active front-opportunity">机会前排</button>
+            <button data-front="risk" class="front-risk">风险前排</button>
+            <button data-front="take_profit" class="front-take-profit">止盈前排</button>
+          </div>
+        </div>
+        <div class="coefficient-row">
+          <div class="coefficient-label"><span class="eyebrow">SENSITIVITY</span><strong>信号系数</strong><span id="coefficientValue" class="coefficient-value">—</span></div>
+          <input id="coefficientSlider" type="range" min="0.5" max="1.5" step="0.05" value="1">
+          <button id="coefficientSave" class="primary">保存系数</button>
+        </div>
+        <p class="muted small coefficient-note">有效分 = 信号分 × 系数：&gt;1 更敏感（机会/止盈更容易入列），&lt;1 更保守。仅作用于本页研究视图，不改变生产信号引擎与阈值。</p>
+        <div id="frontCount" class="muted front-count"></div>
+        <div id="frontList" class="front-list"><div class="loading-row">等待信号中心数据...</div></div>
       </div>
     </section>
 
@@ -89,6 +127,6 @@
   <div id="detailOverlay" class="overlay hidden"><div class="modal detail-modal"><button class="modal-close" data-close="detailOverlay">×</button><div id="detailContent"></div><canvas id="chartCanvas"></canvas></div></div>
   <div id="holdingOverlay" class="overlay hidden"><form id="holdingForm" class="modal form-modal"><button type="button" class="modal-close" data-close="holdingOverlay">×</button><div class="eyebrow">PORTFOLIO</div><h2>录入持仓</h2><label>标的<select id="holdingCode" name="ts_code"></select></label><label>份额<input name="shares" type="number" min="0" step="0.0001" required></label><label>成本价<input name="cost_price" type="number" min="0" step="0.000001" required></label><label>目标权重（0-1，可空）<input name="target_weight" type="number" min="0" max="1" step="0.01"></label><label>备注<textarea name="notes" rows="3"></textarea></label><button class="primary" type="submit">保存</button><div id="holdingError" class="error-text"></div></form></div>
   <div id="toast" class="toast hidden"></div>
-  <script src="/assets/app.js" defer></script>
+  <script src="/assets/app.js?v=0.6.0" defer></script>
 </body>
 </html>

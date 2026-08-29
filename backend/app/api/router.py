@@ -19,6 +19,7 @@ from app.services.dashboard_service import DashboardService
 from app.services.holding_service import HoldingNotFoundError, HoldingService
 from app.services.report_service import ReportService
 from app.services.runtime_service import RuntimeService
+from app.services.signal_center_service import SignalCenterService
 from app.services.task_service import TaskBusyError, TaskService, UnknownTaskError
 
 router = APIRouter(prefix="/api")
@@ -115,6 +116,22 @@ def delete_holding(ts_code: str, db: Annotated[Session, Depends(get_db)]) -> dic
     except HoldingNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"status": "ok", "deleted": deleted}
+
+
+@private_router.get("/signals/center")
+def signal_center(
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    coefficient: float | None = Query(default=None, ge=0.5, le=1.5),
+    days: int = Query(default=60, ge=5, le=250),
+) -> dict:
+    stored = RuntimeService(settings).get_all(db).get("signal_center_coefficient")
+    effective = coefficient
+    if effective is None and stored is not None:
+        effective = float(stored)
+    payload = SignalCenterService(settings).build(db, coefficient=effective, days=days)
+    db.commit()  # 持久化 ensure_defaults 写入的默认设置
+    return payload
 
 
 @private_router.get("/settings")
