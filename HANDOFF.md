@@ -64,6 +64,13 @@
 - 普通新闻 30 分钟，午间 10 分钟。
 - PostgreSQL advisory lock 防止手工任务与 scheduler 重叠。
 
+## 信号中心（v0.6.0）
+
+- 端点：`GET /api/signals/center?coefficient=0.5~1.5&days=5~250`，返回汇总卡、机会/风险/止盈前排、信号行情曲线和板块强度；只读取层，不改写生产信号。
+- 设置：`PUT /api/settings` 的 `signal_center_coefficient`（0.50–1.50，默认 1.00），存于 `runtime_settings`，无迁移需求。
+- 前端：第 5 个页签"信号中心"——汇总卡、Canvas 三序列曲线、板块强度排名、前排三页签（条目可点开 K 线详情）、信号系数滑块；命中持仓的条目显示"已持有 · 注意账户影响"琥珀色提醒。
+- 边界：mock provider 下 `research_only=true` 并全局告警；前排列表一律标注"研究提示，非操作指令"。
+
 ## 报告验收
 
 每份报告应能够追溯：
