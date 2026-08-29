@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.models import (
+    AnalysisRun,
     DailyBar,
-    EventLog,
     ForecastSnapshot,
     Holding,
     IndicatorSnapshot,
@@ -22,6 +22,7 @@ from app.models import (
     TaskRun,
 )
 from app.services.holding_service import HoldingService
+from app.services.market_context_service import MarketContextService
 
 
 class DashboardService:
@@ -103,6 +104,9 @@ class DashboardService:
                         "premium_rate": quote.premium_rate,
                         "source": quote.source,
                         "is_realtime": quote.is_realtime,
+                        # QuoteSnapshot predates an explicit flag; the active
+                        # provider provenance is authoritative for this view.
+                        "is_mock": self.settings.market_provider == "mock",
                         "degraded_reason": quote.degraded_reason,
                     }
                     if quote
@@ -120,6 +124,9 @@ class DashboardService:
                     "forecasts": {
                         str(horizon): {
                             "horizon": item.horizon,
+                            "as_of_date": item.as_of_date,
+                            "generated_at": item.generated_at,
+                            "model_version": item.model_version,
                             "p_up": item.p_up,
                             "expected_return": item.expected_return,
                             "q10": item.q10,
@@ -129,6 +136,10 @@ class DashboardService:
                             "confidence": item.confidence,
                             "calibration_status": item.calibration_status,
                             "similarity_distance": item.similarity_distance,
+                            # ForecastSnapshot has no schema-backed cutoff field;
+                            # diagnostics are informational and cannot override
+                            # authoritative presentation provenance.
+                            "data_cutoff": None,
                         }
                         for horizon, item in forecasts.items()
                     },
@@ -199,13 +210,73 @@ class DashboardService:
         }
 
     def recent_news(self, db: Session, limit: int = 30) -> list[dict[str, Any]]:
+        limit = max(0, min(int(limit), 1000))
         rows = db.scalars(
-            select(NewsItem).order_by(NewsItem.published_at.desc()).limit(limit)
+            select(NewsItem)
+            .order_by(NewsItem.published_at.desc(), NewsItem.id.desc())
+            .limit(limit)
+            .execution_options(populate_existing=True)
         ).all()
-        return [
+        run_ids = {row.analysis_run_id for row in rows if row.analysis_run_id is not None}
+        runs = (
             {
+                run.id: run
+                for run in db.scalars(
+                    select(AnalysisRun)
+                    .where(AnalysisRun.id.in_(run_ids))
+                    .execution_options(populate_existing=True)
+                ).all()
+            }
+            if run_ids
+            else {}
+        )
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            run = runs.get(row.analysis_run_id)
+            if row.analysis_run_id is None:
+                coherent = (row.analysis_source, row.analysis_status) in {
+                    (None, None),
+                    ("heuristic", "disabled"),
+                }
+                analysis = {
+                    "analysis_run_id": None,
+                    "source": row.analysis_source if coherent else None,
+                    "status": row.analysis_status if coherent else "invalid_provenance",
+                    "provider": None,
+                    "model": None,
+                    "prompt_version": None,
+                    "schema_version": None,
+                    "input_hash": None,
+                    "analysis_coherent": coherent,
+                    "model_analysis": None,
+                }
+            else:
+                coherent = (
+                    run is not None
+                    and row.analysis_source == run.provider
+                    and row.analysis_status == run.status
+                )
+                analysis = {
+                    "analysis_run_id": row.analysis_run_id,
+                    "source": run.provider if coherent and run is not None else None,
+                    "status": run.status if coherent and run is not None else "invalid_provenance",
+                    "provider": run.provider if coherent and run is not None else None,
+                    "model": run.model if coherent and run is not None else None,
+                    "prompt_version": run.prompt_version if coherent and run is not None else None,
+                    "schema_version": run.schema_version if coherent and run is not None else None,
+                    "input_hash": run.input_hash if coherent and run is not None else None,
+                    "analysis_coherent": coherent,
+                    "model_analysis": (
+                        run.output_payload
+                        if coherent and run is not None and run.status == "completed"
+                        else None
+                    ),
+                }
+            result.append(
+                {
                 "id": row.id,
                 "source": row.source,
+                "source_id": row.source_id,
                 "title": row.title,
                 "summary": row.summary,
                 "url": row.url,
@@ -218,9 +289,10 @@ class DashboardService:
                 "impact_horizon": row.impact_horizon,
                 "impact_score": row.impact_score,
                 "llm_model": row.llm_model,
+                "analysis": analysis,
             }
-            for row in rows
-        ]
+            )
+        return result
 
     def provider_health(self, db: Session, limit: int = 50) -> list[dict[str, Any]]:
         rows = db.scalars(
@@ -285,10 +357,16 @@ class DashboardService:
         ]
 
     def bootstrap(self, db: Session) -> dict[str, Any]:
+        market_context = MarketContextService(
+            # The bootstrap view is read-only and must not refresh or invoke a provider.
+            provider=None,  # type: ignore[arg-type]
+            settings=self.settings,
+        )
         return {
             "generated_at": datetime.now(self.settings.timezone),
             "summary": self.summary(db),
             "instruments": self.instrument_rows(db),
+            "market_context": market_context.latest_view(db),
             "holdings": self.holdings.list(db),
             "news": self.recent_news(db, 30),
             "tasks": self.task_runs(db, 20),

@@ -197,6 +197,21 @@ python codex/skills/fund-research/scripts/check_no_secrets.py .
 
 ## Review
 
+### D3 release/docs/validation review (2026-08-29)
+
+- Changed only the D3-owned semantic paths in this section: `backend/app/core/config.py`, `pyproject.toml`, `deploy/.env.production.example`, `deploy/Caddyfile.example`, `deploy/nginx.conf.example`, `README.md`, `QUICKSTART.md`, `docs/ARCHITECTURE.md`, `docs/IMPLEMENTATION_MATRIX.md`, `STATUS.md`, `HANDOFF.md`, and this ledger. Other dirty snapshot paths remain pre-existing owner work; no stage/commit/reset/clean/push was performed.
+- Release assertions: `Settings(_env_file=None).app_version == 0.6.0`; `pyproject.toml` package version is `0.6.0`; `APP_VERSION=0.6.0` is in the production example. `config/strategy.json` remains `signal-v0.4.0`; no strategy/indicator/forecast formula or version was changed. `OCR_MAX_IMAGE_BYTES` is accepted with legacy `OCR_MAX_BYTES` compatibility.
+- `E:\project\ETF-Fund-Analysis\.venv\Scripts\python.exe -m pytest -rA`: **323 passed, 2 skipped, 14 warnings, exit 0**. Skips are host symlink privilege limitations; warnings are existing Starlette/httpx and Python 3.12 SQLite datetime deprecations.
+- `python -m compileall -q backend/app`: exit 0. `node --check backend/app/static/app.js`: exit 0.
+- `with_server.py --help` was run first from `C:\Users\Admin\.codex\skills\webapp-testing\scripts\with_server.py` (the worktree has no helper). Git Bash/WSL was unavailable: WSL relay reported `/bin/bash` missing and `C:\Program Files\Git\bin\bash.exe` was absent. Shell syntax is therefore a deployment gate.
+- `docker` exists, but `docker compose config` was not run with a generated `.env`: Compose requires the server-local `.env` referenced by services, and no `.env` or secret was created/read. This is an explicit Compose gate; no image build or network/model download occurred.
+- Mock bootstrap used a disposable SQLite/report root and `MARKET_PROVIDER=mock`, `AUTH_ENABLED=false`, lookback 180: succeeded; 10 instruments, 1,170 bars, 9 indicator snapshots, 9 degraded/mock quotes, six configured context cards with zero eligible proxy requests, and a generated report. Forecast failures due intentionally short history were retained as non-calibrated/unavailable.
+- Mock HTTP on isolated `127.0.0.1:38123` through `with_server.py`: `/api/health` returned version `0.6.0`, `/api/bootstrap` returned six context cards and nine instruments; helper stopped the server cleanly.
+- Headless Chromium smoke used the locally existing Playwright-capable Python 3.12 interpreter with a generated nonsecret local token, isolated port/temp DB/reports/OCR environment, and Mock provider. After attempting `networkidle` (the app keeps an authenticated SSE stream open), assertions passed: six context cards, code-first identity, exact distinct `FORECAST · 非实际结果` labels, PORTFOLIO INPUT dialog and image accept types, mobile tabs, console errors 0. No upload or provider call was made; server/browser cleaned up.
+- Secret scan: `check_no_secrets.py .` returned two fixture-only matches at `backend/tests/test_api.py:164` (`market-context-test-token`) and `backend/tests/test_news_analysis.py:137` (`test-key-not-a-real-secret`); both are pre-existing test literals, not credentials. No `.env`, token, cookie, password, account number, or signed URL was read or emitted.
+- Real PostgreSQL, Tushare/AKShare/news/OpenAI endpoint qualification, ECS/HTTPS, real Paddle Python 3.12 wheel/model and `paddle-local-v1` manifest, six proxy qualification, forecast calibration, and production backup/restore remain gates. Final D3 status: **DONE_WITH_CONCERNS** (implementation and local/Mock evidence complete; deployment and real-provider evidence intentionally pending).
+- Controller follow-up (2026-08-29): the two environment gates above were closed from the main checkout — `bash -n` passed on `deploy/aliyun/bootstrap_host.sh`, `deploy/aliyun/deploy.sh`, `deploy/aliyun/update.sh`, `scripts/backup_postgres.sh`, `scripts/restore_postgres.sh`, `scripts/smoke_http.sh`; `docker compose config` passed with a throwaway placeholder `POSTGRES_PASSWORD` (temp `.env` deleted, no secret created). Full pytest re-run independently: 323 passed / 2 skipped, exit 0; Alembic full-chain upgrade → downgrade base → upgrade passed (head `b3c4d5e6f7a8`). QUICKSTART backup/migration order corrected to backup-first per spec review.
+
 ### Fresh controller verification
 
 - Verification copy: `E:\Claude_allow\Download\etf-v050-baseline-20260828-010724-5733a2a2a57a4769bb639ada797e2cfb\final-controller-20260828-041026-2f32cf89664e4734baef7b0861dbdb47\source-copy-final`.
@@ -223,3 +238,131 @@ python codex/skills/fund-research/scripts/check_no_secrets.py .
 - Final result: `PARTIAL / NOT READY FOR REAL STRATEGY SEALING OR PRODUCTION PROVIDER CLAIMS`.
 - Completed scope: repository audit, fresh local baseline, safe single-run Provider capability observation, demo-universe audit, Mock history/indicator validation, Mock rotation/direct dormant ablation/forecast validation, and reviewed report.
 - Blocked/unverified scope: Tushare permissions, stable Composite history, exchange-time realtime freshness, five-real-ETF quality cross-check, real-data indicator validation, RPS app comparison, calibrated forecasts, A-H ablation, complete transaction constraints, and independent second-engine reconciliation.
+
+---
+
+# v0.6.0 Multi-Model, Market Context, and Portfolio OCR Active Plan
+
+**Isolation:** `E:\Claude_allow\Download\ETF-Fund-Analysis-worktrees\multi-model-market-context-ocr` on `codex/multi-model-market-context-ocr`.
+
+**Approved design:** `docs/superpowers/specs/2026-08-28-multi-model-market-context-ocr-design.md`.
+
+**Implementation plans:**
+- `docs/superpowers/plans/2026-08-28-analysis-gateway.md`
+- `docs/superpowers/plans/2026-08-28-market-context.md`
+- `docs/superpowers/plans/2026-08-28-portfolio-ocr.md`
+- `docs/superpowers/plans/2026-08-28-dashboard-integration.md`
+
+## Baseline
+
+- [x] Current owner working snapshot copied without secrets into the isolated worktree.
+- [x] Baseline `pytest -q`: 10 passed; one existing Starlette/httpx deprecation warning.
+- [x] Baseline compileall and Node syntax: exit 0.
+- [x] No implementation task has started before plan completion.
+
+## Subagent-driven task gates
+
+- [x] A1 contracts/config: implementer self-review, spec review, quality review.
+- [x] A2 direct adapters/gateway: implementer self-review, spec review, quality review.
+- [x] A3a persistence/review records: implementer self-review, spec review, quality review. PostgreSQL trigger smoke remains a deployment environment gate.
+- [x] A3b1 news/signal/Dashboard integration: implementer self-review, spec review, quality review.
+- [x] A3b2 review API/task integration: implementer self-review, spec review, quality review.
+- [x] B1 market registry/contracts/schema: implementer self-review, spec review, quality review.
+- [x] B2a market registry sync/provider observations: implementer self-review, spec review, quality review.
+- [x] B2b market task/scheduler/payload: implementer self-review, spec review, quality review.
+- [x] C1 OCR contracts/image validation/schema: implementer self-review, spec review, quality review.
+- [x] C2 OCR service/private API: implementer self-review, spec review, quality review.
+- [x] D1 market/identity/forecast UI: implementer self-review, spec review, quality review.
+- [x] D2 Portfolio OCR review UI: implementer self-review, spec review, quality review.
+- [x] D3 release/docs/end-to-end: implementer self-review, spec review, quality review.
+- [x] Final global review has no open Critical or Important issue. (Controller-dispatched independent reviewer, two rounds; see "Final global review evidence" below. Not the Luna runtime — same gate, different reviewer.)
+- [x] Main controller verification and exact file attribution complete. (Controller independently re-ran full pytest, Alembic full-chain roundtrip, `bash -n` on 6 scripts, `docker compose config` with placeholder env, compileall, `node --check`; D3 file attribution verified against actual diffs by the spec reviewer.)
+
+### Final global review evidence (2026-08-29)
+
+- Round 1 (controller-dispatched independent reviewer over the full uncommitted tree): VERDICT PASS, no Critical. Findings: 1 Important — `ReportService.generate()` never passed `market_context` to `report.html.j2`, so generated reports always rendered the six placeholder cards; Minors — scheduler `refresh_market_context` did not catch `TaskBusyError` (advisory-lock starvation), OCR `_resolve_line` ran `_instrument_maps` per row, `task-snapshots/` not gitignored, `!deploy/.env.production.example` negation dropped, `canonical_json` path-lookalike pattern overly broad, analysis orphan-flag validation absent.
+- Fix round (fix agent): report render wired via `market_context=payload.get("market_context") or []` with new discriminating test `test_report_service_generation_wires_bootstrap_market_context` (verified to fail without the fix); scheduler catches `(TaskExecutionError, TaskBusyError)`; `_instrument_maps` hoisted out of the candidate-row loop (`_resolve_line(by_symbol, by_name, ...)`); `.gitignore` restored negation + added `task-snapshots/`. Gates after fixes: full pytest 324 passed / 2 skipped exit 0, compileall clean, `node --check` clean.
+- Round 2 (same reviewer): all five fixes verified OK, no regressions, VERDICT PASS. Test isolation sound (rollback in `finally`, artifact under ignored path).
+- Deferred non-blocking follow-ups (recorded deliberately, not lost): (1) `backend/app/utils/canonical_json.py` path-lookalike pattern rejects ordinary `A/B` strings in free-text fields — consistent with DB checks, blunt but safe; narrow in a future release if operator notes need slashes. (2) `backend/app/core/config.py` analysis orphan flags (e.g. `ANALYSIS_CODEX_ENABLED=true` without `ANALYSIS_ENABLED`) are silently ignored rather than rejected; add fail-closed validation in a future release.
+
+### D3 release/docs/validation execution checklist
+
+- [x] Set authoritative application/package release to `0.6.0`; retain strategy/indicator/forecast versions.
+- [x] Document one-primary analysis configuration, market-context defaults, OCR operator/deployment gates, and no-actionable-data boundaries.
+- [x] Align production env example, reverse-proxy upload limits, migration/rollback order, and Docker Paddle behavior.
+- [x] Run isolated SQLite migration, Python/JS checks, shell syntax, Compose/secret checks, Mock HTTP, and browser smoke where dependencies permit.
+- [x] Record exact commands/results/limitations and explicit D3 file attribution in the review below.
+
+### B2a review evidence
+
+- [x] Disabled/unverified registry rows remain visible but never expose historical snapshots as current observations.
+- [x] Eligible rows without a successful snapshot are explicitly unavailable; registry verification remains separate provenance.
+- [x] Registry order reconciliation is safe under immediate uniqueness constraints, including historical rows and configured order `10000`.
+- [x] Observations bind to `source_symbol`; A-to-B symbol changes preserve A history without relabeling it as B.
+- [x] Mock observations remain explicitly unverified/degraded/non-actionable; non-Mock unverified observations are rejected.
+- [x] Composite capability-unavailable traces remain `unsupported`; provider failures are sanitized and cannot leak raw exception text.
+- [x] SQLite/PostgreSQL conflict-safe inserts preserve snapshot idempotency and the outer transaction.
+- [x] ORM and Alembic constraints/unique keys are aligned; clean SQLite upgrade/downgrade/upgrade passed.
+- [x] Controller verification: `test_market_context.py` 49 passed; full suite 236 passed; compileall, Node syntax, scoped Ruff, and diff check passed.
+- [x] Fresh Luna/high specification and quality reviews found no open Critical or Important issue.
+
+### B2b review evidence
+
+- [x] `refresh_market_context` task, coherent run/event identity, private endpoint, bootstrap payload, and partial-pipeline behavior are implemented.
+- [x] Scheduler isolates market-context failures, continues independent tasks, and throttles by last terminal attempt without relabeling failure as success.
+- [x] Current-run counts come from an immutable service-owned outcome; no Provider monkeypatching or historical-count leakage remains.
+- [x] Forecast provenance uses authoritative stored fields only; unsupported `data_cutoff` remains null and diagnostics cannot spoof it.
+- [x] Existing v0.5 signal/backtest wiring, `backtest_ablation`, and indicator assertions were restored and regression-tested.
+- [x] Controller verification: focused B2b tests 68 passed; full suite 252 passed; compileall, Node syntax, scoped Ruff, and diff check passed.
+- [x] Fresh Luna/high specification and quality reviews found no open Critical or Important issue.
+
+### C1 review evidence
+
+- [x] PNG/JPEG/WebP validation enforces MIME/magic/decode/bytes/dimensions/pixels/trailing data and does not mutate Pillow globals.
+- [x] Paddle remains optional, local-only, manifest/hash bound, executed in a killable spawned process with bounded output and hard timeout cleanup.
+- [x] Image metadata is revalidated at the adapter boundary; forged `ValidatedImage` instances cannot bypass decoding and hash checks.
+- [x] Import-session/candidate persistence excludes image bytes, raw OCR, user filenames, and sensitive fields; safe text is validated on bind/read and by portable structural constraints.
+- [x] SQLite-specific NUL triggers cover ORM `create_all` and Alembic; PostgreSQL text NUL rejection and dialect-specific backslash DDL are documented/compiled.
+- [x] Opaque tokens, consent/terminal/selection state coherence, indexes, defaults, TypeDecorators, ORM and migration parity are covered.
+- [x] Controller verification: C1 37 passed/2 platform skips; full suite 289 passed/2 skips; SQLite Alembic roundtrip, PostgreSQL DDL compile, compileall, Node, Ruff, and diff check passed.
+- [x] Real PostgreSQL constraints and real Paddle package/model qualification remain deployment gates; no network/model download occurred.
+- [x] Fresh Luna/high specification and quality reviews found no open Critical or Important issue.
+
+### C2 review evidence
+
+- [x] Private multipart upload, review/edit/reject, confirm/cancel, expiry cleanup, and consent-only cloud status endpoints are implemented with no image retrieval route.
+- [x] Durable `processing` precedes file creation; terminal state commits precede deletion; cleanup retries until `storage_key` is cleared.
+- [x] Mutations use service-owned sessions and fail closed on caller transactions or in-memory SQLite; CAS states protect edit/confirm/cancel/expiry races.
+- [x] Unknown exchanges and non-exact names never silently resolve; bbox OCR cells are assembled by row and x-order without numeric pollution.
+- [x] Holding writes occur only after explicit confirmation through `HoldingService.upsert`, in deterministic code order, with idempotent confirmation.
+- [x] Storage uses contained opaque token directories and fail-closed 0700/0600 permission checks; no raw screenshot/OCR/path is exposed.
+- [x] Controller verification: full suite 318 passed/2 platform skips; Alembic roundtrip/current head, compileall, Node, Ruff, diff, and targeted secret scan passed.
+- [x] Fresh Luna/high specification and quality reviews found no open Critical or Important issue.
+
+### D1 review evidence
+
+- [x] Six market-context cards remain visible through deterministic fallback merge; no proxy code or observation is fabricated.
+- [x] Code-first identity and today-change-first observed hierarchy are implemented across Dashboard and report.
+- [x] Forecasts use a distinct `FORECAST · 非实际结果` surface with null-safe provenance and explicit calibration state.
+- [x] Quote `is_mock`, freshness, source and timestamps are displayed per observed item; Mock/degraded cannot appear as verified normal state.
+- [x] Dynamic UI/report text is escaped; report autoescape and minimal-payload rendering are covered.
+- [x] Responsive report/table behavior, explicit Asia/Shanghai time handling, bars cancellation/debounce, modal/keyboard/focus accessibility and contrast are implemented.
+- [x] Controller verification: focused D1 11 passed; full suite 321 passed/2 skips; Node, compileall, Ruff and diff check passed.
+- [x] Fresh Luna/high specification and quality reviews found no open Critical or Important issue.
+
+### D2 review evidence
+
+- [x] Portfolio screenshot upload uses FormData without multipart `Content-Type` corruption and keeps Authorization header-only.
+- [x] Candidate review exposes only allowed fields, code-first alternatives, confidence/status warnings, explicit edit/reject/confirm/cancel and no raw/path/hash data.
+- [x] Import generation, AbortControllers, serialized PATCH queue, pending-save flush and durable cancel prevent stale async responses and lost edits.
+- [x] Client numeric bounds/precision mirror backend validation; 0/decimals are preserved and unresolved/duplicate/error states block confirmation.
+- [x] Lock/auth generation clears sensitive in-memory review state; no import state is persisted to localStorage; cloud review remains disabled with no egress.
+- [x] Mobile tabs remain accessible; modal, live status, focus, reduced-motion and responsive candidate layout are implemented.
+- [x] Controller verification: test_api 10 passed; full suite passed with 2 platform skips; Node, compileall, Ruff and diff check passed.
+- [x] Fresh Luna/high specification and quality reviews found no open Critical or Important issue.
+
+## Authorization and provenance
+
+- [x] No automatic commit, push, PR, provider credential read, production DB write, broker action, or threshold tuning is authorized.
+- [x] Pre-existing snapshot differences remain owner work; each task records only its explicit file list and semantic diff.
+- [x] Models/agents remain text-analysis candidates with no tools or numeric decision authority.

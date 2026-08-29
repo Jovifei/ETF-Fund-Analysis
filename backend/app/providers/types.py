@@ -4,6 +4,17 @@ from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 from typing import Any
 
+from app.market_context.contracts import MarketContextItem, MarketContextObservation
+
+__all__ = [
+    "InstrumentRecord",
+    "BarRecord",
+    "QuoteRecord",
+    "NewsRecord",
+    "MarketContextItem",
+    "MarketContextObservation",
+]
+
 
 @dataclass(slots=True)
 class InstrumentRecord:

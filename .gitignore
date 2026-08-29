@@ -16,6 +16,7 @@ reports/*.json
 backups/*
 !backups/.gitkeep
 deployment_reports/
+task-snapshots/
 .DS_Store
 vendor/src/
 coverage.xml

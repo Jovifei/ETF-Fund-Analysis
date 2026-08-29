@@ -3,26 +3,66 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app.api.schemas import HoldingUpsert, RuntimeUpdate, TaskRequest
+from app.api.schemas import (
+    HoldingImportCandidatePatch,
+    HoldingImportCandidateResponse,
+    HoldingImportCloudConsent,
+    HoldingImportResponse,
+    HoldingUpsert,
+    ReviewCandidateResponse,
+    ReviewEnqueueRequest,
+    ReviewRunner,
+    ReviewTransitionRequest,
+    RuntimeUpdate,
+    TaskRequest,
+)
 from app.core.config import Settings, get_settings
 from app.core.security import require_private_access
 from app.db.session import SessionLocal, get_db
 from app.models import EventLog, ReportArtifact
+from app.ocr.image_validation import ImageValidationError, read_limited_bytes
+from app.services.analysis_persistence_service import AnalysisStorageNotMigrated
 from app.services.dashboard_service import DashboardService
+from app.services.holding_import_service import (
+    HoldingImportConflict,
+    HoldingImportError,
+    HoldingImportNotFound,
+    HoldingImportService,
+    HoldingImportUnavailable,
+)
 from app.services.holding_service import HoldingNotFoundError, HoldingService
+from app.services.market_context_service import MarketContextService
 from app.services.report_service import ReportService
+from app.services.review_service import CandidateNotFoundError, ReviewService
 from app.services.runtime_service import RuntimeService
-from app.services.task_service import TaskBusyError, TaskService, UnknownTaskError
+from app.services.task_service import TaskBusyError, TaskExecutionError, TaskService, UnknownTaskError
 
 router = APIRouter(prefix="/api")
 private_router = APIRouter(dependencies=[Depends(require_private_access)])
+
+
+def _review_response(candidate: Any) -> ReviewCandidateResponse:
+    """Project an ORM candidate without exposing storage or runner internals."""
+    return ReviewCandidateResponse(
+        candidate_id=candidate.candidate_id,
+        runner=candidate.runner,
+        bundle_hash=candidate.bundle_hash,
+        memo_hash=candidate.memo_hash,
+        memo=candidate.memo_payload,
+        review_status=candidate.review_status,
+        created_at=candidate.created_at,
+        updated_at=candidate.updated_at,
+        accepted_at=candidate.accepted_at,
+        rejected_at=candidate.rejected_at,
+        review_note=candidate.review_note,
+    )
 
 
 @router.get("/health")
@@ -55,6 +95,14 @@ def instruments(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> list[dict]:
     return DashboardService(settings).instrument_rows(db)
+
+
+@private_router.get("/market-context")
+def market_context(
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, Any]:
+    return {"latest_view": MarketContextService(provider=None, settings=settings).latest_view(db)}
 
 
 @private_router.get("/instruments/{ts_code}/bars")
@@ -117,6 +165,166 @@ def delete_holding(ts_code: str, db: Annotated[Session, Depends(get_db)]) -> dic
     return {"status": "ok", "deleted": deleted}
 
 
+def _holding_import_candidate_response(candidate: Any) -> HoldingImportCandidateResponse:
+    return HoldingImportCandidateResponse(
+        id=candidate.id,
+        row_index=candidate.row_index,
+        ts_code=candidate.ts_code,
+        name=candidate.name,
+        shares=float(candidate.shares) if candidate.shares is not None else None,
+        cost_price=float(candidate.cost_price) if candidate.cost_price is not None else None,
+        target_weight=candidate.target_weight,
+        user_note=candidate.user_note,
+        match_status=candidate.match_status,
+        status=candidate.status,
+        action=candidate.action,
+        safe_alternatives=list(candidate.safe_alternatives_json or ()),
+        field_confidence=[item.model_dump() for item in (candidate.field_confidence_json or ())],
+        selected_code=candidate.selected_code,
+    )
+
+
+def _holding_import_response(session: Any) -> HoldingImportResponse:
+    return HoldingImportResponse(
+        session_id=session.session_id,
+        status=session.status,
+        candidate_count=session.candidate_count,
+        expires_at=session.expires_at,
+        confirmed_at=session.confirmed_at,
+        cancelled_at=session.cancelled_at,
+        cloud_consent=session.cloud_consent,
+        cloud_consent_at=session.cloud_consent_at,
+        ocr_mode=session.ocr_mode,
+        ocr_backend=session.ocr_backend,
+        ocr_model=session.ocr_model,
+        ocr_version=session.ocr_version,
+        candidates=[_holding_import_candidate_response(item) for item in session.candidates],
+    )
+
+
+def _import_http_error(exc: HoldingImportError) -> HTTPException:
+    if isinstance(exc, HoldingImportNotFound):
+        return HTTPException(status_code=404, detail="holding import session not found")
+    if isinstance(exc, HoldingImportUnavailable):
+        return HTTPException(status_code=503, detail="local OCR is unavailable")
+    if isinstance(exc, HoldingImportConflict):
+        code_status = {
+            "expired": 409,
+            "cloud_disabled": 409,
+            "confirming": 409,
+            "storage_path": 400,
+            "invalid_code": 422,
+            "unknown_code": 422,
+            "invalid_numeric": 422,
+            "invalid_text": 422,
+            "invalid_action": 422,
+        }
+        return HTTPException(status_code=code_status.get(exc.code, 409), detail="holding import state cannot change")
+    return HTTPException(status_code=422, detail="holding import request rejected")
+
+
+@private_router.post(
+    "/holding-imports",
+    response_model=HoldingImportResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_holding_import(
+    file: Annotated[UploadFile, File(...)],
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> HoldingImportResponse:
+    try:
+        payload = read_limited_bytes(file.file, max_bytes=settings.ocr_max_bytes)
+        session = HoldingImportService(settings).import_bytes(db, payload, file.content_type)
+        return _holding_import_response(session)
+    except ImageValidationError as exc:
+        if exc.code == "too_large":
+            raise HTTPException(status_code=413, detail="image exceeds the configured size limit") from None
+        if exc.code in {"mime_mismatch", "unsupported_format"}:
+            raise HTTPException(status_code=415, detail="unsupported image type") from None
+        raise HTTPException(status_code=422, detail="image validation failed") from None
+    except HoldingImportError as exc:
+        raise _import_http_error(exc) from None
+    except Exception:
+        raise HTTPException(status_code=503, detail="holding import unavailable") from None
+    finally:
+        await file.close()
+
+
+@private_router.get("/holding-imports/{session_id}", response_model=HoldingImportResponse)
+def get_holding_import(
+    session_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> HoldingImportResponse:
+    try:
+        return _holding_import_response(HoldingImportService(settings).get(db, session_id))
+    except HoldingImportError as exc:
+        raise _import_http_error(exc) from None
+
+
+@private_router.patch(
+    "/holding-imports/{session_id}/candidates/{candidate_id}",
+    response_model=HoldingImportCandidateResponse,
+)
+def edit_holding_import_candidate(
+    session_id: str,
+    candidate_id: int,
+    payload: HoldingImportCandidatePatch,
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> HoldingImportCandidateResponse:
+    try:
+        candidate = HoldingImportService(settings).edit_candidate(db, session_id, candidate_id, payload)
+        return _holding_import_candidate_response(candidate)
+    except HoldingImportError as exc:
+        raise _import_http_error(exc) from None
+
+
+@private_router.post("/holding-imports/{session_id}/confirm")
+def confirm_holding_import(
+    session_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, Any]:
+    service = HoldingImportService(settings)
+    try:
+        result = service.confirm(db, session_id)
+        return result
+    except HoldingImportError as exc:
+        raise _import_http_error(exc) from None
+    except Exception:
+        raise HTTPException(status_code=409, detail="holding import could not be confirmed") from None
+
+
+@private_router.post("/holding-imports/{session_id}/cancel")
+def cancel_holding_import(
+    session_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, Any]:
+    service = HoldingImportService(settings)
+    try:
+        result = service.cancel(db, session_id)
+        return result
+    except HoldingImportError as exc:
+        raise _import_http_error(exc) from None
+
+
+@private_router.post("/holding-imports/{session_id}/cloud-consent", response_model=HoldingImportResponse)
+def set_holding_import_cloud_consent(
+    session_id: str,
+    payload: HoldingImportCloudConsent,
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> HoldingImportResponse:
+    try:
+        session = HoldingImportService(settings).set_cloud_consent(db, session_id, payload.consent)
+        return _holding_import_response(session)
+    except HoldingImportError as exc:
+        raise _import_http_error(exc) from None
+
+
 @private_router.get("/settings")
 def runtime_settings(
     db: Annotated[Session, Depends(get_db)],
@@ -148,6 +356,111 @@ def task_history(
     return DashboardService(settings).task_runs(db, limit)
 
 
+@private_router.post(
+    "/analysis/reviews",
+    response_model=ReviewCandidateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def enqueue_analysis_review(
+    payload: ReviewEnqueueRequest,
+    db: Annotated[Session, Depends(get_db)],
+) -> ReviewCandidateResponse:
+    try:
+        candidate = ReviewService.enqueue_from_hash(
+            db,
+            runner=payload.runner,
+            bundle_hash=payload.bundle_hash,
+            memo=payload.memo,
+            memo_hash=payload.memo_hash,
+        )
+        db.commit()
+        return _review_response(candidate)
+    except AnalysisStorageNotMigrated:
+        db.rollback()
+        raise HTTPException(status_code=503, detail="review storage unavailable") from None
+    except ValueError:
+        db.rollback()
+        raise HTTPException(status_code=422, detail="review request rejected") from None
+
+
+@private_router.get("/analysis/reviews", response_model=list[ReviewCandidateResponse])
+def list_analysis_reviews(
+    db: Annotated[Session, Depends(get_db)],
+    review_status: Annotated[Literal["pending", "accepted", "rejected"] | None, Query()] = None,
+    runner: Annotated[ReviewRunner | None, Query()] = None,
+    limit: int = Query(default=100, ge=1, le=1000),
+) -> list[ReviewCandidateResponse]:
+    try:
+        return [_review_response(candidate) for candidate in ReviewService.list(
+            db, review_status=review_status, runner=runner, limit=limit
+        )]
+    except AnalysisStorageNotMigrated:
+        raise HTTPException(status_code=503, detail="review storage unavailable") from None
+    except ValueError:
+        raise HTTPException(status_code=422, detail="review query rejected") from None
+
+
+@private_router.get("/analysis/reviews/{candidate_id}", response_model=ReviewCandidateResponse)
+def get_analysis_review(
+    candidate_id: str,
+    db: Annotated[Session, Depends(get_db)],
+) -> ReviewCandidateResponse:
+    try:
+        return _review_response(ReviewService.get(db, candidate_id))
+    except CandidateNotFoundError:
+        raise HTTPException(status_code=404, detail="review candidate not found") from None
+    except AnalysisStorageNotMigrated:
+        raise HTTPException(status_code=503, detail="review storage unavailable") from None
+
+
+@private_router.post(
+    "/analysis/reviews/{candidate_id}/accept",
+    response_model=ReviewCandidateResponse,
+)
+def accept_analysis_review(
+    candidate_id: str,
+    payload: ReviewTransitionRequest,
+    db: Annotated[Session, Depends(get_db)],
+) -> ReviewCandidateResponse:
+    try:
+        candidate = ReviewService.accept(db, candidate_id, note=payload.note)
+        db.commit()
+        return _review_response(candidate)
+    except CandidateNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=404, detail="review candidate not found") from None
+    except AnalysisStorageNotMigrated:
+        db.rollback()
+        raise HTTPException(status_code=503, detail="review storage unavailable") from None
+    except ValueError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="review candidate cannot change state") from None
+
+
+@private_router.post(
+    "/analysis/reviews/{candidate_id}/reject",
+    response_model=ReviewCandidateResponse,
+)
+def reject_analysis_review(
+    candidate_id: str,
+    payload: ReviewTransitionRequest,
+    db: Annotated[Session, Depends(get_db)],
+) -> ReviewCandidateResponse:
+    try:
+        candidate = ReviewService.reject(db, candidate_id, note=payload.note)
+        db.commit()
+        return _review_response(candidate)
+    except CandidateNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=404, detail="review candidate not found") from None
+    except AnalysisStorageNotMigrated:
+        db.rollback()
+        raise HTTPException(status_code=503, detail="review storage unavailable") from None
+    except ValueError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="review candidate cannot change state") from None
+
+
 @private_router.post("/tasks/{task_name}")
 def run_task(
     task_name: str,
@@ -165,9 +478,15 @@ def run_task(
     except TaskBusyError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except Exception as exc:
-        db.commit()  # persist failed TaskRun/provider audit before returning error
-        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
+    except TaskExecutionError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail={"run_id": exc.run_id, "failure_class": exc.failure_class},
+        ) from None
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="task execution failed") from None
 
 
 @private_router.post("/reports")

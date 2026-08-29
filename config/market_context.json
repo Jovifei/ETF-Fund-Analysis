@@ -1,0 +1,88 @@
+{
+  "items": [
+    {
+      "context_id": "china-sector-breadth",
+      "label": "中国行业/板块广度与轮动",
+      "region": "China",
+      "context_kind": "sector_breadth",
+      "source_symbol": null,
+      "display_code": null,
+      "is_tradable_proxy": false,
+      "enabled": false,
+      "display_order": 1,
+      "source_priority": [],
+      "freshness_rule": "provider_defined",
+      "verification_status": "unverified"
+    },
+    {
+      "context_id": "us-sp500",
+      "label": "S&P 500",
+      "region": "United States",
+      "context_kind": "index",
+      "source_symbol": null,
+      "display_code": null,
+      "is_tradable_proxy": false,
+      "enabled": false,
+      "display_order": 2,
+      "source_priority": [],
+      "freshness_rule": "provider_defined",
+      "verification_status": "unverified"
+    },
+    {
+      "context_id": "us-nasdaq-composite",
+      "label": "Nasdaq Composite",
+      "region": "United States",
+      "context_kind": "index",
+      "source_symbol": null,
+      "display_code": null,
+      "is_tradable_proxy": false,
+      "enabled": false,
+      "display_order": 3,
+      "source_priority": [],
+      "freshness_rule": "provider_defined",
+      "verification_status": "unverified"
+    },
+    {
+      "context_id": "us-nasdaq-100",
+      "label": "Nasdaq-100",
+      "region": "United States",
+      "context_kind": "index",
+      "source_symbol": null,
+      "display_code": null,
+      "is_tradable_proxy": false,
+      "enabled": false,
+      "display_order": 4,
+      "source_priority": [],
+      "freshness_rule": "provider_defined",
+      "verification_status": "unverified"
+    },
+    {
+      "context_id": "china-semiconductor-etf",
+      "label": "中国半导体可交易 ETF 代理",
+      "region": "China",
+      "context_kind": "tradable_proxy",
+      "source_symbol": null,
+      "display_code": null,
+      "is_tradable_proxy": true,
+      "enabled": false,
+      "display_order": 5,
+      "source_priority": [],
+      "freshness_rule": "provider_defined",
+      "verification_status": "unverified"
+    },
+    {
+      "context_id": "korea-semiconductor-etf",
+      "label": "韩国半导体可交易 ETF 代理",
+      "region": "Korea",
+      "context_kind": "tradable_proxy",
+      "source_symbol": null,
+      "display_code": null,
+      "is_tradable_proxy": true,
+      "enabled": false,
+      "display_order": 6,
+      "source_priority": [],
+      "freshness_rule": "provider_defined",
+      "verification_status": "unverified"
+    }
+  ]
+}

@@ -1,14 +1,64 @@
 {
   "generated_at": "2026-08-27",
-  "policy": "Runtime code remains independent. References are pinned and isolated; upstream licenses and service terms still apply.",
+  "policy": "Runtime code remains independent. Reference repositories are fetched only into vendor/src, excluded from Git and Docker, and retain their own licenses/notices. --include-personal-use is an explicit opt-in; it does not waive upstream terms. Repositories with known credential-history risk are never fetched by this helper.",
   "repositories": [
-    {"name":"fund-rotation-analyst","repo":"https://github.com/thincat75/fund-rotation-analyst.git","ref":"474e554f6d7f0219637883fd775c3df06b545fb1","license":"MIT"},
-    {"name":"fund-analysis-matrix","repo":"https://github.com/illusionno/fund-analysis-matrix.git","ref":"2c68d2ec65c31ed61e1970a7f7c7383ac99fc6b9","license":"MIT"},
-    {"name":"vibe-astock","repo":"https://github.com/simonlin1212/vibe-astock.git","ref":"d3af182b43aa75a5604ee467794ef7cfc70d1c01","license":"Apache-2.0"},
-    {"name":"etf-rotation-strategy","repo":"https://github.com/zhangsensen/etf-rotation-strategy.git","ref":"4e5d1fbde56b0094db976cbebb6cf5020105bd98","license":"MIT","credential_history_risk":true},
-    {"name":"ta_cn","repo":"https://github.com/wukan1986/ta_cn.git","ref":"a569a618109daa804541c5d67fa4c0407f03fd49","license":"MIT"},
-    {"name":"ta","repo":"https://github.com/bukosabino/ta.git","ref":"a890410710a6e483c9ba08da7f3dd5089e4b9dff","license":"MIT"},
-    {"name":"Opptrix","repo":"https://github.com/Travisun/Opptrix.git","ref":"9f8878415566e42f1bfd4b2f497423464112f0f8","license":"Apache-2.0"},
-    {"name":"stock_selector","repo":"https://github.com/Super-YYQ/stock_selector.git","ref":"106cdd86edcf4c8d7215d6dd633be4457e12afbd","license":"not clearly declared","policy":"concept review only; no source copying"}
+    {
+      "name": "fund-rotation-analyst",
+      "repo": "https://github.com/thincat75/fund-rotation-analyst.git",
+      "ref": "474e554f6d7f0219637883fd775c3df06b545fb1",
+      "license": "MIT",
+      "auto_fetch": true,
+      "personal_use_fetch": true,
+      "borrowed_designs": ["audit-first cache", "theme taxonomy", "multi-dimensional fund scoring", "deterministic JSON-to-report pipeline"]
+    },
+    {
+      "name": "fund-analysis-matrix",
+      "repo": "https://github.com/illusionno/fund-analysis-matrix.git",
+      "ref": "2c68d2ec65c31ed61e1970a7f7c7383ac99fc6b9",
+      "license": "MIT",
+      "auto_fetch": true,
+      "personal_use_fetch": true,
+      "borrowed_designs": ["dark dashboard information architecture", "watchlist hydration then refresh", "chart detail modal"]
+    },
+    {
+      "name": "vibe-astock",
+      "repo": "https://github.com/simonlin1212/vibe-astock.git",
+      "ref": "d3af182b43aa75a5604ee467794ef7cfc70d1c01",
+      "license": "Apache-2.0",
+      "auto_fetch": true,
+      "personal_use_fetch": true,
+      "borrowed_designs": ["hard metrics outside LLM", "actual-input preflight", "structured-output validation", "explicit degraded-data warnings"]
+    },
+    {
+      "name": "etf-rotation-strategy",
+      "repo": "https://github.com/zhangsensen/etf-rotation-strategy.git",
+      "ref": "4e5d1fbde56b0094db976cbebb6cf5020105bd98",
+      "license": "MIT",
+      "auto_fetch": false,
+      "personal_use_fetch": false,
+      "credential_history_risk": true,
+      "risk": "The reviewed commit documents previously hard-coded credentials and says historical sealed snapshots may still contain old tokens. Do not clone this repository onto a production ECS. Review selected files through GitHub and re-implement the design.",
+      "borrowed_designs": ["WFO to vectorized to event-driven validation", "state hysteresis", "volatility exposure gate", "frozen strategy parameters"]
+    },
+    {
+      "name": "TradingAgents-CN",
+      "repo": "https://github.com/hsliuping/TradingAgents-CN.git",
+      "ref": "74783e8817d6cf6de29867880631cc555153f36b",
+      "license": "mixed / project-specific commercial terms",
+      "auto_fetch": false,
+      "personal_use_fetch": true,
+      "risk": "Some directories and uses have project-specific terms. Fetch only after reading LICENSE/COPYRIGHT; keep it isolated and do not redistribute it as part of this project.",
+      "borrowed_designs": ["provider adapters", "multi-model configuration", "Docker deployment layout"]
+    },
+    {
+      "name": "a-share-etf-rotation",
+      "repo": "https://github.com/fadaiba/a-share-etf-rotation.git",
+      "ref": "6e2a6e20b0a98f4b8a062aa40bf64da1c5d4b306",
+      "license": "not clearly declared in reviewed repository metadata",
+      "auto_fetch": false,
+      "personal_use_fetch": false,
+      "risk": "No clear license was confirmed. Review remotely; do not copy or redistribute source without permission.",
+      "borrowed_designs": ["ETF clustering", "multi-period momentum", "risk parity research ideas"]
+    }
   ]
 }

@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import date
 
+from app.market_context.contracts import MarketContextItem, MarketContextObservation
 from app.providers.types import BarRecord, InstrumentRecord, NewsRecord, QuoteRecord
 
 
@@ -31,6 +32,12 @@ class MarketProvider(ABC):
 
     def fetch_news(self, since_hours: int = 24) -> list[NewsRecord]:
         return []
+
+    def fetch_market_context(
+        self, requests: list[MarketContextItem]
+    ) -> list[MarketContextObservation]:
+        del requests
+        raise CapabilityUnavailable("market context capability is unavailable for this provider")
 
     def is_trade_day(self, day: date) -> bool:
         return day.weekday() < 5

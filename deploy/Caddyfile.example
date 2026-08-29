@@ -6,6 +6,10 @@
 
 fund.example.com {
   encode zstd gzip
+  # OCR_MAX_IMAGE_BYTES defaults to 10 MiB; 12 MB leaves multipart overhead.
+  request_body {
+    max_size 12MB
+  }
   reverse_proxy 127.0.0.1:8080
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains"

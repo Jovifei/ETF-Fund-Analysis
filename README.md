@@ -1,100 +1,76 @@
 # 中国 ETF / LOF 私有决策看板
 
-一个面向中国场内 ETF/LOF 的**个人私有研究系统**。它把行情、日线、技术指标、主题新闻、持仓和多期限预测整理成可审计的信号看板，并按北京时间自动刷新。
+一个面向中国场内 ETF/LOF 的个人私有研究系统。它把行情、日线、技术指标、主题新闻、持仓和多期限预测整理成可审计的信号看板，并按北京时间自动刷新。
 
-当前版本：`0.5.0`
+当前版本：`0.6.0`
 
-> 本项目不连接券商、不自动下单。技术指标、仓位约束和信号状态由确定性程序计算；OpenAI-compatible 模型仅用于把新闻整理成结构化事实、推断和风险项。预测基线默认处于 `not_calibrated`，在完成真实数据的 walk-forward 验证前，不应作为确定性收益判断。
+> 本项目不连接券商、不自动下单，也不构成投资建议。技术指标、仓位约束和信号状态由确定性程序计算；分析模型只能生成带来源的文本审阅候选，不能计算指标、预测、仓位或交易动作。预测基线保持 `not_calibrated`，在完成真实数据的 walk-forward 验证前，不应作为确定性收益判断。
 
 ## 已实现
 
-- Tushare 主数据源、AKShare 备用源，禁止生产环境静默回退到 Mock。
-- 可选 RSS/Atom 新闻源，兼容自建 RSSHub 路由。
-- ETF/LOF 自选池、日线、盘中快照、数据源审计和退化标记。
-- 指标引擎 v0.5：MA、MACD、KDJ、RSI、ATR、BOLL、量比、OBV、MFI、CMF、VWAP、ADX/DMI、CCI、WR、ROC、TD Setup。
-- 结构/形态：20/55/120 日箱体、海龟 20/55 日突破、放量突破、缩量回踩、二次启动、假突破风险。
-- 中国化扩展：RSRS 择时、20/60/120 日 RPS 横截面强度、ETF/LOF 近 120 日成交量价格分布近似（筹码峰/成本分位/获利盘）。
-- 多策略家族评分：趋势、动量、资金流、突破、回踩、结构、相对强度、反转八类分开评分并聚合。
-- 1、5、20 个交易日相似样本预测：上涨概率、期望值、Q10/Q50/Q90、样本数和置信度。
-- 手工 walk-forward 预测验证：方向准确率、Brier、MAE、区间覆盖率和校准桶。
-- 事件驱动 ETF 轮动回测：收盘决策、次日开盘执行、整手、费率、滑点、迟滞、主题分散和市场暴露门控。
-- 策略消融回测：在相同执行引擎下依次比较“动量基线 → 资金流 → 突破/结构 → v0.5 全因子”，避免只因指标变多就误判为策略提升。
-- 结合持仓成本、当前权重、目标权重的信号状态机。
-- 以沪深 300 ETF 为代理的市场风险门控和组合总暴露上限。
-- 信号迟滞：最短状态持续时间和最小分数变化，避免频繁反转。
-- 单基金上限、单主题上限、单次调整上限。
-- 新闻去重、主题映射、提示注入隔离和 Pydantic JSON 校验。
-- 暗色网页看板、K 线/MACD Canvas 图、持仓录入、SSE 增量更新、HTML 报告。
-- PostgreSQL、Alembic、FastAPI 和独立调度进程。
-- Docker Compose、阿里云 ECS 部署脚本、备份/恢复、CI 和 Codex 交接规范。
-
-> v0.5 的新增指标已经进入研究引擎，但尚未封版为“更优策略”。同执行引擎 Mock 消融中，`full_v050` 没有跑赢动量基线；因此真实 ETF/LOF 历史数据验证前，新增因子只作为研究证据，不自动宣称提升收益。详见 `VALIDATION.md`。
-
-## 设计原则
-
-```text
-外部数据源
-   ↓
-原始记录 + 来源 + 时间 + 质量哈希
-   ↓
-确定性指标 / 新闻结构化 / 预测基线
-   ↓
-实际输入体检（核心数据缺失即阻断）
-   ↓
-基金质量 + 主题 + 市场状态 + 持仓约束
-   ↓
-版本化信号快照和证据
-   ↓
-FastAPI / SSE / HTML 报告
-```
-
-项目吸收了 GitHub 社区中若干成熟思路，但没有让第三方仓库直接进入生产依赖：
-
-- `fund-rotation-analyst`：审计优先缓存、主题分类、多维基金评分。
-- `vibe-astock`：硬指标不经过 AI、实际输入体检、退化数据显式警告。
-- `etf-rotation-strategy`：WFO→向量化→事件驱动验证、迟滞、波动率仓位门控、参数冻结。
-- `fund-analysis-matrix`：暗色卡片布局、自选池和图表详情交互。
-- `RSSHub`：通过标准 RSS/Atom 接口扩展新闻源的思路。
-- `wukan1986/ta_cn`：中国化指标和筹码分布研究口径。
-- `bukosabino/ta`：ADX/DMI、MFI、CMF、OBV、CCI、Williams %R 等标准技术指标实现参考。
-- `Travisun/Opptrix`：RSRS（high~low OLS、β×R²、滚动 z-score）研究口径。
-- `Super-YYQ/stock_selector`：箱体、海龟、RPS、价量突破/缩量回踩等策略家族的条件化思路；因仓库未声明许可证，本项目只参考公开说明与行为，不复制其源码。
-
-具体来源、版本和风险见 [`docs/GITHUB_RESEARCH.md`](docs/GITHUB_RESEARCH.md) 与 [`vendor/manifest.json`](vendor/manifest.json)。
+- Tushare 主数据源、AKShare 备用源，生产环境禁止静默回退到 Mock。
+- ETF/LOF 自选池、日线、盘中快照、数据源审计和退化标记；技术指标、预测基线、事件驱动轮动回测和信号状态机。
+- 新闻去重、主题映射、提示注入隔离和 provider-neutral 多模型分析网关。
+- 暗色网页看板、市场上下文卡片、K 线/MACD Canvas 图、持仓录入、SSE 增量更新、HTML 报告。
+- 本地私有 OCR 导入、候选编辑/拒绝/确认流程；确认前不会写入持仓。
+- PostgreSQL、Alembic、FastAPI、独立调度进程、Docker Compose、阿里云 ECS 部署脚本、备份/恢复和 CI。
 
 ## 目录
 
 ```text
-backend/app/               FastAPI、数据层、指标、预测、信号与静态看板
+backend/app/               FastAPI、数据层、指标、预测、信号、市场上下文与 OCR
 backend/tests/             单元与集成测试
 backend/alembic/           数据库迁移
-config/                    自选池、策略参数、主题分类
+config/                    自选池、策略参数、主题分类、市场上下文注册表
 reports/                   运行时报告（默认不入 Git）
 deploy/aliyun/             阿里云 ECS 脚本
-scripts/                   冒烟、备份、恢复、参考源码拉取
 codex/skills/fund-research Codex 研究 Skill
 vendor/                    GitHub 参考仓库清单，不参与运行
 ```
 
 ## 本地 Mock 启动
 
-需要 Python 3.11+：
+需要 Python 3.11+；若启用 Paddle OCR，生产资格只接受 Python 3.12/Linux：
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -e '.[dev]'
-
-export APP_ENV=development
-export AUTH_ENABLED=false
-export MARKET_PROVIDER=mock
+export APP_ENV=development AUTH_ENABLED=false MARKET_PROVIDER=mock
 export DATABASE_URL=sqlite:///./fund_decision.sqlite3
-
 fund-decision bootstrap --lookback-days 420
 uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 ```
 
 打开 `http://127.0.0.1:8000`。Mock 仅用于验证页面和流水线，所有信号都会被标记为不可执行。
+
+## 分析模型配置（单一主 provider）
+
+默认关闭。配置后只启用一个主 provider：Codex/OpenAI Responses。服务器本地 `.env` 使用以下变量：`OPENAI_API_KEY`、`ANALYSIS_PRIMARY_MODEL`、`ANALYSIS_CODEX_BASE_URL`、`ANALYSIS_PRIMARY_MODE=responses`，并设置 `ANALYSIS_ENABLED=true`、`ANALYSIS_CODEX_ENABLED=true`、`ANALYSIS_PRIMARY_PROVIDER=codex_openai_responses`。Anthropic Messages 与 DeepSeek 兼容适配器仅注册为手工切换候选，不能与 Codex 同时启用；失败不会静默切换。
+
+模型无工具、无凭据访问、无数据库/网络抓取/券商能力，也无数值决策权限。Codex/Claude Code 可以在应用生成证据包后异步生成只读审阅候选；只有人工查看并明确接受，候选才可记录为审阅结果。密钥只存在服务器 `.env`，不放入页面、报告、Git 或提示词。
+
+## 市场上下文
+
+默认显示六张卡片，实际观察以 `today_pct_change` 为主、价格为辅。上下文和 ETF 身份均显示来源、时间、新鲜度与 Mock/退化状态。六项定义在 [`config/market_context.json`](config/market_context.json)：
+
+| 卡片 | 默认状态 |
+|---|---|
+| 中国行业/板块广度与轮动 | 上下文，禁用/未验证 |
+| S&P 500 | 指数上下文，禁用/未验证 |
+| Nasdaq Composite | 指数上下文，禁用/未验证 |
+| Nasdaq-100 | 指数上下文，禁用/未验证 |
+| 中国半导体可交易 ETF 代理 | 代理代码为空，禁用/未验证 |
+| 韩国半导体可交易 ETF 代理 | 代理代码为空，禁用/未验证 |
+
+代理只有在 Provider 交付交易所代码、日线和现货覆盖、流动性、时间戳与字段质量证明后才可启用。缺失、Mock 或不可用观察均不可产生 actionable 信号；不能用历史快照冒充今日数据。
+
+## 投资组合截图 OCR 操作指南
+
+1. 上传仅限 PNG/JPEG/WebP；Pillow 负责 MIME、魔数、解码、尺寸、像素和尾随数据校验。应用默认最多 10 MiB（`OCR_MAX_IMAGE_BYTES=10485760`）、12,000×12,000、4,000 万像素，硬超时 60 秒，临时会话 TTL 默认 15 分钟。
+2. PaddleOCR 是可选本地后端。只有 Python 3.12/Linux 上经过资格验证、私有只读模型目录和严格 `paddle-local-v1` manifest（每个文件含相对路径、字节数、SHA-256，大小有界）才可启用；当前环境没有资格证明，真实 Paddle 包/模型不应被宣称已验证。Docker 镜像不安装重型 Paddle，未显式配置时诚实返回 503/unavailable。
+3. `OCR_TRANSIENT_ROOT` 必须是服务器私有、独立的 0700 根目录；模型根目录只读且私有。生产 Windows 直接 fail-closed；生产 Linux 启动时检查目录权限。应用在可杀死的 spawn worker 中运行 OCR，超时会终止并清理，不把原图或原始 OCR 全量写入数据库。
+4. 识别结果进入候选表后，操作者必须检查代码/名称、数量、成本、目标权重，编辑或拒绝歧义/重复/低置信度行，再显式确认。任何 OCR 结果都不会自动写持仓；确认后才调用持仓 upsert。云视觉复核默认为关闭，仅在用户明确同意时可用；当前版本不出网、不自动重试、不自动持仓写入。
 
 ## 阿里云 ECS 生产部署
 
@@ -103,41 +79,17 @@ uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 ```bash
 sudo bash deploy/aliyun/bootstrap_host.sh
 sudo mkdir -p /opt/china-fund-decision
-# 将源码复制或 git clone 到上述目录
 cd /opt/china-fund-decision
 cp deploy/.env.production.example .env
 python3 scripts/generate_secrets.py
-# 将生成的值、TUSHARE_TOKEN 和模型配置写入 .env
+# 将生成的值、TUSHARE_TOKEN 和（如需要）分析配置写入 .env
+chmod 600 .env
 sudo bash deploy/aliyun/deploy.sh
 ```
 
-Compose 只把应用映射到 `127.0.0.1:8080`，PostgreSQL 不映射宿主机端口。公网访问应经过 Caddy/Nginx HTTPS；ECS 安全组只开放 80/443，SSH 22 仅允许可信 IP。
+Compose 只把应用映射到 `127.0.0.1:8080`，PostgreSQL 不映射宿主机端口。公网访问应经过 Caddy/Nginx HTTPS；ECS 安全组只开放 80/443，SSH 22 仅允许可信 IP。反向代理上传上限应保持 12MB：应用图像上限为 10MiB，额外空间仅用于 multipart 开销；示例已在 Caddy/Nginx 中对齐。
 
-## 配置真实自选池
-
-编辑 [`config/watchlist.json`](config/watchlist.json)。第一版建议控制在 30～100 只高流动性 ETF/LOF，并为每只基金明确：
-
-- `ts_code`、名称和类型；
-- 一级主题与二级主题；
-- 跟踪指数；
-- 是否启用。
-
-更新后执行：
-
-```bash
-docker compose run --rm api fund-decision run-task sync_instruments
-docker compose run --rm api fund-decision bootstrap --lookback-days 900
-```
-
-## 新闻源
-
-默认使用 Tushare 可用的新闻接口。可在 `.env` 中额外配置普通 RSS/Atom 地址或自建 RSSHub 路由：
-
-```env
-NEWS_RSS_URLS=https://your-rsshub.example/route-a,https://publisher.example/feed.xml
-```
-
-系统会聚合、去重并分别记录各新闻源的成功、空结果或失败。不要在 RSS URL 中写入会出现在日志里的长期凭据。
+`.env` 用 `chmod 0600`，OCR 临时根目录用 `0700`，模型根目录私有并只读。上线前先备份，再按 `158ca7025305` → `9f1c2b3a4d5e` → `a2b3c4d5e6f7` → `b3c4d5e6f7a8` 执行 `alembic upgrade head`；回滚只允许在备份和隔离实例验证后使用 `alembic downgrade`，不能直接改生产库。
 
 ## 命令
 
@@ -145,32 +97,21 @@ NEWS_RSS_URLS=https://your-rsshub.example/route-a,https://publisher.example/feed
 fund-decision run-task sync_instruments
 fund-decision run-task refresh_bars --lookback-days 900
 fund-decision run-task refresh_quotes
+fund-decision run-task refresh_market_context
 fund-decision run-task refresh_news
 fund-decision run-task refresh_indicators
 fund-decision run-task refresh_forecasts
 fund-decision run-task refresh_signals
 fund-decision run-task validate_forecasts
 fund-decision run-task backtest_rotation
-fund-decision run-task backtest_ablation
 fund-decision run-task generate_report
 fund-decision bootstrap --lookback-days 900
 ```
 
-## 当前边界
+## 版本与验证边界
 
-尚未声称完成的内容包括：
-
-- 你的 Tushare 账号接口权限和真实服务器出口网络验证；
-- 真实 ETF/LOF 池的主题纯度、规模、费率和跟踪误差补齐；
-- 真实市场约束下的回测复核：停牌、涨跌停无法成交、LOF 溢价、现金收益与独立第二引擎对账；
-- 预测概率校准和模型封版；
-- 阿里云实例上的 Docker 构建、域名证书、告警和恢复演练；
-- 自动交易。
-
-这些任务已写入 [`CODEX_DEPLOYMENT_TASKS.md`](CODEX_DEPLOYMENT_TASKS.md)。
+应用/发行包版本为 `0.6.0`。策略、指标和预测版本仍由 `config/strategy.json` 管理（当前策略版本为 `signal-v0.4.0`），本版本没有升级公式或阈值。完整回归、迁移、Mock HTTP 和浏览器烟测只证明本地/Mock 行为；真实 PostgreSQL、Tushare/AKShare/OpenAI 端点、真实 Paddle Python 3.12 wheel/model、ECS、域名 HTTPS 与预测校准仍是部署门槛。详见 [`STATUS.md`](STATUS.md)、[`HANDOFF.md`](HANDOFF.md) 和 [`docs/IMPLEMENTATION_MATRIX.md`](docs/IMPLEMENTATION_MATRIX.md)。
 
 ## 安全与许可证
 
-个人私用并不会自动取消第三方许可证、署名要求、保密义务或服务条款。参考源码采用隔离的浅克隆方式；生产应用不从 `vendor/src` 导入代码。个人研究源码可用 `./scripts/fetch_reference_sources.sh --include-personal-use` 显式下载到隔离目录，但该开关不免除上游条款。严禁把 GitHub 中发现的 Token、内网地址、账户 ID 或历史数据复制到本项目。
-
-本仓库自有代码按 MIT License 提供；第三方说明见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+个人私用并不会自动取消第三方许可证、署名要求、保密义务或服务条款。参考源码采用隔离方式；生产应用不从 `vendor/src` 导入代码。严禁把 GitHub 中发现的 Token、内网地址、账户 ID 或历史数据复制到本项目。第三方说明见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。

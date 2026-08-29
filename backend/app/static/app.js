@@ -11,7 +11,36 @@ const state = {
   eventRetry: null,
   refreshTimer: null,
   activeTab: 'dashboard',
+  modalReturnFocus: null,
+  detailCode: null,
+  detailRequestController: null,
+  detailRequestToken: 0,
+  resizeTimer: null,
+  holdingImport: null,
+  importGeneration: 0,
+  importControllers: new Set(),
+  pendingSaveTimers: new Map(),
+  inflightSavePromises: new Map(),
+  sessionSaveQueue: Promise.resolve(),
+  sessionQueuedVersions: new Map(),
+  importSaveVersions: new Map(),
+  importSaveErrors: new Map(),
+  authRequestGeneration: 0,
+  bootstrapController: null,
+  settingsController: null,
+  cancelController: null,
+  cancelPromise: null,
+  cloudReviewEnabled: false,
 };
+
+const DEFAULT_MARKET_CONTEXT = Object.freeze([
+  {context_id: "china-sector-breadth", label: "中国行业/板块广度与轮动", region: "China", context_kind: "sector_breadth", source_symbol: null, display_code: null, enabled: false, display_order: 1, verification_status: "unverified", is_tradable_proxy: false},
+  {context_id: "us-sp500", label: "S&P 500", region: "United States", context_kind: "index", source_symbol: null, display_code: null, enabled: false, display_order: 2, verification_status: "unverified", is_tradable_proxy: false},
+  {context_id: "us-nasdaq-composite", label: "Nasdaq Composite", region: "United States", context_kind: "index", source_symbol: null, display_code: null, enabled: false, display_order: 3, verification_status: "unverified", is_tradable_proxy: false},
+  {context_id: "us-nasdaq-100", label: "Nasdaq-100", region: "United States", context_kind: "index", source_symbol: null, display_code: null, enabled: false, display_order: 4, verification_status: "unverified", is_tradable_proxy: false},
+  {context_id: "china-semiconductor-etf", label: "中国半导体可交易 ETF 代理", region: "China", context_kind: "tradable_proxy", source_symbol: null, display_code: null, enabled: false, display_order: 5, verification_status: "unverified", is_tradable_proxy: true},
+  {context_id: "korea-semiconductor-etf", label: "韩国半导体可交易 ETF 代理", region: "Korea", context_kind: "tradable_proxy", source_symbol: null, display_code: null, enabled: false, display_order: 6, verification_status: "unverified", is_tradable_proxy: true},
+]);
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -21,16 +50,25 @@ function escapeHtml(value) {
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
 }
+function displayIdentity(code, name) {
+  const parts = [code, name]
+    .map(value => String(value ?? '').trim())
+    .filter(Boolean);
+  return parts.length ? parts.map(escapeHtml).join(' · ') : '未知标的';
+}
+function numericValue(value) {
+  return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+}
 function fmt(value, digits = 2, fallback = '—') {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return fallback;
+  if (!numericValue(value)) return fallback;
   return Number(value).toFixed(digits);
 }
 function pct(value, digits = 2, ratio = false) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return '—';
+  if (!numericValue(value)) return '—';
   const n = Number(value) * (ratio ? 100 : 1);
   return `${n >= 0 ? '+' : ''}${n.toFixed(digits)}%`;
 }
-function colorClass(value) { return Number(value || 0) >= 0 ? 'up' : 'down'; }
+function colorClass(value) { return !numericValue(value) ? 'neutral' : Number(value) >= 0 ? 'up' : 'down'; }
 function safeHttpUrl(value) {
   if (!value) return '';
   try {
@@ -40,15 +78,22 @@ function safeHttpUrl(value) {
 }
 function timeText(value) {
   if (!value) return '—';
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString('zh-CN', {hour12:false});
+  const text = String(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const d = new Date(text);
+  return Number.isNaN(d.getTime()) ? text : `${d.toLocaleString('zh-CN', {hour12:false, timeZone:'Asia/Shanghai'})} · Asia/Shanghai`;
 }
 function amountText(value) {
-  const n = Number(value || 0);
-  if (!n) return '—';
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '—';
+  const n = Number(value);
+  if (n === 0) return '0';
   if (n >= 1e8) return `${(n / 1e8).toFixed(2)}亿`;
   if (n >= 1e4) return `${(n / 1e4).toFixed(1)}万`;
   return n.toFixed(0);
+}
+function holdingPnlPercent(holding) {
+  if (!numericValue(holding?.cost_price) || Number(holding.cost_price) <= 0 || !numericValue(holding?.pnl_pct)) return '—';
+  return pct(holding.pnl_pct);
 }
 function stateClass(label) {
   if (['可入场'].includes(label)) return 'entry';
@@ -67,21 +112,120 @@ function toast(message, timeout = 2600) {
 }
 
 async function api(path, options = {}) {
-  const headers = new Headers(options.headers || {});
+  const {authGeneration = state.authRequestGeneration, ...requestOptions} = options;
+  const headers = new Headers(requestOptions.headers || {});
   if (state.token) headers.set('Authorization', `Bearer ${state.token}`);
-  if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-  const response = await fetch(path, {...options, headers});
+  if (requestOptions.body instanceof FormData) {
+    headers.delete('Content-Type');
+    for (const name of [...headers.keys()]) if (name.toLowerCase() === 'content-type') headers.delete(name);
+  } else if (requestOptions.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+  const response = await fetch(path, {...requestOptions, headers});
   if (response.status === 401) {
-    showAuth('令牌无效或已变更');
+    if (authGeneration === state.authRequestGeneration) showAuth('令牌无效或已变更');
     throw new Error('unauthorized');
   }
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`;
     try { const payload = await response.json(); detail = payload.detail || detail; } catch (_) {}
-    throw new Error(detail);
+    const error = new Error(detail);
+    error.status = response.status;
+    throw error;
   }
   const type = response.headers.get('content-type') || '';
   return type.includes('application/json') ? response.json() : response.text();
+}
+
+const IMPORT_STATUS_CLASS_ALLOWLIST = Object.freeze({matched:'matched', ambiguous:'ambiguous', unmatched:'unmatched', low_confidence:'low_confidence', duplicate:'duplicate', rejected:'rejected', pending:'pending', reviewed:'reviewed', confirmed:'confirmed'});
+const IMPORT_DECIMAL_CONTRACTS = Object.freeze({shares:{maximum:'1000000000', scale:4}, cost_price:{maximum:'1000000000', scale:6}, target_weight:{maximum:'1', scale:6}});
+function isImportCurrent(generation, sessionId = '') {
+  return generation === state.importGeneration && (!sessionId || state.holdingImport?.sessionId === sessionId);
+}
+function trackImportController(controller) { state.importControllers.add(controller); return controller; }
+function untrackImportController(controller) { state.importControllers.delete(controller); }
+function abortImportRequests() {
+  for (const controller of state.importControllers) controller.abort();
+  state.importControllers.clear();
+  for (const record of state.pendingSaveTimers.values()) clearTimeout(record.timer);
+  state.pendingSaveTimers.clear();
+  state.importSaveVersions.clear();
+  state.importSaveErrors.clear();
+  state.inflightSavePromises.clear();
+  state.sessionQueuedVersions.clear();
+  state.sessionSaveQueue = Promise.resolve();
+}
+function newImportGeneration() {
+  state.importGeneration += 1;
+  abortImportRequests();
+  return state.importGeneration;
+}
+function parseImportDecimal(value, contract) {
+  const text = value === null || value === undefined ? '' : String(value).trim();
+  if (!text) return {valid:false, reason:'必填数值不能为空'};
+  const rule = contract || {maximum:'1000000000', scale:6};
+  if (!/^\d+(?:\.\d+)?$/.test(text)) return {valid:false, reason:'只能填写非负十进制数字'};
+  const [wholePart, fractionPart = ''] = text.split('.');
+  if (fractionPart.length > rule.scale) return {valid:false, reason:`最多 ${rule.scale} 位小数`};
+  const factor = 10n ** BigInt(rule.scale);
+  const whole = BigInt(wholePart);
+  const fraction = BigInt((fractionPart || '').padEnd(rule.scale, '0') || '0');
+  const scaled = whole * factor + fraction;
+  const maximumParts = String(rule.maximum).split('.');
+  const maximum = BigInt(maximumParts.join('')) * (10n ** BigInt(rule.scale - (maximumParts[1]?.length || 0)));
+  if (scaled > maximum) return {valid:false, reason:`不能超过 ${rule.maximum}`};
+  return {valid:true, value:text};
+}
+function importCandidateValidation(candidate) {
+  const reasons = [];
+  if (!candidate.selected_code) reasons.push('请选择已配置代码');
+  for (const [field, contract] of Object.entries(IMPORT_DECIMAL_CONTRACTS)) {
+    const value = candidate[field];
+    if (field === 'target_weight' && (value === null || value === undefined || value === '')) continue;
+    const result = parseImportDecimal(value, contract);
+    if (!result.valid) reasons.push(`${IMPORT_FIELD_LABELS[field] || field}：${result.reason}`);
+  }
+  return reasons;
+}
+function importWorkflowHasPendingSaves() {
+  return state.pendingSaveTimers.size > 0 || state.inflightSavePromises.size > 0 || state.importSaveErrors.size > 0;
+}
+function validateImportPayload(payload) {
+  const reasons = [];
+  for (const [field, contract] of Object.entries(IMPORT_DECIMAL_CONTRACTS)) {
+    const value = payload[field];
+    if (field === 'target_weight' && (value === null || value === undefined || value === '')) continue;
+    const result = parseImportDecimal(value, contract);
+    if (!result.valid) reasons.push(`${IMPORT_FIELD_LABELS[field] || field}：${result.reason}`);
+  }
+  return reasons;
+}
+function authRequestGeneration() { return state.authRequestGeneration; }
+function abortAuthRequests() {
+  state.bootstrapController?.abort(); state.bootstrapController = null;
+  state.settingsController?.abort(); state.settingsController = null;
+  state.eventAbort?.abort(); state.eventAbort = null; clearTimeout(state.eventRetry); state.eventRetry = null;
+}
+function advanceAuthRequestGeneration() {
+  state.authRequestGeneration += 1;
+  abortAuthRequests();
+  newImportGeneration();
+  resetImportWorkflow({advance:false});
+  return state.authRequestGeneration;
+}
+function resetImportWorkflow({advance = true} = {}) {
+  if (advance) newImportGeneration(); else abortImportRequests();
+  state.holdingImport = null;
+  qs('#portfolioImportCandidates')?.replaceChildren(); qs('#portfolioImportReview')?.classList.add('hidden');
+  qs('#portfolioImportProgress')?.classList.add('hidden'); qs('#portfolioImportError').textContent = '';
+  qs('#portfolioConfirmError').textContent = ''; qs('#portfolioImportFile').value = '';
+  qs('#portfolioImportStatus').textContent = '等待选择截图'; qs('#portfolioImportUploadButton').disabled = false;
+  qs('#portfolioCancelButton').disabled = false; qs('#portfolioConfirmButton').disabled = true; qs('#portfolioConfirmButton').setAttribute('aria-disabled', 'true');
+  qs('#portfolioConfirmYes').disabled = false; renderCloudReview();
+}
+function setImportInteractionDisabled(disabled) {
+  qs('#portfolioImportUploadButton').disabled = disabled;
+  qs('#portfolioCancelButton').disabled = disabled;
+  qs('#portfolioConfirmButton').disabled = disabled || qs('#portfolioConfirmButton').disabled;
+  qsa('#portfolioImportCandidates [data-import-field], #portfolioImportCandidates .import-reject').forEach(control => { control.disabled = disabled; });
 }
 
 function showAuth(error = '') {
@@ -91,27 +235,79 @@ function showAuth(error = '') {
   setTimeout(() => qs('#tokenInput').focus(), 30);
 }
 function hideAuth() { qs('#authOverlay').classList.add('hidden'); }
+function openModal(id, focusSelector = '.modal-close') {
+  const overlay = qs(`#${id}`);
+  state.modalReturnFocus = document.activeElement;
+  overlay.classList.remove('hidden');
+  const focusTarget = qs(focusSelector, overlay) || qs('.modal-close', overlay);
+  if (focusTarget) focusTarget.focus();
+}
+function closeModal(id) {
+  qs(`#${id}`)?.classList.add('hidden');
+  if (id === 'detailOverlay') cancelDetailRequest();
+  if (state.modalReturnFocus && typeof state.modalReturnFocus.focus === 'function') state.modalReturnFocus.focus();
+  state.modalReturnFocus = null;
+}
+
+function cancelDetailRequest() {
+  state.detailRequestToken += 1;
+  if (state.detailRequestController) state.detailRequestController.abort();
+  state.detailRequestController = null;
+  clearTimeout(state.resizeTimer);
+}
+
+function requestDetailBars(code) {
+  if (!code || qs('#detailOverlay').classList.contains('hidden')) return;
+  cancelDetailRequest();
+  const requestToken = state.detailRequestToken;
+  const controller = new AbortController();
+  state.detailRequestController = controller;
+  api(`/api/instruments/${encodeURIComponent(code)}/bars?limit=220`, {signal: controller.signal})
+    .then(bars => {
+      if (requestToken === state.detailRequestToken && state.detailCode === code && !qs('#detailOverlay').classList.contains('hidden')) drawChart(bars);
+    })
+    .catch(error => {
+      if (error.name !== 'AbortError' && requestToken === state.detailRequestToken) toast(`K线加载失败：${error.message}`);
+    });
+}
+
+function scheduleDetailBars(code, delay = 120) {
+  clearTimeout(state.resizeTimer);
+  state.resizeTimer = setTimeout(() => requestDetailBars(code), delay);
+}
+
+function trapModalFocus(event) {
+  if (event.key !== 'Tab' || event.currentTarget.classList.contains('hidden')) return;
+  const focusable = qsa('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])', event.currentTarget);
+  if (!focusable.length) return;
+  const first = focusable[0], last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+}
 
 async function loadBootstrap(silent = false) {
   if (!state.token) { showAuth(); return; }
+  const requestGeneration = authRequestGeneration(), requestToken = state.token, controller = new AbortController();
+  state.bootstrapController?.abort(); state.bootstrapController = controller;
   if (!silent) qs('#refreshButton').disabled = true;
   try {
-    const bootstrap = await api('/api/bootstrap');
+    const bootstrap = await api('/api/bootstrap', {signal:controller.signal, authGeneration:requestGeneration});
     let reports = [];
     try {
-      reports = await api('/api/reports');
+      reports = await api('/api/reports', {signal:controller.signal, authGeneration:requestGeneration});
     } catch (reportError) {
       console.warn('report list unavailable', reportError);
     }
+    if (requestGeneration !== authRequestGeneration() || requestToken !== state.token || controller.signal.aborted) return;
     state.data = bootstrap;
     state.reports = reports;
     hideAuth();
     renderAll();
     scheduleBrowserRefresh();
   } catch (error) {
-    if (error.message !== 'unauthorized') toast(`刷新失败：${error.message}`, 5000);
+    if (error.name !== 'AbortError' && requestGeneration === authRequestGeneration() && requestToken === state.token) toast(`刷新失败：${error.message}`, 5000);
   } finally {
-    qs('#refreshButton').disabled = false;
+    if (state.bootstrapController === controller) { state.bootstrapController = null; qs('#refreshButton').disabled = false; }
   }
 }
 
@@ -119,6 +315,73 @@ function scheduleBrowserRefresh() {
   clearInterval(state.refreshTimer);
   const minutes = Number(state.settings?.quote_refresh_minutes || 3);
   state.refreshTimer = setInterval(() => loadBootstrap(true), Math.max(1, minutes) * 60 * 1000);
+}
+
+function provenanceText(source, sourceTimestamp, fetchedAt, freshness, verification, degradedReason) {
+  return `<div class="provenance-line"><span>来源 ${escapeHtml(source || '—')}</span><span>源时间 ${escapeHtml(timeText(sourceTimestamp))}</span><span>抓取 ${escapeHtml(timeText(fetchedAt))}</span><span>新鲜度 ${escapeHtml(freshness || 'unavailable')}</span><span>验证 ${escapeHtml(verification || 'unverified')}</span>${degradedReason ? `<span class="provenance-warning">${escapeHtml(degradedReason)}</span>` : ''}</div>`;
+}
+
+function quoteFreshness(quote) {
+  if (quote?.freshness) return quote.freshness;
+  if (quote?.degraded_reason || quote?.is_mock) return 'degraded';
+  if (quote?.is_realtime) return 'fresh';
+  return 'unavailable';
+}
+
+function quoteStateLabel(quote) {
+  if (quote?.is_mock) return 'Mock · degraded';
+  if (quoteFreshness(quote) === 'stale') return 'stale';
+  if (quoteFreshness(quote) === 'degraded') return 'degraded';
+  if (quoteFreshness(quote) === 'unavailable') return 'unavailable';
+  return quote?.verification_status || 'unverified';
+}
+
+function contextObservation(item) {
+  return item?.observation || item || {};
+}
+
+function contextStatus(item, observation) {
+  if (!item?.enabled) return 'unavailable · disabled';
+  if (item.verification_status !== 'verified') return 'unverified';
+  if (!observation || (observation.degraded || ['degraded', 'unavailable'].includes(observation.freshness))) return observation?.is_mock ? 'Mock · degraded' : 'unavailable';
+  if (observation.is_mock) return 'Mock · degraded';
+  return observation.freshness || 'verified';
+}
+
+function marketContextCard(item) {
+  const observation = contextObservation(item);
+  const hasObservation = Boolean(item?.observation) || (item?.observed_value !== null && item?.observed_value !== undefined);
+  const status = contextStatus(item, hasObservation ? observation : null);
+  const value = observation.today_pct_change;
+  const level = observation.observed_value ?? observation.price;
+  const code = item.display_code || item.source_symbol;
+  const unavailable = value === null || value === undefined;
+  const tone = escapeHtml(unavailable ? 'neutral' : colorClass(value));
+  return `<article class="context-card observed-card" role="listitem">
+    <div class="context-card-head"><div class="context-identity">${displayIdentity(code, item.label)}</div><span class="status-badge ${status.includes('unavailable') || status.includes('unverified') ? 'status-muted' : ''}">${escapeHtml(status)}</span></div>
+    <div class="context-region">${escapeHtml(item.region || '—')} · ${escapeHtml(item.context_kind || 'context')}</div>
+    <div class="context-value ${tone}"><span class="context-value-label">今日涨跌</span><strong>${unavailable ? '—' : escapeHtml(pct(value))}</strong></div>
+    <div class="context-level"><span>水平 / 价格</span><strong>${escapeHtml(fmt(level, 4))}</strong></div>
+    ${provenanceText(observation.source, observation.source_timestamp, observation.fetched_at, observation.freshness || status, observation.verification_status || item.verification_status, observation.degraded_reason)}
+  </article>`;
+}
+
+function mergeMarketContext(items) {
+  const incoming = Array.isArray(items) ? items : [];
+  const byId = new Map(incoming.filter(item => item && item.context_id).map(item => [item.context_id, item]));
+  const defaults = DEFAULT_MARKET_CONTEXT.map(item => ({...item, ...(byId.get(item.context_id) || {})}));
+  const standardIds = new Set(DEFAULT_MARKET_CONTEXT.map(item => item.context_id));
+  const extras = incoming
+    .filter(item => item && item.context_id && !standardIds.has(item.context_id))
+    .map(item => ({...item}))
+    .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0));
+  return [...defaults, ...extras];
+}
+
+function renderMarketContext() {
+  const node = qs('#marketContextCards');
+  const rows = mergeMarketContext(state.data.market_context);
+  node.innerHTML = rows.map(marketContextCard).join('');
 }
 
 function renderSummary() {
@@ -154,16 +417,22 @@ function renderNarrative() {
   const up = state.data.summary.market_width.up;
   const down = state.data.summary.market_width.down;
   qs('#marketNarrative').innerHTML = `
-    <strong>市场宽度：</strong>${up} 涨 / ${down} 跌。当前信号以 <strong>${escapeHtml(Object.entries(stateCounts).sort((a,b)=>b[1]-a[1])[0]?.[0] || '暂无')}</strong> 为主。
-    <strong>相对领先：</strong>${strongest.map(r => `${escapeHtml(r.name)}（${fmt(r.signal.score,1)}）`).join('、')}。
-    <strong>风险靠前：</strong>${weakest.map(r => `${escapeHtml(r.name)}（${fmt(r.signal.score,1)}）`).join('、')}。
+    <strong>市场宽度：</strong>${escapeHtml(up)} 涨 / ${escapeHtml(down)} 跌。当前信号以 <strong>${escapeHtml(Object.entries(stateCounts).sort((a,b)=>b[1]-a[1])[0]?.[0] || '暂无')}</strong> 为主。
+    <strong>相对领先：</strong>${strongest.map(r => `${escapeHtml(r.name)}（${escapeHtml(fmt(r.signal.score,1))}）`).join('、')}。
+    <strong>风险靠前：</strong>${weakest.map(r => `${escapeHtml(r.name)}（${escapeHtml(fmt(r.signal.score,1))}）`).join('、')}。
     所有预测均显示样本支持和区间；未校准预测不会获得高置信度。`;
 }
 
 function forecastCell(item) {
-  if (!item || item.p_up === null) return '<span class="muted">—</span>';
-  const cls = Number(item.expected_return || 0) >= 0 ? 'up' : 'down';
-  return `<div class="metric-main ${cls}">${fmt(item.p_up * 100,1)}%</div><div class="metric-sub">中位 ${pct(item.q50,2,true)} · n=${item.sample_count}</div>`;
+  const f = item || {};
+  return `<div class="forecast-surface" aria-label="FORECAST · 非实际结果">
+    <div class="forecast-label">FORECAST · 非实际结果</div>
+    <div class="forecast-horizon">${escapeHtml(f.horizon == null ? '—' : `${f.horizon}日`)}</div>
+    <div class="forecast-value">p(up) ${escapeHtml(f.p_up == null ? '—' : pct(f.p_up, 1, true))}</div>
+    <div class="forecast-range">E[r] ${escapeHtml(pct(f.expected_return, 2, true))} · q10/q50/q90 ${escapeHtml(pct(f.q10, 2, true))} / ${escapeHtml(pct(f.q50, 2, true))} / ${escapeHtml(pct(f.q90, 2, true))}</div>
+    <div class="forecast-meta">n=${escapeHtml(f.sample_count == null ? '—' : f.sample_count)} · ${escapeHtml(f.calibration_status || 'not_calibrated')} · ${escapeHtml(f.model_version || '—')}</div>
+    <div class="forecast-meta">as_of ${escapeHtml(timeText(f.as_of_date))} · generated ${escapeHtml(timeText(f.generated_at))} · cutoff ${escapeHtml(timeText(f.data_cutoff))}</div>
+  </div>`;
 }
 function instrumentRow(row) {
   const q = row.quote || {};
@@ -172,25 +441,31 @@ function instrumentRow(row) {
   const s = row.signal || {};
   const f = row.forecasts || {};
   const expired = s.expires_at && new Date(s.expires_at) < new Date();
-  return `<tr class="clickable ${expired ? 'signal-expired' : ''}" data-code="${escapeHtml(row.ts_code)}">
-    <td><div class="instrument-name">${escapeHtml(row.name)}</div><div class="instrument-meta">${escapeHtml(row.ts_code)} · ${escapeHtml(row.theme_l1 || '未分类')}/${escapeHtml(row.theme_l2 || '-')}</div></td>
-    <td><div class="metric-main ${colorClass(q.pct_change)}">${q.price == null ? '—' : fmt(q.price,4)}</div><div class="metric-sub ${colorClass(q.pct_change)}">${pct(q.pct_change)} · ${escapeHtml(q.source || '')}</div></td>
-    <td><div class="metric-main">${amountText(q.amount)}</div><div class="metric-sub">量比 ${fmt(v.volume_ratio,2)}</div></td>
-    <td><div class="metric-main">${escapeHtml(i.trend_label || '—')}</div><div class="metric-sub">技术 ${fmt(i.technical_score,1)} / 风险 ${fmt(i.risk_score,1)}</div></td>
-    <td><div class="metric-main ${Number(v.macd_hist || 0)>=0?'up':'down'}">${fmt(v.macd_hist,6)}</div><div class="metric-sub">DIF ${fmt(v.macd_dif,5)} / DEA ${fmt(v.macd_dea,5)}</div></td>
-    <td><div class="metric-main">J ${fmt(v.kdj_j,1)}</div><div class="metric-sub">K ${fmt(v.kdj_k,1)} / D ${fmt(v.kdj_d,1)}</div></td>
-    <td><div class="metric-main">${fmt(v.rsi14,1)}</div><div class="metric-sub">6:${fmt(v.rsi6,1)} / 12:${fmt(v.rsi12,1)}</div></td>
-    <td><div class="metric-main">${v.td_buy_setup ?? '—'} / ${v.td_sell_setup ?? '—'}</div><div class="metric-sub">买 / 卖设置</div></td>
-    <td><div class="metric-main ${colorClass(v.return_20d)}">${pct(v.return_20d,2,true)}</div><div class="metric-sub">60日 ${pct(v.return_60d,2,true)}</div></td>
+  return `<tr class="clickable ${expired ? 'signal-expired' : ''}" tabindex="0" role="button" aria-label="打开 ${displayIdentity(row.ts_code, row.name)}" data-code="${escapeHtml(row.ts_code)}">
+    <td><div class="instrument-name">${displayIdentity(row.ts_code, row.name)}</div><div class="instrument-meta">${escapeHtml(row.theme_l1 || '未分类')}/${escapeHtml(row.theme_l2 || '-')}</div></td>
+    <td class="observed-surface quote-cell"><div class="metric-main quote-change ${escapeHtml(colorClass(q.pct_change))}">${escapeHtml(pct(q.pct_change))}</div><div class="metric-sub quote-price">价格 ${escapeHtml(fmt(q.price,4))}</div><div class="quote-state-badge ${escapeHtml(q.is_mock ? 'is-mock' : quoteFreshness(q))}">${escapeHtml(quoteStateLabel(q))}</div>${provenanceText(q.source, q.source_timestamp || q.time, q.fetched_at, quoteFreshness(q), q.verification_status || 'unverified', q.degraded_reason)}</td>
+    <td><div class="metric-main">${escapeHtml(amountText(q.amount))}</div><div class="metric-sub">量比 ${escapeHtml(fmt(v.volume_ratio,2))}</div></td>
+    <td><div class="metric-main">${escapeHtml(i.trend_label || '—')}</div><div class="metric-sub">技术 ${escapeHtml(fmt(i.technical_score,1))} / 风险 ${escapeHtml(fmt(i.risk_score,1))}</div></td>
+    <td><div class="metric-main ${escapeHtml(Number(v.macd_hist || 0)>=0?'up':'down')}">${escapeHtml(fmt(v.macd_hist,6))}</div><div class="metric-sub">DIF ${escapeHtml(fmt(v.macd_dif,5))} / DEA ${escapeHtml(fmt(v.macd_dea,5))}</div></td>
+    <td><div class="metric-main">J ${escapeHtml(fmt(v.kdj_j,1))}</div><div class="metric-sub">K ${escapeHtml(fmt(v.kdj_k,1))} / D ${escapeHtml(fmt(v.kdj_d,1))}</div></td>
+    <td><div class="metric-main">${escapeHtml(fmt(v.rsi14,1))}</div><div class="metric-sub">6:${escapeHtml(fmt(v.rsi6,1))} / 12:${escapeHtml(fmt(v.rsi12,1))}</div></td>
+    <td><div class="metric-main">${escapeHtml(v.td_buy_setup ?? '—')} / ${escapeHtml(v.td_sell_setup ?? '—')}</div><div class="metric-sub">买 / 卖设置</div></td>
+    <td><div class="metric-main ${escapeHtml(colorClass(v.return_20d))}">${escapeHtml(pct(v.return_20d,2,true))}</div><div class="metric-sub">60日 ${escapeHtml(pct(v.return_60d,2,true))}</div></td>
     <td>${forecastCell(f['1'])}</td><td>${forecastCell(f['5'])}</td><td>${forecastCell(f['20'])}</td>
-    <td><span class="badge ${stateClass(s.state)}">${escapeHtml(s.state || '待计算')}</span><div class="metric-sub">分 ${fmt(s.score,1)} · conf ${fmt(s.confidence,1)}</div></td>
+    <td><span class="badge ${escapeHtml(stateClass(s.state))}">${escapeHtml(s.state || '待计算')}</span><div class="metric-sub">分 ${escapeHtml(fmt(s.score,1))} · conf ${escapeHtml(fmt(s.confidence,1))}</div></td>
   </tr>`;
 }
 function renderInstruments() {
   const body = qs('#instrumentTable tbody');
   const rows = [...(state.data.instruments || [])].sort((a,b) => Number(b.signal?.score || -1) - Number(a.signal?.score || -1));
   body.innerHTML = rows.length ? rows.map(instrumentRow).join('') : '<tr class="loading-row"><td colspan="13">暂无数据，请运行 bootstrap</td></tr>';
-  qsa('#instrumentTable tbody tr[data-code]').forEach(row => row.addEventListener('click', () => openDetail(row.dataset.code)));
+  qsa('#instrumentTable tbody tr[data-code]').forEach(row => {
+    const open = () => openDetail(row.dataset.code);
+    row.addEventListener('click', open);
+    row.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); }
+    });
+  });
 }
 
 function renderHoldings() {
@@ -204,11 +479,285 @@ function renderHoldings() {
     ['现金 / 未分配', '未录入', '本版不推断现金余额'],
   ];
   qs('#holdingSummary').innerHTML = items.map(([l,v,s]) => `<div class="summary-card"><div class="label">${escapeHtml(l)}</div><div class="value">${escapeHtml(v)}</div><div class="sub">${escapeHtml(s)}</div></div>`).join('');
-  qs('#holdingTable tbody').innerHTML = holdings.length ? holdings.map(h => `<tr><td><div class="instrument-name">${escapeHtml(h.name)}</div><div class="instrument-meta">${escapeHtml(h.ts_code)}</div></td><td>${fmt(h.shares,4)}</td><td>${fmt(h.cost_price,4)}</td><td>${fmt(h.latest_price,4)}</td><td>${amountText(h.market_value)}</td><td class="${colorClass(h.pnl)}">${fmt(h.pnl,2)} / ${h.pnl_pct==null?'—':pct(h.pnl_pct)}</td><td>${fmt(h.current_weight*100,1)}%</td><td>${h.target_weight==null?'—':fmt(h.target_weight*100,1)+'%'}</td><td><button class="small-button edit-holding" data-code="${escapeHtml(h.ts_code)}">修改</button> <button class="small-button danger delete-holding" data-code="${escapeHtml(h.ts_code)}">删除</button></td></tr>`).join('') : '<tr class="loading-row"><td colspan="9">尚未录入持仓</td></tr>';
+  qs('#holdingTable tbody').innerHTML = holdings.length ? holdings.map(h => `<tr><td><div class="instrument-name">${displayIdentity(h.ts_code, h.name)}</div><div class="instrument-meta">${escapeHtml(h.theme_l1 || '未分类')}/${escapeHtml(h.theme_l2 || '-')}</div></td><td>${escapeHtml(fmt(h.shares,4))}</td><td>${escapeHtml(fmt(h.cost_price,4))}</td><td>${escapeHtml(fmt(h.latest_price,4))}</td><td>${escapeHtml(amountText(h.market_value))}</td><td class="${escapeHtml(colorClass(h.pnl))}">${escapeHtml(fmt(h.pnl,2))} / ${escapeHtml(holdingPnlPercent(h))}</td><td>${escapeHtml(fmt(h.current_weight*100,1))}%</td><td>${h.target_weight==null?'—':escapeHtml(fmt(h.target_weight*100,1))+'%'}</td><td><button class="small-button edit-holding" data-code="${escapeHtml(h.ts_code)}">修改</button> <button class="small-button danger delete-holding" data-code="${escapeHtml(h.ts_code)}">删除</button></td></tr>`).join('') : '<tr class="loading-row"><td colspan="9">尚未录入持仓</td></tr>';
   qsa('.edit-holding').forEach(b => b.addEventListener('click', () => openHolding(b.dataset.code)));
   qsa('.delete-holding').forEach(b => b.addEventListener('click', () => deleteHolding(b.dataset.code)));
+  syncHoldingOptions();
+}
+
+function syncHoldingOptions() {
+  const overlay = qs('#holdingOverlay');
+  if (!overlay.classList.contains('hidden')) return;
   const select = qs('#holdingCode');
-  select.innerHTML = (state.data.instruments || []).map(r => `<option value="${escapeHtml(r.ts_code)}">${escapeHtml(r.ts_code)} · ${escapeHtml(r.name)}</option>`).join('');
+  const selectedCode = select.value;
+  select.innerHTML = (state.data.instruments || []).map(r => `<option value="${escapeHtml(r.ts_code)}">${displayIdentity(r.ts_code, r.name)}</option>`).join('');
+  if ([...select.options].some(option => option.value === selectedCode)) select.value = selectedCode;
+}
+
+const IMPORT_EDITABLE_FIELDS = Object.freeze(['selected_code', 'name', 'shares', 'cost_price', 'target_weight', 'user_note']);
+const IMPORT_STATUS_LABELS = Object.freeze({
+  matched: '已匹配', ambiguous: '需明确选择', unmatched: '未匹配', low_confidence: '低置信度', duplicate: '重复候选',
+  rejected: '已拒绝', pending: '待复核', reviewed: '已复核', confirmed: '已写入', saving: '保存中',
+});
+const IMPORT_FIELD_LABELS = Object.freeze({ts_code: '代码', name: '名称', shares: '份额', cost_price: '成本价', target_weight: '目标权重'});
+
+function importCandidateValue(value) { return value === null || value === undefined ? '' : String(value); }
+function importStatusLabel(value) { return IMPORT_STATUS_LABELS[value] || String(value || '待复核'); }
+function importCandidate(candidate) {
+  return {
+    id: Number(candidate?.id), row_index: Number(candidate?.row_index ?? 0),
+    ts_code: candidate?.ts_code == null ? null : String(candidate.ts_code), name: candidate?.name == null ? null : String(candidate.name),
+    shares: candidate?.shares == null ? null : candidate.shares, cost_price: candidate?.cost_price == null ? null : candidate.cost_price,
+    target_weight: candidate?.target_weight == null ? null : candidate.target_weight, user_note: candidate?.user_note == null ? null : String(candidate.user_note),
+    match_status: String(candidate?.match_status || 'unmatched'), status: String(candidate?.status || 'pending'), action: String(candidate?.action || 'none'),
+    selected_code: candidate?.selected_code == null ? null : String(candidate.selected_code),
+    safe_alternatives: Array.isArray(candidate?.safe_alternatives) ? candidate.safe_alternatives.map(String) : [],
+    field_confidence: Array.isArray(candidate?.field_confidence) ? candidate.field_confidence.map(item => ({field:String(item?.field || ''), confidence:item?.confidence})) : [],
+  };
+}
+function importSession(payload) {
+  const sessionId = typeof payload?.session_id === 'string' && /^[0-9a-f]{16,256}$/i.test(payload.session_id) ? payload.session_id : '';
+  return {sessionId, session: {
+    status: String(payload?.status || 'failed'), candidate_count: Number(payload?.candidate_count || 0), expires_at: payload?.expires_at || null,
+    cloud_consent: Boolean(payload?.cloud_consent), ocr_mode: String(payload?.ocr_mode || 'local'), ocr_backend: String(payload?.ocr_backend || 'local'),
+    ocr_model: String(payload?.ocr_model || '—'), ocr_version: String(payload?.ocr_version || '—'), candidates: Array.isArray(payload?.candidates) ? payload.candidates.map(importCandidate) : [],
+  }, busy:false, uploadProgress:null, importBusy:false, importError:'', error:'', status:'就绪'};
+}
+function importAlternativeCodes(candidate) {
+  const codes = new Set();
+  for (const code of [candidate.selected_code, candidate.ts_code, ...(candidate.safe_alternatives || [])]) if (code) codes.add(String(code));
+  for (const instrument of (state.data?.instruments || [])) if (instrument.ts_code) codes.add(String(instrument.ts_code));
+  return [...codes].sort();
+}
+function importInstrumentName(code) { return (state.data?.instruments || []).find(item => item.ts_code === code)?.name || ''; }
+function importCodeOptions(candidate) {
+  const selected = importCandidateValue(candidate.selected_code || candidate.ts_code);
+  return ['<option value="">请选择代码</option>', ...importAlternativeCodes(candidate).map(code => `<option value="${escapeHtml(code)}"${code === selected ? ' selected' : ''}>${displayIdentity(code, importInstrumentName(code))}</option>`)].join('');
+}
+function importWarning(candidate) {
+  if (candidate.status === 'rejected') return '此行已明确拒绝，不会写入持仓。';
+  return ({
+    ambiguous: '存在多个可能标的；请明确选择，或拒绝此行。', unmatched: '服务端尚未解析到配置标的；请明确选择。',
+    low_confidence: '识别置信度偏低；请人工核对代码、名称和数值。', duplicate: '此候选可能与其他行指向同一代码；确认前必须处理重复。',
+  })[candidate.match_status] || '';
+}
+function renderImportCandidate(candidate) {
+  const rejected = candidate.status === 'rejected' || candidate.action === 'reject';
+  const badges = [candidate.match_status, candidate.status].filter(Boolean).map(status => {
+    const safeStatus = IMPORT_STATUS_CLASS_ALLOWLIST[status] || 'pending';
+    return `<span class="import-badge status-${safeStatus}">${escapeHtml(importStatusLabel(status))}</span>`;
+  }).join('');
+  const confidence = (candidate.field_confidence || []).map(item => `<span class="confidence-badge">${escapeHtml(IMPORT_FIELD_LABELS[item.field] || item.field)} ${escapeHtml(fmt(item.confidence, 2))}</span>`).join('');
+  const disabled = rejected ? ' disabled' : '';
+  const validation = rejected ? [] : [...importCandidateValidation(candidate), ...(state.importSaveErrors.get(candidate.id) ? [state.importSaveErrors.get(candidate.id)] : [])];
+  return `<article class="candidate-card${rejected ? ' is-rejected' : ''}" role="listitem" data-candidate-id="${escapeHtml(candidate.id)}">
+    <div class="candidate-card-head"><div><div class="candidate-row-title">第 ${escapeHtml(candidate.row_index + 1)} 行 · ${displayIdentity(candidate.selected_code || candidate.ts_code, candidate.name)}</div><div class="candidate-row-id">代码优先身份 · 服务端状态保留</div></div><div class="candidate-badges">${badges}</div></div>
+    ${importWarning(candidate) ? `<div class="candidate-warning" role="note">${escapeHtml(importWarning(candidate))}</div>` : ''}
+    ${validation.length ? `<div class="candidate-validation" role="alert">${validation.map(reason => escapeHtml(reason)).join(' · ')}</div>` : ''}
+    <div class="candidate-fields">
+      <label>选择代码<select data-import-field="selected_code"${disabled}>${importCodeOptions(candidate)}</select></label>
+      <label>名称<input data-import-field="name" type="text" maxlength="128" value="${escapeHtml(importCandidateValue(candidate.name))}"${disabled}></label>
+      <label>份额<input data-import-field="shares" type="number" min="0" step="0.0001" value="${escapeHtml(importCandidateValue(candidate.shares))}"${disabled}></label>
+      <label>成本价<input data-import-field="cost_price" type="number" min="0" step="0.000001" value="${escapeHtml(importCandidateValue(candidate.cost_price))}"${disabled}></label>
+      <label>目标权重（0-1，可空）<input data-import-field="target_weight" type="number" min="0" max="1" step="0.000001" value="${escapeHtml(importCandidateValue(candidate.target_weight))}"${disabled}></label>
+      <label>用户备注<textarea data-import-field="user_note" maxlength="2000"${disabled}>${escapeHtml(importCandidateValue(candidate.user_note))}</textarea></label>
+    </div>
+    <div class="confidence-list" aria-label="字段置信度">${confidence || '<span class="muted">无字段置信度</span>'}</div>
+    <div class="candidate-actions"><span class="candidate-save-state" aria-live="polite">${rejected ? '已拒绝' : '修改后自动保存'}</span>${rejected ? '' : '<button class="small-button danger import-reject" type="button">拒绝此行</button>'}</div>
+  </article>`;
+}
+function importConfirmState() {
+  const workflow = state.holdingImport, session = workflow?.session;
+  if (!workflow || !session || workflow.busy || importWorkflowHasPendingSaves() || !['ready', 'editing'].includes(session.status)) return {ready:false, reason:'等待本地识别或保存完成'};
+  if (!session.candidates.length) return {ready:false, reason:'没有可确认的候选，服务器不会创建持仓'};
+  const seen = new Set();
+  for (const candidate of session.candidates) {
+    if (candidate.status === 'rejected') continue;
+    const code = String(candidate.selected_code || '').trim().toUpperCase();
+    if (candidate.status !== 'reviewed' || candidate.action !== 'none') return {ready:false, reason:'每一行都需要明确处理：选择代码、复核状态，或拒绝此行'};
+    if (!code || seen.has(code)) return {ready:false, reason:'每一行都需要唯一的已配置代码；重复候选需明确处理'};
+    const reasons = importCandidateValidation(candidate);
+    if (reasons.length) return {ready:false, reason:reasons.join(' · ')};
+    seen.add(code);
+  }
+  return {ready:true, reason:'所有未拒绝行已明确处理，可继续确认'};
+}
+function renderImportReview() {
+  const workflow = state.holdingImport, review = qs('#portfolioImportReview');
+  if (!workflow?.session) { review.classList.add('hidden'); return; }
+  review.classList.remove('hidden');
+  qs('#portfolioImportMeta').textContent = `${workflow.session.candidates.length} 行候选 · ${workflow.session.ocr_backend} · ${workflow.session.ocr_model}`;
+  qs('#portfolioImportCandidates').innerHTML = workflow.session.candidates.length ? workflow.session.candidates.map(renderImportCandidate).join('') : '<div class="empty-state">未找到可复核候选；不会创建持仓。</div>';
+  const gate = importConfirmState(), button = qs('#portfolioConfirmButton');
+  button.disabled = !gate.ready; button.setAttribute('aria-disabled', String(!gate.ready)); qs('#portfolioConfirmReason').textContent = gate.reason;
+  qs('#portfolioImportStatus').textContent = workflow.status || `状态：${workflow.session.status}`;
+  if (workflow.canceling) setImportInteractionDisabled(true);
+}
+function renderCloudReview() {
+  const panel = qs('#cloudReviewPanel'), enabled = state.cloudReviewEnabled === true;
+  panel.classList.toggle('hidden', !enabled); panel.hidden = !enabled;
+  if (enabled && state.holdingImport?.session) qs('#cloudReviewProvider').textContent = `${state.holdingImport.session.ocr_backend} / ${state.holdingImport.session.ocr_model}`;
+}
+function formatImportError(error) {
+  if (error?.message === 'unauthorized') return '访问令牌已失效，请重新登录。';
+  return ({413:'图片超过服务器大小限制。', 415:'仅支持 PNG、JPEG 或 WebP 图片。', 422:'图片或候选数据未通过服务器校验。', 503:'本地 OCR 暂不可用，请稍后重试。'})[error?.status] || '持仓截图导入失败，请检查后重试。';
+}
+function clearPortfolioImport() { resetImportWorkflow(); }
+async function openPortfolioImport() {
+  if (state.cancelPromise) await state.cancelPromise;
+  if (state.holdingImport?.cancelError) { openModal('portfolioImportOverlay', '#portfolioCancelButton'); return; }
+  resetImportWorkflow(); openModal('portfolioImportOverlay', '#portfolioImportFile'); renderCloudReview();
+}
+async function uploadPortfolioImport(event) {
+  event.preventDefault(); const input = qs('#portfolioImportFile'), file = input.files?.[0];
+  if (state.cancelPromise) { qs('#portfolioImportStatus').textContent = '等待取消请求完成后再开始新导入…'; await state.cancelPromise; return; }
+  if (!file) { qs('#portfolioImportError').textContent = '请选择一张 PNG、JPEG 或 WebP 图片。'; return; }
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) qs('#portfolioImportError').textContent = 'MIME 类型仅作浏览器提示；服务器最终权威判定，仍会继续提交校验。';
+  if (file.size > 10 * 1024 * 1024) { qs('#portfolioImportError').textContent = '浏览器提示：图片超过建议 10 MB；服务器限制优先，请选择较小图片。'; return; }
+  const generation = newImportGeneration(); resetImportWorkflow({advance:false});
+  state.holdingImport = {sessionId:'', session:null, generation, busy:true, uploadProgress:0, importBusy:true, importError:'', error:'', status:'上传并进行本地识别中…'}; qs('#portfolioImportStatus').textContent = '上传并进行本地识别中…'; qs('#portfolioImportProgress').setAttribute('aria-valuenow', '0'); qs('#portfolioImportProgress').classList.remove('hidden'); qs('#portfolioImportUploadButton').disabled = true;
+  const body = new FormData(); body.append('file', file, 'portfolio-import');
+  const controller = trackImportController(new AbortController());
+  try {
+    const workflow = importSession(await api('/api/holding-imports', {method:'POST', body, signal:controller.signal, authGeneration:authRequestGeneration()}));
+    if (!isImportCurrent(generation) || controller.signal.aborted) return;
+    if (!workflow.sessionId) throw Object.assign(new Error('invalid import session'), {status:422});
+    workflow.generation = generation; workflow.uploadProgress = 100; state.holdingImport = workflow; renderImportReview(); renderCloudReview(); qs('#portfolioImportStatus').textContent = '本地识别完成，请逐行复核。'; qs('#portfolioImportProgress').setAttribute('aria-valuenow', '100'); qs('#portfolioImportProgress').classList.add('hidden');
+  } catch (error) {
+    if (!isImportCurrent(generation) || error?.name === 'AbortError') return;
+    state.holdingImport.busy = false; state.holdingImport.importBusy = false; state.holdingImport.error = formatImportError(error); state.holdingImport.importError = state.holdingImport.error; qs('#portfolioImportStatus').textContent = '识别未完成'; qs('#portfolioImportError').textContent = state.holdingImport.error; qs('#portfolioImportProgress').classList.add('hidden'); qs('#portfolioImportUploadButton').disabled = false;
+  } finally { untrackImportController(controller); }
+}
+function importPatchPayload(card) {
+  const payload = {};
+  for (const field of IMPORT_EDITABLE_FIELDS) {
+    const control = qs(`[data-import-field="${field}"]`, card); if (!control) continue;
+    const raw = control.value; payload[field] = raw === '' ? null : raw;
+  }
+  return payload;
+}
+function scheduleImportCandidateSave(card) {
+  const workflow = state.holdingImport; if (!workflow?.sessionId || workflow.canceling) return;
+  const id = Number(card.dataset.candidateId), version = (state.importSaveVersions.get(id) || 0) + 1;
+  state.importSaveVersions.set(id, version); state.importSaveErrors.delete(id); clearTimeout(state.pendingSaveTimers.get(id)?.timer);
+  const payload = importPatchPayload(card), generation = state.importGeneration, sessionId = workflow.sessionId;
+  const numericReasons = validateImportPayload(payload);
+  if (numericReasons.length) { state.importSaveErrors.set(id, numericReasons.join(' · ')); const status = qs('.candidate-save-state', card); if (status) status.textContent = '数值待修正'; return; }
+  const timer = setTimeout(() => flushCandidateSave(id, generation, sessionId, version), 280);
+  state.pendingSaveTimers.set(id, {timer, payload, version, generation, sessionId, card});
+  const status = qs('.candidate-save-state', card); if (status) status.textContent = '等待保存…';
+}
+async function flushCandidateSave(id, generation, sessionId, version) {
+  const record = state.pendingSaveTimers.get(id);
+  if (!record || record.version !== version) return false;
+  if (!isImportCurrent(generation, sessionId)) return false;
+  return enqueueSessionPatch(id, generation, sessionId, version);
+}
+function enqueueSessionPatch(id, generation, sessionId, version) {
+  const existing = state.inflightSavePromises.get(id);
+  if (existing && state.sessionQueuedVersions.get(id) >= version) return existing;
+  const workflow = state.holdingImport;
+  const run = async () => {
+    if (!isImportCurrent(generation, sessionId)) return false;
+    const latest = state.pendingSaveTimers.get(id);
+    const sendRecord = latest && latest.version >= version ? latest : null;
+    if (!sendRecord) return false;
+    clearTimeout(sendRecord.timer); state.pendingSaveTimers.delete(id);
+    const sendVersion = sendRecord.version;
+    workflow.importBusy = true; workflow.status = '保存候选修改中…';
+    const controller = trackImportController(new AbortController());
+    try {
+      const updated = await api(`/api/holding-imports/${encodeURIComponent(sessionId)}/candidates/${id}`, {method:'PATCH', body:JSON.stringify(sendRecord.payload), signal:controller.signal, authGeneration:authRequestGeneration()});
+      if (!isImportCurrent(generation, sessionId) || state.importSaveVersions.get(id) !== sendVersion) return false;
+      const index = workflow.session.candidates.findIndex(candidate => candidate.id === id); if (index >= 0) workflow.session.candidates[index] = importCandidate(updated);
+      workflow.session.status = 'ready'; workflow.status = '已保存'; state.importSaveErrors.delete(id); renderImportReview(); return true;
+    } catch (error) {
+      if (!isImportCurrent(generation, sessionId) || error?.name === 'AbortError') return false;
+      if (state.importSaveVersions.get(id) === sendVersion) { state.importSaveErrors.set(id, formatImportError(error)); workflow.status = '保存失败'; qs('#portfolioImportError').textContent = formatImportError(error); renderImportReview(); }
+      return false;
+    } finally {
+      untrackImportController(controller);
+      if (state.sessionQueuedVersions.get(id) === sendVersion) state.sessionQueuedVersions.delete(id);
+      if (isImportCurrent(generation, sessionId) && state.pendingSaveTimers.has(id)) {
+        const next = state.pendingSaveTimers.get(id); setTimeout(() => enqueueSessionPatch(id, next.generation, next.sessionId, next.version), 0);
+      }
+      if (isImportCurrent(generation, sessionId) && !state.pendingSaveTimers.has(id)) workflow.importBusy = false;
+    }
+  };
+  const task = state.sessionSaveQueue.then(run, run);
+  state.sessionSaveQueue = task.catch(() => false);
+  state.sessionQueuedVersions.set(id, version);
+  state.inflightSavePromises.set(id, task);
+  task.finally(() => { if (state.inflightSavePromises.get(id) === task) state.inflightSavePromises.delete(id); });
+  return task;
+}
+function queueImportCandidateSave(card, id, explicitPayload = null) {
+  const workflow = state.holdingImport; if (!workflow?.sessionId || workflow.canceling) return Promise.resolve(false);
+  const version = (state.importSaveVersions.get(id) || 0) + 1, generation = state.importGeneration, sessionId = workflow.sessionId;
+  state.importSaveVersions.set(id, version); state.importSaveErrors.delete(id); clearTimeout(state.pendingSaveTimers.get(id)?.timer);
+  state.pendingSaveTimers.set(id, {timer:setTimeout(() => flushCandidateSave(id, generation, sessionId, version), explicitPayload ? 0 : 280), payload:explicitPayload || importPatchPayload(card), version, generation, sessionId, card});
+  return explicitPayload ? flushCandidateSave(id, generation, sessionId, version) : Promise.resolve(true);
+}
+async function saveImportCandidate(card, id, explicitPayload = null) { return queueImportCandidateSave(card, id, explicitPayload); }
+async function rejectImportCandidate(card) { await queueImportCandidateSave(card, Number(card.dataset.candidateId), {action:'reject'}); }
+async function flushImportSaves(generation, sessionId) {
+  if (!isImportCurrent(generation, sessionId)) return false;
+  while (isImportCurrent(generation, sessionId) && (state.pendingSaveTimers.size || state.inflightSavePromises.size)) {
+    const pending = [...state.pendingSaveTimers.entries()].sort(([, left], [, right]) => {
+      const leftRow = state.holdingImport?.session?.candidates.find(candidate => candidate.id === Number(left.card?.dataset.candidateId))?.row_index ?? Number.MAX_SAFE_INTEGER;
+      const rightRow = state.holdingImport?.session?.candidates.find(candidate => candidate.id === Number(right.card?.dataset.candidateId))?.row_index ?? Number.MAX_SAFE_INTEGER;
+      return leftRow - rightRow || left.version - right.version;
+    });
+    const queued = pending.map(([id, record]) => { clearTimeout(record.timer); return enqueueSessionPatch(id, record.generation, record.sessionId, record.version); });
+    await Promise.all(queued);
+    await Promise.all([...state.inflightSavePromises.values()]);
+  }
+  return isImportCurrent(generation, sessionId) && state.importSaveErrors.size === 0 && !importWorkflowHasPendingSaves();
+}
+async function requestPortfolioConfirm() {
+  if (!importConfirmState().ready) { renderImportReview(); return; }
+  const workflow = state.holdingImport, generation = state.importGeneration, sessionId = workflow.sessionId;
+  workflow.busy = true; workflow.importBusy = true; workflow.status = '正在等待候选保存…'; renderImportReview();
+  const flushed = await flushImportSaves(generation, sessionId);
+  if (!isImportCurrent(generation, sessionId)) return;
+  workflow.busy = false; workflow.importBusy = false; workflow.status = '已保存';
+  if (!flushed) { workflow.status = '保存失败'; renderImportReview(); return; }
+  if (!importConfirmState().ready) { renderImportReview(); return; }
+  qs('#portfolioConfirmError').textContent = ''; openModal('portfolioConfirmOverlay', '#portfolioConfirmYes');
+}
+async function confirmPortfolioImport() {
+  const workflow = state.holdingImport; if (!workflow?.sessionId || !importConfirmState().ready) return;
+  const generation = state.importGeneration, sessionId = workflow.sessionId, controller = trackImportController(new AbortController());
+  workflow.busy = true; workflow.importBusy = true; qs('#portfolioConfirmYes').disabled = true; qs('#portfolioConfirmError').textContent = '';
+  try {
+    await api(`/api/holding-imports/${encodeURIComponent(sessionId)}/confirm`, {method:'POST', signal:controller.signal, authGeneration:authRequestGeneration()});
+    if (!isImportCurrent(generation, sessionId) || controller.signal.aborted) return;
+    untrackImportController(controller); closeModal('portfolioConfirmOverlay'); closeModal('portfolioImportOverlay'); resetImportWorkflow(); toast('持仓导入已确认'); await loadBootstrap(true);
+  } catch (error) {
+    if (!isImportCurrent(generation, sessionId) || error?.name === 'AbortError') return;
+    workflow.busy = false; workflow.importBusy = false; workflow.importError = formatImportError(error); qs('#portfolioConfirmYes').disabled = false; qs('#portfolioConfirmError').textContent = workflow.importError; renderImportReview();
+  } finally { untrackImportController(controller); }
+}
+async function cancelPortfolioImport() {
+  if (state.cancelPromise) return state.cancelPromise;
+  const workflow = state.holdingImport, sessionId = workflow?.sessionId || '';
+  if (!sessionId) { newImportGeneration(); resetImportWorkflow({advance:false}); closeModal('portfolioConfirmOverlay'); closeModal('portfolioImportOverlay'); return; }
+  const generation = newImportGeneration(), authGenerationAtCancel = authRequestGeneration(), capturedToken = state.token;
+  workflow.generation = generation; workflow.canceling = true; workflow.cancelError = false; workflow.busy = true; workflow.status = '正在取消导入…'; setImportInteractionDisabled(true); renderImportReview();
+  const controller = new AbortController(); state.cancelController = controller;
+  const cancelPromise = (async () => {
+    try {
+      await api(`/api/holding-imports/${encodeURIComponent(sessionId)}/cancel`, {method:'POST', headers: capturedToken ? {Authorization:`Bearer ${capturedToken}`} : {}, signal:controller.signal, authGeneration:authGenerationAtCancel});
+      if (isImportCurrent(generation, sessionId)) { state.cancelPromise = null; state.cancelController = null; closeModal('portfolioConfirmOverlay'); closeModal('portfolioImportOverlay'); resetImportWorkflow(); toast('已取消截图导入'); }
+    } catch (error) {
+      if (isImportCurrent(generation, sessionId)) { workflow.canceling = false; workflow.busy = false; workflow.cancelError = true; workflow.status = '取消失败，请重试'; qs('#portfolioImportError').textContent = `取消失败，请重试：${formatImportError(error)}`; setImportInteractionDisabled(false); renderImportReview(); }
+    } finally {
+      if (state.cancelPromise === cancelPromise) state.cancelPromise = null;
+      if (state.cancelController === controller) state.cancelController = null;
+    }
+  })();
+  state.cancelPromise = cancelPromise;
+  return cancelPromise;
 }
 
 function renderNews() {
@@ -216,14 +765,16 @@ function renderNews() {
   qs('#newsList').innerHTML = rows.length ? rows.map(item => {
     const href = safeHttpUrl(item.url);
     const title = href ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a>` : escapeHtml(item.title);
-    return `<article class="news-card"><div><h3>${title}</h3><div class="news-meta">${escapeHtml(item.source)} · ${timeText(item.published_at)} · ${escapeHtml((item.affected_themes || []).join(' / '))}</div>${item.facts?.length ? `<p><strong>事实：</strong>${escapeHtml(item.facts.join('；'))}</p>` : ''}${item.inferences?.length ? `<div class="news-facts">推断：${escapeHtml(item.inferences.join('；'))}</div>` : ''}${item.risk_flags?.length ? `<div class="news-facts amber">风险：${escapeHtml(item.risk_flags.join('；'))}</div>` : ''}</div><div><div class="news-score ${colorClass(item.impact_score)}">${Number(item.impact_score || 0)>=0?'+':''}${fmt(item.impact_score,2)}</div><div class="news-meta">${escapeHtml(item.impact_direction || '中性')} · ${escapeHtml(item.impact_horizon || '-')}</div></div></article>`;
+    const impact = numericValue(item.impact_score) ? `${Number(item.impact_score) >= 0 ? '+' : ''}${escapeHtml(fmt(item.impact_score,2))}` : '—';
+    return `<article class="news-card"><div><h3>${title}</h3><div class="news-meta">${escapeHtml(item.source)} · ${escapeHtml(timeText(item.published_at))} · ${escapeHtml((item.affected_themes || []).join(' / '))}</div>${item.facts?.length ? `<p><strong>事实：</strong>${escapeHtml(item.facts.join('；'))}</p>` : ''}${item.inferences?.length ? `<div class="news-facts">推断：${escapeHtml(item.inferences.join('；'))}</div>` : ''}${item.risk_flags?.length ? `<div class="news-facts amber">风险：${escapeHtml(item.risk_flags.join('；'))}</div>` : ''}</div><div><div class="news-score ${escapeHtml(colorClass(item.impact_score))}">${impact}</div><div class="news-meta">${escapeHtml(item.impact_direction || '中性')} · ${escapeHtml(item.impact_horizon || '-')}</div></div></article>`;
   }).join('') : '<div class="loading-row">暂无新闻；可在“系统”中运行 refresh_news。</div>';
 }
 
 async function downloadReport(filename) {
+  const requestGeneration = authRequestGeneration(), requestToken = state.token;
   try {
     const response = await fetch(`/api/reports/${encodeURIComponent(filename)}`, {headers: {Authorization: `Bearer ${state.token}`}});
-    if (response.status === 401) { showAuth('令牌无效或已变更'); return; }
+    if (response.status === 401) { if (requestGeneration === authRequestGeneration() && requestToken === state.token) showAuth('令牌无效或已变更'); return; }
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
@@ -234,22 +785,28 @@ async function downloadReport(filename) {
 }
 
 async function loadSettings() {
+  if (!state.token) return;
+  const requestGeneration = authRequestGeneration(), requestToken = state.token, controller = new AbortController();
+  state.settingsController?.abort(); state.settingsController = controller;
   try {
-    state.settings = await api('/api/settings');
+    const settings = await api('/api/settings', {signal:controller.signal, authGeneration:requestGeneration});
+    if (requestGeneration !== authRequestGeneration() || requestToken !== state.token || controller.signal.aborted) return;
+    state.settings = settings;
     for (const [key,value] of Object.entries(state.settings)) {
       const input = qs(`[name="${key}"]`, qs('#settingsForm'));
       if (input) input.value = value;
     }
     scheduleBrowserRefresh();
-  } catch (error) { toast(`读取设置失败：${error.message}`); }
+  } catch (error) { if (error.name !== 'AbortError' && requestGeneration === authRequestGeneration() && requestToken === state.token) toast(`读取设置失败：${error.message}`); }
+  finally { if (state.settingsController === controller) state.settingsController = null; }
 }
 function renderSystem() {
   const providers = state.data.provider_health || [];
-  qs('#providerTable tbody').innerHTML = providers.length ? providers.map(r => `<tr><td>${timeText(r.created_at)}</td><td>${escapeHtml(r.operation)}</td><td>${escapeHtml(r.provider)}</td><td><span class="badge ${r.status==='ok'||r.status==='fallback_used'?'entry':'reduce'}">${escapeHtml(r.status)}</span></td><td>${fmt(r.latency_ms,1)} ms</td><td>${r.record_count}</td><td class="muted">${escapeHtml(r.reason || '')}</td></tr>`).join('') : '<tr><td colspan="7">暂无审计记录</td></tr>';
+  qs('#providerTable tbody').innerHTML = providers.length ? providers.map(r => `<tr><td>${escapeHtml(timeText(r.created_at))}</td><td>${escapeHtml(r.operation)}</td><td>${escapeHtml(r.provider)}</td><td><span class="badge ${r.status==='ok'||r.status==='fallback_used'?'entry':'reduce'}">${escapeHtml(r.status)}</span></td><td>${escapeHtml(fmt(r.latency_ms,1))} ms</td><td>${escapeHtml(fmt(r.record_count,0))}</td><td class="muted">${escapeHtml(r.reason || '')}</td></tr>`).join('') : '<tr><td colspan="7">暂无审计记录</td></tr>';
   const tasks = state.data.tasks || [];
-  qs('#taskTable tbody').innerHTML = tasks.length ? tasks.map(r => `<tr><td>${timeText(r.started_at)}</td><td>${escapeHtml(r.task_name)}</td><td><span class="badge ${r.status==='succeeded'?'entry':r.status==='failed'?'reduce':'probe'}">${escapeHtml(r.status)}</span></td><td class="muted">${escapeHtml(r.run_id)}</td><td class="down">${escapeHtml(r.error || '')}</td></tr>`).join('') : '<tr><td colspan="5">暂无任务记录</td></tr>';
+  qs('#taskTable tbody').innerHTML = tasks.length ? tasks.map(r => `<tr><td>${escapeHtml(timeText(r.started_at))}</td><td>${escapeHtml(r.task_name)}</td><td><span class="badge ${r.status==='succeeded'?'entry':r.status==='failed'?'reduce':'probe'}">${escapeHtml(r.status)}</span></td><td class="muted">${escapeHtml(r.run_id)}</td><td class="down">${escapeHtml(r.error || '')}</td></tr>`).join('') : '<tr><td colspan="5">暂无任务记录</td></tr>';
   const reports = state.reports || [];
-  qs('#reportTable tbody').innerHTML = reports.length ? reports.map(r => `<tr><td>${timeText(r.as_of_time)}</td><td>${escapeHtml(r.type)}</td><td>${escapeHtml(r.filename)}</td><td class="muted">${escapeHtml(String(r.content_hash || '').slice(0,16))}…</td><td><button class="small-button download-report" data-file="${escapeHtml(r.filename)}">下载</button></td></tr>`).join('') : '<tr><td colspan="5">暂无报告</td></tr>';
+  qs('#reportTable tbody').innerHTML = reports.length ? reports.map(r => `<tr><td>${escapeHtml(timeText(r.as_of_time))}</td><td>${escapeHtml(r.type)}</td><td>${escapeHtml(r.filename)}</td><td class="muted">${escapeHtml(String(r.content_hash || '').slice(0,16))}…</td><td><button class="small-button download-report" data-file="${escapeHtml(r.filename)}">下载</button></td></tr>`).join('') : '<tr><td colspan="5">暂无报告</td></tr>';
   qsa('.download-report').forEach(button => button.addEventListener('click', () => downloadReport(button.dataset.file)));
 }
 function renderTaskButtons() {
@@ -261,13 +818,13 @@ function renderTaskButtons() {
 }
 
 function renderAll() {
-  renderSummary(); renderNarrative(); renderInstruments(); renderHoldings(); renderNews(); renderSystem();
+  renderSummary(); renderNarrative(); renderMarketContext(); renderInstruments(); renderHoldings(); renderNews(); renderSystem();
 }
 
 function switchTab(tab) {
   state.activeTab = tab;
   qsa('.view').forEach(v => v.classList.toggle('active', v.id === `view-${tab}`));
-  qsa('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  qsa('#tabs button').forEach(b => { const selected = b.dataset.tab === tab; b.classList.toggle('active', selected); b.setAttribute('aria-selected', String(selected)); });
   if (tab === 'system' && !state.settings) loadSettings();
 }
 
@@ -283,7 +840,7 @@ function openHolding(code = null) {
       form.elements.notes.value = h.notes ?? '';
     }
   }
-  qs('#holdingOverlay').classList.remove('hidden');
+  openModal('holdingOverlay', '#holdingCode');
 }
 async function saveHolding(event) {
   event.preventDefault();
@@ -297,7 +854,7 @@ async function saveHolding(event) {
   };
   try {
     await api(`/api/holdings/${encodeURIComponent(payload.ts_code)}`, {method:'PUT', body:JSON.stringify(payload)});
-    qs('#holdingOverlay').classList.add('hidden'); toast('持仓已保存'); await loadBootstrap(true);
+    closeModal('holdingOverlay'); toast('持仓已保存'); await loadBootstrap(true);
   } catch (error) { qs('#holdingError').textContent = error.message; }
 }
 async function deleteHolding(code) {
@@ -321,12 +878,13 @@ async function runTask(name, button = null) {
 async function openDetail(code) {
   const row = (state.data.instruments || []).find(r => r.ts_code === code);
   if (!row) return;
+  state.detailCode = code;
   const i = row.indicator || {}, v = i.values || {}, s = row.signal || {}, q = row.quote || {};
-  qs('#detailContent').innerHTML = `<div class="eyebrow">${escapeHtml(row.theme_l1 || '')} / ${escapeHtml(row.theme_l2 || '')}</div><h2>${escapeHtml(row.name)} <span class="muted">${escapeHtml(row.ts_code)}</span></h2><div class="detail-grid">
-    ${[['最新价格',fmt(q.price,4)],['今日涨跌',pct(q.pct_change)],['技术分',fmt(i.technical_score,1)],['风险分',fmt(i.risk_score,1)],['信号',s.state||'—'],['信号分',fmt(s.score,1)],['MACD柱',fmt(v.macd_hist,6)],['KDJ J',fmt(v.kdj_j,1)],['RSI14',fmt(v.rsi14,1)],['量比',fmt(v.volume_ratio,2)],['TD买/卖',`${v.td_buy_setup??'—'}/${v.td_sell_setup??'—'}`],['溢价率',q.premium_rate==null?'—':pct(q.premium_rate)]].map(([label,value])=>`<div class="detail-metric"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`).join('')}</div><div class="reason-box"><strong>理由：</strong>${escapeHtml((s.reasons||[]).join('；')||'暂无')}<br><span class="amber"><strong>风险：</strong>${escapeHtml((s.risks||[]).join('；')||'暂无')}</span></div>`;
-  qs('#detailOverlay').classList.remove('hidden');
-  try { const bars = await api(`/api/instruments/${encodeURIComponent(code)}/bars?limit=220`); drawChart(bars); }
-  catch (error) { toast(`K线加载失败：${error.message}`); }
+  const forecastHtml = Object.values(row.forecasts || {}).map(forecastCell).join('');
+  qs('#detailContent').innerHTML = `<div class="eyebrow">${escapeHtml(row.theme_l1 || '')} / ${escapeHtml(row.theme_l2 || '')}</div><h2>${displayIdentity(row.ts_code, row.name)}</h2><div class="detail-hero observed-surface"><div class="detail-primary-change ${escapeHtml(colorClass(q.pct_change))}"><span>今日涨跌</span><strong>${escapeHtml(pct(q.pct_change))}</strong></div><div class="detail-secondary-price"><span>最新价格</span><strong>${escapeHtml(fmt(q.price,4))}</strong></div><div class="quote-state-badge ${escapeHtml(q.is_mock ? 'is-mock' : quoteFreshness(q))}">${escapeHtml(quoteStateLabel(q))}</div>${provenanceText(q.source, q.source_timestamp || q.time, q.fetched_at, quoteFreshness(q), q.verification_status || 'unverified', q.degraded_reason)}</div><div class="detail-grid">
+    ${[['技术分',fmt(i.technical_score,1)],['风险分',fmt(i.risk_score,1)],['信号',s.state||'—'],['信号分',fmt(s.score,1)],['MACD柱',fmt(v.macd_hist,6)],['KDJ J',fmt(v.kdj_j,1)],['RSI14',fmt(v.rsi14,1)],['量比',fmt(v.volume_ratio,2)],['TD买/卖',`${v.td_buy_setup??'—'}/${v.td_sell_setup??'—'}`],['溢价率',q.premium_rate==null?'—':pct(q.premium_rate)]].map(([label,value])=>`<div class="detail-metric"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`).join('')}</div><section class="detail-forecast forecast-surface" aria-labelledby="detailForecastHeading"><div class="eyebrow">FORECAST · 非实际结果</div><h3 id="detailForecastHeading">预测摘要</h3><div class="detail-forecast-grid">${forecastHtml || '<span class="muted">预测不可用</span>'}</div></section><div class="reason-box"><strong>理由：</strong>${escapeHtml((s.reasons||[]).join('；')||'暂无')}<br><span class="amber"><strong>风险：</strong>${escapeHtml((s.risks||[]).join('；')||'暂无')}</span></div>`;
+  openModal('detailOverlay');
+  scheduleDetailBars(code);
 }
 
 function ema(values, period) {
@@ -370,6 +928,7 @@ async function connectEvents() {
   if (state.eventAbort) state.eventAbort.abort();
   clearTimeout(state.eventRetry);
   if (!state.token) return;
+  const requestGeneration = authRequestGeneration(), requestToken = state.token;
   const controller = new AbortController();
   state.eventAbort = controller;
   try {
@@ -378,13 +937,13 @@ async function connectEvents() {
       signal: controller.signal,
       cache: 'no-store',
     });
-    if (response.status === 401) { showAuth('令牌无效或已变更'); return; }
+    if (response.status === 401) { if (requestGeneration === authRequestGeneration() && requestToken === state.token) showAuth('令牌无效或已变更'); return; }
     if (!response.ok || !response.body) throw new Error(`SSE ${response.status}`);
     qs('#connectionBadge').className='status-dot online';
     qs('#connectionBadge').textContent='实时连接';
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    const watched = new Set(['instruments.updated','bars.updated','indicators.updated','forecasts.updated','quotes.updated','news.updated','signals.updated','holdings.updated','report.generated']);
+    const watched = new Set(['instruments.updated','bars.updated','indicators.updated','forecasts.updated','quotes.updated','news.updated','signals.updated','holdings.updated','market_context.updated','report.generated']);
     let buffer = '';
     let timer = null;
     while (true) {
@@ -416,26 +975,52 @@ async function connectEvents() {
 
 function bindEvents() {
   qs('#authForm').addEventListener('submit', async event => {
-    event.preventDefault(); state.token=qs('#tokenInput').value.trim(); localStorage.setItem('fundDecisionToken',state.token); await loadBootstrap(); connectEvents();
+    event.preventDefault(); state.token=qs('#tokenInput').value.trim(); localStorage.setItem('fundDecisionToken',state.token); advanceAuthRequestGeneration(); await loadBootstrap(); if (state.token) { connectEvents(); loadSettings(); }
   });
   qs('#refreshButton').addEventListener('click',()=>loadBootstrap());
-  qs('#lockButton').addEventListener('click',()=>{state.token='';localStorage.removeItem('fundDecisionToken');if(state.eventAbort)state.eventAbort.abort();clearTimeout(state.eventRetry);showAuth();});
+  qs('#lockButton').addEventListener('click',()=>{state.token='';localStorage.removeItem('fundDecisionToken');advanceAuthRequestGeneration();showAuth();});
   qsa('#tabs button').forEach(button=>button.addEventListener('click',()=>switchTab(button.dataset.tab)));
-  qsa('[data-close]').forEach(button=>button.addEventListener('click',()=>qs(`#${button.dataset.close}`).classList.add('hidden')));
-  qsa('.overlay').forEach(overlay=>overlay.addEventListener('click',event=>{if(event.target===overlay&&!overlay.classList.contains('auth-overlay'))overlay.classList.add('hidden');}));
+  qsa('[data-close]').forEach(button=>button.addEventListener('click',()=>closeModal(button.dataset.close)));
+  qsa('.overlay').forEach(overlay=>{
+    overlay.addEventListener('click',event=>{if(event.target===overlay&&!overlay.classList.contains('auth-overlay')&&!['portfolioImportOverlay','portfolioConfirmOverlay'].includes(overlay.id))closeModal(overlay.id);});
+    overlay.addEventListener('keydown', trapModalFocus);
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      if (!qs('#portfolioConfirmOverlay').classList.contains('hidden')) closeModal('portfolioConfirmOverlay');
+      else if (!qs('#portfolioImportOverlay').classList.contains('hidden')) cancelPortfolioImport();
+      else qsa('.overlay:not(.hidden):not(.auth-overlay)').forEach(overlay => closeModal(overlay.id));
+    }
+  });
   qs('#newHoldingButton').addEventListener('click',()=>openHolding());
   qs('#holdingForm').addEventListener('submit',saveHolding);
+  qs('#portfolioImportButton').addEventListener('click', openPortfolioImport);
+  qs('#portfolioImportCloseButton').addEventListener('click', cancelPortfolioImport);
+  qs('#portfolioImportForm').addEventListener('submit', uploadPortfolioImport);
+  qs('#portfolioImportCandidates').addEventListener('change', event => {
+    const field = event.target.closest('[data-import-field]');
+    const card = event.target.closest('[data-candidate-id]');
+    if (field && card) scheduleImportCandidateSave(card);
+  });
+  qs('#portfolioImportCandidates').addEventListener('click', event => {
+    const button = event.target.closest('.import-reject');
+    const card = event.target.closest('[data-candidate-id]');
+    if (button && card) rejectImportCandidate(card);
+  });
+  qs('#portfolioCancelButton').addEventListener('click', cancelPortfolioImport);
+  qs('#portfolioConfirmButton').addEventListener('click', requestPortfolioConfirm);
+  qs('#portfolioConfirmYes').addEventListener('click', confirmPortfolioImport);
+  qs('#portfolioConfirmNo').addEventListener('click', () => closeModal('portfolioConfirmOverlay'));
   qs('#newsRefreshButton').addEventListener('click',event=>runTask('refresh_news',event.currentTarget));
   qs('#generateReportButton').addEventListener('click',event=>runTask('generate_report',event.currentTarget));
   qs('#settingsForm').addEventListener('submit',async event=>{event.preventDefault();const form=new FormData(event.currentTarget),payload={};for(const [k,v] of form.entries())payload[k]=Number(v);try{state.settings=await api('/api/settings',{method:'PUT',body:JSON.stringify(payload)});toast('刷新频率已保存');scheduleBrowserRefresh();}catch(error){toast(`保存失败：${error.message}`);}});
-  window.addEventListener('resize',()=>{if(!qs('#detailOverlay').classList.contains('hidden')){const code=qs('#detailContent .muted')?.textContent; if(code) api(`/api/instruments/${encodeURIComponent(code)}/bars?limit=220`).then(drawChart).catch(()=>{});}});
+  window.addEventListener('resize',()=>{if(!qs('#detailOverlay').classList.contains('hidden') && state.detailCode) scheduleDetailBars(state.detailCode);});
 }
 
 async function start() {
   bindEvents(); renderTaskButtons();
   if (!state.token) showAuth();
-  else { await loadBootstrap(); connectEvents(); }
-  loadSettings();
+  else { await loadBootstrap(); if (state.token) { connectEvents(); loadSettings(); } }
 }
 
 document.addEventListener('DOMContentLoaded', start);

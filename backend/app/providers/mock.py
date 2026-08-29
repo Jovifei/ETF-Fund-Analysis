@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import math
 import random
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from app.core.config import Settings, get_settings
+from app.market_context.contracts import (
+    FreshnessStatus,
+    MarketContextItem,
+    MarketContextObservation,
+    VerificationStatus,
+)
 from app.providers.base import MarketProvider
 from app.providers.types import BarRecord, InstrumentRecord, NewsRecord, QuoteRecord
 
@@ -139,6 +145,34 @@ class MockProvider(MarketProvider):
             )
             for idx, (title, _theme, _score) in enumerate(samples)
         ]
+
+    def fetch_market_context(self, requests: list[MarketContextItem]) -> list[MarketContextObservation]:
+        """Return deterministic, explicitly degraded observations for local demonstrations."""
+        fetched_at = datetime.now(self.tz)
+        source_timestamp = fetched_at.replace(second=0, microsecond=0)
+        observations: list[MarketContextObservation] = []
+        for request in requests:
+            seed = self._seed(f"context:{request.context_id}:{request.source_symbol or ''}")
+            observed_value = round(90.0 + (seed % 10_000) / 100.0, 4)
+            today_pct_change = round(((seed % 401) - 200) / 100.0, 4)
+            price = round(0.5 + (seed % 50_000) / 100.0, 4)
+            observations.append(
+                MarketContextObservation(
+                    context_id=request.context_id,
+                    source_symbol=request.source_symbol,
+                    observed_value=observed_value,
+                    today_pct_change=today_pct_change,
+                    price=price,
+                    source=self.name,
+                    source_timestamp=source_timestamp,
+                    fetched_at=fetched_at,
+                    freshness=FreshnessStatus.DEGRADED,
+                    verification_status=VerificationStatus.UNVERIFIED,
+                    is_mock=True,
+                    degraded_reason="synthetic mock observation; not real market data",
+                )
+            )
+        return observations
 
     def is_trade_day(self, day: date) -> bool:
         return day.weekday() < 5

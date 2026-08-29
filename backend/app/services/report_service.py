@@ -40,6 +40,7 @@ class ReportService:
             instruments=payload["instruments"],
             holdings=payload["holdings"],
             news=payload["news"],
+            market_context=payload.get("market_context") or [],
             content_hash=content_hash,
         )
         path.write_text(html, encoding="utf-8")

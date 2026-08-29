@@ -14,6 +14,7 @@ from app.api.router import router as api_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.session import init_db, session_scope
+from app.services.holding_import_service import HoldingImportService
 from app.services.runtime_service import RuntimeService
 
 settings = get_settings()
@@ -28,6 +29,13 @@ async def lifespan(_: FastAPI):
         init_db()
     with session_scope() as db:
         RuntimeService(settings).ensure_defaults(db)
+    try:
+        with session_scope() as db:
+            HoldingImportService(settings).cleanup_expired(db)
+    except Exception:
+        # Cleanup is retryable maintenance; it must not prevent the private
+        # API from starting, and its log must never expose paths/tracebacks.
+        logger.warning("holding import cleanup unavailable; retrying later")
     logger.info(
         "starting %s version=%s env=%s provider=%s",
         settings.app_name,
@@ -52,7 +60,7 @@ if settings.cors_origin_list:
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
         allow_credentials=False,
-        allow_methods=["GET", "POST", "PUT", "DELETE"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_headers=["Authorization", "Content-Type"],
     )
 

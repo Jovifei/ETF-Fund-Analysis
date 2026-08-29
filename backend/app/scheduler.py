@@ -14,7 +14,7 @@ from app.db.session import init_db, session_scope
 from app.models import TaskRun
 from app.providers.factory import create_provider
 from app.services.runtime_service import RuntimeService
-from app.services.task_service import TaskService
+from app.services.task_service import TaskBusyError, TaskExecutionError, TaskService
 
 logger = logging.getLogger(__name__)
 STOP = False
@@ -29,6 +29,20 @@ def _last_success(db, task_name: str) -> datetime | None:
     return db.scalar(
         select(TaskRun.finished_at)
         .where(TaskRun.task_name == task_name, TaskRun.status == "succeeded")
+        .order_by(TaskRun.finished_at.desc())
+        .limit(1)
+    )
+
+
+def _last_terminal_attempt(db, task_name: str) -> datetime | None:
+    """Return the last completed attempt, regardless of success or failure."""
+    return db.scalar(
+        select(TaskRun.finished_at)
+        .where(
+            TaskRun.task_name == task_name,
+            TaskRun.status.in_(("succeeded", "failed", "partial")),
+            TaskRun.finished_at.is_not(None),
+        )
         .order_by(TaskRun.finished_at.desc())
         .limit(1)
     )
@@ -62,6 +76,23 @@ def tick() -> dict:
         if _last_success(db, "sync_instruments") is None:
             tasks.run(db, "sync_instruments")
             executed.append("sync_instruments")
+
+        # Market context has its own bounded cadence. It is intentionally an
+        # explicit task rather than a side effect of quotes or the full pipeline.
+        market_context_minutes = int(settings.market_context_refresh_minutes)
+        if _due(
+            _last_terminal_attempt(db, "refresh_market_context"), now, market_context_minutes
+        ):
+            try:
+                tasks.run(db, "refresh_market_context")
+            except (TaskExecutionError, TaskBusyError) as exc:
+                # A context provider is optional; preserve the rest of this tick
+                # while the durable failed TaskRun remains the retry marker.
+                # TaskBusyError (advisory lock held by another process) must not
+                # abort the remaining quotes/signals steps of this tick.
+                failure_class = getattr(exc, "failure_class", type(exc).__name__)
+                logger.warning("market context refresh failed: %s", failure_class)
+            executed.append("refresh_market_context")
 
         quote_minutes = int(intervals["quote_refresh_minutes"])
         signal_minutes = int(intervals["signal_refresh_minutes"])

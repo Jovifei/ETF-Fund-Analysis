@@ -1,52 +1,39 @@
 # 工程状态
 
-更新时间：2026-08-27  
-版本：0.5.0
+更新时间：2026-08-29
+发行版本：`0.6.0`
 
-## 已完成并在本地验证
+## 已实现（本地测试范围）
 
-| 模块 | 状态 | 验证范围 |
+| 模块 | 状态 | 证据边界 |
 |---|---|---|
-| FastAPI API 与静态看板 | 完成 | TestClient、静态资源、Bearer 鉴权 |
-| SQLite 本地/测试模式 | 完成 | 测试和 Mock bootstrap |
-| PostgreSQL 数据模型与 Alembic | 完成 | 干净 SQLite 迁移验证；真实 PostgreSQL 待 ECS 验证 |
-| Tushare Provider | 已实现 | 代码与权限自适应；用户 Token 尚未实测 |
-| AKShare Provider | 已实现 | 代码完成；阿里云出口网络尚未实测 |
-| Composite Provider | 完成 | 主备切换、逐源审计、禁止静默 Mock |
-| RSS/Atom 新闻 Provider | 完成 | 可选配置；真实 RSS URL 尚未实测 |
-| 技术指标/策略家族 v0.5 | 完成 | MACD/KDJ/RSI/量能/资金流/ADX-DMI/CCI-WR/RSRS/RPS/箱体/海龟/回踩/成交密集峰近似 + 单元测试 |
-| 1/5/20 日相似样本预测 | 完成 | 无前视基线与 Mock 数据运行 |
-| Walk-forward 预测验证 | 完成 | 生成 JSON；真实数据校准未完成 |
-| 事件驱动轮动回测 | 完成研究基线 | v0.5 因子家族、收盘决策、次日开盘、整手、费率、滑点、迟滞、主题分散和风险门控；真实约束待 ECS 数据复核 |
-| 策略消融回测 | 完成研究工具 | 同一事件引擎比较动量基线、资金流、突破/结构和 full_v050；Mock 中新增因子未胜基线，尚未封版 |
-| 信号状态机 | 完成 | 数据门控、组合约束、市场门控、迟滞 |
-| 持仓录入 | 完成 | API 与集成测试 |
-| 新闻结构化 | 完成 | 启发式 + OpenAI-compatible 客户端；真实模型待实测 |
-| HTML 报告 | 完成 | Mock 报告已生成 |
-| SSE 增量更新 | 完成 | 使用带 Authorization 的 fetch stream，Token 不放 URL |
-| 独立调度器 | 完成 | Mock 环境逻辑验证 |
-| 并发任务锁 | 完成 | PostgreSQL advisory lock / 本地进程锁 |
-| Docker Compose | 已实现 | 当前执行环境无 Docker，镜像构建待 CI/ECS |
-| 阿里云部署脚本 | 已实现 | 待目标 ECS 执行 |
-| CI | 完成 | 测试、迁移、JS 检查、Compose 检查、镜像构建 |
+| FastAPI API、静态看板、SSE | 已实现 | TestClient/静态资源和本地 Mock；浏览器烟测见 `tasks/todo.md` D3 review |
+| SQLite、本地任务、Alembic | 已实现 | 干净 SQLite 迁移链；真实 PostgreSQL 仍是部署门槛 |
+| Tushare、AKShare、Composite | 适配器已实现 | Token/权限、ECS 出口、实时字段和稳定性尚未实测 |
+| 技术指标、信号、回测 | 既有基线 | 本版不改公式、阈值或策略版本；真实数据校准和第二引擎对账未完成 |
+| 预测 | 已实现基线 | 输出始终 `not_calibrated`；没有 calibrated 或收益确定性结论 |
+| 新闻与多模型分析 | 合约/网关已实现 | Codex/OpenAI Responses 可作为唯一主 provider；Anthropic/DeepSeek 仅手工切换；真实端点未验证 |
+| 市场上下文 | 六项注册表和任务已实现 | 默认六卡片；代理代码 null、disabled、unverified，真实资格未完成 |
+| 持仓截图 OCR | 本地流程已实现 | Pillow/合约/候选确认测试通过；真实 Paddle 包/model 未资格验证，生产 Windows fail-closed |
+| Docker、反向代理、ECS 脚本 | 模板/脚本已实现 | Docker/ECS/HTTPS/备份恢复需目标环境执行；镜像不含重型 Paddle |
 
-## 尚未完成或不能在当前环境诚实验证
+## 运行时配置边界
 
-1. 你的 Tushare Token 对 `fund_basic`、`fund_daily`、实时 ETF、新闻和交易日历的实际权限。
-2. 阿里云 ECS 出口访问 Tushare、AKShare 底层站点和 OpenAI-compatible 端点的稳定性。
-3. 真实自选池的基金规模、成交额、费率、跟踪误差、申赎状态和主题纯度数据。
-4. 真实分钟线落库；当前盘中技术指标仍以最近已结算日线为基础，实时价格单独进入状态机。
-5. 基础事件驱动回测已实现，但真实停牌、涨跌停无法成交、LOF 溢价、现金收益和独立第二引擎对账尚未完成。
-6. 预测模型的样本外校准与封版；系统保持 `not_calibrated`。
-7. 域名、HTTPS 证书、阿里云安全组、云监控告警和恢复演练。
-8. 自动交易。本项目有意不实现。
+- 服务器生产使用 `MARKET_PROVIDER=composite`、`ALLOW_MOCK_FALLBACK=false`。Mock、unavailable、退化或缺失核心数据都阻断 actionable 信号。
+- 分析默认关闭；启用时只允许一个主 provider。Codex/OpenAI Responses 的服务器变量为 `OPENAI_API_KEY`、`ANALYSIS_PRIMARY_MODEL`、`ANALYSIS_CODEX_BASE_URL`、`ANALYSIS_PRIMARY_MODE=responses` 及对应 enabled/provider 开关。模型无工具、凭据、数值决策、数据库写入、网络抓取或券商权限。
+- 市场上下文默认每 15 分钟，scheduler 每 30 秒检查任务是否到期。今日变化优先于价格，所有观察保留来源、时间、新鲜度、Mock/退化状态。
+- OCR 图像默认 10MiB（`OCR_MAX_IMAGE_BYTES`）、12,000×12,000、4,000 万像素、60 秒硬超时、15 分钟 TTL。临时根 0700 私有，模型根私有只读，原图不进入普通数据库记录。云复核关闭且当前不出网。
+- 发行包版本 `0.6.0` 与策略版本分离；`config/strategy.json` 当前 `signal-v0.4.0` 等策略/指标/预测版本保持不变。
 
-## 已知设计选择
+## 部署前必须完成
 
-- 小型个人 ECS 不引入 Redis/Celery，使用 PostgreSQL 任务记录和独立 scheduler，减少运维复杂度。
-- SSE 事件存入数据库，API 与 scheduler 跨进程可见。
-- 所有报告和信号都保留版本、输入哈希和来源审计。
-- 新闻正文是不可信输入；LLM 无工具权限。
-- 第三方源码仅供隔离研究，不作为运行时 import 路径。
-- v0.5 新因子/策略是研究基线；Mock 消融未显示稳定增益，真实历史验证前不得自动提升生产权重。
-- ETF/LOF 的筹码相关展示是成交密集/成本分布近似，不等同于股票真实持仓筹码。
+1. 在目标 Linux ECS 以真实 PostgreSQL 执行迁移、备份、隔离恢复和权限检查；生产 Windows 的 OCR 配置必须拒绝启动。
+2. 分别取得 Tushare/AKShare、实时行情、新闻和 OpenAI 端点的权限/稳定性证据，不能以本地或 Mock 结果替代。
+3. 为六项上下文建立 Provider 资格记录；中国/韩国半导体代理在此之前保持空代码、禁用、未验证。
+4. 若需 Paddle，提供 Python 3.12 Linux wheel、模型文件和 `paddle-local-v1` manifest 的大小/SHA-256 记录；当前环境没有真实 Paddle/model 资格证明。
+5. 完成真实数据 walk-forward、事件回测约束复核、预测校准和人工封版记录；在此之前预测保持 `not_calibrated`。
+6. 通过 Caddy/Nginx HTTPS 反代访问，body limit 设 12MB（10MiB 图像上限加 multipart 开销），`.env` 0600，OCR transient root 0700。
+
+## 明确不做
+
+本项目没有自动交易、券商连接、模型自动持仓写入或投资建议。Codex/Claude Code 仅可生成异步、只读、待人工接受的审阅候选；不能把本地测试、Mock 数据、候选报告或历史快照描述为生产/实时/已校准事实。
