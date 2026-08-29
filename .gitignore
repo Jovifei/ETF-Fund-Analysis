@@ -21,3 +21,4 @@ task-snapshots/
 vendor/src/
 coverage.xml
 htmlcov/
+backend/*.egg-info/

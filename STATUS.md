@@ -11,6 +11,7 @@
 | SQLite、本地任务、Alembic | 已实现 | 干净 SQLite 迁移链；真实 PostgreSQL 仍是部署门槛 |
 | Tushare、AKShare、Composite | 适配器已实现 | Token/权限、ECS 出口、实时字段和稳定性尚未实测 |
 | 技术指标、信号、回测 | 既有基线 | 本版不改公式、阈值或策略版本；真实数据校准和第二引擎对账未完成 |
+| 信号中心（读取层研究视图） | 完成 | 信号行情曲线、机会/风险/止盈前排、板块强度、可调系数、持仓命中提醒；`test_signal_center.py` 8 项 |
 | 预测 | 已实现基线 | 输出始终 `not_calibrated`；没有 calibrated 或收益确定性结论 |
 | 新闻与多模型分析 | 合约/网关已实现 | Codex/OpenAI Responses 可作为唯一主 provider；Anthropic/DeepSeek 仅手工切换；真实端点未验证 |
 | 市场上下文 | 六项注册表和任务已实现 | 默认六卡片；代理代码 null、disabled、unverified，真实资格未完成 |
@@ -24,6 +25,7 @@
 - 市场上下文默认每 15 分钟，scheduler 每 30 秒检查任务是否到期。今日变化优先于价格，所有观察保留来源、时间、新鲜度、Mock/退化状态。
 - OCR 图像默认 10MiB（`OCR_MAX_IMAGE_BYTES`）、12,000×12,000、4,000 万像素、60 秒硬超时、15 分钟 TTL。临时根 0700 私有，模型根私有只读，原图不进入普通数据库记录。云复核关闭且当前不出网。
 - 发行包版本 `0.6.0` 与策略版本分离；`config/strategy.json` 当前 `signal-v0.4.0` 等策略/指标/预测版本保持不变。
+- 信号中心（v0.6.0 新增）是只读取层：仅消费已落库的 SignalSnapshot/IndicatorSnapshot/新闻/持仓，信号系数只影响该视图的前排分类与曲线口径，不改写生产信号引擎（signal-v0.4.x）的权重、阈值与状态机，因此不触发策略封版与 walk-forward 流程；独立版本号 `signal-center-v0.1.0`。
 
 ## 部署前必须完成
 

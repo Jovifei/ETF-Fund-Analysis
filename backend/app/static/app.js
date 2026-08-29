@@ -7,6 +7,10 @@ const state = {
   data: null,
   settings: null,
   reports: [],
+  signalCenter: null,
+  signalFrontTab: 'opportunity',
+  signalCenterLoading: false,
+  coefficientTimer: null,
   eventAbort: null,
   eventRetry: null,
   refreshTimer: null,
@@ -817,8 +821,222 @@ function renderTaskButtons() {
   qsa('.task-run').forEach(b => b.addEventListener('click', () => runTask(b.dataset.task, b)));
 }
 
+async function loadSignalCenter(silent = false, coefficientOverride = null) {
+  if (!state.token || state.signalCenterLoading) return;
+  state.signalCenterLoading = true;
+  if (!silent) qs('#signalCurveMeta').textContent = '加载中...';
+  try {
+    const query = coefficientOverride == null ? '' : `?coefficient=${encodeURIComponent(coefficientOverride)}`;
+    state.signalCenter = await api(`/api/signals/center${query}`);
+    renderSignalCenter();
+  } catch (error) {
+    if (error.message !== 'unauthorized') toast(`信号中心加载失败：${error.message}`, 5000);
+  } finally { state.signalCenterLoading = false; }
+}
+
+const SIGNAL_CATEGORIES = {
+  opportunity: {label: '机会', color: 'var(--up)'},
+  risk: {label: '风险', color: 'var(--blue)'},
+  take_profit: {label: '止盈', color: 'var(--down)'},
+};
+
+function renderSignalCenter() {
+  const payload = state.signalCenter;
+  if (!payload) return;
+  const warning = qs('#signalWarning');
+  if (payload.research_only) {
+    warning.textContent = '信号中心为研究视图：当前数据源为 Mock 演示数据，所有前排与板块强度仅用于功能验证，不可用于真实投资判断。';
+    warning.classList.remove('hidden');
+  } else warning.classList.add('hidden');
+  const s = payload.summary || {};
+  const cards = [
+    ['总信号', s.total ?? 0, `信号系数 × ${fmt(payload.coefficient,2)}`, ''],
+    ['机会', s.opportunity ?? 0, '可入场 / 试探 / 加仓', SIGNAL_CATEGORIES.opportunity.color],
+    ['风险', s.risk ?? 0, '减仓 / 风险观察 / 低位', SIGNAL_CATEGORIES.risk.color],
+    ['止盈', s.take_profit ?? 0, '过热研究提示', SIGNAL_CATEGORIES.take_profit.color],
+  ];
+  qs('#signalSummaryCards').innerHTML = cards.map(([label, value, sub, color]) => `<div class="summary-card"><div class="label">${escapeHtml(label)}</div><div class="value"${color?` style="color:${color}"`:''}>${escapeHtml(value)}</div><div class="sub">${escapeHtml(sub)}</div></div>`).join('');
+  qs('#signalCurveMeta').textContent = `口径 ${payload.version} · 生成 ${timeText(payload.generated_at)}`;
+  const sectors = payload.sectors || [];
+  qs('#sectorList').innerHTML = sectors.length ? sectors.map(sectorRow).join('') : '<div class="loading-row">暂无板块数据；需要先完成指标重算（refresh_indicators）。</div>';
+  renderFrontList();
+  const slider = qs('#coefficientSlider');
+  if (document.activeElement !== slider) slider.value = payload.coefficient;
+  qs('#coefficientValue').textContent = `× ${fmt(payload.coefficient,2)}`;
+  drawSignalCurve();
+}
+
+function sectorRow(sector) {
+  const chips = (sector.members || []).slice(0, 4)
+    .map(m => `<span class="chip">${escapeHtml(m.ts_code)} ${escapeHtml(m.name)}</span>`).join('');
+  const meta = [
+    `动量 ${fmt(sector.momentum_score, 0)}`,
+    sector.technical_score == null ? null : `技术 ${fmt(sector.technical_score, 0)}`,
+    sector.breadth == null ? null : `宽度 ${fmt(sector.breadth * 100, 0)}%`,
+    sector.news_score == null ? null : `新闻 ${fmt(sector.news_score, 0)}`,
+    sector.risk_score == null ? null : `风险 ${fmt(sector.risk_score, 0)}`,
+    `${sector.member_count} 只`,
+  ].filter(Boolean).join(' · ');
+  return `<div class="sector-row">
+    <div class="sector-rank">${sector.rank}</div>
+    <div class="sector-main">
+      <div class="sector-head"><span class="sector-name">${escapeHtml(sector.theme_l1)}</span><span class="sector-score ${sector.rank <= 3 ? 'up' : ''}">${fmt(sector.strength, 1)}</span></div>
+      <div class="sector-bar"><i style="width:${Math.max(2, Math.min(100, Number(sector.strength) || 0))}%"></i></div>
+      <div class="sector-meta">${escapeHtml(meta)}</div>
+      <div class="sector-members">${chips}</div>
+    </div>
+  </div>`;
+}
+
+function frontItem(item, index) {
+  let metricMain, metricSub;
+  if (item.category === 'opportunity') {
+    metricMain = fmt(item.effective_score, 1);
+    metricSub = `有效分 · 原始 ${fmt(item.score, 1)} × 系数`;
+  } else if (item.category === 'risk') {
+    metricMain = fmt(item.risk_score, 1);
+    metricSub = `风险分 · 有效分 ${fmt(item.effective_score, 1)}`;
+  } else {
+    metricMain = item.heat == null ? '—' : fmt(item.heat * 100, 0);
+    metricSub = `过热度 · 20日 ${pct(item.return_20d, 1, true)}`;
+  }
+  const held = item.in_account;
+  const holdingPart = held && item.holding
+    ? `权重 ${fmt((item.holding.current_weight || 0) * 100, 1)}% · 浮动 ${item.holding.pnl_pct == null ? '—' : pct(item.holding.pnl_pct)}`
+    : '';
+  return `<div class="front-item ${held ? 'in-account' : ''}" data-code="${escapeHtml(item.ts_code)}">
+    <div class="front-rank">${index + 1}</div>
+    <div class="front-main">
+      <div class="front-name">${escapeHtml(item.name)} <span class="muted">${escapeHtml(item.ts_code)}</span></div>
+      <div class="front-meta">${escapeHtml(item.theme_l1 || '未分类')} · 技术 ${fmt(item.technical_score, 1)} · 风险 ${fmt(item.risk_score, 1)} · RSI ${fmt(item.rsi14, 1)} · 20日 ${pct(item.return_20d, 1, true)} · 信号 ${timeText(item.signal_time)}</div>
+      ${held ? `<div class="account-warning">⚠ 该标的在你当前持仓中（${holdingPart}）——本页仅为研究提示，不构成账户操作指令，请结合自身成本与风险判断。</div>` : ''}
+    </div>
+    <div class="front-side">
+      <span class="badge ${stateClass(item.state)}">${escapeHtml(item.state || '—')}</span>
+      <div class="front-score">${escapeHtml(metricMain)}</div>
+      <div class="metric-sub">${escapeHtml(metricSub)}</div>
+    </div>
+  </div>`;
+}
+
+function renderFrontList() {
+  const payload = state.signalCenter;
+  if (!payload) return;
+  const tab = state.signalFrontTab;
+  qsa('#frontTabs button').forEach(b => b.classList.toggle('active', b.dataset.front === tab));
+  const items = (payload.fronts || {})[tab] || [];
+  const labels = {opportunity: '机会前排', risk: '风险前排', take_profit: '止盈前排'};
+  qs('#frontCount').textContent = `${labels[tab]} · 共 ${items.length} 只（研究提示，非操作指令）`;
+  qs('#frontList').innerHTML = items.length ? items.map(frontItem).join('') : '<div class="loading-row">当前系数下该前排暂无标的。</div>';
+  qsa('#frontList .front-item[data-code]').forEach(el => el.addEventListener('click', () => openDetail(el.dataset.code)));
+}
+
+const CURVE_SERIES = [
+  {key: 'opportunity', color: '#ff605e', label: '机会'},
+  {key: 'risk', color: '#4aa3ff', label: '风险'},
+  {key: 'take_profit', color: '#24c997', label: '止盈'},
+];
+
+function drawSignalCurve(hoverIndex = null) {
+  const canvas = qs('#signalCurveCanvas');
+  const curve = state.signalCenter?.curve || [];
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(600, rect.width * dpr);
+  canvas.height = 260 * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const width = canvas.width / dpr, height = canvas.height / dpr;
+  ctx.clearRect(0, 0, width, height);
+  canvas._points = null; canvas._curve = null; canvas._layout = null;
+  if (!curve.length) {
+    ctx.fillStyle = '#71839a'; ctx.font = '12px system-ui';
+    ctx.fillText('暂无信号历史：运行 refresh_signals 后按交易日逐日累积。', 20, 30);
+    return;
+  }
+  const left = 46, right = 16, top = 16, bottom = 30;
+  const maxV = Math.max(4, ...curve.map(p => Math.max(p.opportunity || 0, p.risk || 0, p.take_profit || 0)));
+  const xStep = (width - left - right) / curve.length;
+  const y = v => top + (1 - v / maxV) * (height - top - bottom);
+  ctx.strokeStyle = '#1d2a3b'; ctx.fillStyle = '#71839a'; ctx.font = '10px system-ui'; ctx.lineWidth = 1;
+  for (let n = 0; n <= 4; n++) {
+    const yy = top + (height - top - bottom) * n / 4;
+    ctx.beginPath(); ctx.moveTo(left, yy); ctx.lineTo(width - right, yy); ctx.stroke();
+    ctx.fillText(String(Math.round(maxV * (1 - n / 4))), 10, yy + 3);
+  }
+  ctx.fillText(curve[0].date, left, height - 8);
+  const lastLabel = curve[curve.length - 1].date;
+  ctx.fillText(lastLabel, width - right - ctx.measureText(lastLabel).width, height - 8);
+  const points = {};
+  for (const series of CURVE_SERIES) {
+    ctx.strokeStyle = series.color; ctx.lineWidth = 1.6; ctx.beginPath();
+    const pts = [];
+    curve.forEach((p, i) => {
+      const x = left + xStep * (i + .5), yy = y(Number(p[series.key] || 0));
+      pts.push([x, yy]);
+      i ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy);
+    });
+    ctx.stroke();
+    points[series.key] = pts;
+  }
+  canvas._points = points; canvas._curve = curve;
+  canvas._layout = {left, right, xStep, top, bottom, height, width};
+  if (hoverIndex != null) drawSignalCurveHover(hoverIndex);
+}
+
+function drawSignalCurveHover(index) {
+  drawSignalCurve();
+  const canvas = qs('#signalCurveCanvas');
+  const points = canvas._points, curve = canvas._curve, layout = canvas._layout;
+  if (!points || !curve || !curve[index]) return;
+  const ctx = canvas.getContext('2d');
+  const x = points.opportunity[index][0];
+  ctx.strokeStyle = '#3a4a63'; ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(x, layout.top); ctx.lineTo(x, layout.height - layout.bottom); ctx.stroke();
+  ctx.setLineDash([]);
+  for (const series of CURVE_SERIES) {
+    const [px, py] = points[series.key][index];
+    ctx.fillStyle = series.color;
+    ctx.beginPath(); ctx.arc(px, py, 3.2, 0, Math.PI * 2); ctx.fill();
+  }
+  const point = curve[index];
+  const lines = [
+    point.date,
+    `总量 ${point.total}`,
+    ...CURVE_SERIES.map(s => `${s.label} ${point[s.key] || 0}`),
+  ];
+  ctx.font = '11px system-ui';
+  const boxWidth = Math.max(...lines.map(t => ctx.measureText(t).width)) + 18;
+  const boxHeight = lines.length * 16 + 10;
+  let boxX = x + 10;
+  if (boxX + boxWidth > layout.width - layout.right) boxX = x - boxWidth - 10;
+  const boxY = layout.top + 6;
+  ctx.fillStyle = 'rgba(17,24,35,.95)'; ctx.strokeStyle = '#263246';
+  ctx.beginPath(); ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 6); ctx.fill(); ctx.stroke();
+  lines.forEach((text, i) => {
+    ctx.fillStyle = i === 0 ? '#e9eff8' : (i === 2 ? '#ff605e' : i === 3 ? '#4aa3ff' : i === 4 ? '#24c997' : '#aebacb');
+    ctx.fillText(text, boxX + 9, boxY + 20 + i * 16);
+  });
+}
+
+function onCoefficientInput(event) {
+  const value = Number(event.currentTarget.value);
+  qs('#coefficientValue').textContent = `× ${value.toFixed(2)}`;
+  clearTimeout(state.coefficientTimer);
+  state.coefficientTimer = setTimeout(() => loadSignalCenter(true, value), 420);
+}
+
+async function saveCoefficient() {
+  const value = Number(qs('#coefficientSlider').value);
+  try {
+    state.settings = await api('/api/settings', {method: 'PUT', body: JSON.stringify({signal_center_coefficient: value})});
+    toast(`信号系数已保存为 ${value.toFixed(2)}`);
+    await loadSignalCenter(true);
+  } catch (error) { toast(`保存失败：${error.message}`, 5000); }
+}
+
 function renderAll() {
-  renderSummary(); renderNarrative(); renderMarketContext(); renderInstruments(); renderHoldings(); renderNews(); renderSystem();
+  renderSummary(); renderNarrative(); renderMarketContext(); renderInstruments(); renderHoldings(); renderNews(); renderSystem(); renderSignalCenter();
 }
 
 function switchTab(tab) {
@@ -826,6 +1044,7 @@ function switchTab(tab) {
   qsa('.view').forEach(v => v.classList.toggle('active', v.id === `view-${tab}`));
   qsa('#tabs button').forEach(b => { const selected = b.dataset.tab === tab; b.classList.toggle('active', selected); b.setAttribute('aria-selected', String(selected)); });
   if (tab === 'system' && !state.settings) loadSettings();
+  if (tab === 'signals' && !state.signalCenter) loadSignalCenter();
 }
 
 function openHolding(code = null) {
@@ -960,7 +1179,10 @@ async function connectEvents() {
         }
         if (watched.has(eventName)) {
           clearTimeout(timer);
-          timer = setTimeout(() => loadBootstrap(true), 450);
+          timer = setTimeout(() => {
+            loadBootstrap(true);
+            if (state.activeTab === 'signals') loadSignalCenter(true);
+          }, 450);
         }
       }
     }
@@ -1014,7 +1236,23 @@ function bindEvents() {
   qs('#newsRefreshButton').addEventListener('click',event=>runTask('refresh_news',event.currentTarget));
   qs('#generateReportButton').addEventListener('click',event=>runTask('generate_report',event.currentTarget));
   qs('#settingsForm').addEventListener('submit',async event=>{event.preventDefault();const form=new FormData(event.currentTarget),payload={};for(const [k,v] of form.entries())payload[k]=Number(v);try{state.settings=await api('/api/settings',{method:'PUT',body:JSON.stringify(payload)});toast('刷新频率已保存');scheduleBrowserRefresh();}catch(error){toast(`保存失败：${error.message}`);}});
-  window.addEventListener('resize',()=>{if(!qs('#detailOverlay').classList.contains('hidden') && state.detailCode) scheduleDetailBars(state.detailCode);});
+  qs('#coefficientSlider').addEventListener('input', onCoefficientInput);
+  qs('#coefficientSave').addEventListener('click', saveCoefficient);
+  qsa('#frontTabs button').forEach(button => button.addEventListener('click', () => {
+    state.signalFrontTab = button.dataset.front;
+    renderFrontList();
+  }));
+  const curveCanvas = qs('#signalCurveCanvas');
+  curveCanvas.addEventListener('mousemove', event => {
+    const canvas = event.currentTarget;
+    if (!canvas._curve || !canvas._layout) return;
+    const rect = canvas.getBoundingClientRect();
+    const relative = (event.clientX - rect.left - canvas._layout.left) / canvas._layout.xStep;
+    const index = Math.max(0, Math.min(canvas._curve.length - 1, Math.round(relative - .5)));
+    drawSignalCurveHover(index);
+  });
+  curveCanvas.addEventListener('mouseleave', () => { if (qs('#signalCurveCanvas')._curve) drawSignalCurve(); });
+  window.addEventListener('resize',()=>{if(!qs('#detailOverlay').classList.contains('hidden') && state.detailCode) scheduleDetailBars(state.detailCode); if(state.activeTab==='signals') drawSignalCurve();});
 }
 
 async function start() {

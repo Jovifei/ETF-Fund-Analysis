@@ -31,6 +31,7 @@ class RuntimeUpdate(BaseModel):
     signal_refresh_minutes: int | None = Field(default=None, ge=5, le=120)
     news_refresh_minutes: int | None = Field(default=None, ge=5, le=240)
     lunch_news_refresh_minutes: int | None = Field(default=None, ge=3, le=120)
+    signal_center_coefficient: float | None = Field(default=None, ge=0.5, le=1.5)
 
     def compact(self) -> dict[str, Any]:
         return {key: value for key, value in self.model_dump().items() if value is not None}

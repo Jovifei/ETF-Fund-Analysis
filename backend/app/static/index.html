@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>中国 ETF/LOF 私有决策看板</title>
-  <link rel="stylesheet" href="/assets/app.css">
+  <link rel="stylesheet" href="/assets/app.css?v=0.6.0">
 </head>
 <body>
   <div id="authOverlay" class="overlay auth-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="authHeading">
@@ -25,6 +25,7 @@
     </div>
     <nav id="tabs" class="tabs" role="tablist" aria-label="研究视图">
       <button data-tab="dashboard" class="active" role="tab" aria-selected="true">决策看板</button>
+      <button data-tab="signals" role="tab" aria-selected="false">信号中心</button>
       <button data-tab="holdings" role="tab" aria-selected="false">持仓</button>
       <button data-tab="news" role="tab" aria-selected="false">新闻事件</button>
       <button data-tab="system" role="tab" aria-selected="false">系统</button>
@@ -61,6 +62,43 @@
         <div class="table-wrap"><table id="instrumentTable" class="signal-table"><thead><tr>
           <th>标的</th><th>观察行情</th><th>量能</th><th>均线/趋势</th><th>MACD</th><th>KDJ</th><th>RSI</th><th>TD</th><th>近1月</th><th class="forecast-column">FORECAST · 非实际结果<br><span>明日</span></th><th class="forecast-column">FORECAST · 非实际结果<br><span>一周</span></th><th class="forecast-column">FORECAST · 非实际结果<br><span>一月</span></th><th>建议</th>
         </tr></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <section id="view-signals" class="view">
+      <div id="signalWarning" class="warning-banner hidden"></div>
+      <div id="signalSummaryCards" class="summary-grid compact"></div>
+      <div class="panel">
+        <div class="panel-head"><div><div class="eyebrow">SIGNAL MARKET</div><h2>信号行情</h2></div><div id="signalCurveMeta" class="muted"></div></div>
+        <div class="chart-wrap curve-wrap"><canvas id="signalCurveCanvas"></canvas></div>
+        <div class="curve-legend">
+          <span class="legend-item"><i class="dot" style="background:var(--up)"></i>机会</span>
+          <span class="legend-item"><i class="dot" style="background:var(--blue)"></i>风险</span>
+          <span class="legend-item"><i class="dot" style="background:var(--down)"></i>止盈</span>
+        </div>
+        <p class="muted small curve-note">曲线按交易日统计各类信号数量，随系统运行逐日累积；系数变化会以当前口径重算历史分类。</p>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div><div class="eyebrow">SECTOR STRENGTH</div><h2>板块强度</h2></div><div id="sectorMeta" class="muted"></div></div>
+        <div id="sectorList" class="sector-list"><div class="loading-row">等待信号中心数据...</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <div><div class="eyebrow">FRONT RANKING</div><h2>信号前排</h2></div>
+          <div class="front-tabs" id="frontTabs">
+            <button data-front="opportunity" class="active front-opportunity">机会前排</button>
+            <button data-front="risk" class="front-risk">风险前排</button>
+            <button data-front="take_profit" class="front-take-profit">止盈前排</button>
+          </div>
+        </div>
+        <div class="coefficient-row">
+          <div class="coefficient-label"><span class="eyebrow">SENSITIVITY</span><strong>信号系数</strong><span id="coefficientValue" class="coefficient-value">—</span></div>
+          <input id="coefficientSlider" type="range" min="0.5" max="1.5" step="0.05" value="1">
+          <button id="coefficientSave" class="primary">保存系数</button>
+        </div>
+        <p class="muted small coefficient-note">有效分 = 信号分 × 系数：&gt;1 更敏感（机会/止盈更容易入列），&lt;1 更保守。仅作用于本页研究视图，不改变生产信号引擎与阈值。</p>
+        <div id="frontCount" class="muted front-count"></div>
+        <div id="frontList" class="front-list"><div class="loading-row">等待信号中心数据...</div></div>
       </div>
     </section>
 
@@ -131,6 +169,6 @@
     <section class="modal confirm-modal"><button class="modal-close" data-close="portfolioConfirmOverlay" aria-label="关闭确认对话框">×</button><div class="eyebrow">EXPLICIT ACTION</div><h2 id="portfolioConfirmHeading">确认写入持仓？</h2><p>仅已明确选择、数值有效且未拒绝的候选会交给持仓服务。确认后才会更新持仓与看板；重复点击是幂等的。</p><div class="button-row"><button id="portfolioConfirmNo" class="ghost" type="button">返回复核</button><button id="portfolioConfirmYes" class="primary" type="button">确认导入并写入</button></div><div id="portfolioConfirmError" class="error-text" role="alert"></div></section>
   </div>
   <div id="toast" class="toast hidden"></div>
-  <script src="/assets/app.js" defer></script>
+  <script src="/assets/app.js?v=0.6.0" defer></script>
 </body>
 </html>
