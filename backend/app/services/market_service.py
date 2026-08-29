@@ -104,10 +104,14 @@ class MarketService:
         totals = {"inserted": 0, "updated": 0, "instruments": 0, "failures": []}
         for instrument in instruments:
             start_date = end_date - timedelta(days=lookback_days)
+            earliest = db.scalar(
+                select(func.min(DailyBar.trade_date)).where(DailyBar.instrument_id == instrument.id)
+            )
             latest = db.scalar(
                 select(func.max(DailyBar.trade_date)).where(DailyBar.instrument_id == instrument.id)
             )
-            if latest:
+            if earliest is not None and latest is not None and earliest <= start_date:
+                # History already covers the requested lookback; refresh a short overlap only.
                 start_date = max(start_date, latest - timedelta(days=7))
             timer = AuditTimer()
             error: Exception | None = None

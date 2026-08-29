@@ -1,8 +1,8 @@
 # v0.7.0 资格验证交接文档
 
 更新时间：2026-08-30
-分支：`main` @ `8b6ceec`
-状态：**Phase A（差距补齐开发）完成，Phase B（本地基线报告）待执行，真实数据阶段（Phase D+）待用户提供 TUSHARE_TOKEN**
+分支：`main` @ `121f70f`（接续提交含 Phase B 收尾）
+状态：**Phase A + Phase B（本地基线）完成；Phase C 部分（Alembic 演练）；Phase D+ 阻塞 TUSHARE_TOKEN / ECS**
 
 ---
 
@@ -43,24 +43,20 @@ TaskService 现有 **22 个任务**（原 18 + calibrate_forecasts + optimize_po
 
 ## 三、下一步（Phase B → Q）
 
-### Phase B — 本地基线报告（无需用户，立即可做）
+### Phase B — 本地基线报告 ✅（2026-08-30）
 
-```bash
-pytest -q 2>&1 | tee deployment_reports/pytest.log
-python -m compileall -q backend/app
-node --check backend/app/static/app.js
-python codex/skills/fund-research/scripts/check_no_secrets.py .
-find deploy scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
-# 有 shellcheck 则跑 shellcheck deploy/aliyun/*.sh scripts/*.sh
-```
+- 报告：`deployment_reports/2026-08-30-local-validation.md`
+- 生产资格摘要：`deployment_reports/2026-08-30-production-qualification.md`
+- Mock 研究任务烟测全部 exit 0（含 analyze_factors，修复 `refresh_daily_bars` 回填后）
+- `qualify_postgres.sh` head 修订为 `d5e6f7a8b9c0`；Windows 上 Alembic up/down/up 手动通过；完整九步备份恢复待在 Linux ECS 执行
 
-写入 `deployment_reports/YYYY-MM-DD-local-validation.md`（命令/退出码/测试数/警告/未执行原因）。
-
-### Phase C — PostgreSQL 资格（无需用户，需 Docker Desktop 运行中）
+### Phase C — PostgreSQL 资格（部分）
 
 ```bash
 bash scripts/qualify_postgres.sh --json deployment_reports/pg-qualification.json
 ```
+
+Windows 无 bash 时已在 Docker PG16 上验证 Alembic 链；完整 pg_dump/restore 见 ECS。
 
 ### Phase D — Provider 能力矩阵 ⚠️ **需要用户配置 TUSHARE_TOKEN**
 

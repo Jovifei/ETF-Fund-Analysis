@@ -1,0 +1,27 @@
+{
+  "generated_at": "2026-08-30T00:30:00+08:00",
+  "mode": "docker-container-partial-windows",
+  "note": "Full qualify_postgres.sh could not run on Windows (no native bash). Alembic up/down/up verified manually against isolated postgres:16-alpine on 127.0.0.1:15432. Backup/restore drill not completed in this session; run scripts/qualify_postgres.sh on Linux ECS for full gate.",
+  "versions": {
+    "pg_image": "postgres:16-alpine",
+    "alembic_head": "d5e6f7a8b9c0"
+  },
+  "downgrade_revision": "c4d5e6f7a8b9",
+  "database_url_masked": "postgresql+psycopg://qualify:***@127.0.0.1:15432/fund_qualify",
+  "steps": [
+    {"name": "start_isolated_pg", "status": "passed"},
+    {"name": "alembic_upgrade_head", "status": "passed"},
+    {"name": "alembic_downgrade_prev", "status": "passed"},
+    {"name": "alembic_upgrade_again", "status": "passed"},
+    {"name": "seed_rows", "status": "not_executed"},
+    {"name": "backup_dump", "status": "not_executed"},
+    {"name": "wipe_schema", "status": "not_executed"},
+    {"name": "restore_dump", "status": "not_executed"},
+    {"name": "verify_integrity", "status": "not_executed"}
+  ],
+  "summary": {
+    "result": "partial",
+    "failed_step": null,
+    "recommendation": "Run bash scripts/qualify_postgres.sh --json deployment_reports/pg-qualification.json on target Linux host before production scheduler."
+  }
+}

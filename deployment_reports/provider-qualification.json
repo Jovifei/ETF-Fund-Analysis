@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-08-30T00:16:35.190036+08:00",
+  "git_commit_sha": "121f70fe91a10f83bf5a885b097f03b268ceed88",
+  "provider": "mock",
+  "tushare_token_present": false,
+  "field_semantics": {
+    "source_timestamp": "upstream quote time (QuoteRecord.quote_time); the only time eligible as realtime evidence",
+    "fetched_at": "local clock time captured immediately after the provider call",
+    "verification_status": "actionable verdict from the 8-condition gate; verified only when all conditions pass",
+    "is_realtime": "provider's realtime claim, re-verified against the timestamp gate",
+    "degraded_reason": "provider-reported degradation; any non-empty value blocks actionable"
+  },
+  "actionable_conditions": [
+    "upstream_timestamp_missing",
+    "not_today",
+    "outside_price_session",
+    "timestamp_age",
+    "invalid_price_volume_amount",
+    "provider_not_timestamp_qualified",
+    "mock_source",
+    "degraded_or_daily_fallback"
+  ],
+  "status": "mock_refused",
+  "reason": "mock provider can never be qualification evidence; pass --allow-mock-check for structure checks only"
+}

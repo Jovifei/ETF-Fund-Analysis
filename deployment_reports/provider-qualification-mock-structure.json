@@ -1,0 +1,268 @@
+{
+  "generated_at": "2026-08-30T00:27:34.813621+08:00",
+  "git_commit_sha": "121f70fe91a10f83bf5a885b097f03b268ceed88",
+  "provider": "mock",
+  "tushare_token_present": false,
+  "field_semantics": {
+    "source_timestamp": "upstream quote time (QuoteRecord.quote_time); the only time eligible as realtime evidence",
+    "fetched_at": "local clock time captured immediately after the provider call",
+    "verification_status": "actionable verdict from the 8-condition gate; verified only when all conditions pass",
+    "is_realtime": "provider's realtime claim, re-verified against the timestamp gate",
+    "degraded_reason": "provider-reported degradation; any non-empty value blocks actionable"
+  },
+  "actionable_conditions": [
+    "upstream_timestamp_missing",
+    "not_today",
+    "outside_price_session",
+    "timestamp_age",
+    "invalid_price_volume_amount",
+    "provider_not_timestamp_qualified",
+    "mock_source",
+    "degraded_or_daily_fallback"
+  ],
+  "status": "ok",
+  "trade_calendar": {
+    "ok": true,
+    "is_trade_day": false,
+    "verified": true,
+    "source": "exchange_calendars:XSHG",
+    "reason": null
+  },
+  "sections": {
+    "instruments": {
+      "ok": true,
+      "count": 5,
+      "sample": [
+        {
+          "ts_code": "510300.SH",
+          "name": "沪深300ETF"
+        },
+        {
+          "ts_code": "510500.SH",
+          "name": "中证500ETF"
+        },
+        {
+          "ts_code": "159915.SZ",
+          "name": "创业板ETF"
+        }
+      ]
+    },
+    "daily_bars": {
+      "ok": true,
+      "checked": 9,
+      "ok_count": 9,
+      "per_code": {
+        "510300.SH": {
+          "ok": true,
+          "record_count": 1325,
+          "source": "mock",
+          "units_note": "volume/amount as reported by provider, unconverted",
+          "ohlc_violations": 0,
+          "future_date_violations": 0,
+          "duplicate_trade_dates": 0,
+          "null_volume_count": 0,
+          "null_amount_count": 0,
+          "first_trade_date": "2021-08-02",
+          "last_trade_date": "2026-08-28"
+        },
+        "510500.SH": {
+          "ok": true,
+          "record_count": 1325,
+          "source": "mock",
+          "units_note": "volume/amount as reported by provider, unconverted",
+          "ohlc_violations": 0,
+          "future_date_violations": 0,
+          "duplicate_trade_dates": 0,
+          "null_volume_count": 0,
+          "null_amount_count": 0,
+          "first_trade_date": "2021-08-02",
+          "last_trade_date": "2026-08-28"
+        },
+        "159915.SZ": {
+          "ok": true,
+          "record_count": 1325,
+          "source": "mock",
+          "units_note": "volume/amount as reported by provider, unconverted",
+          "ohlc_violations": 0,
+          "future_date_violations": 0,
+          "duplicate_trade_dates": 0,
+          "null_volume_count": 0,
+          "null_amount_count": 0,
+          "first_trade_date": "2021-08-02",
+          "last_trade_date": "2026-08-28"
+        },
+        "588000.SH": {
+          "ok": true,
+          "record_count": 1325,
+          "source": "mock",
+          "units_note": "volume/amount as reported by provider, unconverted",
+          "ohlc_violations": 0,
+          "future_date_violations": 0,
+          "duplicate_trade_dates": 0,
+          "null_volume_count": 0,
+          "null_amount_count": 0,
+          "first_trade_date": "2021-08-02",
+          "last_trade_date": "2026-08-28"
+        },
+        "512480.SH": {
+          "ok": true,
+          "record_count": 1325,
+          "source": "mock",
+          "units_note": "volume/amount as reported by provider, unconverted",
+          "ohlc_violations": 0,
+          "future_date_violations": 0,
+          "duplicate_trade_dates": 0,
+          "null_volume_count": 0,
+          "null_amount_count": 0,
+          "first_trade_date": "2021-08-02",
+          "last_trade_date": "2026-08-28"
+        },
+        "512660.SH": {
+          "ok": true,
+          "record_count": 1325,
+          "source": "mock",
+          "units_note": "volume/amount as reported by provider, unconverted",
+          "ohlc_violations": 0,
+          "future_date_violations": 0,
+          "duplicate_trade_dates": 0,
+          "null_volume_count": 0,
+          "null_amount_count": 0,
+          "first_trade_date": "2021-08-02",
+          "last_trade_date": "2026-08-28"
+        },
+        "512170.SH": {
+          "ok": true,
+          "record_count": 1325,
+          "source": "mock",
+          "units_note": "volume/amount as reported by provider, unconverted",
+          "ohlc_violations": 0,
+          "future_date_violations": 0,
+          "duplicate_trade_dates": 0,
+          "null_volume_count": 0,
+          "null_amount_count": 0,
+          "first_trade_date": "2021-08-02",
+          "last_trade_date": "2026-08-28"
+        },
+        "515030.SH": {
+          "ok": true,
+          "record_count": 1325,
+          "source": "mock",
+          "units_note": "volume/amount as reported by provider, unconverted",
+          "ohlc_violations": 0,
+          "future_date_violations": 0,
+          "duplicate_trade_dates": 0,
+          "null_volume_count": 0,
+          "null_amount_count": 0,
+          "first_trade_date": "2021-08-02",
+          "last_trade_date": "2026-08-28"
+        },
+        "518880.SH": {
+          "ok": true,
+          "record_count": 1325,
+          "source": "mock",
+          "units_note": "volume/amount as reported by provider, unconverted",
+          "ohlc_violations": 0,
+          "future_date_violations": 0,
+          "duplicate_trade_dates": 0,
+          "null_volume_count": 0,
+          "null_amount_count": 0,
+          "first_trade_date": "2021-08-02",
+          "last_trade_date": "2026-08-28"
+        }
+      }
+    },
+    "quotes": {
+      "ok": true,
+      "count": 3,
+      "sources": [
+        "mock"
+      ],
+      "realtime_claim_count": 3,
+      "degraded_count": 3
+    },
+    "news": {
+      "ok": true,
+      "count": 3,
+      "sample_titles": [
+        "政策端强调推动科技创新与先进制造，市场关注半导体和机器人产业链",
+        "贵金属价格波动加大，黄金主题资金出现分歧",
+        "医药行业多项研发进展披露，创新药主题热度回升"
+      ]
+    }
+  },
+  "realtime_actionable": {
+    "verdicts": [
+      {
+        "ts_code": "510300.SH",
+        "source": "mock",
+        "source_timestamp": "2026-08-30T00:27:35.450247+08:00",
+        "fetched_at": "2026-08-30T00:27:35.451252+08:00",
+        "is_realtime_claim": true,
+        "degraded_reason": "演示数据，不可用于真实投资判断",
+        "actionable": false,
+        "failed_conditions": [
+          "outside_price_session",
+          "provider_not_timestamp_qualified",
+          "mock_source",
+          "degraded_or_daily_fallback"
+        ]
+      },
+      {
+        "ts_code": "510500.SH",
+        "source": "mock",
+        "source_timestamp": "2026-08-30T00:27:35.450247+08:00",
+        "fetched_at": "2026-08-30T00:27:35.451252+08:00",
+        "is_realtime_claim": true,
+        "degraded_reason": "演示数据，不可用于真实投资判断",
+        "actionable": false,
+        "failed_conditions": [
+          "outside_price_session",
+          "provider_not_timestamp_qualified",
+          "mock_source",
+          "degraded_or_daily_fallback"
+        ]
+      },
+      {
+        "ts_code": "159915.SZ",
+        "source": "mock",
+        "source_timestamp": "2026-08-30T00:27:35.450247+08:00",
+        "fetched_at": "2026-08-30T00:27:35.451252+08:00",
+        "is_realtime_claim": true,
+        "degraded_reason": "演示数据，不可用于真实投资判断",
+        "actionable": false,
+        "failed_conditions": [
+          "outside_price_session",
+          "provider_not_timestamp_qualified",
+          "mock_source",
+          "degraded_or_daily_fallback"
+        ]
+      }
+    ],
+    "summary": {
+      "checked": 3,
+      "actionable_count": 0
+    }
+  },
+  "latency": {
+    "fetch_daily_bars": {
+      "calls": 9,
+      "p50_ms": 6.6,
+      "p95_ms": 7.0
+    },
+    "fetch_news": {
+      "calls": 1,
+      "p50_ms": 0.2,
+      "p95_ms": 0.2
+    },
+    "fetch_spot_quotes": {
+      "calls": 1,
+      "p50_ms": 0.8,
+      "p95_ms": 0.8
+    },
+    "list_instruments": {
+      "calls": 1,
+      "p50_ms": 0.4,
+      "p95_ms": 0.4
+    }
+  }
+}
