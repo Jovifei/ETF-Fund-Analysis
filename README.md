@@ -118,7 +118,7 @@ fund-decision bootstrap --lookback-days 900
 
 ## 版本与验证边界
 
-应用/发行包版本为 `0.7.0`。策略、指标和预测版本仍由 `config/strategy.json` 管理（当前策略版本为 `signal-v0.4.0`），本版本没有升级公式或阈值。完整回归、迁移、Mock HTTP 和浏览器烟测只证明本地/Mock 行为；真实 PostgreSQL、Tushare/AKShare/OpenAI 端点、真实 Paddle Python 3.12 wheel/model、ECS、域名 HTTPS 与预测校准仍是部署门槛。详见 [`STATUS.md`](STATUS.md)、[`HANDOFF.md`](HANDOFF.md) 和 [`docs/IMPLEMENTATION_MATRIX.md`](docs/IMPLEMENTATION_MATRIX.md)。
+应用/发行包版本为 `0.7.0`。策略、指标和预测版本仍由 `config/strategy.json` 管理（当前为 `signal-v0.7.0-research` / `similarity-corridor-v0.7.0` 等），本版本没有在生产环境自动升级公式或阈值。完整回归、迁移、Mock HTTP 和浏览器烟测只证明本地/Mock 行为；真实 PostgreSQL、Tushare/AKShare/OpenAI 端点、真实 Paddle Python 3.12 wheel/model、ECS、域名 HTTPS 与预测校准仍是部署门槛。详见 [`STATUS.md`](STATUS.md)、[`HANDOFF.md`](HANDOFF.md) 和 [`docs/IMPLEMENTATION_MATRIX.md`](docs/IMPLEMENTATION_MATRIX.md)。
 
 ## 安全与许可证
 

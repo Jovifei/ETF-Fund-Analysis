@@ -1,6 +1,6 @@
 # 工程状态
 
-更新时间：2026-08-29
+更新时间：2026-08-30
 发行版本：`0.7.0`
 
 ## 已实现（本地测试范围）
@@ -24,8 +24,9 @@
 - 分析默认关闭；启用时只允许一个主 provider。Codex/OpenAI Responses 的服务器变量为 `OPENAI_API_KEY`、`ANALYSIS_PRIMARY_MODEL`、`ANALYSIS_CODEX_BASE_URL`、`ANALYSIS_PRIMARY_MODE=responses` 及对应 enabled/provider 开关。模型无工具、凭据、数值决策、数据库写入、网络抓取或券商权限。
 - 市场上下文默认每 15 分钟，scheduler 每 30 秒检查任务是否到期。今日变化优先于价格，所有观察保留来源、时间、新鲜度、Mock/退化状态。
 - OCR 图像默认 10MiB（`OCR_MAX_IMAGE_BYTES`）、12,000×12,000、4,000 万像素、60 秒硬超时、15 分钟 TTL。临时根 0700 私有，模型根私有只读，原图不进入普通数据库记录。云复核关闭且当前不出网。
-- 发行包版本 `0.6.0` 与策略版本分离；`config/strategy.json` 当前 `signal-v0.4.0` 等策略/指标/预测版本保持不变。
-- 信号中心（v0.6.0 新增）是只读取层：仅消费已落库的 SignalSnapshot/IndicatorSnapshot/新闻/持仓，信号系数只影响该视图的前排分类与曲线口径，不改写生产信号引擎（signal-v0.4.x）的权重、阈值与状态机，因此不触发策略封版与 walk-forward 流程；独立版本号 `signal-center-v0.1.0`。
+- 发行包版本 `0.7.0` 与策略版本分离；`config/strategy.json` 当前为 `signal-v0.7.0-research` / `indicator-v0.5.1` / `similarity-corridor-v0.7.0` / `rotation-v0.5.1` / `feature-store-v0.7.0`。
+- 信号中心（v0.6.0 新增）是只读取层：仅消费已落库的 SignalSnapshot/IndicatorSnapshot/新闻/持仓，信号系数只影响该视图的前排分类与曲线口径，不改写生产信号引擎的权重、阈值与状态机，因此不触发策略封版与 walk-forward 流程；独立版本号 `signal-center-v0.1.0`。
+- v0.7.0 资格验证：Phase A/B 本地/Mock 已完成（commit `60da31c`）；真实 Provider、ETF 池、ECS 部署与 20 交易日影子运行待 `TUSHARE_TOKEN` 与目标环境。
 
 ## 部署前必须完成
 
