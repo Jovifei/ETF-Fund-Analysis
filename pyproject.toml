@@ -1,6 +1,6 @@
 [project]
 name = "china-fund-decision"
-version = "0.6.0"
+version = "0.7.0"
 description = "Private China ETF/LOF research dashboard with deterministic indicators and evidence-aware signals"
 requires-python = ">=3.11"
 license = {text = "MIT"}
@@ -19,17 +19,29 @@ dependencies = [
   "python-multipart>=0.0.9,<1",
   "psycopg[binary]>=3.2,<4",
   "alembic>=1.14,<2",
-  "Pillow>=10,<13",
+  "Pillow<13,>=10",
+  "exchange-calendars>=4.11,<5",
 ]
 
 [project.optional-dependencies]
+research = [
+  "alphalens-reloaded>=0.4,<1",
+  "mapie>=1,<2",
+  "akquant>=0.1",
+  "mlforecast>=1,<2",
+  "lightgbm>=4,<5",
+  "catboost>=1.2,<2",
+  "pyqlib>=0.9,<1",
+  "riskfolio-lib>=7,<8",
+  "rqalpha>=5,<6",
+]
 market = [
   "tushare>=1.4.20",
   "akshare>=1.17.0",
   "feedparser>=6.0,<7",
 ]
 ocr = [
-  "Pillow>=10,<13",
+  "Pillow<13,>=10",
   "paddleocr>=3,<4",
   "paddlepaddle>=3,<4; platform_system != 'Darwin'",
 ]

@@ -15,6 +15,7 @@ from app.models import TaskRun
 from app.providers.factory import create_provider
 from app.services.runtime_service import RuntimeService
 from app.services.task_service import TaskBusyError, TaskExecutionError, TaskService
+from app.services.trading_calendar_service import TradingCalendarService
 
 logger = logging.getLogger(__name__)
 STOP = False
@@ -61,7 +62,8 @@ def tick() -> dict:
     provider = create_provider(settings)
     clock = MarketClock(settings.timezone)
     now = clock.now()
-    is_trade_day = provider.is_trade_day(now.date())
+    calendar_decision = TradingCalendarService(settings, provider).decision(now.date())
+    is_trade_day = calendar_decision.is_trade_day
     phase = clock.phase(now, is_trade_day)
     executed: list[str] = []
 
@@ -142,6 +144,8 @@ def tick() -> dict:
     return {
         "now": now.isoformat(),
         "trade_day": is_trade_day,
+        "trade_day_verified": calendar_decision.verified,
+        "calendar_source": calendar_decision.source,
         "phase": phase.value,
         "executed": executed,
     }

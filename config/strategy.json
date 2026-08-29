@@ -1,24 +1,28 @@
 {
-  "version": "signal-v0.4.0",
-  "indicator_version": "indicator-v0.2.0",
-  "forecast_version": "similarity-v0.2.0",
+  "version": "signal-v0.7.0-research",
+  "indicator_version": "indicator-v0.5.1",
+  "forecast_version": "similarity-corridor-v0.7.0",
   "signal_center_version": "signal-center-v0.1.0",
   "signal_center": {
     "curve_days": 60,
     "front_size": 10,
-    "coefficient": {"min": 0.5, "max": 1.5, "default": 1.0},
+    "coefficient": {
+      "min": 0.5,
+      "max": 1.5,
+      "default": 1.0
+    },
     "take_profit": {
-      "min_return_20d": 0.10,
+      "min_return_20d": 0.1,
       "rsi_floor": 68,
       "heat_threshold": 0.62,
-      "return_saturation": 0.30
+      "return_saturation": 0.3
     },
     "sector_weights": {
       "momentum": 0.35,
       "technical": 0.25,
       "breadth": 0.15,
       "news": 0.15,
-      "risk_inverse": 0.10
+      "risk_inverse": 0.1
     },
     "news_lookback_hours": 72
   },
@@ -55,7 +59,49 @@
     "atr_window": 14,
     "boll_window": 20,
     "boll_std": 2.0,
-    "td_setup_length": 9
+    "td_setup_length": 9,
+    "trend_strength": {
+      "adx_window": 14,
+      "cci_window": 20,
+      "wr_window": 14,
+      "wr_long_window": 28,
+      "roc_window": 12
+    },
+    "money_flow": {
+      "mfi_window": 14,
+      "cmf_window": 20
+    },
+    "rsrs": {
+      "regression_window": 18,
+      "zscore_window": 60
+    },
+    "box_windows": [
+      20,
+      55,
+      120
+    ],
+    "turtle": {
+      "entry_windows": [
+        20,
+        55
+      ],
+      "exit_windows": [
+        10,
+        20
+      ]
+    },
+    "pullback": {
+      "ignition_return": 0.02,
+      "ignition_volume_ratio": 1.35,
+      "lookback": 13,
+      "contraction_ratio": 0.9
+    },
+    "chip": {
+      "method": "volume_profile_approx",
+      "window": 120,
+      "bins": 32,
+      "estimated": true
+    }
   },
   "forecast": {
     "horizons": [
@@ -68,7 +114,13 @@
     "minimum_neighbors": 25,
     "maximum_confidence_uncalibrated": 55,
     "validation_step": 5,
-    "validation_max_points": 120
+    "validation_max_points": 120,
+    "feature_schema_version": "feature-store-v0.7.0",
+    "conformal_alpha": 0.2,
+    "interval_method": "local_conformal_research_v1",
+    "path_extremes": true,
+    "touch_probabilities": true,
+    "global_model_promotion": "manual_only"
   },
   "signal": {
     "entry_score": 68,
@@ -92,7 +144,17 @@
       "high_risk": 0.4,
       "extreme_risk": 0.1
     },
-    "regime_benchmark": "510300.SH"
+    "regime_benchmark": "510300.SH",
+    "forecast_risk_adjustment": {
+      "enabled": true,
+      "maximum_points": 4.0,
+      "expected_return_scale": 0.04,
+      "downside_scale": 0.06,
+      "probability_weight": 0.45,
+      "expected_return_weight": 0.35,
+      "downside_weight": 0.2,
+      "requires_calibrated": true
+    }
   },
   "backtest": {
     "initial_cash": 1000000.0,
@@ -105,11 +167,16 @@
     "minimum_cross_section_score": 0.5,
     "minimum_absolute_momentum": 0.0,
     "factor_weights": {
-      "return_5": 0.15,
-      "return_20": 0.35,
-      "return_60": 0.25,
-      "trend_20": 0.15,
-      "low_volatility": 0.1
+      "return_5": 0.1,
+      "return_20": 0.2,
+      "return_60": 0.15,
+      "trend_20": 0.1,
+      "low_volatility": 0.1,
+      "volume_flow": 0.12,
+      "breakout": 0.1,
+      "rsrs": 0.06,
+      "structure": 0.04,
+      "pullback": 0.03
     },
     "commission_rate": 0.0002,
     "minimum_commission": 5.0,
@@ -118,5 +185,31 @@
     "extreme_return_warning": 0.2,
     "max_per_theme": 1,
     "single_fund_target_cap": 0.25
+  },
+  "backtest_version": "rotation-v0.5.1",
+  "feature_schema_version": "feature-store-v0.7.0",
+  "strategy_engine": {
+    "version": "strategy-family-v0.5.1",
+    "family_weights": {
+      "trend": 0.18,
+      "momentum": 0.16,
+      "volume_flow": 0.15,
+      "breakout": 0.14,
+      "pullback": 0.1,
+      "structure": 0.1,
+      "relative_strength": 0.12,
+      "reversal": 0.05
+    }
+  },
+  "factor_analysis": {
+    "version": "factor-analysis-v0.1.0",
+    "quantiles": 5,
+    "horizons": [
+      1,
+      5,
+      20
+    ],
+    "minimum_cross_section": 4,
+    "promotion_policy": "manual_walk_forward_holdout_required"
   }
 }

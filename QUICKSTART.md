@@ -92,4 +92,4 @@ docker compose run --rm api python scripts/provider_smoke.py
 
 ## F. 明确边界
 
-发行版本为 `0.6.0`；策略版本仍为 `signal-v0.4.0`，指标/预测版本仍由 `config/strategy.json` 管理。本版本不声称真实数据稳定、预测 calibrated、部署完成或可执行交易；本项目没有自动交易功能。
+发行版本为 `0.7.0`；策略版本仍为 `signal-v0.4.0`，指标/预测版本仍由 `config/strategy.json` 管理。本版本不声称真实数据稳定、预测 calibrated、部署完成或可执行交易；本项目没有自动交易功能。

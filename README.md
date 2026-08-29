@@ -2,7 +2,7 @@
 
 一个面向中国场内 ETF/LOF 的个人私有研究系统。它把行情、日线、技术指标、主题新闻、持仓和多期限预测整理成可审计的信号看板，并按北京时间自动刷新。
 
-当前版本：`0.6.0`
+当前版本：`0.7.0`
 
 > 本项目不连接券商、不自动下单，也不构成投资建议。技术指标、仓位约束和信号状态由确定性程序计算；分析模型只能生成带来源的文本审阅候选，不能计算指标、预测、仓位或交易动作。预测基线保持 `not_calibrated`，在完成真实数据的 walk-forward 验证前，不应作为确定性收益判断。
 
@@ -12,6 +12,9 @@
 - ETF/LOF 自选池、日线、盘中快照、数据源审计和退化标记；技术指标、预测基线、事件驱动轮动回测和信号状态机。
 - 新闻去重、主题映射、提示注入隔离和 provider-neutral 多模型分析网关。
 - 暗色网页看板、市场上下文卡片、K 线/MACD Canvas 图、持仓录入、SSE 增量更新、HTML 报告。
+- 1/5/20 日终点收益、终点收盘区间、未来路径支撑/压力区和触及概率；继续标记 `not_calibrated`。
+- Alphalens 风格因子 IC/Rank IC/ICIR/分位收益/换手/市场状态诊断，以及可选全局 LightGBM/CatBoost 研究任务。
+- XSHG 统一交易日历；实时行情必须拥有可验证的上游时间戳才能成为操作级数据。
 - 信号中心研究视图：信号行情曲线（机会/风险/止盈逐日计数）、三张前排推荐、板块强度排名和可调信号系数（0.50–1.50）；命中持仓的条目带账户提醒，仅为研究提示。
 - 本地私有 OCR 导入、候选编辑/拒绝/确认流程；确认前不会写入持仓。
 - PostgreSQL、Alembic、FastAPI、独立调度进程、Docker Compose、阿里云 ECS 部署脚本、备份/恢复和 CI。
@@ -105,13 +108,17 @@ fund-decision run-task refresh_forecasts
 fund-decision run-task refresh_signals
 fund-decision run-task validate_forecasts
 fund-decision run-task backtest_rotation
+fund-decision run-task backtest_ablation
+fund-decision run-task analyze_factors
+fund-decision run-task research_global_models
+fund-decision run-task research_capabilities
 fund-decision run-task generate_report
 fund-decision bootstrap --lookback-days 900
 ```
 
 ## 版本与验证边界
 
-应用/发行包版本为 `0.6.0`。策略、指标和预测版本仍由 `config/strategy.json` 管理（当前策略版本为 `signal-v0.4.0`），本版本没有升级公式或阈值。完整回归、迁移、Mock HTTP 和浏览器烟测只证明本地/Mock 行为；真实 PostgreSQL、Tushare/AKShare/OpenAI 端点、真实 Paddle Python 3.12 wheel/model、ECS、域名 HTTPS 与预测校准仍是部署门槛。详见 [`STATUS.md`](STATUS.md)、[`HANDOFF.md`](HANDOFF.md) 和 [`docs/IMPLEMENTATION_MATRIX.md`](docs/IMPLEMENTATION_MATRIX.md)。
+应用/发行包版本为 `0.7.0`。策略、指标和预测版本仍由 `config/strategy.json` 管理（当前策略版本为 `signal-v0.4.0`），本版本没有升级公式或阈值。完整回归、迁移、Mock HTTP 和浏览器烟测只证明本地/Mock 行为；真实 PostgreSQL、Tushare/AKShare/OpenAI 端点、真实 Paddle Python 3.12 wheel/model、ECS、域名 HTTPS 与预测校准仍是部署门槛。详见 [`STATUS.md`](STATUS.md)、[`HANDOFF.md`](HANDOFF.md) 和 [`docs/IMPLEMENTATION_MATRIX.md`](docs/IMPLEMENTATION_MATRIX.md)。
 
 ## 安全与许可证
 

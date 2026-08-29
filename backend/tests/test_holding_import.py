@@ -883,9 +883,9 @@ def test_holding_import_api_is_private_when_authentication_enabled(monkeypatch, 
 
     settings = Settings(
         _env_file=None,
-        AUTH_ENABLED=True,
-        PRIVATE_ACCESS_TOKEN="a" * 32,
-        OCR_TRANSIENT_ROOT=tmp_path,
+        auth_enabled=True,
+        private_access_token="a" * 32,
+        ocr_transient_root=tmp_path,
     )
     app.dependency_overrides[get_settings] = lambda: settings
     try:

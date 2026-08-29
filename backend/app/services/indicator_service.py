@@ -10,7 +10,9 @@ from app.core.config import Settings, get_settings
 from app.models import DailyBar, IndicatorSnapshot, Instrument
 from app.services.event_service import emit_event
 from app.services.strategy_engine import evaluate_strategy_families
+from app.utils.feature_store import FEATURE_SCHEMA_VERSION
 from app.utils.hashing import stable_hash
+from app.utils.reproducibility import reproducibility_payload
 from app.utils.indicators_v05 import IndicatorResult, calculate_indicators
 from app.utils.numbers import clamp
 
@@ -92,6 +94,7 @@ class IndicatorService:
         rps120 = self._rps(computed, "return_120d")
         created = 0
         version = self.strategy["indicator_version"]
+        feature_schema_version = self.strategy.get("feature_schema_version", FEATURE_SCHEMA_VERSION)
         strategy_cfg = self.strategy.get("strategy_engine", {})
         for instrument_id, result in computed.items():
             instrument, rows, input_hash = metadata[instrument_id]
@@ -112,6 +115,13 @@ class IndicatorService:
                 dict.fromkeys(list(values.get("technical_reasons") or []) + evaluation.reasons)
             )[:16]
             values["indicator_version"] = version
+            reproducibility = reproducibility_payload(
+                strategy=self.strategy,
+                feature_schema_version=feature_schema_version,
+                features=values.keys(),
+                code_component="IndicatorService.v0.7",
+            )
+            values["reproducibility"] = reproducibility
 
             as_of_date = rows[-1].trade_date
             snapshot = db.scalar(
@@ -132,6 +142,10 @@ class IndicatorService:
                     trend_label=self._trend_label(technical_score),
                     data_quality=result.data_quality,
                     input_hash=input_hash,
+                    feature_schema_version=feature_schema_version,
+                    config_hash=reproducibility["config_hash"],
+                    git_commit_sha=reproducibility["git_commit_sha"],
+                    reproducibility_json=reproducibility,
                 )
                 db.add(snapshot)
                 created += 1
@@ -142,6 +156,10 @@ class IndicatorService:
                 snapshot.trend_label = self._trend_label(technical_score)
                 snapshot.data_quality = result.data_quality
                 snapshot.input_hash = input_hash
+                snapshot.feature_schema_version = feature_schema_version
+                snapshot.config_hash = reproducibility["config_hash"]
+                snapshot.git_commit_sha = reproducibility["git_commit_sha"]
+                snapshot.reproducibility_json = reproducibility
         db.flush()
         emit_event(
             db,

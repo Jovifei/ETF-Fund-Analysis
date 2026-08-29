@@ -169,6 +169,27 @@ class TushareProvider(MarketProvider):
             value = f"{value}.{suffix}"
         return value
 
+    def _quote_timestamp(self, row: dict[str, Any], fallback: datetime) -> datetime | None:
+        combined_date = row.get("trade_date") or row.get("date") or row.get("交易日")
+        combined_time = row.get("trade_time") or row.get("time") or row.get("更新时间")
+        if combined_date and combined_time:
+            parsed = self._parse_datetime(f"{combined_date} {combined_time}")
+            if parsed is not None:
+                return parsed
+        for key in ("datetime", "trade_datetime", "timestamp", "更新时间", "update_time"):
+            parsed = self._parse_datetime(row.get(key))
+            if parsed is not None:
+                return parsed
+        if combined_time:
+            text = str(combined_time).strip()
+            for fmt in ("%H:%M:%S", "%H:%M"):
+                try:
+                    parsed_time = datetime.strptime(text, fmt).time()
+                    return datetime.combine(fallback.date(), parsed_time, tzinfo=self.tz)
+                except ValueError:
+                    continue
+        return None
+
     def fetch_spot_quotes(self, codes: list[str]) -> list[QuoteRecord]:
         rows: list[dict[str, Any]] = []
         resolved_by: str | None = None
@@ -198,10 +219,11 @@ class TushareProvider(MarketProvider):
                 pct = finite_or_none(row.get("pct_chg") or row.get("pct_change") or row.get("涨跌幅"))
                 if pct is None and pre_close:
                     pct = (price / pre_close - 1) * 100
+                source_time = self._quote_timestamp(row, now)
                 quotes.append(
                     QuoteRecord(
                         ts_code=code,
-                        quote_time=now,
+                        quote_time=source_time or now,
                         price=price,
                         open=finite_or_none(row.get("open") or row.get("今开")),
                         high=finite_or_none(row.get("high") or row.get("最高")),
@@ -212,7 +234,11 @@ class TushareProvider(MarketProvider):
                         amount=finite_or_none(row.get("amount") or row.get("成交额")),
                         premium_rate=finite_or_none(row.get("premium_rate") or row.get("溢价率")),
                         source=f"{self.name}:{resolved_by}",
-                        is_realtime=True,
+                        is_realtime=source_time is not None,
+                        degraded_reason=(
+                            None if source_time is not None else
+                            "上游实时接口未提供可验证行情时间；不可作为盘中操作依据"
+                        ),
                     )
                 )
         if quotes:
@@ -302,7 +328,7 @@ class TushareProvider(MarketProvider):
         if isinstance(value, datetime):
             return value.astimezone(self.tz) if value.tzinfo else value.replace(tzinfo=self.tz)
         text = str(value).strip()
-        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y%m%d %H:%M:%S", "%Y-%m-%d", "%Y%m%d"):
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y%m%d %H:%M:%S", "%Y%m%d%H%M%S", "%Y-%m-%d", "%Y%m%d"):
             try:
                 parsed = datetime.strptime(text, fmt)
                 return parsed.replace(tzinfo=self.tz)

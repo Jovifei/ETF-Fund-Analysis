@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.clock import MarketClock
 from app.core.config import Settings, get_settings
+from app.services.trading_calendar_service import TradingCalendarService
 from app.models import ForecastSnapshot, IndicatorSnapshot, Instrument, QuoteSnapshot
 
 
@@ -43,6 +44,7 @@ class PreflightService:
         self.settings = settings or get_settings()
         self.strategy = self.settings.load_strategy()
         self.clock = MarketClock(self.settings.timezone)
+        self.calendar = TradingCalendarService(self.settings)
 
     def check_instrument(self, db: Session, instrument: Instrument, at: datetime | None = None) -> PreflightResult:
         at = at or datetime.now(self.settings.timezone)
@@ -81,7 +83,10 @@ class PreflightService:
             if quote_time.tzinfo is None:
                 quote_time = quote_time.replace(tzinfo=self.settings.timezone)
             age = at - quote_time
-            if self.clock.price_session_open(at, is_trade_day=at.weekday() < 5):
+            calendar_decision = self.calendar.decision(at.date())
+            if not calendar_decision.verified:
+                warnings.append("交易日历未完成验证，操作级信号将被阻断")
+            if self.clock.price_session_open(at, is_trade_day=calendar_decision.is_trade_day):
                 max_age = timedelta(minutes=float(self.strategy["signal"]["maximum_quote_age_minutes"]))
             else:
                 # After close and weekends, the last settled close remains useful
@@ -90,8 +95,8 @@ class PreflightService:
                 max_age = timedelta(hours=96)
             if age > max_age:
                 missing_core.append("行情已过期")
-            if not quote.is_realtime:
-                warnings.append("实时行情权限不可用，当前快照来自日线退化")
+            if not quote.is_realtime or not bool(getattr(quote, "timestamp_verified", False)):
+                warnings.append("实时行情或源时间戳未通过资格验证")
             if quote.degraded_reason:
                 warnings.append(quote.degraded_reason)
 

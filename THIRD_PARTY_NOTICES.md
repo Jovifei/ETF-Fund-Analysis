@@ -40,3 +40,12 @@
 - 本包不包含第三方仓库完整源码。可选浅克隆清单见 `vendor/manifest.json`；个人研究 opt-in 只下载到隔离目录，不将其转许可为本项目代码。
 - `zhangsensen/etf-rotation-strategy` 的最新提交说明其历史快照曾含旧凭据，因此本项目不在生产服务器自动克隆该仓库。
 - 行情和新闻数据的展示、缓存、再分发权利与代码许可证是不同问题，应遵守数据源合同。
+
+## v0.7 隔离研究参考
+
+- `stefan-jansen/alphalens-reloaded`：因子收益、IC、换手与分组诊断；生产运行时不导入。
+- `scikit-learn-contrib/MAPIE`：Conformal Prediction 研究；当前核心实现仅为明确标记的本地残差扩张，不冒充 MAPIE 校准。
+- `gerrymanoim/exchange_calendars`：XSHG 交易日历，作为核心日历依赖。
+- `akfamily/akquant`：独立事件驱动回测与 walk-forward 研究。
+- `Nixtla/mlforecast`：多序列全局预测研究。
+- `microsoft/qlib`、`dcajasn/Riskfolio-Lib`、`ricequant/rqalpha`：仅可选离线研究。

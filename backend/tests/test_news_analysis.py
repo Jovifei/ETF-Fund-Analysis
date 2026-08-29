@@ -134,7 +134,7 @@ def _enabled_settings():
         analysis_primary_model="verified-model",
         analysis_primary_mode="responses",
         analysis_codex_enabled=True,
-        openai_api_key="test-key-not-a-real-secret",
+        openai_api_key="CHANGE_ME_TEST_KEY_NOT_REAL",
     )
 
 

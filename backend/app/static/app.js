@@ -429,13 +429,23 @@ function renderNarrative() {
 
 function forecastCell(item) {
   const f = item || {};
+  const hasCorridor = numericValue(f.path_low_price_q50) && numericValue(f.path_high_price_q50);
+  const corridor = hasCorridor ? `
+    <div class="forecast-corridor">
+      <div>终点收盘 80%：${escapeHtml(fmt(f.terminal_price_q10,4))} ～ ${escapeHtml(fmt(f.terminal_price_q90,4))}</div>
+      <div>路径支撑区：${escapeHtml(fmt(f.path_low_price_q10,4))} ～ ${escapeHtml(fmt(f.path_low_price_q90,4))}</div>
+      <div>路径压力区：${escapeHtml(fmt(f.path_high_price_q10,4))} ～ ${escapeHtml(fmt(f.path_high_price_q90,4))}</div>
+      <div>走廊位置 ${escapeHtml(fmt(f.corridor_position,1))}/100 · 触支撑 ${escapeHtml(pct(f.support_touch_probability,1,true))} · 触压力 ${escapeHtml(pct(f.resistance_touch_probability,1,true))}</div>
+    </div>` : '<div class="forecast-meta">价格走廊不可用</div>';
   return `<div class="forecast-surface" aria-label="FORECAST · 非实际结果">
-    <div class="forecast-label">FORECAST · 非实际结果</div>
+    <div class="forecast-label">FORECAST · 非实际结果 · 未校准</div>
     <div class="forecast-horizon">${escapeHtml(f.horizon == null ? '—' : `${f.horizon}日`)}</div>
     <div class="forecast-value">p(up) ${escapeHtml(f.p_up == null ? '—' : pct(f.p_up, 1, true))}</div>
     <div class="forecast-range">E[r] ${escapeHtml(pct(f.expected_return, 2, true))} · q10/q50/q90 ${escapeHtml(pct(f.q10, 2, true))} / ${escapeHtml(pct(f.q50, 2, true))} / ${escapeHtml(pct(f.q90, 2, true))}</div>
+    ${corridor}
     <div class="forecast-meta">n=${escapeHtml(f.sample_count == null ? '—' : f.sample_count)} · ${escapeHtml(f.calibration_status || 'not_calibrated')} · ${escapeHtml(f.model_version || '—')}</div>
-    <div class="forecast-meta">as_of ${escapeHtml(timeText(f.as_of_date))} · generated ${escapeHtml(timeText(f.generated_at))} · cutoff ${escapeHtml(timeText(f.data_cutoff))}</div>
+    <div class="forecast-meta">${escapeHtml(f.interval_method || 'empirical')} · schema ${escapeHtml(f.feature_schema_version || '—')}</div>
+    <div class="forecast-meta">as_of ${escapeHtml(timeText(f.as_of_date))} · data_cutoff ${escapeHtml(timeText(f.data_cutoff))} · generated ${escapeHtml(timeText(f.generated_at))}</div>
   </div>`;
 }
 function instrumentRow(row) {

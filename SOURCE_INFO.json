@@ -1,7 +1,7 @@
 {
   "project": "china-fund-decision",
-  "version": "0.4.0",
-  "generated_at": "2026-08-27T10:20:00+08:00",
+  "version": "0.7.0",
+  "generated_at": "2026-08-29T13:07:08.912073+00:00",
   "target": "private Alibaba Cloud ECS deployment",
   "runtime_architecture": {
     "api": "FastAPI + dependency-free static dashboard",
@@ -30,5 +30,7 @@
     "rotation_event_backtest": "passed",
     "docker_runtime": "not available in build environment",
     "live_tushare_openai_aliyun": "not tested"
-  }
+  },
+  "feature_schema_version": "feature-store-v0.7.0",
+  "forecast_version": "similarity-corridor-v0.7.0"
 }

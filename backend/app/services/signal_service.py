@@ -22,6 +22,7 @@ from app.models import (
 )
 from app.services.event_service import emit_event
 from app.services.preflight_service import PreflightService
+from app.services.trading_calendar_service import TradingCalendarService
 from app.utils.hashing import stable_hash
 from app.utils.numbers import clamp
 
@@ -54,6 +55,7 @@ class SignalService:
         self.strategy = self.settings.load_strategy()
         self.preflight = PreflightService(self.settings)
         self.clock = MarketClock(self.settings.timezone)
+        self.calendar = TradingCalendarService(self.settings)
 
     @staticmethod
     def _latest_by_horizon(rows: list[ForecastSnapshot]) -> dict[int, ForecastSnapshot]:
@@ -271,7 +273,8 @@ class SignalService:
             actionable=(
                 preflight.ok
                 and bool(quote and quote.is_realtime and quote.source != "mock" and not quote.degraded_reason)
-                and self.clock.price_session_open(now, is_trade_day=now.weekday() < 5)
+                and self.calendar.actionable_day(now.date())
+                and self.clock.price_session_open(now, is_trade_day=True)
             ),
         )
 

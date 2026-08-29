@@ -15,7 +15,9 @@ from app.models import Instrument, ProviderAudit, TaskRun
 from app.providers.factory import create_provider
 from app.services.backtest_v05_service import RotationBacktestV05Service
 from app.services.event_service import emit_event
+from app.services.factor_analysis_service import FactorAnalysisService
 from app.services.forecast_service import ForecastService
+from app.services.global_model_research_service import GlobalModelResearchService
 from app.services.indicator_service import IndicatorService
 from app.services.market_context_service import MarketContextService
 from app.services.market_service import MarketService
@@ -24,6 +26,7 @@ from app.services.report_service import ReportService
 from app.services.runtime_service import RuntimeService
 from app.services.signal_v05_service import SignalV05Service
 from app.services.validation_service import ForecastValidationService
+from app.research.integrations import capability_matrix
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +100,8 @@ class TaskService:
         self.runtime = RuntimeService(self.settings)
         self.reports = ReportService(self.settings)
         self.validation = ForecastValidationService(self.settings)
+        self.factor_analysis = FactorAnalysisService(self.settings)
+        self.global_models = GlobalModelResearchService(self.settings)
         self.backtest = RotationBacktestV05Service(self.settings)
 
     @property
@@ -115,6 +120,9 @@ class TaskService:
             "validate_forecasts",
             "backtest_rotation",
             "backtest_ablation",
+            "analyze_factors",
+            "research_global_models",
+            "research_capabilities",
             "bootstrap",
             "full_pipeline",
         )
@@ -190,6 +198,12 @@ class TaskService:
             return self.backtest.run(db, run_id=run_id)
         if task_name == "backtest_ablation":
             return self.backtest.run_ablation(db, run_id=run_id)
+        if task_name == "analyze_factors":
+            return self.factor_analysis.run(db, run_id=run_id)
+        if task_name == "research_global_models":
+            return self.global_models.run(db, run_id=run_id)
+        if task_name == "research_capabilities":
+            return {"run_id": run_id, "status": "succeeded", "integrations": capability_matrix()}
         if task_name in {"bootstrap", "full_pipeline"}:
             results: dict[str, dict] = {}
             failed_steps: list[str] = []

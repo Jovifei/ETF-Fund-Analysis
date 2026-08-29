@@ -19,6 +19,30 @@ class MarketService:
         self.provider = provider
         self.settings = settings or get_settings()
 
+    @staticmethod
+    def _qualify_quote_timestamp(item, fetched_at: datetime) -> tuple[bool, str | None]:
+        source_time = item.quote_time
+        if source_time.tzinfo is None:
+            source_time = source_time.replace(tzinfo=fetched_at.tzinfo)
+        age = fetched_at - source_time
+        source = str(item.source or "").lower()
+        provider_timestamp_capable = source.startswith("tushare:") and "fund_daily" not in source
+        verified = bool(
+            item.is_realtime
+            and provider_timestamp_capable
+            and source_time.date() == fetched_at.date()
+            and timedelta(minutes=-5) <= age <= timedelta(minutes=20)
+        )
+        if verified:
+            return True, None
+        if not item.is_realtime:
+            return False, item.degraded_reason or "provider marked quote non-realtime"
+        if not provider_timestamp_capable:
+            return False, "quote source timestamp has not completed provider qualification"
+        if source_time.date() != fetched_at.date():
+            return False, "quote source date is not today"
+        return False, "quote source timestamp is stale or future-dated"
+
     def sync_instruments(self, db: Session, codes: list[str] | None = None, run_id: str | None = None) -> dict:
         run_id = run_id or uuid4().hex
         timer = AuditTimer()
@@ -179,14 +203,20 @@ class MarketService:
         realtime = 0
         raw_realtime = 0
         degraded = 0
+        fetched_at = datetime.now(self.settings.timezone)
         for item in records:
             instrument = by_code.get(item.ts_code)
             if not instrument:
                 continue
+            timestamp_verified, timestamp_reason = self._qualify_quote_timestamp(item, fetched_at)
+            effective_realtime = bool(item.is_realtime and timestamp_verified and not item.degraded_reason)
+            effective_degraded_reason = item.degraded_reason or timestamp_reason
             db.add(
                 QuoteSnapshot(
                     instrument_id=instrument.id,
                     quote_time=item.quote_time,
+                    fetched_at=fetched_at,
+                    timestamp_verified=timestamp_verified,
                     price=item.price,
                     open=item.open,
                     high=item.high,
@@ -197,15 +227,15 @@ class MarketService:
                     amount=item.amount,
                     premium_rate=item.premium_rate,
                     source=item.source,
-                    is_realtime=item.is_realtime,
-                    degraded_reason=item.degraded_reason,
+                    is_realtime=effective_realtime,
+                    degraded_reason=effective_degraded_reason,
                     quality_hash=stable_hash(item.to_dict()),
                 )
             )
             inserted += 1
             raw_realtime += int(item.is_realtime)
-            realtime += int(item.is_realtime and not item.degraded_reason)
-            degraded += int(bool(item.degraded_reason))
+            realtime += int(effective_realtime)
+            degraded += int(bool(effective_degraded_reason))
         db.flush()
         emit_event(
             db,

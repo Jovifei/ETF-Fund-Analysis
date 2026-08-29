@@ -210,12 +210,12 @@ def test_market_context_endpoint_requires_private_auth_when_enabled(bootstrapped
     settings = get_settings()
     old_enabled, old_token = settings.auth_enabled, settings.private_access_token
     settings.auth_enabled = True
-    settings.private_access_token = "market-context-test-token"
+    settings.private_access_token = "CHANGE_ME_MARKET_CONTEXT_TEST_TOKEN"
     try:
         with TestClient(app) as client:
             assert client.get("/api/market-context").status_code == 401
             response = client.get(
-                "/api/market-context", headers={"Authorization": "Bearer market-context-test-token"}
+                "/api/market-context", headers={"Authorization": "Bearer CHANGE_ME_MARKET_CONTEXT_TEST_TOKEN"}
             )
             assert response.status_code == 200
             assert len(response.json()["latest_view"]) == 6

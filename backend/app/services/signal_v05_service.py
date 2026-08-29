@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models import ForecastSnapshot, Holding, IndicatorSnapshot, Instrument, QuoteSnapshot
 from app.services.signal_service import CandidateSignal, SignalService
+from app.utils.numbers import clamp
 
 
 class SignalV05Service(SignalService):
@@ -63,4 +64,33 @@ class SignalV05Service(SignalService):
         if positive:
             item.reasons = list(dict.fromkeys(item.reasons + ["策略共振：" + "、".join(positive[:4])]))[:12]
         item.risks = list(dict.fromkeys(item.risks + list(values.get("strategy_risks") or [])))[:12]
+        adjustment_cfg = self.strategy.get("signal", {}).get("forecast_risk_adjustment", {})
+        calibrated_forecasts = [
+            item for item in forecasts.values()
+            if item.calibration_status == "calibrated"
+        ]
+        if bool(adjustment_cfg.get("enabled", False)) and calibrated_forecasts:
+            contributions: list[float] = []
+            for horizon, weight in ((1, 0.50), (5, 0.30), (20, 0.20)):
+                forecast = forecasts.get(horizon)
+                if forecast is None or forecast.expected_return is None:
+                    continue
+                probability = float(forecast.p_up if forecast.p_up is not None else 0.5)
+                expected_scale = float(adjustment_cfg.get("expected_return_scale", 0.04))
+                downside_scale = float(adjustment_cfg.get("downside_scale", 0.06))
+                probability_component = (probability - 0.5) * 2.0
+                expected_component = clamp(float(forecast.expected_return) / expected_scale, -1.0, 1.0)
+                downside = float(forecast.q10 if forecast.q10 is not None else 0.0)
+                downside_component = clamp(downside / downside_scale, -1.0, 1.0)
+                combined = (
+                    probability_component * float(adjustment_cfg.get("probability_weight", 0.45))
+                    + expected_component * float(adjustment_cfg.get("expected_return_weight", 0.35))
+                    + downside_component * float(adjustment_cfg.get("downside_weight", 0.20))
+                )
+                contributions.append(combined * weight)
+            if contributions:
+                maximum = float(adjustment_cfg.get("maximum_points", 4.0))
+                adjustment = clamp(sum(contributions) * maximum, -maximum, maximum)
+                item.score = round(clamp(item.score + adjustment, 0.0, 100.0), 2)
+                item.reasons = list(dict.fromkeys(item.reasons + [f"预测收益/下行风险调整 {adjustment:+.2f} 分"]))[:12]
         return item
