@@ -35,7 +35,23 @@
 #
 # Exit codes: 0 all steps passed; 1 step failure (failed step is named);
 #             2 usage error.
+#
+# Known limitations:
+#   * Docker is a hard requirement even in --db-url mode when local
+#     psql/pg_dump binaries are absent (one-shot client containers are used
+#     then); the docker daemon must be running either way.
+#   * --db-url accepts only plain (non-percent-encoded) userinfo, no IPv6
+#     literal hosts and no query parameters; '@' inside userinfo is rejected
+#     up-front (URL-encode it as %40).
+#   * The JSON report performs no JSON-string escaping of user-derived fields
+#     (paths, URLs); values containing quotes or backslashes can render the
+#     report invalid JSON.
+#   * wipe_schema drops the URL's target schema (default: public); the
+#     isolation-by-convention of --db-url is the blast-radius boundary, so
+#     only ever point it at a disposable instance.
 set -euo pipefail
+umask 077   # dumps may contain real data in --db-url mode; artifacts stay 0600
+script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 cd "$(dirname "$0")/.."
 
 # --------------------------------------------------------------------------
@@ -195,12 +211,14 @@ record_step() { # name status duration_ms
 # one-shot client containers.
 # --------------------------------------------------------------------------
 ext_psql() { # args: psql options; SQL/dbname comes from callers
+    # ON_ERROR_STOP mirrors the container path: without it a restore whose
+    # DDL succeeds but whose COPYs partially fail would still exit 0.
     if [ -n "$EXT_PSQL" ]; then
-        PGPASSWORD="$EXT_PASSWORD" "$EXT_PSQL" "$@" "$EXTERNAL_DB_URL"
+        PGPASSWORD="$EXT_PASSWORD" "$EXT_PSQL" -v ON_ERROR_STOP=1 "$@" "$EXTERNAL_DB_URL"
     else
         # shellcheck disable=SC2086
         docker run --rm -i $DOCKER_HOST_ARGS -e PGPASSWORD="$EXT_PASSWORD" \
-            "$PG_IMAGE" psql "$@" "$EXT_URL_CLIENT"
+            "$PG_IMAGE" psql -v ON_ERROR_STOP=1 "$@" "$EXT_URL_CLIENT"
     fi
 }
 
@@ -213,7 +231,8 @@ target_psql() { # args: psql options; reads SQL from -c args or stdin
 }
 
 psql_scalar() { # single SQL expression -> single value on stdout
-    target_psql -t -A -c "$1"
+    # tr -d '\r': native Windows psql.exe emits CRLF line endings.
+    target_psql -t -A -c "$1" | tr -d '\r'
 }
 
 ext_dump() {
@@ -239,6 +258,9 @@ alembic_cmd() { # DATABASE_URL override is the only place the raw password trave
 toolchain_step() {
     begin_step "toolchain_check"
 
+    # Docker is required in both modes: container lifecycle by default, or
+    # one-shot client containers in --db-url mode when local psql/pg_dump
+    # binaries are absent.
     command -v docker >/dev/null 2>&1 || { log "ERROR: docker CLI not found"; return 1; }
     docker version --format '{{.Server.Version}}' >/dev/null 2>&1 \
         || { log "ERROR: docker daemon unreachable"; return 1; }
