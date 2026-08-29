@@ -14,6 +14,7 @@ from app.core.config import Settings, get_settings
 from app.models import Instrument, ProviderAudit, TaskRun
 from app.providers.factory import create_provider
 from app.services.backtest_v05_service import RotationBacktestV05Service
+from app.services.calibration_service import CalibrationService
 from app.services.event_service import emit_event
 from app.services.factor_analysis_service import FactorAnalysisService
 from app.services.forecast_service import ForecastService
@@ -102,6 +103,7 @@ class TaskService:
         self.validation = ForecastValidationService(self.settings)
         self.factor_analysis = FactorAnalysisService(self.settings)
         self.global_models = GlobalModelResearchService(self.settings)
+        self.calibration = CalibrationService(self.settings)
         self.backtest = RotationBacktestV05Service(self.settings)
 
     @property
@@ -118,6 +120,7 @@ class TaskService:
             "refresh_signals",
             "generate_report",
             "validate_forecasts",
+            "calibrate_forecasts",
             "backtest_rotation",
             "backtest_ablation",
             "analyze_factors",
@@ -194,6 +197,8 @@ class TaskService:
             return self.reports.generate(db, run_id=run_id)
         if task_name == "validate_forecasts":
             return self.validation.run(db, run_id=run_id)
+        if task_name == "calibrate_forecasts":
+            return self.calibration.create_candidate(db, run_id=run_id)
         if task_name == "backtest_rotation":
             return self.backtest.run(db, run_id=run_id)
         if task_name == "backtest_ablation":

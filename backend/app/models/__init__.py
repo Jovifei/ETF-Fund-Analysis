@@ -1,6 +1,7 @@
 from app.models.entities import (
     AgentReviewCandidate,
     AnalysisRun,
+    CalibrationProfile,
     DailyBar,
     EventLog,
     ForecastSnapshot,
@@ -30,6 +31,7 @@ __all__ = [
     "MarketContextSnapshot",
     "IndicatorSnapshot",
     "ForecastSnapshot",
+    "CalibrationProfile",
     "SignalSnapshot",
     "Holding",
     "HoldingImportSession",
