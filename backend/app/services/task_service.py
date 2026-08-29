@@ -17,6 +17,7 @@ from app.services.backtest_v05_service import RotationBacktestV05Service
 from app.services.calibration_service import CalibrationService
 from app.services.portfolio_optimization_service import PortfolioOptimizationService
 from app.services.crosscheck_engine import crosscheck_main
+from app.services.shadow_run_audit_service import ShadowRunAuditService
 from app.services.event_service import emit_event
 from app.services.factor_analysis_service import FactorAnalysisService
 from app.services.forecast_service import ForecastService
@@ -107,6 +108,7 @@ class TaskService:
         self.global_models = GlobalModelResearchService(self.settings)
         self.calibration = CalibrationService(self.settings)
         self.portfolio = PortfolioOptimizationService(self.settings)
+        self.shadow_audit = ShadowRunAuditService(self.settings)
         self.backtest = RotationBacktestV05Service(self.settings)
 
     @property
@@ -128,6 +130,7 @@ class TaskService:
             "backtest_rotation",
             "backtest_ablation",
             "backtest_crosscheck",
+            "shadow_run_audit",
             "analyze_factors",
             "research_global_models",
             "research_capabilities",
@@ -212,6 +215,8 @@ class TaskService:
             return self.backtest.run_ablation(db, run_id=run_id)
         if task_name == "backtest_crosscheck":
             return crosscheck_main(db, self.settings)
+        if task_name == "shadow_run_audit":
+            return self.shadow_audit.run(db, run_id=run_id)
         if task_name == "analyze_factors":
             return self.factor_analysis.run(db, run_id=run_id)
         if task_name == "research_global_models":
