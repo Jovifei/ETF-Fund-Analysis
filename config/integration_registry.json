@@ -1,0 +1,86 @@
+{
+  "version": "v0.7.0",
+  "description": "第三方研究集成注册表：记录资格状态与生产运行时权限",
+  "integrations": [
+    {
+      "key": "alphalens",
+      "distribution": "alphalens-reloaded",
+      "purpose": "因子分析 IC/分位数收益/换手",
+      "production_runtime": false,
+      "qualifed_as": "research_only",
+      "notes": "只读因子诊断；不进入信号链路"
+    },
+    {
+      "key": "mapie",
+      "distribution": "mapie",
+      "purpose": "区间预测校准参考",
+      "production_runtime": false,
+      "qualifed_as": "unqualified",
+      "notes": "保留隔离研究；本系统使用 local_conformal_research_v1"
+    },
+    {
+      "key": "exchange_calendars",
+      "distribution": "exchange_calendars",
+      "purpose": "XSHG 交易日历",
+      "production_runtime": true,
+      "qualifed_as": "qualified",
+      "notes": "生产运行时使用；TradingCalendarService"
+    },
+    {
+      "key": "akquant",
+      "distribution": "akquant",
+      "purpose": "独立第二回测引擎（可选）",
+      "production_runtime": false,
+      "qualifed_as": "unqualified",
+      "notes": "待真实数据资格后对账"
+    },
+    {
+      "key": "mlforecast",
+      "distribution": "mlforecast",
+      "purpose": "全局特征管线（可选）",
+      "production_runtime": false,
+      "qualifed_as": "research_only",
+      "notes": "候选模型比较时使用"
+    },
+    {
+      "key": "lightgbm",
+      "distribution": "lightgbm",
+      "purpose": "全局分位模型（p_up/terminal/path）",
+      "production_runtime": false,
+      "qualifed_as": "research_only",
+      "notes": "global_model_research_service 仅创建候选；不自动晋升"
+    },
+    {
+      "key": "catboost",
+      "distribution": "catboost",
+      "purpose": "全局分位模型备选",
+      "production_runtime": false,
+      "qualifed_as": "research_only",
+      "notes": "与 LightGBM 同优先级；未安装时自动降级"
+    },
+    {
+      "key": "qlib",
+      "distribution": "pyqlib",
+      "purpose": "量化研究平台参考",
+      "production_runtime": false,
+      "qualifed_as": "research_only",
+      "notes": "仅注册；不进入生产链路"
+    },
+    {
+      "key": "riskfolio",
+      "distribution": "riskfolio-lib",
+      "purpose": "组合优化（HRP/风险平价/CVaR）",
+      "production_runtime": false,
+      "qualifed_as": "research_only",
+      "notes": "优化研究只输出建议；不写 Holding、不触发再平衡"
+    },
+    {
+      "key": "rqalpha",
+      "distribution": "rqalpha",
+      "purpose": "中国 A 股独立第二引擎（可选）",
+      "production_runtime": false,
+      "qualifed_as": "unqualified",
+      "notes": "待真实数据资格后对账"
+    }
+  ]
+}

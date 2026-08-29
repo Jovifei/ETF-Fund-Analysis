@@ -1,0 +1,27 @@
+{
+  "version": "v0.7.0",
+  "description": "ETF/LOF 主题分类规则：关键词匹配，first-match-wins",
+  "source": "基于 sector_taxonomy.json 与 watchlist.json 词汇，由 build_etf_universe.py 复用",
+  "rules": [
+    {"keywords": ["半导体", "芯片"], "theme_l1": "科技", "theme_l2": "半导体"},
+    {"keywords": ["人工智能", "AI", "智能"], "theme_l1": "科技", "theme_l2": "人工智能"},
+    {"keywords": ["通信", "5G"], "theme_l1": "科技", "theme_l2": "通信"},
+    {"keywords": ["传媒", "游戏", "影视"], "theme_l1": "科技", "theme_l2": "传媒"},
+    {"keywords": ["机器人"], "theme_l1": "制造", "theme_l2": "机器人"},
+    {"keywords": ["军工", "国防"], "theme_l1": "制造", "theme_l2": "军工"},
+    {"keywords": ["新能源", "电池", "光伏"], "theme_l1": "制造", "theme_l2": "新能源"},
+    {"keywords": ["医疗", "医药", "创新药", "生物"], "theme_l1": "医药", "theme_l2": "医疗"},
+    {"keywords": ["白酒", "食品", "消费", "酒"], "theme_l1": "消费", "theme_l2": "消费"},
+    {"keywords": ["有色", "黄金", "煤炭", "石油", "原油"], "theme_l1": "资源能源", "theme_l2": "资源"},
+    {"keywords": ["银行"], "theme_l1": "金融", "theme_l2": "银行"},
+    {"keywords": ["证券", "券商"], "theme_l1": "金融", "theme_l2": "证券"},
+    {"keywords": ["保险"], "theme_l1": "金融", "theme_l2": "保险"},
+    {"keywords": ["房地产", "地产"], "theme_l1": "地产建筑", "theme_l2": "地产"},
+    {"keywords": ["基建", "建材"], "theme_l1": "地产建筑", "theme_l2": "基建"},
+    {"keywords": ["农业", "养殖"], "theme_l1": "农业", "theme_l2": "农业"},
+    {"keywords": ["红利"], "theme_l1": "宽基", "theme_l2": "红利"},
+    {"keywords": ["价值"], "theme_l1": "宽基", "theme_l2": "价值"},
+    {"keywords": ["创业板", "科创", "北证"], "theme_l1": "宽基", "theme_l2": "成长"},
+    {"keywords": ["沪深300", "中证500", "中证1000", "中证800", "上证50", "深证100"], "theme_l1": "宽基", "theme_l2": "规模指数"}
+  ]
+}
