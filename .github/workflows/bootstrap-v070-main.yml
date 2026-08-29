@@ -28,6 +28,7 @@ jobs:
           git archive origin/codex/source-export .automation/v070 | tar -x -C /tmp
           cp -a /tmp/.automation/v070/. /tmp/v070/
           rm -rf /tmp/.automation
+          sed -i 's/Pillow>=10,<13/Pillow<13,>=10/' pyproject.toml
           if ! grep -q 'version = "0.7.0"' pyproject.toml; then
             python /tmp/v070/upgrade.py
           fi
