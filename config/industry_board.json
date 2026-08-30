@@ -1,0 +1,68 @@
+{
+  "version": "screenshot-signal-board-v0.2.0",
+  "classification": {
+    "name": "申万行业分类标准2021",
+    "level": 1,
+    "expected_count": 31,
+    "scope": "中国A股行业研究层",
+    "note": "行业ETF为可交易代理。direct_etf表示较直接代理，proxy表示部分产业链代理，unmapped_pending_qualification表示暂未确认合适场内基金。"
+  },
+  "display": {
+    "china_market_color_convention": "red_up_green_down",
+    "board_columns": ["标的", "今日涨幅", "较昨日", "量能", "均线多空", "MACD", "KDJ", "九转", "RSI", "板块涨跌", "近1周", "明日预测", "操作建议"],
+    "signal_groups": [
+      {"key": "add", "label": "可加仓", "subtitle": "J<90 · 上涨放量 · MA多头排列", "tone": "green"},
+      {"key": "entry", "label": "可入场", "subtitle": "J<90 · KDJ有余量 · 结构向好", "tone": "blue"},
+      {"key": "probe", "label": "可试探", "subtitle": "J<90 · 信号偏弱 · 结构尚可", "tone": "amber"},
+      {"key": "watch", "label": "观望", "subtitle": "超买/偏高 · 放量滞涨 · 回调风险", "tone": "orange"},
+      {"key": "reduce", "label": "减仓", "subtitle": "KDJ死叉 · MACD转弱 · 多重看空共振", "tone": "red"}
+    ]
+  },
+  "market_anchors": [
+    {"id": "china_core", "name": "中国核心", "index_name": "沪深300指数", "index_symbol": "000300.SH", "proxy_ts_code": "510300.SH", "proxy_name": "沪深300ETF", "kind": "domestic_index_proxy", "note": "用于A股市场状态与风险门控。", "display_order": 1},
+    {"id": "sp500", "name": "标普500", "index_name": "S&P 500", "index_symbol": "SPX", "proxy_ts_code": "513500.SH", "proxy_name": "标普500ETF", "kind": "qdii_etf_proxy", "note": "中国场内QDII ETF代理，不等同于美股指数实时点位，受汇率、时差和溢价影响。", "display_order": 2},
+    {"id": "nasdaq", "name": "纳斯达克", "index_name": "Nasdaq-100 / Nasdaq Composite", "index_symbol": "NDX/IXIC", "proxy_ts_code": "513100.SH", "proxy_name": "纳指ETF", "kind": "qdii_etf_proxy", "note": "中国场内纳指QDII ETF代理，不等同于纳斯达克综合指数实时点位。", "display_order": 3},
+    {"id": "gold", "name": "黄金", "index_name": "上海黄金现货 / 黄金价格", "index_symbol": "AU", "proxy_ts_code": "518880.SH", "proxy_name": "黄金ETF", "kind": "commodity_etf_proxy", "note": "黄金现货型场内ETF代理。", "display_order": 4}
+  ],
+  "industries": [
+    {"industry_id": "801010", "name": "农林牧渔", "macro_group": "周期制造", "coverage_status": "direct_etf", "proxy_ts_code": "159825.SZ", "proxy_name": "农业ETF", "benchmark": "中证农业主题指数", "coverage_note": "农业主题ETF作为申万农林牧渔可交易代理", "display_order": 1, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801030", "name": "基础化工", "macro_group": "周期制造", "coverage_status": "direct_etf", "proxy_ts_code": "516020.SH", "proxy_name": "化工ETF", "benchmark": "中证细分化工产业主题指数", "coverage_note": "化工主题ETF作为基础化工可交易代理", "display_order": 2, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801040", "name": "钢铁", "macro_group": "周期资源", "coverage_status": "direct_etf", "proxy_ts_code": "515210.SH", "proxy_name": "钢铁ETF", "benchmark": "中证钢铁指数", "coverage_note": "钢铁行业ETF", "display_order": 3, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801050", "name": "有色金属", "macro_group": "周期资源", "coverage_status": "direct_etf", "proxy_ts_code": "512400.SH", "proxy_name": "有色金属ETF", "benchmark": "中证申万有色金属指数", "coverage_note": "有色金属行业ETF", "display_order": 4, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801080", "name": "电子", "macro_group": "科技成长", "coverage_status": "direct_etf", "proxy_ts_code": "159997.SZ", "proxy_name": "电子ETF", "benchmark": "中证电子50指数", "coverage_note": "电子行业ETF；半导体另列扩展主题", "display_order": 5, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801880", "name": "汽车", "macro_group": "周期制造", "coverage_status": "direct_etf", "proxy_ts_code": "516110.SH", "proxy_name": "汽车ETF", "benchmark": "中证全指汽车指数", "coverage_note": "汽车行业ETF", "display_order": 6, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801110", "name": "家用电器", "macro_group": "大消费", "coverage_status": "direct_etf", "proxy_ts_code": "159996.SZ", "proxy_name": "家电ETF", "benchmark": "中证全指家用电器指数", "coverage_note": "家电行业ETF", "display_order": 7, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801120", "name": "食品饮料", "macro_group": "大消费", "coverage_status": "direct_etf", "proxy_ts_code": "515170.SH", "proxy_name": "食品饮料ETF", "benchmark": "中证细分食品饮料产业主题指数", "coverage_note": "食品饮料行业ETF", "display_order": 8, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801130", "name": "纺织服饰", "macro_group": "大消费", "coverage_status": "unmapped_pending_qualification", "proxy_ts_code": null, "proxy_name": null, "benchmark": null, "coverage_note": "暂无通过资格验证的单一行业ETF；保留行业展示", "display_order": 9, "qualification_status": "not_mapped"},
+    {"industry_id": "801140", "name": "轻工制造", "macro_group": "大消费", "coverage_status": "unmapped_pending_qualification", "proxy_ts_code": null, "proxy_name": null, "benchmark": null, "coverage_note": "暂无通过资格验证的单一行业ETF；保留行业展示", "display_order": 10, "qualification_status": "not_mapped"},
+    {"industry_id": "801150", "name": "医药生物", "macro_group": "医药消费", "coverage_status": "direct_etf", "proxy_ts_code": "512010.SH", "proxy_name": "医药ETF", "benchmark": "沪深300医药卫生指数", "coverage_note": "医药行业ETF", "display_order": 11, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801160", "name": "公用事业", "macro_group": "稳定价值", "coverage_status": "proxy", "proxy_ts_code": "159611.SZ", "proxy_name": "电力ETF", "benchmark": "中证全指电力公用事业指数", "coverage_note": "电力ETF仅作为公用事业代理，不覆盖全部公用事业子行业", "display_order": 12, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801170", "name": "交通运输", "macro_group": "周期制造", "coverage_status": "direct_etf", "proxy_ts_code": "159666.SZ", "proxy_name": "交通运输ETF", "benchmark": "中证全指运输指数", "coverage_note": "交通运输行业ETF", "display_order": 13, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801180", "name": "房地产", "macro_group": "金融地产", "coverage_status": "direct_etf", "proxy_ts_code": "512200.SH", "proxy_name": "房地产ETF", "benchmark": "中证全指房地产指数", "coverage_note": "房地产行业ETF", "display_order": 14, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801200", "name": "商贸零售", "macro_group": "大消费", "coverage_status": "unmapped_pending_qualification", "proxy_ts_code": null, "proxy_name": null, "benchmark": null, "coverage_note": "暂无通过资格验证的单一行业ETF；可在部署后加入零售主题代理", "display_order": 15, "qualification_status": "not_mapped"},
+    {"industry_id": "801210", "name": "社会服务", "macro_group": "大消费", "coverage_status": "proxy", "proxy_ts_code": "159766.SZ", "proxy_name": "旅游ETF", "benchmark": "中证旅游主题指数", "coverage_note": "旅游ETF仅代理社会服务中的旅游链条", "display_order": 16, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801780", "name": "银行", "macro_group": "金融地产", "coverage_status": "direct_etf", "proxy_ts_code": "512800.SH", "proxy_name": "银行ETF", "benchmark": "中证银行指数", "coverage_note": "银行行业ETF", "display_order": 17, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801790", "name": "非银金融", "macro_group": "金融地产", "coverage_status": "direct_etf", "proxy_ts_code": "512070.SH", "proxy_name": "证券保险ETF", "benchmark": "沪深300非银行金融指数", "coverage_note": "证券保险ETF作为非银金融代理", "display_order": 18, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801230", "name": "综合", "macro_group": "其他", "coverage_status": "unmapped_pending_qualification", "proxy_ts_code": null, "proxy_name": null, "benchmark": null, "coverage_note": "综合行业异质性高，暂不指定单一ETF", "display_order": 19, "qualification_status": "not_mapped"},
+    {"industry_id": "801710", "name": "建筑材料", "macro_group": "周期制造", "coverage_status": "direct_etf", "proxy_ts_code": "159745.SZ", "proxy_name": "建材ETF", "benchmark": "中证全指建筑材料指数", "coverage_note": "建筑材料行业ETF", "display_order": 20, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801720", "name": "建筑装饰", "macro_group": "周期制造", "coverage_status": "proxy", "proxy_ts_code": "516970.SH", "proxy_name": "基建50ETF", "benchmark": "中证基建工程指数", "coverage_note": "基建ETF仅作为建筑装饰代理", "display_order": 21, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801730", "name": "电力设备", "macro_group": "科技成长", "coverage_status": "proxy", "proxy_ts_code": "516160.SH", "proxy_name": "新能源ETF", "benchmark": "中证新能源指数", "coverage_note": "新能源ETF作为电力设备产业链代理", "display_order": 22, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801890", "name": "机械设备", "macro_group": "周期制造", "coverage_status": "direct_etf", "proxy_ts_code": "159886.SZ", "proxy_name": "机械ETF", "benchmark": "中证细分机械设备产业主题指数", "coverage_note": "机械设备行业ETF", "display_order": 23, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801740", "name": "国防军工", "macro_group": "科技成长", "coverage_status": "direct_etf", "proxy_ts_code": "512660.SH", "proxy_name": "军工ETF", "benchmark": "中证军工指数", "coverage_note": "国防军工行业ETF", "display_order": 24, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801750", "name": "计算机", "macro_group": "科技成长", "coverage_status": "direct_etf", "proxy_ts_code": "512720.SH", "proxy_name": "计算机ETF", "benchmark": "中证计算机主题指数", "coverage_note": "计算机行业ETF", "display_order": 25, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801760", "name": "传媒", "macro_group": "科技成长", "coverage_status": "direct_etf", "proxy_ts_code": "512980.SH", "proxy_name": "传媒ETF", "benchmark": "中证传媒指数", "coverage_note": "传媒行业ETF", "display_order": 26, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801770", "name": "通信", "macro_group": "科技成长", "coverage_status": "direct_etf", "proxy_ts_code": "515880.SH", "proxy_name": "通信ETF", "benchmark": "中证全指通信设备指数", "coverage_note": "通信行业ETF", "display_order": 27, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801950", "name": "煤炭", "macro_group": "周期资源", "coverage_status": "direct_etf", "proxy_ts_code": "515220.SH", "proxy_name": "煤炭ETF", "benchmark": "中证煤炭指数", "coverage_note": "煤炭行业ETF", "display_order": 28, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801960", "name": "石油石化", "macro_group": "周期资源", "coverage_status": "direct_etf", "proxy_ts_code": "561360.SH", "proxy_name": "石油ETF", "benchmark": "中证油气产业指数", "coverage_note": "油气产业ETF作为石油石化代理", "display_order": 29, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801970", "name": "环保", "macro_group": "稳定价值", "coverage_status": "direct_etf", "proxy_ts_code": "512580.SH", "proxy_name": "环保ETF", "benchmark": "中证环保产业指数", "coverage_note": "环保产业ETF", "display_order": 30, "qualification_status": "pending_real_provider_qualification"},
+    {"industry_id": "801980", "name": "美容护理", "macro_group": "医药消费", "coverage_status": "unmapped_pending_qualification", "proxy_ts_code": null, "proxy_name": null, "benchmark": null, "coverage_note": "暂无通过资格验证的单一行业ETF；保留行业展示", "display_order": 31, "qualification_status": "not_mapped"}
+  ],
+  "extended_themes": [
+    {"id": "broad_market", "name": "宽基指数", "macro_group": "宽基风格", "proxy_ts_code": "510300.SH", "proxy_name": "沪深300ETF", "note": "核心宽基"},
+    {"id": "gem", "name": "创业板", "macro_group": "宽基风格", "proxy_ts_code": "159915.SZ", "proxy_name": "创业板ETF", "note": "成长宽基"},
+    {"id": "star50", "name": "科创50", "macro_group": "宽基风格", "proxy_ts_code": "588000.SH", "proxy_name": "科创50ETF", "note": "科创宽基"},
+    {"id": "semiconductor", "name": "半导体", "macro_group": "科技成长", "proxy_ts_code": "512480.SH", "proxy_name": "半导体ETF", "note": "电子行业扩展主题"},
+    {"id": "ai", "name": "人工智能", "macro_group": "科技成长", "proxy_ts_code": "159819.SZ", "proxy_name": "人工智能ETF", "note": "AI产业扩展主题"},
+    {"id": "gold_equity", "name": "黄金产业链", "macro_group": "周期资源", "proxy_ts_code": "517520.SH", "proxy_name": "黄金股ETF", "note": "黄金股票与黄金现货ETF分开显示"}
+  ]
+}
