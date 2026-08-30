@@ -32,6 +32,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
+      - /var/lib/china-fund-decision/ocr-transient:size=256m,mode=0700,uid=10001,gid=10001
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -48,6 +49,12 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 5
     volumes:
       - ./config:/app/config:ro
       - ./reports:/app/reports
@@ -68,6 +75,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
+      - /var/lib/china-fund-decision/ocr-transient:size=256m,mode=0700,uid=10001,gid=10001
     security_opt:
       - no-new-privileges:true
     cap_drop:

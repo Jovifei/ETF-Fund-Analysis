@@ -90,6 +90,46 @@ docker compose run --rm api python scripts/provider_smoke.py
 
 没有非空标的、可审计的来源/时间、新鲜实时字段和无 Mock 证据时，不要开启 scheduler。真实 PostgreSQL、Tushare/AKShare、OpenAI、Paddle wheel/model、ECS 和 HTTPS 仍需分别资格验证。
 
+## G. 本地 Docker 验证（上 ECS 前）
+
+先在本地用 Docker 跑通 PostgreSQL + API，确认无问题后再部署服务器。
+
+```bash
+# 1. 准备配置（Windows PowerShell 或 Git Bash 均可）
+cp deploy/.env.local.docker.example .env
+python scripts/generate_secrets.py   # 将输出的两行粘贴替换 .env 中 POSTGRES_PASSWORD / PRIVATE_ACCESS_TOKEN
+# 编辑 .env：填入 TUSHARE_TOKEN（真实数据阶段）；初次 smoke 可留空但 MARKET_PROVIDER 需知会限流
+
+# 2. 构建并启动（先不启 scheduler）
+docker compose build
+docker compose up -d db api
+docker compose ps
+docker compose logs --tail=100 api
+
+# 3. 健康检查
+curl -fsS http://127.0.0.1:8080/api/health
+# 带 Token 访问（替换为你的 PRIVATE_ACCESS_TOKEN）
+curl -fsS -H "Authorization: Bearer <PRIVATE_ACCESS_TOKEN>" http://127.0.0.1:8080/api/instruments
+
+# 4. Provider 冒烟（需 TUSHARE_TOKEN）
+docker compose run --rm api python scripts/provider_smoke.py
+
+# 5. 数据管道（Token 配置后）
+docker compose run --rm api fund-decision run-task sync_instruments
+docker compose run --rm api fund-decision bootstrap --lookback-days 900
+
+# 6. 确认无误后再启 scheduler
+# 编辑 .env：SCHEDULER_ENABLED=true
+docker compose up -d scheduler
+```
+
+本地 Docker 默认建议：
+
+- `SCHEDULER_ENABLED=false`（数据资格通过前）
+- `OCR_MODE=disabled`（未 provision Paddle 模型前）
+- API 绑定 `127.0.0.1:8080`，PostgreSQL 不映射宿主机端口
+- 浏览器访问：http://127.0.0.1:8080/ （需在请求头带 Bearer Token）
+
 ## F. 明确边界
 
-发行版本为 `0.7.0`；策略版本仍为 `signal-v0.4.0`，指标/预测版本仍由 `config/strategy.json` 管理。本版本不声称真实数据稳定、预测 calibrated、部署完成或可执行交易；本项目没有自动交易功能。
+发行版本为 `0.7.0`；策略版本见 `config/strategy.json`（当前 `signal-v0.7.0-research` 等）。本版本不声称真实数据稳定、预测 calibrated、部署完成或可执行交易；本项目没有自动交易功能。

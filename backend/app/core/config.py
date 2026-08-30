@@ -241,6 +241,8 @@ class Settings(BaseSettings):
     def validate_ocr_configuration(self) -> Settings:
         if self.ocr_mode == "cloud_review" and not self.ocr_cloud_review_enabled:
             raise ValueError("OCR_MODE=cloud_review requires OCR_CLOUD_REVIEW_ENABLED=true")
+        if self.ocr_mode == "disabled":
+            return self
         transient = self.ocr_transient_root.resolve()
         reports = self.reports_dir.resolve()
         protected = (

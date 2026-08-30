@@ -20,8 +20,8 @@ COPY scripts /app/scripts
 RUN pip install --no-cache-dir ".[market]"
 
 RUN useradd --create-home --uid 10001 appuser \
-    && mkdir -p /app/reports /app/backups \
-    && chown -R appuser:appuser /app
+    && mkdir -p /app/reports /app/backups /var/lib/china-fund-decision/ocr-model \
+    && chown -R appuser:appuser /app /var/lib/china-fund-decision
 USER appuser
 
 EXPOSE 8000
