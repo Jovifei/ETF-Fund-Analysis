@@ -1,0 +1,62 @@
+{
+  "status": "unqualified",
+  "skill_commit": "cbcfb6283e075fbaa65487a2cb1a75b70c5d4308",
+  "schemas": {
+    "instruments": "InstrumentRecord",
+    "daily": "BarRecord",
+    "spot": "QuoteRecord"
+  },
+  "provider": "ftshare",
+  "probe_code": "510300.SH",
+  "bounded": {
+    "max_pages": 10,
+    "max_rows": 10000,
+    "max_date_span_days": 366,
+    "max_response_bytes": 2000000
+  },
+  "operations": {
+    "list_instruments": {
+      "provider": "ftshare",
+      "operation": "list_instruments",
+      "records": 0,
+      "status": "rejected",
+      "failure_class": "CapabilityUnavailable",
+      "upstream_code": null,
+      "latency_ms": 255.12,
+      "source": "ftshare:list_instruments",
+      "pagination": {"bounded": null, "truncated": null},
+      "schema_fields": null,
+      "unit_findings": null,
+      "timestamp_findings": null
+    },
+    "fetch_daily_bars": {
+      "provider": "ftshare",
+      "operation": "fetch_daily_bars",
+      "records": 0,
+      "status": "rejected",
+      "failure_class": "CapabilityUnavailable",
+      "upstream_code": null,
+      "latency_ms": 66.15,
+      "source": "ftshare:fetch_daily_bars",
+      "pagination": {"bounded": null, "truncated": null},
+      "schema_fields": null,
+      "unit_findings": null,
+      "timestamp_findings": null
+    },
+    "fetch_spot_quotes": {
+      "provider": "ftshare",
+      "operation": "fetch_spot_quotes",
+      "records": 0,
+      "status": "rejected",
+      "failure_class": "CapabilityUnavailable",
+      "upstream_code": null,
+      "latency_ms": 75.63,
+      "source": "ftshare:fetch_spot_quotes",
+      "pagination": {"bounded": null, "truncated": null},
+      "schema_fields": null,
+      "unit_findings": null,
+      "timestamp_findings": null
+    }
+  },
+  "evidence_note": "Fresh bounded read-only probe after structured safe-code propagation on 2026-08-30. All three operations returned sanitized CapabilityUnavailable results; no structured upstream code was observed, so upstream_code remains null. Latencies are recorded from this run. No credential, raw response, account identifier, or private URL is included. Keep FTSHARE_ENABLED=false and FTSHARE_QUALIFICATION=unverified."
+}

@@ -19,6 +19,7 @@ from app.services.portfolio_optimization_service import PortfolioOptimizationSer
 from app.services.crosscheck_engine import crosscheck_main
 from app.services.shadow_run_audit_service import ShadowRunAuditService
 from app.services.event_service import emit_event
+from app.services.execution_policy import TaskExecutionPolicy
 from app.services.factor_analysis_service import FactorAnalysisService
 from app.services.forecast_service import ForecastService
 from app.services.global_model_research_service import GlobalModelResearchService
@@ -92,14 +93,29 @@ class TaskService:
     a small private ECS.
     """
 
-    def __init__(self, settings: Settings | None = None, provider=None) -> None:
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        provider=None,
+        *,
+        execution_policy: TaskExecutionPolicy | None = None,
+    ) -> None:
         self.settings = settings or get_settings()
+        self.execution_policy = execution_policy or TaskExecutionPolicy()
+        self._owns_provider = provider is None
         self.provider = provider if provider is not None else create_provider(self.settings)
-        self.market = MarketService(self.provider, self.settings)
-        self.market_context = MarketContextService(self.provider, self.settings)
+        self._closed = False
+        self.market = MarketService(
+            self.provider, self.settings, persist_provider_audits=self.execution_policy.persist_provider_audits
+        )
+        self.market_context = MarketContextService(
+            self.provider, self.settings, persist_provider_audits=self.execution_policy.persist_provider_audits
+        )
         self.indicators = IndicatorService(self.settings)
         self.forecasts = ForecastService(self.settings)
-        self.news = NewsService(self.provider, self.settings)
+        self.news = NewsService(
+            self.provider, self.settings, persist_provider_audits=self.execution_policy.persist_provider_audits
+        )
         self.signals = SignalV05Service(self.settings)
         self.runtime = RuntimeService(self.settings)
         self.reports = ReportService(self.settings)
@@ -110,6 +126,16 @@ class TaskService:
         self.portfolio = PortfolioOptimizationService(self.settings)
         self.shadow_audit = ShadowRunAuditService(self.settings)
         self.backtest = RotationBacktestV05Service(self.settings)
+
+    def close(self) -> None:
+        """Close only providers created by this service instance."""
+        if self._closed:
+            return
+        self._closed = True
+        if self._owns_provider:
+            close = getattr(self.provider, "close", None)
+            if callable(close):
+                close()
 
     @property
     def task_names(self) -> tuple[str, ...]:
@@ -136,6 +162,35 @@ class TaskService:
             "research_capabilities",
             "bootstrap",
             "full_pipeline",
+        )
+
+    def _bind_runtime_provider(self, db: Session) -> None:
+        settings = getattr(self, "settings", None)
+        runtime = getattr(self, "runtime", None)
+        if settings is None or runtime is None or settings.market_provider == "mock":
+            return
+        resolved = self.runtime.resolve_settings(db)
+        if (
+            resolved.market_provider == self.settings.market_provider
+            and (resolved.tushare_token or "") == (self.settings.tushare_token or "")
+        ):
+            return
+        if self._owns_provider:
+            close = getattr(self.provider, "close", None)
+            if callable(close):
+                close()
+        self.settings = resolved
+        self.runtime = RuntimeService(resolved)
+        self.provider = create_provider(resolved)
+        self._owns_provider = True
+        self.market = MarketService(
+            self.provider, resolved, persist_provider_audits=self.execution_policy.persist_provider_audits
+        )
+        self.market_context = MarketContextService(
+            self.provider, resolved, persist_provider_audits=self.execution_policy.persist_provider_audits
+        )
+        self.news = NewsService(
+            self.provider, resolved, persist_provider_audits=self.execution_policy.persist_provider_audits
         )
 
     def _ensure_instruments(self, db: Session, run_id: str) -> dict | None:
@@ -169,6 +224,7 @@ class TaskService:
         }
 
     def _execute(self, db: Session, task_name: str, run_id: str, **kwargs) -> dict:
+        self._bind_runtime_provider(db)
         if task_name == "sync_instruments":
             return self.market.sync_instruments(db, codes=kwargs.get("codes"), run_id=run_id)
         if task_name == "refresh_market_context":
@@ -179,7 +235,7 @@ class TaskService:
             self._ensure_instruments(db, run_id)
             return self.market.refresh_daily_bars(
                 db,
-                lookback_days=int(kwargs.get("lookback_days", 900)),
+                lookback_days=int(kwargs.get("lookback_days", 120)),
                 codes=kwargs.get("codes"),
                 run_id=run_id,
             )
@@ -344,43 +400,47 @@ class TaskService:
         with _task_lock(db):
             run_id = kwargs.pop("run_id", None) or uuid4().hex
             started = datetime.now(self.settings.timezone)
-            task = TaskRun(
-                run_id=run_id,
-                task_name=task_name,
-                status="running",
-                started_at=started,
-                result_json={},
-            )
-            db.add(task)
-            db.flush()
+            task = None
+            if self.execution_policy.persist_task_runs:
+                task = TaskRun(
+                    run_id=run_id,
+                    task_name=task_name,
+                    status="running",
+                    started_at=started,
+                    result_json={},
+                )
+                db.add(task)
+                db.flush()
             try:
                 result = self._execute(db, task_name, run_id, **kwargs)
-                task.status = result.get("status", "succeeded")
-                task.result_json = result
-                task.finished_at = datetime.now(self.settings.timezone)
-                db.flush()
-                emit_event(
-                    db,
-                    "task.updated",
-                    {
-                        "run_id": run_id,
-                        "task_name": task_name,
-                        "status": task.status,
-                        "failed_steps": result.get("failed_steps", []),
-                    },
-                )
+                if task is not None:
+                    task.status = result.get("status", "succeeded")
+                    task.result_json = result
+                    task.finished_at = datetime.now(self.settings.timezone)
+                    db.flush()
+                    emit_event(
+                        db,
+                        "task.updated",
+                        {
+                            "run_id": run_id,
+                            "task_name": task_name,
+                            "status": task.status,
+                            "failed_steps": result.get("failed_steps", []),
+                        },
+                    )
                 return result
             except Exception as exc:
                 logger.error("Task %s (%s) failed: %s", task_name, run_id, _failure_class(exc))
                 failure_class = _failure_class(exc)
-                self._persist_failed_run(
-                    db,
-                    run_id=run_id,
-                    task_name=task_name,
-                    started_at=started,
-                    finished_at=datetime.now(started.tzinfo),
-                    failure_class=failure_class,
-                    provider_audit=(
+                if self.execution_policy.persist_task_runs:
+                    self._persist_failed_run(
+                        db,
+                        run_id=run_id,
+                        task_name=task_name,
+                        started_at=started,
+                        finished_at=datetime.now(started.tzinfo),
+                        failure_class=failure_class,
+                        provider_audit=(
                         {
                             "operation": "fetch_market_context",
                             "provider": str(getattr(self.provider, "name", type(self.provider).__name__))[:32],
@@ -400,7 +460,7 @@ class TaskService:
                             task_name == "refresh_market_context"
                             and getattr(getattr(exc, "outcome", None), "provider_calls", 0) > 0
                         )
-                        else None
-                    ),
-                )
+                            else None
+                        ),
+                    )
                 raise TaskExecutionError(run_id, failure_class) from None

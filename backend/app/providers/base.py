@@ -8,7 +8,24 @@ from app.providers.types import BarRecord, InstrumentRecord, NewsRecord, QuoteRe
 
 
 class ProviderError(RuntimeError):
-    pass
+    """Sanitized provider failure with an optional allowlisted upstream code."""
+
+    _SAFE_CODES = frozenset({"UPSTREAM_REJECTED"})
+
+    def __init__(
+        self,
+        message: str = "provider error",
+        *,
+        safe_code: str | None = None,
+        upstream_code: str | None = None,
+    ) -> None:
+        # `upstream_code` is a compatibility alias for consumers that use the
+        # report vocabulary.  Values outside the explicit allowlist are never
+        # retained, so raw provider response details cannot escape by accident.
+        candidate = safe_code if safe_code is not None else upstream_code
+        self.safe_code = candidate if candidate in self._SAFE_CODES else None
+        self.upstream_code = self.safe_code
+        super().__init__(message)
 
 
 class CapabilityUnavailable(ProviderError):
@@ -32,6 +49,10 @@ class MarketProvider(ABC):
 
     def fetch_news(self, since_hours: int = 24) -> list[NewsRecord]:
         return []
+
+    def close(self) -> None:
+        """Release provider-owned resources; injected providers may no-op."""
+        return None
 
     def fetch_market_context(
         self, requests: list[MarketContextItem]

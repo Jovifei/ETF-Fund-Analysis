@@ -19,6 +19,7 @@
 | AKShare | 备用财经数据适配 | MIT |
 | feedparser | RSS/Atom 解析 | BSD-2-Clause |
 | PostgreSQL | 数据库 | PostgreSQL License |
+| `ftshare-market-data` Skill (reference only) | FTShare endpoint contract used by the read-only adapter | MIT (code); FTShare server/data terms separate |
 
 ## GitHub 设计参考
 
@@ -40,6 +41,15 @@
 - 本包不包含第三方仓库完整源码。可选浅克隆清单见 `vendor/manifest.json`；个人研究 opt-in 只下载到隔离目录，不将其转许可为本项目代码。
 - `zhangsensen/etf-rotation-strategy` 的最新提交说明其历史快照曾含旧凭据，因此本项目不在生产服务器自动克隆该仓库。
 - 行情和新闻数据的展示、缓存、再分发权利与代码许可证是不同问题，应遵守数据源合同。
+
+## FTShare read-only integration
+
+The application-side adapter was implemented against the pinned `ftshare-market-data`
+Skill contract at commit `cbcfb6283e075fbaa65487a2cb1a75b70c5d4308` (MIT code license).
+The Skill repository/source is not included in this application, container, or runtime
+path; only fixed endpoint contracts are reimplemented. FTShare server access and market
+data display, caching, and redistribution remain subject to separate FTShare service/data
+terms and are not granted by the MIT code license.
 
 ## v0.7 隔离研究参考
 

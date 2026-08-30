@@ -17,6 +17,8 @@
 - XSHG 统一交易日历；实时行情必须拥有可验证的上游时间戳才能成为操作级数据。
 - 信号中心研究视图：信号行情曲线（机会/风险/止盈逐日计数）、三张前排推荐、板块强度排名和可调信号系数（0.50–1.50）；命中持仓的条目带账户提醒，仅为研究提示。
 - 本地私有 OCR 导入、候选编辑/拒绝/确认流程；确认前不会写入持仓。
+- 隔离演示数据模式：420+ 天 Mock 仅写进程内 SQLite，不访问外网或正式数据库；正式行情更新默认回看 120 天。
+- 可选 FTShare 只读备用 Provider，默认关闭且未资格验证；需通过有界资格探测后才能进入 AKShare/Tushare fallback 链。
 - PostgreSQL、Alembic、FastAPI、独立调度进程、Docker Compose、阿里云 ECS 部署脚本、备份/恢复和 CI。
 
 ## 目录
@@ -69,6 +71,17 @@ uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 
 代理只有在 Provider 交付交易所代码、日线和现货覆盖、流动性、时间戳与字段质量证明后才可启用。缺失、Mock 或不可用观察均不可产生 actionable 信号；不能用历史快照冒充今日数据。
 
+## 行情数据源与安全演示
+
+看板把数据用途分成三档：隔离演示（Mock）、免费公开行情（AKShare 主源）和更完整行情（Tushare
+主源）。FTShare 是可选的只读备用源，默认 `FTSHARE_ENABLED=false` 且
+`FTSHARE_QUALIFICATION=unverified`；应用不会执行第三方 Skill，也不接受前端传入 URL、工具名或
+Shell 参数。通过资格探测前，FTShare 完全跳过；探测失败只会记录脱敏状态并继续其他公开源，绝不
+静默切换到 Mock。配置项和资格流程见 [`docs/FTSHARE_PROVIDER.md`](docs/FTSHARE_PROVIDER.md)。
+
+系统页的「演示数据」是独立视图：加载后显示 DEMO/Mock 横幅，所有读数仅供研究演示且不可操作；
+正式数据和演示数据不会混库。演示状态不会持久化，API 重启后需重新加载。
+
 ## 投资组合截图 OCR 操作指南
 
 1. 上传仅限 PNG/JPEG/WebP；Pillow 负责 MIME、魔数、解码、尺寸、像素和尾随数据校验。应用默认最多 10 MiB（`OCR_MAX_IMAGE_BYTES=10485760`）、12,000×12,000、4,000 万像素，硬超时 60 秒，临时会话 TTL 默认 15 分钟。
@@ -93,7 +106,7 @@ sudo bash deploy/aliyun/deploy.sh
 
 Compose 只把应用映射到 `127.0.0.1:8080`，PostgreSQL 不映射宿主机端口。公网访问应经过 Caddy/Nginx HTTPS；ECS 安全组只开放 80/443，SSH 22 仅允许可信 IP。反向代理上传上限应保持 12MB：应用图像上限为 10MiB，额外空间仅用于 multipart 开销；示例已在 Caddy/Nginx 中对齐。
 
-`.env` 用 `chmod 0600`，OCR 临时根目录用 `0700`，模型根目录私有并只读。上线前先备份，再按 `158ca7025305` → `9f1c2b3a4d5e` → `a2b3c4d5e6f7` → `b3c4d5e6f7a8` 执行 `alembic upgrade head`；回滚只允许在备份和隔离实例验证后使用 `alembic downgrade`，不能直接改生产库。
+`.env` 用 `chmod 0600`，OCR 临时根目录用 `0700`，模型根目录私有并只读。上线前先备份，再按 `158ca7025305` → `9f1c2b3a4d5e` → `a2b3c4d5e6f7` → `b3c4d5e6f7a8` → `c4d5e6f7a8b9` → `d5e6f7a8b9c0`（当前 head）执行 `alembic upgrade head`；回滚只允许在备份和隔离实例验证后使用 `alembic downgrade`，不能直接改生产库。隔离 SQLite 已完成 upgrade/current、完整 downgrade/re-upgrade 和 `alembic check`；该审计修复保留历史 review/analysis hash-check 名称、holding-import opaque-session 约束、nullable legacy calibration JSON 与唯一 `candidate_id` 查询契约。真实 PostgreSQL 的迁移/回滚/备份恢复仍是生产发布门槛。
 
 ## 命令
 
@@ -118,7 +131,7 @@ fund-decision bootstrap --lookback-days 900
 
 ## 版本与验证边界
 
-应用/发行包版本为 `0.7.0`。策略、指标和预测版本仍由 `config/strategy.json` 管理（当前为 `signal-v0.7.0-research` / `similarity-corridor-v0.7.0` 等），本版本没有在生产环境自动升级公式或阈值。完整回归、迁移、Mock HTTP 和浏览器烟测只证明本地/Mock 行为；真实 PostgreSQL、Tushare/AKShare/OpenAI 端点、真实 Paddle Python 3.12 wheel/model、ECS、域名 HTTPS 与预测校准仍是部署门槛。详见 [`STATUS.md`](STATUS.md)、[`HANDOFF.md`](HANDOFF.md) 和 [`docs/IMPLEMENTATION_MATRIX.md`](docs/IMPLEMENTATION_MATRIX.md)。
+应用/发行包版本为 `0.7.0`。策略、指标和预测版本仍由 `config/strategy.json` 管理（当前为 `signal-v0.7.0-research` / `similarity-corridor-v0.7.0` 等），本版本没有在生产环境自动升级公式或阈值。完整回归、迁移、Mock HTTP 和浏览器烟测只证明本地/Mock 行为；真实 PostgreSQL、Tushare/AKShare/OpenAI 端点、真实 Paddle Python 3.12 wheel/model、ECS、域名 HTTPS 与预测校准仍是部署门槛。详见 [`STATUS.md`](STATUS.md)、[`HANDOFF.md`](HANDOFF.md)、[`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) 和 [`docs/IMPLEMENTATION_MATRIX.md`](docs/IMPLEMENTATION_MATRIX.md)。
 
 ## 安全与许可证
 

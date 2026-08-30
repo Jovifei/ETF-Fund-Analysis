@@ -8,7 +8,7 @@
 
 1. `AGENTS.md`
 2. `STATUS.md`
-3. `README.md` 与 `QUICKSTART.md`
+3. `README.md`、`QUICKSTART.md` 与 `docs/USER_GUIDE.md`
 4. `CODEX_DEPLOYMENT_TASKS.md`
 5. `docs/ARCHITECTURE.md`、`docs/IMPLEMENTATION_MATRIX.md`、`docs/ALIYUN_DEPLOYMENT.md`
 6. `config/strategy.json`、`config/market_context.json` 和 `vendor/manifest.json`
@@ -31,8 +31,10 @@
 生产数据库只用 PostgreSQL 16；先做可验证备份，再按以下顺序执行：
 
 ```text
-158ca7025305 -> 9f1c2b3a4d5e -> a2b3c4d5e6f7 -> b3c4d5e6f7a8
+158ca7025305 -> 9f1c2b3a4d5e -> a2b3c4d5e6f7 -> b3c4d5e6f7a8 -> c4d5e6f7a8b9 -> d5e6f7a8b9c0 (current head)
 ```
+
+The disposable SQLite migration chain now passes `alembic upgrade head`, `current`, full `downgrade base`/re-upgrade, and `alembic check` at `d5e6f7a8b9c0`.  The audited metadata reconciliation preserves the historical review/analysis hash-check names, the opaque import-session check, and legacy nullable calibration JSON; a unique `candidate_id` constraint remains its lookup index.  Real PostgreSQL upgrade/downgrade/backup-restore evidence remains a deployment gate.
 
 回滚只能在隔离实例验证备份 SHA-256 和可恢复性后执行 `alembic downgrade`，不得手工改生产库。API 仅映射 `127.0.0.1:8080`，PostgreSQL 不暴露宿主机端口，公网必须经 Caddy/Nginx HTTPS；反代上传上限 12MB 以覆盖 10MiB 图像和 multipart 开销。
 
@@ -50,3 +52,13 @@
 - 设置：`PUT /api/settings` 的 `signal_center_coefficient`（0.50–1.50，默认 1.00），存于 `runtime_settings`，无迁移需求。
 - 前端：第 5 个页签"信号中心"——汇总卡、Canvas 三序列曲线、板块强度排名、前排三页签（条目可点开 K 线详情）、信号系数滑块；命中持仓的条目显示"已持有 · 注意账户影响"琥珀色提醒。
 - 边界：mock provider 下 `research_only=true` 并全局告警；前排列表一律标注"研究提示，非操作指令"。
+
+## ETF 信号分级（signal-grade-v0.1.0）
+
+- 端点：`GET /api/signals/grade`，只读取 Indicator/Quote/Forecast 快照，派生量能/均线/MACD/KDJ/RSI/九转标签与五档；**不写 Holding、不改生产信号**。
+- 前端：第 6 个页签「ETF信号分级」——五张计数卡、分组宽表（空组文案「今日无『X』标的」）、预测格强制「FORECAST · 非实际结果」。
+- 标的：`config/watchlist.json` v2 行业主题池 + 标普500/纳斯达克100/黄金/黄金股；`510300.SH` 仍为门控基准。不接同花顺指数代码。
+- 卡点：免费档（系统页默认）即可拉东财公开 ETF；完整档才需要 Token。Token 在系统页只写不回显，可用「测试是否连通」。规格见 `docs/superpowers/specs/2026-08-30-etf-signal-grade-design.md`。
+- 决策看板现为行业/概念板块卡片（`GET /api/signals/boards`，`config/board_catalog.json`），不是东财实时板块指数。
+
+- 使用说明：`docs/USER_GUIDE.md`。令牌从仓库根 `.env` 的 `PRIVATE_ACCESS_TOKEN` 复制到登录框，不要发到聊天或提交 Git。

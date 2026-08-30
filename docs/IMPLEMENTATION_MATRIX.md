@@ -13,7 +13,7 @@
 | 持仓截图 OCR | `ocr/`, `holding_import_service.py` | Pillow 校验、私有会话、编辑/拒绝/确认和 no-preconfirm-write 测试 | 真实 Paddle 包、Python 3.12 wheel/model、Linux 私有目录资格；Windows 生产 fail-closed |
 | OCR 安全与限制 | `backend/app/core/config.py` + `backend/app/services/holding_import_service.py` | 10MiB 图像、像素/尺寸、60s hard timeout、15m TTL、spawn cleanup | 运维需建立 transient root 0700、模型根私有只读 |
 | Docker/反向代理 | `docker-compose.yml`, Dockerfile, Caddy/Nginx examples | Compose/配置可静态检查；代理 body limit 12MB | 当前镜像不装重型 Paddle；缺少显式合格 provision 时 OCR 503；ECS 构建待验证 |
-| 数据库迁移 | `backend/alembic/versions` | `158ca7025305` → `9f1c2b3a4d5e` → `a2b3c4d5e6f7` → `b3c4d5e6f7a8` | 真实 PostgreSQL upgrade/downgrade/backup restore |
+| 数据库迁移 | `backend/alembic/versions` | `158ca7025305` → `9f1c2b3a4d5e` → `a2b3c4d5e6f7` → `b3c4d5e6f7a8` → `c4d5e6f7a8b9` → `d5e6f7a8b9c0`（当前 head）；隔离 SQLite upgrade/downgrade/re-upgrade/`alembic check` 通过 | 真实 PostgreSQL upgrade/downgrade/backup restore |
 | 调度器 | `scheduler.py` | 本地 cadence/失败隔离测试；市场上下文默认 15m、tick 30s | ECS 完整交易日观察和告警 |
 | 报告/审计 | report/audit services | 本地 HTML/JSON 与输入哈希、来源字段 | 真实数据长期归档和运维恢复演练 |
 | 自动交易 | 无 | 明确不实现 | 不得由 Agent 擅自增加 |

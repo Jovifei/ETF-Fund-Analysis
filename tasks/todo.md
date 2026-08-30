@@ -366,3 +366,63 @@ python codex/skills/fund-research/scripts/check_no_secrets.py .
 - [x] No automatic commit, push, PR, provider credential read, production DB write, broker action, or threshold tuning is authorized.
 - [x] Pre-existing snapshot differences remain owner work; each task records only its explicit file list and semantic diff.
 - [x] Models/agents remain text-analysis candidates with no tools or numeric decision authority.
+
+---
+
+# FTShare + Safe Demo Active Plan
+
+- [x] Current staged owner snapshot copied into isolated worktree without `.env`, databases, `.zcode`, or reference screenshots.
+- [x] A. Configure and verify FTShare MCP plus pinned user-level Skill; no business DB access.
+- [x] B. Implement disabled-by-default FTShare Provider, qualification script, provider ordering, audit and contract tests.
+- [x] C. Implement isolated DemoService/API; fix 30-calendar-day root cause and status semantics.
+- [x] D. Implement system-page demo/free/complete UX, provider probe matrix and source badges.
+- [x] E. Update docs/config examples, run full regression, live read-only FTShare qualification, browser smoke and final review; schema parity is now green.
+- [x] Every implementation task has a fresh delegated implementer (Luna/Terra high as requested), specification review and quality review with no open feature Critical/Important issue.
+- [x] No real credential read, production DB write, broker action, or Mock-to-production fallback; commit/push only after Jovi's explicit authorization.
+
+## Task B implementation checklist (FTShare provider)
+
+- [x] RED: add isolated MockTransport contract tests for settings, mappings, validation, errors, and factory order.
+- [x] GREEN: implement disabled-by-default FTShare settings, fixed-endpoint provider, factory ordering, and qualification probe.
+- [x] Verify focused tests, full pytest, compileall, node check, and diff check; record evidence below.
+
+### Task B review
+
+- Focused FTShare contract tests: 63 passed; market-context focused suite and full pytest also passed (2 existing platform skips).
+- Follow-up hardening covers exact row symbol/code matching, exact provenance allowlist, strict Beijing ISO timestamp/order/date parsing, explicit unadjusted bars, streaming response byte bounds, strict pagination parsing, production base URL policy, no Mock in new composite chains, sanitized factory/transport errors, integer share volumes, computed bounded pct units, unknown qualification pagination, and idempotent scheduler/provider lifecycle closure.
+- `python -m compileall -q backend/app scripts/qualify_ftshare.py`: passed; `node --check backend/app/static/app.js`: passed.
+- `git diff --check`: no FTShare/task-B whitespace errors; an existing owner change in `backend/app/static/app.css` reports a blank EOF line.
+- Live FTShare qualification was run read-only after implementation and exits nonzero while daily/spot evidence is unavailable; the checked report remains unqualified and FTShare disabled.
+
+### Task C review
+
+- [x] DemoService uses a process-local SQLite `StaticPool` and a dedicated MockProvider; it never shares the production SQLAlchemy engine.
+- [x] Demo load runs the existing sync/420+ bar/indicator/forecast/signal pipeline with `report=False`; demo reads include explicit `demo`, `is_mock`, `research_only`, and `actionable=false` provenance.
+- [x] Private `/api/demo/load`, `/api/demo/bootstrap`, and `/api/demo/reset` endpoints accept no provider URL, tool, or shell controls; reset/disposal is lock-protected and idempotent.
+- [x] Empty, insufficient, provider-unavailable, and indicator-failure states have mutually exclusive labels; API/UI refresh-bars default is 120 calendar days.
+- [x] Focused demo regression: 8 passed; compileall and Node syntax checks passed. Full suite and independent spec/quality review remain parent-task gates.
+- [x] Review hardening: demo settings forcibly disable analysis, LLM, Tushare, FTShare, RSS/news egress, and OCR cloud/local modes; injected HTTP transport confirms zero external calls.
+- [x] Review hardening: pipeline stages classify provider fetch failures separately from core indicator failures; app lifespan disposes the demo runtime and injected provider exactly once.
+- [x] Review hardening: recursive demo provenance flags cover nested dashboard/grade/board/audit data; readiness counts distinct latest indicator snapshots per instrument.
+
+### Task D review
+
+- [x] System page distinguishes isolated DEMO, free AKShare-primary, and complete Tushare-primary usage; FTShare state is visible without returning endpoint URLs or credentials.
+- [x] Market probe returns bounded per-provider rows (`provider`, `operation`, `ok`, `status`, `records`, `latency`, `failure_class`, `qualification`) and persists only sanitized latest results.
+- [x] Demo load/reset/exit controls switch the dashboard to `/api/demo/*`, disable formal task controls, show a persistent DEMO/Mock banner, and restore formal `/api/bootstrap` on exit.
+- [x] Source badge is derived from observed quote/provider provenance; demo results remain research-only and non-actionable.
+- [x] Focused market settings tests, Node syntax, and compile checks passed; full-suite verification remains the parent task gate.
+- [x] Review hardening: FTShare factory inclusion requires both explicit enablement and `qualified`; unqualified/rejected sources are skipped.
+- [x] Review hardening: DEMO blocks all formal mutation handlers and controls, including holdings, OCR, boards, reports, settings, coefficients, and tasks.
+- [x] Review hardening: source badge reports `不可用` when no current quote or latest successful provenance exists; formal Mock is not relabeled as isolated DEMO.
+- [x] Review hardening: exiting DEMO reloads formal settings before formal bootstrap and never re-enters DEMO on settings-read failure.
+- [x] Quality hardening: mode transitions use generation tokens, abort in-flight reads/SSE/OCR work, and centrally track in-flight formal mutations with no counter leak on failure/abort.
+- [x] Quality hardening: Node VM behavior tests cover pending-write refusal, successful DEMO retention, failed-enter SSE/timer restoration, and single formal SSE reconnect on successful exit.
+
+### Task E finalization evidence
+
+- [x] Documentation/config examples updated for `FTSHARE_ENABLED=false`, `FTSHARE_QUALIFICATION=unverified`, fixed endpoint, timeout, page/row/date/response bounds, qualification workflow, independent data-service terms, safe DEMO workflow, 120-day refresh default, status semantics, pinned Agent Skill commit, and the separate Tushare plaintext-token security debt.
+- [x] `scripts/qualify_ftshare.py` live read-only probe completed on 2026-08-30 for `510300.SH`; ETF list, daily bars, and spot operations all returned sanitized rejection (`CapabilityUnavailable`), so the qualification report remains `unqualified` and FTShare remains disabled. Evidence: `docs/ftshare-qualification-2026-08-30.json`.
+- [x] Parent-controller evidence: `pytest -q` exited 0 (447 collected test nodes; 2 existing platform skips); `python -m compileall -q backend/app scripts/qualify_ftshare.py` passed; `node --check backend/app/static/app.js` passed; diff secret scan found no configured-secret patterns (environment files excluded). This child task does not relabel that controller run as its own full-suite result.
+- [x] Isolated headless browser smoke on port 18988 with a worktree-pinned app and temporary SQLite: DEMO banner/load/status/source badge, formal task and portfolio locks, FTShare disabled status, DEMO exit, and zero external requests passed. Exact smoke processes and temporary SQLite artifacts were cleaned up; ports 18981-18988 verified closed.
+- [x] Audited ORM/migration reconciliation: clean disposable SQLite passes `upgrade head`, `current`, full `downgrade base`/re-upgrade, and `alembic check` at `d5e6f7a8b9c0`. The metadata-only repair preserves historical review/analysis hash-check names, restores the separately named opaque import-session constraint, keeps nullable legacy calibration JSON, and removes only a redundant candidate-id index declaration covered by the existing UNIQUE constraint. Regression: `backend/tests/test_migration_schema_parity.py`; real PostgreSQL qualification remains a deployment gate.

@@ -56,12 +56,21 @@ class HeuristicNewsAnalysis:
 
 
 class NewsService:
-    def __init__(self, provider: MarketProvider, settings: Settings | None = None, *, analysis_service: Any | None = None, persistence_service: Any = AnalysisPersistenceService) -> None:
+    def __init__(
+        self,
+        provider: MarketProvider,
+        settings: Settings | None = None,
+        *,
+        analysis_service: Any | None = None,
+        persistence_service: Any = AnalysisPersistenceService,
+        persist_provider_audits: bool = True,
+    ) -> None:
         self.provider = provider
         self.settings = settings or get_settings()
         self.classifier = ThemeClassifier(self.settings)
         self.analysis_service = analysis_service
         self.persistence_service = persistence_service
+        self.persist_provider_audits = persist_provider_audits
 
     def _heuristic_analysis(self, title: str, summary: str | None) -> HeuristicNewsAnalysis:
         text = f"{title} {summary or ''}"
@@ -228,24 +237,26 @@ class NewsService:
             for trace in getattr(self.provider, "last_trace", ()) or ():
                 if getattr(trace, "reason", None):
                     trace.reason = str(sanitized)
+            if self.persist_provider_audits:
+                record_provider_audit(
+                    db,
+                    run_id=run_id,
+                    operation="fetch_news",
+                    provider=self.provider,
+                    error=sanitized,
+                    latency_ms=timer.elapsed_ms,
+                )
+            db.flush()
+            raise sanitized from None
+        if self.persist_provider_audits:
             record_provider_audit(
                 db,
                 run_id=run_id,
                 operation="fetch_news",
                 provider=self.provider,
-                error=sanitized,
+                result=records,
                 latency_ms=timer.elapsed_ms,
             )
-            db.flush()
-            raise sanitized from None
-        record_provider_audit(
-            db,
-            run_id=run_id,
-            operation="fetch_news",
-            provider=self.provider,
-            result=records,
-            latency_ms=timer.elapsed_ms,
-        )
         existing = {(row.source, row.source_id): row for row in db.scalars(select(NewsItem)).all()}
         result = self._run(db, records, existing, 1)
         emit_event(

@@ -62,11 +62,38 @@ class Settings(BaseSettings):
     private_access_token: str = "change-this-private-token-at-least-32-chars"
     trusted_proxy_headers: bool = False
 
-    market_provider: Literal["mock", "tushare", "akshare", "composite"] = "mock"
+    market_provider: Literal["mock", "tushare", "akshare", "ftshare", "public_composite", "composite"] = "mock"
     allow_mock_fallback: bool = False
     tushare_token: str = ""
     tushare_realtime_candidates: str = "rt_etf_k,realtime_quote,rt_k"
     akshare_timeout_seconds: float = 25.0
+    # FTShare is an explicitly opt-in, read-only public source.  Bounds keep a
+    # malformed or unexpectedly large upstream response from becoming a local
+    # resource exhaustion vector.
+    ftshare_enabled: bool = Field(default=False, validation_alias="FTSHARE_ENABLED")
+    # Qualification is deliberately separate from enablement.  Operators must
+    # run the bounded qualification script and explicitly set this value
+    # before FTShare can enter a production fallback chain.
+    ftshare_qualification: Literal["unverified", "qualified", "rejected", "unqualified"] = Field(
+        default="unverified", validation_alias="FTSHARE_QUALIFICATION"
+    )
+    ftshare_base_url: str = Field(
+        default="https://market.ft.tech/gateway", validation_alias="FTSHARE_BASE_URL"
+    )
+    ftshare_allow_custom_base_url: bool = Field(
+        default=False, validation_alias="FTSHARE_ALLOW_CUSTOM_BASE_URL"
+    )
+    ftshare_timeout_seconds: FiniteFloat = Field(
+        default=20.0, validation_alias="FTSHARE_TIMEOUT_SECONDS", gt=0, le=120
+    )
+    ftshare_max_pages: int = Field(default=10, validation_alias="FTSHARE_MAX_PAGES", ge=1, le=100)
+    ftshare_max_rows: int = Field(default=10_000, validation_alias="FTSHARE_MAX_ROWS", ge=1, le=100_000)
+    ftshare_max_date_span_days: int = Field(
+        default=366, validation_alias="FTSHARE_MAX_DATE_SPAN_DAYS", ge=1, le=3_650
+    )
+    ftshare_max_response_bytes: int = Field(
+        default=2_000_000, validation_alias="FTSHARE_MAX_RESPONSE_BYTES", ge=1_024, le=20_000_000
+    )
     news_rss_urls: str = ""
     news_rss_timeout_seconds: float = 20.0
 
@@ -74,6 +101,7 @@ class Settings(BaseSettings):
     strategy_path: Path = PROJECT_ROOT / "config" / "strategy.json"
     taxonomy_path: Path = PROJECT_ROOT / "config" / "sector_taxonomy.json"
     market_context_path: Path = PROJECT_ROOT / "config" / "market_context.json"
+    board_catalog_path: Path = PROJECT_ROOT / "config" / "board_catalog.json"
     reports_dir: Path = PROJECT_ROOT / "reports"
 
     # Portfolio screenshot OCR is local-only by default.  The transient root
@@ -382,6 +410,9 @@ class Settings(BaseSettings):
 
     def load_market_context(self) -> RegistryConfig:
         return RegistryConfig.model_validate(json.loads(self.market_context_path.read_text(encoding="utf-8")))
+
+    def load_board_catalog(self) -> dict:
+        return json.loads(self.board_catalog_path.read_text(encoding="utf-8"))
 
 
 @lru_cache(maxsize=1)

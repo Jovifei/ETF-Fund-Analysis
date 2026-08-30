@@ -79,9 +79,16 @@ class MarketContextService:
 
     operation = "fetch_market_context"
 
-    def __init__(self, provider: MarketProvider, settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        provider: MarketProvider,
+        settings: Settings | None = None,
+        *,
+        persist_provider_audits: bool = True,
+    ) -> None:
         self.provider = provider
         self.settings = settings or get_settings()
+        self.persist_provider_audits = persist_provider_audits
 
     def _config(self, config: RegistryConfig | Iterable[MarketContextItem] | None) -> RegistryConfig:
         if config is None:
@@ -341,6 +348,8 @@ class MarketContextService:
         reason: str | None = None,
         include_traces: bool = True,
     ) -> None:
+        if not self.persist_provider_audits:
+            return
         traces = (
             getattr(self.provider, "last_trace", None)
             if include_traces and isinstance(self.provider, CompositeProvider)

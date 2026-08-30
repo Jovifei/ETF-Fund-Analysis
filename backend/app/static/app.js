@@ -8,6 +8,9 @@ const state = {
   settings: null,
   reports: [],
   signalCenter: null,
+  signalGrade: null,
+  boards: null,
+  boardKind: 'industry',
   signalFrontTab: 'opportunity',
   signalCenterLoading: false,
   coefficientTimer: null,
@@ -35,6 +38,13 @@ const state = {
   cancelController: null,
   cancelPromise: null,
   cloudReviewEnabled: false,
+  demoMode: false,
+  modeGeneration: 0,
+  modeTransition: null,
+  demoBootstrapController: null,
+  formalMutationCount: 0,
+  renderOverride: null,
+  eventsRestartOverride: null,
 };
 
 const DEFAULT_MARKET_CONTEXT = Object.freeze([
@@ -102,8 +112,9 @@ function holdingPnlPercent(holding) {
 function stateClass(label) {
   if (['可入场'].includes(label)) return 'entry';
   if (['可试探'].includes(label)) return 'probe';
-  if (['加仓', '小幅加仓'].includes(label)) return 'add';
+  if (['可加仓', '加仓', '小幅加仓'].includes(label)) return 'add-pos';
   if (['持有', '观察'].includes(label)) return 'hold';
+  if (['观望'].includes(label)) return 'watch';
   if (['减仓', '风险观察'].includes(label)) return 'reduce';
   return 'anomaly';
 }
@@ -114,29 +125,96 @@ function toast(message, timeout = 2600) {
   clearTimeout(node._timer);
   node._timer = setTimeout(() => node.classList.add('hidden'), timeout);
 }
+function blockFormalMutation(action = '此操作') {
+  if (!state.demoMode && !state.modeTransition) return false;
+  toast(`演示模式已禁用${action}；退出演示后可操作`);
+  return true;
+}
+
+function renderCurrentView() {
+  if (typeof state.renderOverride === 'function') return state.renderOverride();
+  return renderAll();
+}
+
+function restartFormalEvents() {
+  if (typeof state.eventsRestartOverride === 'function') return state.eventsRestartOverride();
+  return connectEvents();
+}
+
+function modeRequestCurrent(generation, expectedDemo) {
+  if (generation !== state.modeGeneration || state.demoMode !== expectedDemo) return false;
+  const transitionTarget = state.modeTransition?.target;
+  return !transitionTarget || transitionTarget === (expectedDemo ? 'demo' : 'formal');
+}
+
+function beginModeTransition(target) {
+  if (state.modeTransition) return null;
+  if (state.formalMutationCount > 0) {
+    toast('当前有正式写操作进行中，完成后再切换模式');
+    return null;
+  }
+  state.modeGeneration += 1;
+  state.modeTransition = {target, generation: state.modeGeneration};
+  state.bootstrapController?.abort();
+  state.demoBootstrapController?.abort();
+  state.settingsController?.abort();
+  cancelDetailRequest();
+  state.eventAbort?.abort();
+  clearTimeout(state.eventRetry);
+  clearInterval(state.refreshTimer);
+  abortImportRequests();
+  if (state.holdingImport) {
+    closeModal('portfolioConfirmOverlay');
+    closeModal('portfolioImportOverlay');
+    resetImportWorkflow({advance: false});
+  }
+  renderSourceBadge(state.data || {});
+  return state.modeGeneration;
+}
+
+function endModeTransition(generation) {
+  if (state.modeTransition?.generation !== generation) return false;
+  state.modeTransition = null;
+  renderSourceBadge(state.data || {});
+  return true;
+}
 
 async function api(path, options = {}) {
   const {authGeneration = state.authRequestGeneration, ...requestOptions} = options;
+  const method = String(requestOptions.method || 'GET').toUpperCase();
+  const formalMutation = method !== 'GET' && !String(path).startsWith('/api/demo/');
+  if (formalMutation) {
+    if (blockFormalMutation('正式写操作')) {
+      const blocked = new Error('formal mutation blocked during demo mode transition');
+      blocked.code = 'FORMAL_MUTATION_BLOCKED';
+      throw blocked;
+    }
+    state.formalMutationCount += 1;
+  }
   const headers = new Headers(requestOptions.headers || {});
   if (state.token) headers.set('Authorization', `Bearer ${state.token}`);
   if (requestOptions.body instanceof FormData) {
     headers.delete('Content-Type');
     for (const name of [...headers.keys()]) if (name.toLowerCase() === 'content-type') headers.delete(name);
   } else if (requestOptions.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-  const response = await fetch(path, {...requestOptions, headers});
-  if (response.status === 401) {
-    if (authGeneration === state.authRequestGeneration) showAuth('令牌无效或已变更');
-    throw new Error('unauthorized');
+  try {
+    const response = await fetch(path, {...requestOptions, headers});
+    if (response.status === 401) {
+      if (authGeneration === state.authRequestGeneration) showAuth('令牌无效或已变更');
+      throw new Error('unauthorized');
+    }
+    if (!response.ok) {
+      let detail = `${response.status} ${response.statusText}`;
+      try { const payload = await response.json(); detail = payload.detail || detail; } catch (_) {}
+      const error = new Error(detail);
+      error.status = response.status;
+      throw error;
+    }
+    const type = response.headers.get('content-type') || '';
+    return type.includes('application/json') ? response.json() : response.text();
+  } finally {
+    if (formalMutation) state.formalMutationCount = Math.max(0, state.formalMutationCount - 1);
   }
-  if (!response.ok) {
-    let detail = `${response.status} ${response.statusText}`;
-    try { const payload = await response.json(); detail = payload.detail || detail; } catch (_) {}
-    const error = new Error(detail);
-    error.status = response.status;
-    throw error;
-  }
-  const type = response.headers.get('content-type') || '';
-  return type.includes('application/json') ? response.json() : response.text();
 }
 
 const IMPORT_STATUS_CLASS_ALLOWLIST = Object.freeze({matched:'matched', ambiguous:'ambiguous', unmatched:'unmatched', low_confidence:'low_confidence', duplicate:'duplicate', rejected:'rejected', pending:'pending', reviewed:'reviewed', confirmed:'confirmed'});
@@ -261,17 +339,19 @@ function cancelDetailRequest() {
 }
 
 function requestDetailBars(code) {
+  if (state.demoMode || state.modeTransition) return;
   if (!code || qs('#detailOverlay').classList.contains('hidden')) return;
   cancelDetailRequest();
   const requestToken = state.detailRequestToken;
+  const modeGeneration = state.modeGeneration;
   const controller = new AbortController();
   state.detailRequestController = controller;
   api(`/api/instruments/${encodeURIComponent(code)}/bars?limit=220`, {signal: controller.signal})
     .then(bars => {
-      if (requestToken === state.detailRequestToken && state.detailCode === code && !qs('#detailOverlay').classList.contains('hidden')) drawChart(bars);
+      if (requestToken === state.detailRequestToken && modeGeneration === state.modeGeneration && !state.modeTransition && state.detailCode === code && !qs('#detailOverlay').classList.contains('hidden')) drawChart(bars);
     })
     .catch(error => {
-      if (error.name !== 'AbortError' && requestToken === state.detailRequestToken) toast(`K线加载失败：${error.message}`);
+      if (error.name !== 'AbortError' && requestToken === state.detailRequestToken && modeGeneration === state.modeGeneration && !state.modeTransition) toast(`K线加载失败：${error.message}`);
     });
 }
 
@@ -291,7 +371,10 @@ function trapModalFocus(event) {
 
 async function loadBootstrap(silent = false) {
   if (!state.token) { showAuth(); return; }
+  if (state.modeTransition && !(state.modeTransition.target === 'formal' && !state.demoMode)) return;
+  if (state.demoMode) return loadDemoBootstrap(silent);
   const requestGeneration = authRequestGeneration(), requestToken = state.token, controller = new AbortController();
+  const modeGeneration = state.modeGeneration;
   state.bootstrapController?.abort(); state.bootstrapController = controller;
   if (!silent) qs('#refreshButton').disabled = true;
   try {
@@ -302,23 +385,139 @@ async function loadBootstrap(silent = false) {
     } catch (reportError) {
       console.warn('report list unavailable', reportError);
     }
-    if (requestGeneration !== authRequestGeneration() || requestToken !== state.token || controller.signal.aborted) return;
+    if (requestGeneration !== authRequestGeneration() || requestToken !== state.token || controller.signal.aborted || !modeRequestCurrent(modeGeneration, false)) return;
     state.data = bootstrap;
     state.reports = reports;
+    state.signalGrade = null;
+    state.boards = null;
     hideAuth();
     renderAll();
+    if (state.signalGrade) loadSignalGrade(true);
+    loadSignalBoards(true);
     scheduleBrowserRefresh();
   } catch (error) {
-    if (error.name !== 'AbortError' && requestGeneration === authRequestGeneration() && requestToken === state.token) toast(`刷新失败：${error.message}`, 5000);
+    if (error.name !== 'AbortError' && requestGeneration === authRequestGeneration() && requestToken === state.token && modeRequestCurrent(modeGeneration, false)) toast(`刷新失败：${error.message}`, 5000);
   } finally {
     if (state.bootstrapController === controller) { state.bootstrapController = null; qs('#refreshButton').disabled = false; }
+  }
+}
+
+async function loadDemoBootstrap(silent = false) {
+  if (!state.token) { showAuth(); return; }
+  if (state.modeTransition && state.modeTransition.target !== 'demo') return;
+  const requestGeneration = authRequestGeneration(), requestToken = state.token;
+  const modeGeneration = state.modeGeneration, controller = new AbortController();
+  state.demoBootstrapController?.abort(); state.demoBootstrapController = controller;
+  if (!silent) qs('#refreshButton').disabled = true;
+  try {
+    const bootstrap = await api('/api/demo/bootstrap', {authGeneration: requestGeneration, signal: controller.signal});
+    if (requestGeneration !== authRequestGeneration() || requestToken !== state.token || !modeRequestCurrent(modeGeneration, true)) return;
+    state.data = bootstrap;
+    state.reports = [];
+    state.signalGrade = bootstrap.signal_grade || null;
+    state.boards = bootstrap.boards || null;
+    hideAuth();
+    renderCurrentView();
+  } catch (error) {
+    if (error.name !== 'AbortError' && error.message !== 'unauthorized' && modeRequestCurrent(modeGeneration, true)) toast(`演示数据刷新失败：${error.message}`, 5000);
+  } finally { if (state.demoBootstrapController === controller) state.demoBootstrapController = null; if (!silent) qs('#refreshButton').disabled = false; }
+}
+
+async function enterDemoMode() {
+  const generation = beginModeTransition('demo');
+  if (generation == null) return;
+  let succeeded = false;
+  try {
+    const result = await api('/api/demo/load', {method:'POST', body:JSON.stringify({})});
+    if (generation !== state.modeGeneration || state.modeTransition?.target !== 'demo') return;
+    state.demoMode = true;
+    const demoRadio = qs('input[name="market_data_tier"][value="demo"]');
+    if (demoRadio) demoRadio.checked = true;
+    state.data = result;
+    state.reports = [];
+    state.signalGrade = result.signal_grade || null;
+    state.boards = result.boards || null;
+    renderCurrentView();
+    succeeded = true;
+    toast('演示数据已加载：不访问外网、不写生产数据库');
+  } catch (error) {
+    if (generation === state.modeGeneration) toast(`加载演示失败：${error.message}`, 5000);
+  } finally {
+    if (generation === state.modeGeneration) {
+      if (!succeeded) {
+        state.demoMode = false;
+        scheduleBrowserRefresh();
+      }
+      endModeTransition(generation);
+      renderSourceBadge(state.data || {});
+      if (!succeeded) restartFormalEvents();
+    }
+  }
+}
+
+async function resetDemoMode() {
+  const generation = beginModeTransition('demo');
+  if (generation == null) return;
+  try {
+    const result = await api('/api/demo/reset', {method:'POST', body:JSON.stringify({})});
+    if (generation !== state.modeGeneration || state.modeTransition?.target !== 'demo') return;
+    state.demoMode = true;
+    const demoRadio = qs('input[name="market_data_tier"][value="demo"]');
+    if (demoRadio) demoRadio.checked = true;
+    state.data = result;
+    state.reports = [];
+    state.signalGrade = result.signal_grade || null;
+    state.boards = result.boards || null;
+      renderCurrentView();
+    toast('演示数据已重置');
+  } catch (error) {
+    if (generation === state.modeGeneration) toast(`重置演示失败：${error.message}`, 5000);
+  } finally {
+    if (generation === state.modeGeneration) endModeTransition(generation);
+  }
+}
+
+async function exitDemoMode() {
+  const generation = beginModeTransition('formal');
+  if (generation == null) return;
+  try {
+    await api('/api/demo/reset', {method:'POST', body:JSON.stringify({})});
+    if (generation !== state.modeGeneration) return;
+    state.demoMode = false;
+    state.signalGrade = null;
+    state.boards = null;
+    // Refresh the formal tier after leaving DEMO while the transition lock is
+    // still active. A failed read never re-enters DEMO.
+    await loadSettings();
+    if (state.settings) applyMarketSettings(state.settings);
+    await loadBootstrap();
+    if (state.data?.demo === true) throw new Error('正式看板加载未完成');
+    if (generation === state.modeGeneration) toast('已退出演示，已恢复正式数据');
+  } catch (error) {
+    // Keep the already-loaded DEMO view coherent if reset or formal reload fails.
+    if (generation === state.modeGeneration) {
+      state.demoMode = true;
+      state.signalGrade = state.data?.signal_grade || null;
+      state.boards = state.data?.boards || null;
+      toast(`退出演示失败：${error.message}`, 5000);
+    }
+  } finally {
+    if (generation === state.modeGeneration) {
+      if (state.demoMode) renderCurrentView();
+      endModeTransition(generation);
+      renderSourceBadge(state.data || {});
+      if (!state.demoMode) {
+        scheduleBrowserRefresh();
+        restartFormalEvents();
+      }
+    }
   }
 }
 
 function scheduleBrowserRefresh() {
   clearInterval(state.refreshTimer);
   const minutes = Number(state.settings?.quote_refresh_minutes || 3);
-  state.refreshTimer = setInterval(() => loadBootstrap(true), Math.max(1, minutes) * 60 * 1000);
+  state.refreshTimer = setInterval(() => { if (!state.modeTransition) loadBootstrap(true); }, Math.max(1, minutes) * 60 * 1000);
 }
 
 function provenanceText(source, sourceTimestamp, fetchedAt, freshness, verification, degradedReason) {
@@ -401,20 +600,107 @@ function renderSummary() {
   ];
   qs('#summaryCards').innerHTML = items.map(([label, value, sub]) => `<div class="summary-card"><div class="label">${escapeHtml(label)}</div><div class="value">${escapeHtml(value)}</div><div class="sub">${escapeHtml(sub)}</div></div>`).join('');
   qs('#lastUpdated').textContent = `页面生成 ${timeText(state.data.generated_at)} · 信号 ${timeText(s.last_signal_time)}`;
-  qs('#environmentLabel').textContent = `${s.app_env} · ${s.provider}`;
+  qs('#environmentLabel').textContent = `${s.app_env || 'research'} · ${state.demoMode ? 'DEMO' : (s.provider || 'unavailable')}`;
+  renderSourceBadge(state.data);
   const warning = qs('#globalWarning');
   if (s.is_mock || s.live_quote_count < s.instrument_count) {
-    warning.textContent = s.is_mock
-      ? '当前为 Mock 演示数据：页面功能可验证，但所有结论均不可用于真实投资判断。'
-      : `仅 ${s.live_quote_count}/${s.instrument_count} 个标的具备执行级实时行情；退化数据会压低置信度并阻断操作级信号。`;
+    warning.textContent = state.demoMode
+      ? '当前为 DEMO 隔离 Mock 数据：不访问外网、不写生产数据库，所有结论均不可用于真实投资判断。'
+      : s.is_mock
+        ? '当前正式看板配置为 Mock 数据源：这不是隔离 DEMO，结果仅供测试；请到系统页使用“加载演示数据”验证功能。'
+        : `仅 ${s.live_quote_count}/${s.instrument_count} 个标的具备执行级实时行情；退化数据会压低置信度并阻断操作级信号。`;
     warning.classList.remove('hidden');
   } else warning.classList.add('hidden');
 }
 
+function actualSource(data) {
+  if (data?.demo === true) return 'DEMO';
+  const sources = new Set();
+  let hasCurrentQuoteProvenance = false;
+  let hasUnknownCurrentSource = false;
+  const addSource = value => {
+    const source = String(value || '').toLowerCase();
+    if (source.includes('tushare')) sources.add('Tushare');
+    else if (source.includes('ftshare')) sources.add('FTShare');
+    else if (source.includes('akshare')) sources.add('AKShare');
+    else if (source) hasUnknownCurrentSource = true;
+  };
+  for (const row of (data?.instruments || [])) {
+    if (row?.quote?.source) hasCurrentQuoteProvenance = true;
+    addSource(row?.quote?.source);
+  }
+  if (hasCurrentQuoteProvenance) {
+    if (hasUnknownCurrentSource) return 'unavailable';
+    if (sources.size === 1) return [...sources][0];
+    if (sources.size > 1) return 'fallback';
+    return 'unavailable';
+  }
+  if (sources.size === 1) return [...sources][0];
+  if (sources.size > 1) return 'fallback';
+  // A formal empty view has no current quote provenance. Use only the latest
+  // successful audit row as a weak source hint; failed/stale history must not
+  // masquerade as the current provider.
+  const latestSuccess = (data?.provider_health || []).find(item => ['ok', 'fallback_used'].includes(item?.status));
+  if (latestSuccess?.status === 'fallback_used') return 'fallback';
+  if (latestSuccess) {
+    addSource(latestSuccess.provider);
+    if (sources.size === 1) return [...sources][0];
+  }
+  return 'unavailable';
+}
+function renderSourceBadge(data) {
+  const node = qs('#sourceBadge');
+  if (!node) return;
+  const source = actualSource(data);
+  node.textContent = `来源 ${source === 'unavailable' ? '不可用' : source}`;
+  node.className = `source-badge ${source === 'DEMO' ? 'demo' : source === 'fallback' ? 'fallback' : source === 'unavailable' ? 'unavailable' : 'verified'}`;
+  const banner = qs('#demoBanner');
+  if (banner) banner.classList.toggle('hidden', source !== 'DEMO');
+  const status = qs('#demoStatus');
+  if (status) {
+    status.textContent = source === 'DEMO' ? `已进入演示 · ${data?.status_label || '演示数据'}` : '未进入演示';
+    status.classList.toggle('status-muted', source !== 'DEMO');
+  }
+  const exit = qs('#demoExitButton');
+  if (exit) exit.disabled = source !== 'DEMO';
+  const demo = source === 'DEMO';
+  const locked = demo || Boolean(state.modeTransition);
+  const selectors = [
+    '#newHoldingButton', '#portfolioImportButton', '#newsRefreshButton', '#generateReportButton',
+    '#coefficientSave', '#settingsForm button', '#marketSourceForm button:not(#demoLoadButton)',
+    '#tushareTokenInput', '#settingsForm input', '#boardAddForm input', '#boardAddForm select',
+    '#boardAddForm button', '#portfolioImportForm input', '#portfolioImportForm button',
+    '#portfolioConfirmButton', '#portfolioCancelButton', '.edit-holding', '.delete-holding',
+    '.download-report', '.task-run', '#holdingForm button[type="submit"]',
+  ];
+  selectors.forEach(selector => qsa(selector).forEach(control => { control.disabled = locked; }));
+  // The demo radio is a view switch, not a formal setting and must remain usable.
+  const demoRadio = qs('input[name="market_data_tier"][value="demo"]');
+  if (demoRadio) demoRadio.disabled = Boolean(state.modeTransition);
+  ['#demoLoadButton', '#demoResetButton', '#demoExitButton', '#demoBannerExitButton'].forEach(selector => {
+    qsa(selector).forEach(control => { control.disabled = Boolean(state.modeTransition); });
+  });
+  if (state.modeTransition) {
+    const status = qs('#demoStatus');
+    if (status) status.textContent = '模式切换中…';
+  }
+}
+
 function renderNarrative() {
+  if (state.demoMode && !(state.data?.instruments || []).length) {
+    qs('#marketNarrative').textContent = '演示数据尚未加载。请到「系统」点击“加载演示数据”。';
+    return;
+  }
+  const boards = state.boards;
+  const scored = [...(boards?.industry || [])].filter(item => item.score != null).sort((a, b) => b.score - a.score);
+  if (scored.length) {
+    const top = scored.slice(0, 4).map(item => `${item.name}（${item.score}）`).join('、');
+    qs('#marketNarrative').innerHTML = `<strong>行业ETF代理得分领先：</strong>${escapeHtml(top)}。分数由量能/均线/MACD/KDJ/RSI/九转/近周系数加权，研究提示非操作指令。无K线的板块显示未验证。`;
+    return;
+  }
   const rows = state.data.instruments || [];
   const usable = rows.filter(r => r.signal);
-  if (!usable.length) { qs('#marketNarrative').textContent = '尚未生成信号，请先在“系统”中执行完整初始化。'; return; }
+  if (!usable.length) { qs('#marketNarrative').textContent = '尚未生成信号。请打开「系统」运行完整流水线以写入日线；上方行业/概念卡片在无K线时仍会列出目录。'; return; }
   const strongest = [...usable].sort((a,b) => b.signal.score - a.signal.score).slice(0,3);
   const weakest = [...usable].sort((a,b) => a.signal.score - b.signal.score).slice(0,2);
   const stateCounts = state.data.summary.state_counts || {};
@@ -470,16 +756,7 @@ function instrumentRow(row) {
   </tr>`;
 }
 function renderInstruments() {
-  const body = qs('#instrumentTable tbody');
-  const rows = [...(state.data.instruments || [])].sort((a,b) => Number(b.signal?.score || -1) - Number(a.signal?.score || -1));
-  body.innerHTML = rows.length ? rows.map(instrumentRow).join('') : '<tr class="loading-row"><td colspan="13">暂无数据，请运行 bootstrap</td></tr>';
-  qsa('#instrumentTable tbody tr[data-code]').forEach(row => {
-    const open = () => openDetail(row.dataset.code);
-    row.addEventListener('click', open);
-    row.addEventListener('keydown', event => {
-      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); }
-    });
-  });
+  return;
 }
 
 function renderHoldings() {
@@ -618,12 +895,14 @@ function formatImportError(error) {
 }
 function clearPortfolioImport() { resetImportWorkflow(); }
 async function openPortfolioImport() {
+  if (blockFormalMutation('持仓截图导入')) return;
   if (state.cancelPromise) await state.cancelPromise;
   if (state.holdingImport?.cancelError) { openModal('portfolioImportOverlay', '#portfolioCancelButton'); return; }
   resetImportWorkflow(); openModal('portfolioImportOverlay', '#portfolioImportFile'); renderCloudReview();
 }
 async function uploadPortfolioImport(event) {
   event.preventDefault(); const input = qs('#portfolioImportFile'), file = input.files?.[0];
+  if (blockFormalMutation('持仓截图上传')) return;
   if (state.cancelPromise) { qs('#portfolioImportStatus').textContent = '等待取消请求完成后再开始新导入…'; await state.cancelPromise; return; }
   if (!file) { qs('#portfolioImportError').textContent = '请选择一张 PNG、JPEG 或 WebP 图片。'; return; }
   if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) qs('#portfolioImportError').textContent = 'MIME 类型仅作浏览器提示；服务器最终权威判定，仍会继续提交校验。';
@@ -651,6 +930,7 @@ function importPatchPayload(card) {
   return payload;
 }
 function scheduleImportCandidateSave(card) {
+  if (state.demoMode) return;
   const workflow = state.holdingImport; if (!workflow?.sessionId || workflow.canceling) return;
   const id = Number(card.dataset.candidateId), version = (state.importSaveVersions.get(id) || 0) + 1;
   state.importSaveVersions.set(id, version); state.importSaveErrors.delete(id); clearTimeout(state.pendingSaveTimers.get(id)?.timer);
@@ -706,6 +986,7 @@ function enqueueSessionPatch(id, generation, sessionId, version) {
   return task;
 }
 function queueImportCandidateSave(card, id, explicitPayload = null) {
+  if (state.demoMode) return Promise.resolve(false);
   const workflow = state.holdingImport; if (!workflow?.sessionId || workflow.canceling) return Promise.resolve(false);
   const version = (state.importSaveVersions.get(id) || 0) + 1, generation = state.importGeneration, sessionId = workflow.sessionId;
   state.importSaveVersions.set(id, version); state.importSaveErrors.delete(id); clearTimeout(state.pendingSaveTimers.get(id)?.timer);
@@ -729,6 +1010,7 @@ async function flushImportSaves(generation, sessionId) {
   return isImportCurrent(generation, sessionId) && state.importSaveErrors.size === 0 && !importWorkflowHasPendingSaves();
 }
 async function requestPortfolioConfirm() {
+  if (blockFormalMutation('持仓导入确认')) return;
   if (!importConfirmState().ready) { renderImportReview(); return; }
   const workflow = state.holdingImport, generation = state.importGeneration, sessionId = workflow.sessionId;
   workflow.busy = true; workflow.importBusy = true; workflow.status = '正在等待候选保存…'; renderImportReview();
@@ -740,6 +1022,7 @@ async function requestPortfolioConfirm() {
   qs('#portfolioConfirmError').textContent = ''; openModal('portfolioConfirmOverlay', '#portfolioConfirmYes');
 }
 async function confirmPortfolioImport() {
+  if (blockFormalMutation('持仓写入')) return;
   const workflow = state.holdingImport; if (!workflow?.sessionId || !importConfirmState().ready) return;
   const generation = state.importGeneration, sessionId = workflow.sessionId, controller = trackImportController(new AbortController());
   workflow.busy = true; workflow.importBusy = true; qs('#portfolioConfirmYes').disabled = true; qs('#portfolioConfirmError').textContent = '';
@@ -753,6 +1036,7 @@ async function confirmPortfolioImport() {
   } finally { untrackImportController(controller); }
 }
 async function cancelPortfolioImport() {
+  if (blockFormalMutation('持仓截图导入取消')) return;
   if (state.cancelPromise) return state.cancelPromise;
   const workflow = state.holdingImport, sessionId = workflow?.sessionId || '';
   if (!sessionId) { newImportGeneration(); resetImportWorkflow({advance:false}); closeModal('portfolioConfirmOverlay'); closeModal('portfolioImportOverlay'); return; }
@@ -785,6 +1069,7 @@ function renderNews() {
 }
 
 async function downloadReport(filename) {
+  if (blockFormalMutation('正式报告下载')) return;
   const requestGeneration = authRequestGeneration(), requestToken = state.token;
   try {
     const response = await fetch(`/api/reports/${encodeURIComponent(filename)}`, {headers: {Authorization: `Bearer ${state.token}`}});
@@ -799,20 +1084,122 @@ async function downloadReport(filename) {
 }
 
 async function loadSettings() {
-  if (!state.token) return;
+  if (!state.token || state.demoMode || (state.modeTransition && state.modeTransition.target !== 'formal')) return;
   const requestGeneration = authRequestGeneration(), requestToken = state.token, controller = new AbortController();
+  const modeGeneration = state.modeGeneration;
   state.settingsController?.abort(); state.settingsController = controller;
   try {
     const settings = await api('/api/settings', {signal:controller.signal, authGeneration:requestGeneration});
-    if (requestGeneration !== authRequestGeneration() || requestToken !== state.token || controller.signal.aborted) return;
+    if (requestGeneration !== authRequestGeneration() || requestToken !== state.token || controller.signal.aborted || !modeRequestCurrent(modeGeneration, false)) return;
     state.settings = settings;
+    const frequencyKeys = new Set(['quote_refresh_minutes','signal_refresh_minutes','news_refresh_minutes','lunch_news_refresh_minutes']);
     for (const [key,value] of Object.entries(state.settings)) {
+      if (!frequencyKeys.has(key)) continue;
       const input = qs(`[name="${key}"]`, qs('#settingsForm'));
       if (input) input.value = value;
     }
+    applyMarketSettings(state.settings);
     scheduleBrowserRefresh();
-  } catch (error) { if (error.name !== 'AbortError' && requestGeneration === authRequestGeneration() && requestToken === state.token) toast(`读取设置失败：${error.message}`); }
+  } catch (error) { if (error.name !== 'AbortError' && requestGeneration === authRequestGeneration() && requestToken === state.token && modeRequestCurrent(modeGeneration, false)) toast(`读取设置失败：${error.message}`); }
   finally { if (state.settingsController === controller) state.settingsController = null; }
+}
+function applyMarketSettings(settings) {
+  if (!settings) return;
+  const form = qs('#marketSourceForm');
+  if (!form) return;
+  const tier = settings.market_data_tier === 'complete' ? 'complete' : 'usable';
+  const radio = qs(`input[name="market_data_tier"][value="${tier}"]`, form);
+  if (radio) radio.checked = true;
+  const tokenStatus = qs('#tokenStatus');
+  if (settings.tushare_token_set) tokenStatus.textContent = '已配置 Token（不会回显）';
+  else tokenStatus.textContent = '未配置 Token；免费档不需要';
+  const meta = qs('#marketSourceMeta');
+  const provider = settings.active_provider || '—';
+  if (state.demoMode) {
+    meta.textContent = '当前实际数据源：DEMO · 隔离 Mock（不访问外网、不写生产数据库）';
+  }
+  let extra = '';
+  if (tier === 'complete' && !settings.complete_ready) extra = '；已选完整档但还没有 Token，拉数仍走免费源';
+  if (settings.ftshare_enabled) extra += `；FTShare ${settings.ftshare_ready ? '资格已通过' : '未资格验证，已跳过'}`;
+  if (provider === 'mock' && !state.demoMode) extra += '；正式看板当前为 Mock 配置，请使用隔离演示按钮';
+  if (!state.demoMode) meta.textContent = `当前实际数据源：${provider}${extra}`;
+  const ftshareStatus = qs('#ftshareStatus');
+  if (ftshareStatus) {
+    const enabled = settings.ftshare_enabled ? '已启用' : '未启用';
+    const qualification = settings.ftshare_qualification === 'qualified' ? '资格已通过' : '未资格验证';
+    const latest = settings.ftshare_last_probe?.providers?.find(item => item.provider === 'ftshare');
+    ftshareStatus.textContent = `FTShare：${enabled} · ${qualification}${latest ? ` · 最近探测 ${latest.status}` : ''}`;
+  }
+}
+function selectedMarketTier() {
+  return qs('input[name="market_data_tier"]:checked', qs('#marketSourceForm'))?.value || 'usable';
+}
+function typedTushareToken() {
+  return String(qs('#tushareTokenInput')?.value || '').trim();
+}
+async function saveMarketSource(event) {
+  event.preventDefault();
+  if (selectedMarketTier() === 'demo') { await enterDemoMode(); return; }
+  if (blockFormalMutation('正式数据源设置保存')) return;
+  const payload = {market_data_tier: selectedMarketTier()};
+  const token = typedTushareToken();
+  if (token) payload.tushare_token = token;
+  try {
+    state.settings = await api('/api/settings', {method:'PUT', body:JSON.stringify(payload)});
+    qs('#tushareTokenInput').value = '';
+    applyMarketSettings(state.settings);
+    toast(token ? '数据源与 Token 已保存' : '数据源档位已保存');
+  } catch (error) {
+    toast(`保存失败：${error.message}`);
+  }
+}
+function setProbeResult(kind, text) {
+  const node = qs('#marketProbeResult');
+  node.className = `probe-result ${kind}`;
+  node.textContent = text;
+}
+function renderProbeMatrix(rows) {
+  const node = qs('#marketProbeMatrix');
+  if (!node) return;
+  if (!Array.isArray(rows) || !rows.length) { node.textContent = ''; return; }
+  node.innerHTML = `<div class="probe-matrix-title">逐 Provider 结果</div><div class="table-wrap"><table><thead><tr><th>数据源</th><th>操作</th><th>状态</th><th>记录</th><th>耗时</th><th>资格</th><th>原因</th></tr></thead><tbody>${rows.map(row => `<tr><td>${escapeHtml(row.provider)}</td><td>${escapeHtml(row.operation)}</td><td><span class="badge ${row.ok ? 'entry' : row.status === 'skipped' ? 'probe' : 'reduce'}">${escapeHtml(row.status)}</span></td><td>${escapeHtml(fmt(row.records,0))}</td><td>${escapeHtml(fmt(row.latency,1))} ms</td><td>${escapeHtml(row.qualification || '—')}</td><td>${escapeHtml(row.failure_class || '')}</td></tr>`).join('')}</tbody></table></div>`;
+}
+async function probeMarketSource() {
+  if (state.demoMode || selectedMarketTier() === 'demo') {
+    setProbeResult('skip', '演示模式不会访问外网');
+    toast('演示模式未出网');
+    return;
+  }
+  const payload = {market_data_tier: selectedMarketTier()};
+  const token = typedTushareToken();
+  if (token) payload.tushare_token = token;
+  setProbeResult('muted', '正在测试连通…');
+  try {
+    const result = await api('/api/settings/market-probe', {method:'POST', body:JSON.stringify(payload)});
+    const bits = [result.message || '探测结束'];
+    if (result.provider) bits.push(`数据源 ${result.provider}`);
+    if (Number.isFinite(Number(result.bars))) bits.push(`日线 ${result.bars} 条`);
+    if (result.failure_class) bits.push(result.failure_class);
+    if (Array.isArray(result.providers)) bits.push(`已检查 ${result.providers.length} 个数据源`);
+    renderProbeMatrix(result.providers);
+    const kind = result.ok ? 'ok' : result.skipped ? 'skip' : 'fail';
+    setProbeResult(kind, bits.join(' · '));
+    toast(result.ok ? '探测成功' : result.skipped ? '演示数据源未出网' : '探测未通过');
+  } catch (error) {
+    setProbeResult('fail', `测试失败：${error.message}`);
+    toast(`测试失败：${error.message}`);
+  }
+}
+async function clearStoredTushareToken() {
+  if (blockFormalMutation('Token 清除')) return;
+  try {
+    state.settings = await api('/api/settings', {method:'PUT', body:JSON.stringify({clear_tushare_token:true})});
+    qs('#tushareTokenInput').value = '';
+    applyMarketSettings(state.settings);
+    toast('已清除保存的 Token');
+  } catch (error) {
+    toast(`清除失败：${error.message}`);
+  }
 }
 function renderSystem() {
   const providers = state.data.provider_health || [];
@@ -822,25 +1209,212 @@ function renderSystem() {
   const reports = state.reports || [];
   qs('#reportTable tbody').innerHTML = reports.length ? reports.map(r => `<tr><td>${escapeHtml(timeText(r.as_of_time))}</td><td>${escapeHtml(r.type)}</td><td>${escapeHtml(r.filename)}</td><td class="muted">${escapeHtml(String(r.content_hash || '').slice(0,16))}…</td><td><button class="small-button download-report" data-file="${escapeHtml(r.filename)}">下载</button></td></tr>`).join('') : '<tr><td colspan="5">暂无报告</td></tr>';
   qsa('.download-report').forEach(button => button.addEventListener('click', () => downloadReport(button.dataset.file)));
+  renderSourceBadge(state.data);
 }
 function renderTaskButtons() {
   const tasks = [
     ['refresh_quotes','刷新行情'],['refresh_news','更新新闻'],['refresh_signals','重算信号'],['refresh_bars','更新日线'],['refresh_indicators','重算指标'],['refresh_forecasts','更新预测'],['generate_report','生成报告'],['validate_forecasts','验证预测'],['backtest_rotation','轮动回测'],['full_pipeline','完整流水线']
   ];
-  qs('#taskButtons').innerHTML = tasks.map(([name,label]) => `<button class="ghost task-run" data-task="${name}">${label}</button>`).join('');
+  qs('#taskButtons').innerHTML = tasks.map(([name,label]) => `<button class="ghost task-run" data-task="${name}"${state.demoMode ? ' disabled title="演示模式已禁用正式任务"' : ''}>${label}</button>`).join('');
   qsa('.task-run').forEach(b => b.addEventListener('click', () => runTask(b.dataset.task, b)));
 }
 
+function gradePct(value) {
+  if (!numericValue(value)) return '—';
+  return Math.abs(Number(value)) <= 1 ? pct(value, 2, true) : pct(value, 2, false);
+}
+
+async function loadSignalGrade(silent = false) {
+  if (!state.token || state.demoMode || state.modeTransition) return;
+  const modeGeneration = state.modeGeneration;
+  try {
+    const result = await api('/api/signals/grade');
+    if (!modeRequestCurrent(modeGeneration, false)) return;
+    state.signalGrade = result;
+    renderSignalGrade();
+  } catch (error) {
+    if (!silent && error.message !== 'unauthorized' && modeRequestCurrent(modeGeneration, false)) toast(`信号分级加载失败：${error.message}`, 5000);
+  }
+}
+
+function macdPillClass(kind) {
+  if (kind === 'death') return 'pill-macd-death';
+  if (kind === 'gold' || kind === 'bull_cont') return 'pill-macd-bull';
+  return 'pill-macd-approach';
+}
+
+function kdjPillClass(kind) {
+  if (kind === 'death') return 'pill-kdj-death';
+  if (kind === 'overbought') return 'pill-kdj-overbought';
+  if (kind === 'high') return 'pill-kdj-high';
+  return 'pill-kdj-healthy';
+}
+
+function gradeRowHtml(row) {
+  const vol = row.volume || {};
+  const ma = row.ma || {};
+  const macd = row.macd || {};
+  const kdj = row.kdj || {};
+  const rsi = row.rsi || {};
+  const td = row.td || {};
+  const sector = row.sector || {};
+  const forecast = row.forecast || {};
+  const volClass = vol.kind === 'expand' ? 'pill-expand' : vol.kind === 'contract' ? 'pill-contract' : 'pill-flat';
+  const arrows = (ma.arrows || []).map(item => `<span class="${item.dir === 'up' ? 'arrow-up' : 'arrow-down'}">${escapeHtml(item.window)}${item.dir === 'up' ? '↑' : '↓'}</span>`).join(' ');
+  const vs = row.vs_yesterday === 'up' ? '<span class="arrow-up">↑</span>' : row.vs_yesterday === 'down' ? '<span class="arrow-down">↓</span>' : '—';
+  return `<tr data-code="${escapeHtml(row.ts_code || '')}">
+    <td><div class="instrument-name">${escapeHtml(row.name || row.ts_code)}</div><div class="instrument-meta">${escapeHtml(row.ts_code || '')} · ${escapeHtml(row.theme_l1 || '')}/${escapeHtml(row.theme_l2 || '')}</div></td>
+    <td class="${escapeHtml(colorClass(row.pct_change))}">${escapeHtml(gradePct(row.pct_change))}</td>
+    <td>${vs}</td>
+    <td><span class="pill ${volClass}">${escapeHtml(vol.label || '—')} ${escapeHtml(vol.ratio == null ? '' : String(vol.ratio))}</span></td>
+    <td><div class="ma-${escapeHtml(ma.kind || 'mixed')}">${escapeHtml(ma.label || '—')}</div><div class="metric-sub">${arrows}</div><div class="metric-sub">${escapeHtml(ma.values_text || '')}</div></td>
+    <td><span class="pill ${macdPillClass(macd.kind)}">${escapeHtml(macd.label || '—')}</span><div class="metric-sub">DIF ${escapeHtml(fmt(macd.dif, 4))} DEA ${escapeHtml(fmt(macd.dea, 4))}</div></td>
+    <td><span class="pill ${kdjPillClass(kdj.kind)}">J=${escapeHtml(fmt(kdj.j, 1))} ${escapeHtml(kdj.label || '')}</span><div class="metric-sub">${escapeHtml(kdj.note || '')}</div><div class="metric-sub">K=${escapeHtml(fmt(kdj.k, 1))} D=${escapeHtml(fmt(kdj.d, 1))}</div></td>
+    <td><span class="td-pill">${escapeHtml(td.label || '—')}</span></td>
+    <td><div class="metric-main">${escapeHtml(fmt(rsi.value, 1))}</div><div class="metric-sub">${escapeHtml(rsi.label || '')}</div></td>
+    <td><div class="metric-main">${escapeHtml(sector.label || '未验证 / 不可用')}</div><div class="metric-sub">${escapeHtml(sector.note || '')}</div></td>
+    <td class="${escapeHtml(colorClass(row.return_5d))}">${escapeHtml(gradePct(row.return_5d))}</td>
+    <td><div class="${escapeHtml(colorClass(forecast.expected_return))}">${escapeHtml(gradePct(forecast.expected_return))}</div><div class="forecast-flag">FORECAST · 非实际结果</div><div class="metric-sub">conf ${escapeHtml(fmt(forecast.confidence, 0))} · ${escapeHtml(forecast.calibration_status || 'not_calibrated')}</div></td>
+    <td><span class="badge ${escapeHtml(stateClass(row.grade))}">${escapeHtml(row.grade || '—')}</span><div class="metric-sub">研究提示，非操作指令</div></td>
+  </tr>`;
+}
+
+function renderSignalGrade() {
+  const payload = state.signalGrade;
+  const cardsEl = qs('#gradeSummaryCards');
+  const groupsEl = qs('#gradeGroups');
+  if (!payload || !cardsEl || !groupsEl) return;
+  const counts = payload.counts || {};
+  const cards = [
+    ['可加仓', counts['可加仓'] ?? 0, 'g-add'],
+    ['可入场', counts['可入场'] ?? 0, 'g-entry'],
+    ['可试探', counts['可试探'] ?? 0, 'g-probe'],
+    ['观望', counts['观望'] ?? 0, 'g-watch'],
+    ['减仓', counts['减仓'] ?? 0, 'g-cut'],
+  ];
+  cardsEl.innerHTML = cards.map(([label, value, klass]) => `<div class="summary-card ${klass}"><div class="label">${label}</div><div class="value">${escapeHtml(String(value))}</div><div class="sub">研究计数</div></div>`).join('');
+  const narrative = qs('#gradeNarrative');
+  if (narrative) narrative.textContent = payload.narrative || '';
+  const meta = qs('#gradeMeta');
+  if (meta) meta.textContent = `${payload.version || ''} · ${payload.disclaimer || ''}`;
+  const groups = payload.groups || {};
+  const reasons = {
+    '可加仓': 'J < 90 · 上涨放量 · MA多头排列',
+    '可入场': 'J < 90 · KDJ有余量 · 结构向好',
+    '可试探': 'J < 90 · 信号偏弱 · 结构尚可',
+    '观望': '超买/偏高 · 放量滞涨 · 回调风险',
+    '减仓': 'KDJ死叉 · MACD将死叉 · 多重看空共振',
+  };
+  const headers = '<thead><tr><th>标的</th><th>今日涨幅</th><th>较昨日</th><th>量能</th><th>均线多空</th><th>MACD</th><th>KDJ</th><th>九转</th><th>RSI</th><th>板块涨跌</th><th>近1周</th><th>明日预测</th><th>操作建议</th></tr></thead>';
+  groupsEl.innerHTML = ['可加仓', '可入场', '可试探', '观望', '减仓'].map(name => {
+    const rows = groups[name] || [];
+    const body = rows.length
+      ? `<div class="table-wrap"><table class="signal-table grade-table">${headers}<tbody>${rows.map(gradeRowHtml).join('')}</tbody></table></div>`
+      : `<div class="grade-empty">今日无「${name}」标的</div>`;
+    return `<section class="grade-group"><div class="grade-group-head"><span class="badge ${escapeHtml(stateClass(name))}">${escapeHtml(name)}</span><span>${escapeHtml(reasons[name] || '')}</span><span class="count">${rows.length}个标的</span></div>${body}</section>`;
+  }).join('');
+  qsa('#gradeGroups tr[data-code]').forEach(row => {
+    row.addEventListener('click', () => openDetail(row.dataset.code));
+    row.style.cursor = 'pointer';
+  });
+}
+
+async function loadSignalBoards(silent = false) {
+  if (!state.token || state.demoMode || state.modeTransition) return;
+  const modeGeneration = state.modeGeneration;
+  try {
+    const result = await api('/api/signals/boards');
+    if (!modeRequestCurrent(modeGeneration, false)) return;
+    state.boards = result;
+    renderBoards();
+  } catch (error) {
+    if (!silent && error.message !== 'unauthorized' && modeRequestCurrent(modeGeneration, false)) toast(`板块加载失败：${error.message}`, 5000);
+  }
+}
+
+function boardCardHtml(board) {
+  const score = board.score == null ? '—' : String(board.score);
+  const pctText = board.pct_change == null ? '无K线' : gradePct(board.pct_change);
+  const primary = board.primary_ts_code || '';
+  const parts = board.components || {};
+  const partLine = ['volume', 'ma', 'macd', 'kdj', 'rsi', 'td', 'momentum'].map(key => {
+    const labels = {volume: '量能', ma: '均线', macd: 'MACD', kdj: 'KDJ', rsi: 'RSI', td: '九转', momentum: '近周'};
+    return `${labels[key]} ${parts[key] == null ? '—' : Math.round(parts[key])}`;
+  }).join(' · ');
+  const funds = (board.members || []).map(item => item.name || item.ts_code).slice(0, 3).join(' / ') || '未挂ETF';
+  return `<article class="board-card ${board.has_proxy ? '' : 'is-empty'}" data-code="${escapeHtml(primary)}" data-board="${escapeHtml(board.id)}" tabindex="0">
+    <div class="board-card-top"><strong>${escapeHtml(board.name)}</strong><span class="badge ${escapeHtml(stateClass(board.grade))}">${escapeHtml(board.grade || '—')}</span></div>
+    <div class="board-score">${escapeHtml(score)}<span>综合分</span></div>
+    <div class="${escapeHtml(colorClass(board.pct_change))} board-chg">${escapeHtml(pctText)}</div>
+    <div class="metric-sub">${escapeHtml(funds)}</div>
+    <div class="metric-sub">${escapeHtml(partLine)}</div>
+    <div class="metric-sub">${escapeHtml(board.note || '')}</div>
+  </article>`;
+}
+
+function fillBoardSelect() {
+  const select = qs('#boardAddSelect');
+  if (!select || !state.boards) return;
+  const kind = state.boardKind || 'industry';
+  const boards = state.boards[kind] || [];
+  select.innerHTML = boards.map(board => `<option value="${escapeHtml(board.id)}">${escapeHtml(board.name)}</option>`).join('');
+}
+
+function renderBoards() {
+  const grid = qs('#boardGrid');
+  if (!grid) return;
+  const payload = state.boards;
+  if (!payload) {
+    grid.innerHTML = '<div class="empty-state">等待板块数据…</div>';
+    return;
+  }
+  const meta = qs('#boardMeta');
+  if (meta) meta.textContent = `${payload.version || ''} · 行业 ${payload.counts?.industry ?? 0} · 概念 ${payload.counts?.concept ?? 0} · 有ETF代理 行业${payload.counts?.industry_with_etf ?? 0}/概念${payload.counts?.concept_with_etf ?? 0}`;
+  const kind = state.boardKind || 'industry';
+  const boards = [...(payload[kind] || [])].sort((a, b) => Number(b.score ?? -1) - Number(a.score ?? -1));
+  grid.innerHTML = boards.length ? boards.map(boardCardHtml).join('') : '<div class="empty-state">无板块目录</div>';
+  fillBoardSelect();
+  qsa('#boardGrid .board-card[data-code]').forEach(card => {
+    const open = () => { if (card.dataset.code) openDetail(card.dataset.code); };
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); }
+    });
+  });
+}
+
+async function submitBoardFund(event) {
+  event.preventDefault();
+  if (blockFormalMutation('板块标的修改')) return;
+  const boardId = qs('#boardAddSelect')?.value;
+  const tsCode = qs('#boardAddCode')?.value.trim();
+  const name = qs('#boardAddName')?.value.trim();
+  if (!boardId || !tsCode) return;
+  try {
+    const result = await api(`/api/signals/boards/${encodeURIComponent(boardId)}/funds`, {method: 'POST', body: JSON.stringify({ts_code: tsCode, name: name || null})});
+    toast(`已加入板块：${result.ts_code}。正在拉日线（无 Token 时为 Mock）`);
+    await api('/api/tasks/refresh_bars', {method: 'POST', body: JSON.stringify({lookback_days: 420, codes: [result.ts_code]})});
+    await api('/api/tasks/refresh_indicators', {method: 'POST', body: JSON.stringify({codes: [result.ts_code]})});
+    await loadBootstrap(true);
+    await loadSignalBoards();
+  } catch (error) {
+    toast(`添加失败：${error.message}`, 5000);
+  }
+}
+
 async function loadSignalCenter(silent = false, coefficientOverride = null) {
-  if (!state.token || state.signalCenterLoading) return;
+  if (!state.token || state.demoMode || state.modeTransition || state.signalCenterLoading) return;
+  const modeGeneration = state.modeGeneration;
   state.signalCenterLoading = true;
   if (!silent) qs('#signalCurveMeta').textContent = '加载中...';
   try {
     const query = coefficientOverride == null ? '' : `?coefficient=${encodeURIComponent(coefficientOverride)}`;
-    state.signalCenter = await api(`/api/signals/center${query}`);
+    const result = await api(`/api/signals/center${query}`);
+    if (!modeRequestCurrent(modeGeneration, false)) return;
+    state.signalCenter = result;
     renderSignalCenter();
   } catch (error) {
-    if (error.message !== 'unauthorized') toast(`信号中心加载失败：${error.message}`, 5000);
+    if (error.message !== 'unauthorized' && modeRequestCurrent(modeGeneration, false)) toast(`信号中心加载失败：${error.message}`, 5000);
   } finally { state.signalCenterLoading = false; }
 }
 
@@ -885,10 +1459,10 @@ function sectorRow(sector) {
     sector.breadth == null ? null : `宽度 ${fmt(sector.breadth * 100, 0)}%`,
     sector.news_score == null ? null : `新闻 ${fmt(sector.news_score, 0)}`,
     sector.risk_score == null ? null : `风险 ${fmt(sector.risk_score, 0)}`,
-    `${sector.member_count} 只`,
+    `${escapeHtml(sector.member_count)} 只`,
   ].filter(Boolean).join(' · ');
   return `<div class="sector-row">
-    <div class="sector-rank">${sector.rank}</div>
+    <div class="sector-rank">${escapeHtml(sector.rank)}</div>
     <div class="sector-main">
       <div class="sector-head"><span class="sector-name">${escapeHtml(sector.theme_l1)}</span><span class="sector-score ${sector.rank <= 3 ? 'up' : ''}">${fmt(sector.strength, 1)}</span></div>
       <div class="sector-bar"><i style="width:${Math.max(2, Math.min(100, Number(sector.strength) || 0))}%"></i></div>
@@ -1037,6 +1611,7 @@ function onCoefficientInput(event) {
 }
 
 async function saveCoefficient() {
+  if (blockFormalMutation('信号系数保存')) return;
   const value = Number(qs('#coefficientSlider').value);
   try {
     state.settings = await api('/api/settings', {method: 'PUT', body: JSON.stringify({signal_center_coefficient: value})});
@@ -1046,7 +1621,7 @@ async function saveCoefficient() {
 }
 
 function renderAll() {
-  renderSummary(); renderNarrative(); renderMarketContext(); renderInstruments(); renderHoldings(); renderNews(); renderSystem(); renderSignalCenter();
+  renderSummary(); renderNarrative(); renderMarketContext(); renderInstruments(); renderHoldings(); renderNews(); renderSystem(); renderSignalCenter(); renderSignalGrade(); renderBoards(); renderTaskButtons();
 }
 
 function switchTab(tab) {
@@ -1055,9 +1630,12 @@ function switchTab(tab) {
   qsa('#tabs button').forEach(b => { const selected = b.dataset.tab === tab; b.classList.toggle('active', selected); b.setAttribute('aria-selected', String(selected)); });
   if (tab === 'system' && !state.settings) loadSettings();
   if (tab === 'signals' && !state.signalCenter) loadSignalCenter();
+  if (tab === 'grade' && !state.signalGrade) loadSignalGrade();
+  if (!state.boards) loadSignalBoards();
 }
 
 function openHolding(code = null) {
+  if (blockFormalMutation('持仓编辑')) return;
   const form = qs('#holdingForm'); form.reset(); qs('#holdingError').textContent = '';
   if (code) {
     const h = (state.data.holdings || []).find(x => x.ts_code === code);
@@ -1073,6 +1651,7 @@ function openHolding(code = null) {
 }
 async function saveHolding(event) {
   event.preventDefault();
+  if (blockFormalMutation('持仓保存')) return;
   const form = event.currentTarget;
   const payload = {
     ts_code: form.elements.ts_code.value,
@@ -1087,16 +1666,18 @@ async function saveHolding(event) {
   } catch (error) { qs('#holdingError').textContent = error.message; }
 }
 async function deleteHolding(code) {
+  if (blockFormalMutation('持仓删除')) return;
   if (!confirm(`删除 ${code} 的持仓记录？`)) return;
   try { await api(`/api/holdings/${encodeURIComponent(code)}`, {method:'DELETE'}); toast('已删除'); await loadBootstrap(true); }
   catch (error) { toast(`删除失败：${error.message}`); }
 }
 
 async function runTask(name, button = null) {
+  if (blockFormalMutation('正式任务')) return;
   if (button) button.disabled = true;
   qs('#taskOutput').textContent = `运行 ${name} 中...`;
   try {
-    const payload = name === 'refresh_bars' ? {lookback_days: 30} : {};
+    const payload = name === 'refresh_bars' ? {lookback_days: 120} : {};
     const result = await api(`/api/tasks/${encodeURIComponent(name)}`, {method:'POST', body:JSON.stringify(payload)});
     qs('#taskOutput').textContent = JSON.stringify(result, null, 2);
     toast(`${name} 完成`); await loadBootstrap(true);
@@ -1105,8 +1686,7 @@ async function runTask(name, button = null) {
 }
 
 async function openDetail(code) {
-  const row = (state.data.instruments || []).find(r => r.ts_code === code);
-  if (!row) return;
+  const row = (state.data.instruments || []).find(r => r.ts_code === code) || {ts_code: code, name: code, theme_l1: '', theme_l2: '', indicator: {}, signal: {}, quote: {}, forecasts: {}};
   state.detailCode = code;
   const i = row.indicator || {}, v = i.values || {}, s = row.signal || {}, q = row.quote || {};
   const forecastHtml = Object.values(row.forecasts || {}).map(forecastCell).join('');
@@ -1156,7 +1736,7 @@ function scheduleEventReconnect() {
 async function connectEvents() {
   if (state.eventAbort) state.eventAbort.abort();
   clearTimeout(state.eventRetry);
-  if (!state.token) return;
+  if (!state.token || state.modeTransition) return;
   const requestGeneration = authRequestGeneration(), requestToken = state.token;
   const controller = new AbortController();
   state.eventAbort = controller;
@@ -1192,13 +1772,15 @@ async function connectEvents() {
           timer = setTimeout(() => {
             loadBootstrap(true);
             if (state.activeTab === 'signals') loadSignalCenter(true);
+            if (state.activeTab === 'grade') loadSignalGrade(true);
+            loadSignalBoards(true);
           }, 450);
         }
       }
     }
     if (!controller.signal.aborted) throw new Error('SSE stream closed');
   } catch (error) {
-    if (controller.signal.aborted) return;
+    if (controller.signal.aborted || state.modeTransition) return;
     qs('#connectionBadge').className='status-dot offline';
     qs('#connectionBadge').textContent='重连中';
     scheduleEventReconnect();
@@ -1212,6 +1794,13 @@ function bindEvents() {
   qs('#refreshButton').addEventListener('click',()=>loadBootstrap());
   qs('#lockButton').addEventListener('click',()=>{state.token='';localStorage.removeItem('fundDecisionToken');advanceAuthRequestGeneration();showAuth();});
   qsa('#tabs button').forEach(button=>button.addEventListener('click',()=>switchTab(button.dataset.tab)));
+  qsa('#boardKindTabs button').forEach(button => button.addEventListener('click', () => {
+    state.boardKind = button.dataset.boardKind;
+    qsa('#boardKindTabs button').forEach(item => item.classList.toggle('active', item === button));
+    renderBoards();
+  }));
+  const boardAdd = qs('#boardAddForm');
+  if (boardAdd) boardAdd.addEventListener('submit', submitBoardFund);
   qsa('[data-close]').forEach(button=>button.addEventListener('click',()=>closeModal(button.dataset.close)));
   qsa('.overlay').forEach(overlay=>{
     overlay.addEventListener('click',event=>{if(event.target===overlay&&!overlay.classList.contains('auth-overlay')&&!['portfolioImportOverlay','portfolioConfirmOverlay'].includes(overlay.id))closeModal(overlay.id);});
@@ -1245,7 +1834,14 @@ function bindEvents() {
   qs('#portfolioConfirmNo').addEventListener('click', () => closeModal('portfolioConfirmOverlay'));
   qs('#newsRefreshButton').addEventListener('click',event=>runTask('refresh_news',event.currentTarget));
   qs('#generateReportButton').addEventListener('click',event=>runTask('generate_report',event.currentTarget));
-  qs('#settingsForm').addEventListener('submit',async event=>{event.preventDefault();const form=new FormData(event.currentTarget),payload={};for(const [k,v] of form.entries())payload[k]=Number(v);try{state.settings=await api('/api/settings',{method:'PUT',body:JSON.stringify(payload)});toast('刷新频率已保存');scheduleBrowserRefresh();}catch(error){toast(`保存失败：${error.message}`);}});
+  qs('#settingsForm').addEventListener('submit',async event=>{event.preventDefault();if(blockFormalMutation('刷新频率设置保存'))return;const form=new FormData(event.currentTarget),payload={};for(const [k,v] of form.entries())payload[k]=Number(v);try{state.settings=await api('/api/settings',{method:'PUT',body:JSON.stringify(payload)});toast('刷新频率已保存');scheduleBrowserRefresh();}catch(error){toast(`保存失败：${error.message}`);}});
+  qs('#marketSourceForm').addEventListener('submit', saveMarketSource);
+  qs('#marketProbeButton').addEventListener('click', probeMarketSource);
+  qs('#clearTushareTokenButton').addEventListener('click', clearStoredTushareToken);
+  qs('#demoLoadButton').addEventListener('click', enterDemoMode);
+  qs('#demoResetButton').addEventListener('click', resetDemoMode);
+  qs('#demoExitButton').addEventListener('click', exitDemoMode);
+  qs('#demoBannerExitButton').addEventListener('click', exitDemoMode);
   qs('#coefficientSlider').addEventListener('input', onCoefficientInput);
   qs('#coefficientSave').addEventListener('click', saveCoefficient);
   qsa('#frontTabs button').forEach(button => button.addEventListener('click', () => {

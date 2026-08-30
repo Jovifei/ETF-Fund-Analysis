@@ -12,6 +12,8 @@
 | Tushare、AKShare、Composite | 适配器已实现 | Token/权限、ECS 出口、实时字段和稳定性尚未实测 |
 | 技术指标、信号、回测 | 既有基线 | 本版不改公式、阈值或策略版本；真实数据校准和第二引擎对账未完成 |
 | 信号中心（读取层研究视图） | 完成 | 信号行情曲线、机会/风险/止盈前排、板块强度、可调系数、持仓命中提醒；`test_signal_center.py` 8 项 |
+| ETF 信号分级（读取层研究视图） | 完成 | 第 6 页签彩色五档宽表；`GET /api/signals/grade`；现为 `signal-grade-v0.2.0` |
+| 行业/概念板块目录 | 完成 | 决策看板改为东财式名称的行业+概念卡片；`GET /api/signals/boards`；只映射场内 ETF，不爬东财 |
 | 预测 | 已实现基线 | 输出始终 `not_calibrated`；没有 calibrated 或收益确定性结论 |
 | 新闻与多模型分析 | 合约/网关已实现 | Codex/OpenAI Responses 可作为唯一主 provider；Anthropic/DeepSeek 仅手工切换；真实端点未验证 |
 | 市场上下文 | 六项注册表和任务已实现 | 默认六卡片；代理代码 null、disabled、unverified，真实资格未完成 |
@@ -26,6 +28,8 @@
 - OCR 图像默认 10MiB（`OCR_MAX_IMAGE_BYTES`）、12,000×12,000、4,000 万像素、60 秒硬超时、15 分钟 TTL。临时根 0700 私有，模型根私有只读，原图不进入普通数据库记录。云复核关闭且当前不出网。
 - 发行包版本 `0.7.0` 与策略版本分离；`config/strategy.json` 当前为 `signal-v0.7.0-research` / `indicator-v0.5.1` / `similarity-corridor-v0.7.0` / `rotation-v0.5.1` / `feature-store-v0.7.0`。
 - 信号中心（v0.6.0 新增）是只读取层：仅消费已落库的 SignalSnapshot/IndicatorSnapshot/新闻/持仓，信号系数只影响该视图的前排分类与曲线口径，不改写生产信号引擎的权重、阈值与状态机，因此不触发策略封版与 walk-forward 流程；独立版本号 `signal-center-v0.1.0`。
+- ETF 信号分级（`signal-grade-v0.1.0`）是另一只读研究层：五档（可加仓/可入场/可试探/观望/减仓）由已落库指标快照派生，阈值只在 `config/strategy.json` 的 `signal_grade`，不碰 `signal.entry_score`。自选池已扩到行业主题 ETF + `513500.SH`/`513100.SH`/`518880.SH`/`159562.SZ`；无全市场涨跌家数时板块列显示「未验证 / 不可用」。
+- **当前卡点**：无 Token 时走免费档（AKShare/东财公开 ETF），不是只能 Mock。Mock 永远 `actionable=false`，预测保持 `not_calibrated`。系统页可保存 Tushare Token 并探测连通（接口不回显）。本地 Docker（`127.0.0.1:8080`）可看 UI。下一步：免费档跑通流水线 → 可选完整档 Token → Provider 矩阵 → 再谈 ECS。
 - v0.7.0 资格验证：Phase A/B 本地/Mock 已完成（commit `60da31c`）；真实 Provider、ETF 池、ECS 部署与 20 交易日影子运行待 `TUSHARE_TOKEN` 与目标环境。
 
 ## 部署前必须完成

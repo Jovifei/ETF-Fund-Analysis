@@ -23,6 +23,7 @@ from app.models import (
 )
 from app.services.holding_service import HoldingService
 from app.services.market_context_service import MarketContextService
+from app.services.runtime_service import RuntimeService
 
 
 class DashboardService:
@@ -226,7 +227,7 @@ class DashboardService:
             "last_quote_time": last_quote,
             "last_signal_time": last_signal,
             "market_width": {"up": up, "down": down, "unchanged": unchanged},
-            "provider": self.settings.market_provider,
+            "provider": RuntimeService(self.settings).resolve_settings(db).market_provider,
             "app_env": self.settings.app_env,
             "is_mock": self.settings.market_provider == "mock",
         }

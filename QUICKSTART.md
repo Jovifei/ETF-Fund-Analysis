@@ -25,6 +25,24 @@ node --check backend/app/static/app.js
 
 Mock 只证明本地流水线和页面行为；Mock/不可用数据永远不可产生 actionable 信号。
 
+### 安全演示模式
+
+登录后进入「系统」，选择「演示数据 · 隔离 Mock」，点击「加载演示数据」。演示服务使用进程内
+SQLite 和 420+ 天合成日线，不访问外网、不写正式 PostgreSQL、持仓、审计或报告目录；结果固定为
+`DEMO`、`is_mock=true`、`research_only=true`、`actionable=false`。演示期间正式任务和持仓变更按钮会被
+禁用；点击「退出演示并恢复正式数据」即可返回正式看板。重启 API 后演示数据消失。
+
+正式看板的「更新日线」默认回看 120 个自然日（约 80 个交易日），避免只取 30 个自然日而不足以
+计算 30 根交易日指标。页面状态区分「待初始化」「历史数据不足」「数据源不可用」和「数据异常」；
+只有已有足够历史而核心指标计算失败时才会显示「数据异常」。
+
+### FTShare 备用源
+
+FTShare 是可选、只读的公开数据备用源，默认不启用，也不需要 Token。免费档仍为 AKShare 主源；
+只有运行 `scripts/qualify_ftshare.py` 得到合格报告、确认独立的数据服务条款，并在服务器 `.env`
+明确设置 `FTSHARE_QUALIFICATION=qualified` 与 `FTSHARE_ENABLED=true` 后，FTShare 才会加入备用链。
+详见 [`docs/FTSHARE_PROVIDER.md`](docs/FTSHARE_PROVIDER.md)。
+
 ## B. 生产环境配置
 
 ```bash
@@ -61,14 +79,18 @@ Pillow 核心校验 PNG/JPEG/WebP。默认 `OCR_MAX_IMAGE_BYTES=10485760`（10 M
 
 ## D. 迁移、备份与部署
 
-生产上线前备份数据库，再执行三项增量迁移：
+生产上线前备份数据库，再执行当前完整增量迁移链：
 
 ```text
 158ca7025305 (initial)
   -> 9f1c2b3a4d5e (multi-model analysis)
   -> a2b3c4d5e6f7 (market context)
   -> b3c4d5e6f7a8 (holding import OCR)
+  -> c4d5e6f7a8b9 (forecast corridor provenance)
+  -> d5e6f7a8b9c0 (calibration profiles, current head)
 ```
+
+The disposable SQLite exercise now passes `alembic upgrade head`, `current`, full `downgrade base`/re-upgrade, and `alembic check` at this head.  Its audited ORM reconciliation preserves the historical review/analysis hash-check names, opaque import-session constraint, nullable legacy calibration JSON, and unique `candidate_id` lookup contract.  This local evidence does not replace the required real PostgreSQL upgrade/downgrade/backup-restore qualification.
 
 ```bash
 ./scripts/backup_postgres.sh
@@ -98,7 +120,8 @@ docker compose run --rm api python scripts/provider_smoke.py
 # 1. 准备配置（Windows PowerShell 或 Git Bash 均可）
 cp deploy/.env.local.docker.example .env
 python scripts/generate_secrets.py   # 将输出的两行粘贴替换 .env 中 POSTGRES_PASSWORD / PRIVATE_ACCESS_TOKEN
-# 编辑 .env：填入 TUSHARE_TOKEN（真实数据阶段）；初次 smoke 可留空但 MARKET_PROVIDER 需知会限流
+# 编辑 .env：前期测试用 MARKET_PROVIDER=akshare（免费东财公开接口，TUSHARE_TOKEN 可留空）
+# Token 也可登录后在「系统 → 行情数据源」保存；完整档才会启用 Tushare
 
 # 2. 构建并启动（先不启 scheduler）
 docker compose build
@@ -128,7 +151,8 @@ docker compose up -d scheduler
 - `SCHEDULER_ENABLED=false`（数据资格通过前）
 - `OCR_MODE=disabled`（未 provision Paddle 模型前）
 - API 绑定 `127.0.0.1:8080`，PostgreSQL 不映射宿主机端口
-- 浏览器访问：http://127.0.0.1:8080/ （需在请求头带 Bearer Token）
+- 浏览器访问：http://127.0.0.1:8080/ 。登录框填写仓库根 `.env` 里的 `PRIVATE_ACCESS_TOKEN`（整段复制到密码框；不要发到聊天、不要提交 `.env`）。API 请求头等价于 `Authorization: Bearer <该值>`。
+- 页签含「ETF信号分级」（研究五档宽表）。静态资源在镜像内，改 HTML/JS/CSS 后需 `docker compose build api` 再起；`config/` 一般已 volume 挂载。
 
 ## F. 明确边界
 

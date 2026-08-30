@@ -32,9 +32,42 @@ class RuntimeUpdate(BaseModel):
     news_refresh_minutes: int | None = Field(default=None, ge=5, le=240)
     lunch_news_refresh_minutes: int | None = Field(default=None, ge=3, le=120)
     signal_center_coefficient: float | None = Field(default=None, ge=0.5, le=1.5)
+    market_data_tier: Literal["usable", "complete"] | None = None
+    tushare_token: str | None = None
+    clear_tushare_token: bool = False
 
     def compact(self) -> dict[str, Any]:
-        return {key: value for key, value in self.model_dump().items() if value is not None}
+        data = self.model_dump()
+        compact: dict[str, Any] = {}
+        for key, value in data.items():
+            if key == "clear_tushare_token":
+                if value:
+                    compact[key] = True
+                continue
+            if key == "tushare_token":
+                if isinstance(value, str) and value.strip():
+                    compact[key] = value
+                continue
+            if value is not None:
+                compact[key] = value
+        return compact
+
+
+class MarketProbeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tushare_token: str | None = None
+    market_data_tier: Literal["usable", "complete"] | None = None
+
+
+class BoardFundAdd(BaseModel):
+    ts_code: str = Field(min_length=8, max_length=16)
+    name: str | None = Field(default=None, max_length=64)
+
+    @field_validator("ts_code")
+    @classmethod
+    def normalize_board_code(cls, value: str) -> str:
+        return value.strip().upper()
 
 
 class TaskRequest(BaseModel):
@@ -68,6 +101,12 @@ class TaskRequest(BaseModel):
 
     def compact(self) -> dict[str, Any]:
         return {key: value for key, value in self.model_dump().items() if value is not None}
+
+
+class DemoLoadRequest(BaseModel):
+    """The demo loader deliberately has no provider or execution controls."""
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class ReviewEnqueueRequest(BaseModel):

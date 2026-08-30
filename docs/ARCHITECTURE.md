@@ -63,8 +63,20 @@ PNG/JPEG/WebP upload
 
 - PostgreSQL 任务使用 advisory lock；SQLite 仅用于本地/测试。
 - API 与 scheduler 通过事件表共享 SSE 事件；唯一键提供幂等。
-- 迁移顺序固定为 `158ca7025305` → `9f1c2b3a4d5e` → `a2b3c4d5e6f7` → `b3c4d5e6f7a8`。生产先备份，再 `alembic upgrade head`；回滚先隔离恢复和 hash 校验，禁止手工改库。
+- 迁移顺序固定为 `158ca7025305` → `9f1c2b3a4d5e` → `a2b3c4d5e6f7` → `b3c4d5e6f7a8` → `c4d5e6f7a8b9` → `d5e6f7a8b9c0`（当前 head）。生产先备份，再 `alembic upgrade head`；回滚先隔离恢复和 hash 校验，禁止手工改库。隔离 SQLite 已完成 `upgrade head`、`downgrade base`/re-upgrade 与 `alembic check`。ORM 对齐保留既有 review/analysis hash-check 名称、opaque-session 约束和 nullable legacy calibration JSON，而不是生成会重写现有数据的迁移；真实 PostgreSQL 迁移/回滚/备份恢复仍需资格验证。
 - Compose 只把 API 绑定到 `127.0.0.1:8080`，数据库不暴露宿主机端口，公网只经过 Caddy/Nginx HTTPS。OCR 应用图像上限 10MiB，Caddy/Nginx body limit 用 12MB 覆盖 multipart 开销。
 - `.env` 为 0600；OCR transient root 为 0700；模型根私有且只读。生产配置在 Windows 上对 OCR fail-closed。
 
 真实 PostgreSQL、Provider 出口/权限、OpenAI 端点、Paddle wheel/model、ECS、HTTPS 和预测校准都是部署门槛；本地测试、Mock 数据和候选报告不构成生产或投资结论。
+
+## 研究视图分层（信号中心 vs 信号分级 vs 板块）
+
+两层都只读，都不写持仓、不连券商、不改变生产引擎 `signal-v0.7.0-research` 的权重与阈值。
+
+| 视图 | 版本 | 数据 | UI |
+|---|---|---|---|
+| 决策看板板块 | `board-catalog-v0.1.0` | 静态行业/概念目录 + 主题 ETF 代理指标分 | 东财式名称卡片；不爬东财指数 |
+| 信号中心 | `signal-center-v0.1.0` | 已落库 SignalSnapshot 等；系数只改该页前排/曲线 | 机会 / 风险 / 止盈 三桶 |
+| ETF 信号分级 | `signal-grade-v0.2.0` | IndicatorSnapshot + Quote + 1 日 Forecast | 单基五档彩色表 |
+
+板块分数由量能/均线/MACD/KDJ/RSI/九转/近周系数加权。无代理 ETF 时显示未验证。市场环境六卡不是行业进入依据。预测单元格必须带「FORECAST · 非实际结果」。

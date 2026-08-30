@@ -663,6 +663,7 @@ def test_holding_import_service_requires_explicit_review_before_writing(db_sessi
 
 
 def test_holding_import_api_upload_review_edit_confirm_and_no_image_route(bootstrapped, tmp_path: Path, monkeypatch) -> None:
+    from app.core.config import get_settings
     from app.main import app
     from app.services import holding_import_service
     from fastapi.testclient import TestClient
@@ -674,41 +675,44 @@ def test_holding_import_api_upload_review_edit_confirm_and_no_image_route(bootst
             lines=(OCRLine(text="512480.SH 半导体ETF 100 1.234", confidence=0.98, box=None),)
         ),
     )
-    settings = Settings(_env_file=None, OCR_TRANSIENT_ROOT=tmp_path)
-    monkeypatch.setattr("app.api.router.get_settings", lambda: settings)
+    settings = Settings(_env_file=None, OCR_MODE="local_paddle", OCR_TRANSIENT_ROOT=tmp_path)
+    app.dependency_overrides[get_settings] = lambda: settings
     monkeypatch.setattr("app.main.settings", settings)
-    with TestClient(app) as client:
-        response = client.post(
-            "/api/holding-imports",
-            files={"file": ("portfolio.png", _image_bytes("PNG"), "image/png")},
-        )
-        assert response.status_code == 201, response.text
-        session_id = response.json()["session_id"]
-        assert "storage_key" not in response.json()
-        candidate = response.json()["candidates"][0]
-        edit = client.patch(
-            f"/api/holding-imports/{session_id}/candidates/{candidate['id']}",
-            json={"selected_code": "512480.SH", "shares": 101, "cost_price": 1.235},
-        )
-        assert edit.status_code == 200, edit.text
-        confirmed = client.post(f"/api/holding-imports/{session_id}/confirm")
-        assert confirmed.status_code == 200, confirmed.text
-        assert client.get(f"/api/holding-imports/{session_id}/image").status_code == 404
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/holding-imports",
+                files={"file": ("portfolio.png", _image_bytes("PNG"), "image/png")},
+            )
+            assert response.status_code == 201, response.text
+            session_id = response.json()["session_id"]
+            assert "storage_key" not in response.json()
+            candidate = response.json()["candidates"][0]
+            edit = client.patch(
+                f"/api/holding-imports/{session_id}/candidates/{candidate['id']}",
+                json={"selected_code": "512480.SH", "shares": 101, "cost_price": 1.235},
+            )
+            assert edit.status_code == 200, edit.text
+            confirmed = client.post(f"/api/holding-imports/{session_id}/confirm")
+            assert confirmed.status_code == 200, confirmed.text
+            assert client.get(f"/api/holding-imports/{session_id}/image").status_code == 404
 
-        rejected_import = client.post(
-            "/api/holding-imports",
-            files={"file": ("portfolio.png", _image_bytes("PNG"), "image/png")},
-        )
-        rejected_id = rejected_import.json()["session_id"]
-        rejected_candidate = rejected_import.json()["candidates"][0]
-        rejected = client.patch(
-            f"/api/holding-imports/{rejected_id}/candidates/{rejected_candidate['id']}",
-            json={"action": "reject"},
-        )
-        assert rejected.status_code == 200 and rejected.json()["status"] == "rejected"
-        rejected_confirm = client.post(f"/api/holding-imports/{rejected_id}/confirm")
-        assert rejected_confirm.status_code == 200, rejected_confirm.text
-        assert rejected_confirm.json()["upserted"] == 0
+            rejected_import = client.post(
+                "/api/holding-imports",
+                files={"file": ("portfolio.png", _image_bytes("PNG"), "image/png")},
+            )
+            rejected_id = rejected_import.json()["session_id"]
+            rejected_candidate = rejected_import.json()["candidates"][0]
+            rejected = client.patch(
+                f"/api/holding-imports/{rejected_id}/candidates/{rejected_candidate['id']}",
+                json={"action": "reject"},
+            )
+            assert rejected.status_code == 200 and rejected.json()["status"] == "rejected"
+            rejected_confirm = client.post(f"/api/holding-imports/{rejected_id}/confirm")
+            assert rejected_confirm.status_code == 200, rejected_confirm.text
+            assert rejected_confirm.json()["upserted"] == 0
+    finally:
+        app.dependency_overrides.pop(get_settings, None)
 
 
 def test_holding_import_rejects_bad_upload_and_requires_auth() -> None:

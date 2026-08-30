@@ -572,8 +572,11 @@ class CalibrationProfile(Base):
     validation_content_hash: Mapped[str] = mapped_column(String(64))
     instrument_count: Mapped[int] = mapped_column(Integer, default=0)
     sample_count: Mapped[int] = mapped_column(Integer, default=0)
-    gate_results: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    summary_metrics: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    # The initial governance migration intentionally permits legacy profiles
+    # without these JSON payloads.  The service writes dictionaries for every
+    # new profile and treats historical NULLs as empty data when approving.
+    gate_results: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=dict)
+    summary_metrics: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=dict)
     approved_by: Mapped[str | None] = mapped_column(String(128))
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -643,7 +646,11 @@ class HoldingImportSession(Base, TimestampMixin):
             name="ck_holding_import_sessions_candidate_count_bounded",
         ),
         CheckConstraint(
-            _portable_opaque_token_check("session_id", 96) + " AND length(trim(ocr_mode)) BETWEEN 1 AND 32 AND "
+            _portable_opaque_token_check("session_id", 96),
+            name="ck_holding_import_sessions_session_id_opaque",
+        ),
+        CheckConstraint(
+            "length(trim(session_id)) BETWEEN 16 AND 96 AND length(trim(ocr_mode)) BETWEEN 1 AND 32 AND "
             "length(trim(ocr_backend)) BETWEEN 1 AND 128 AND length(trim(ocr_model)) BETWEEN 1 AND 128 AND "
             "length(trim(ocr_version)) BETWEEN 1 AND 128",
             name="ck_holding_import_sessions_text_bounded",
@@ -945,11 +952,11 @@ class AnalysisRun(Base):
         ),
         CheckConstraint(
             _portable_hex_check("input_hash"),
-            name="ck_analysis_runs_input_hash_strict",
+            name="ck_input_hash_strict_sha256",
         ),
         CheckConstraint(
             "result_hash IS NULL OR (" + _portable_hex_check("result_hash") + ")",
-            name="ck_analysis_runs_result_hash_strict",
+            name="ck_analysis_runs_result_hash",
         ),
         CheckConstraint(
             f"failure_class IS NULL OR ({_portable_failure_class_check('failure_class')})",
@@ -1014,11 +1021,11 @@ class AgentReviewCandidate(Base):
         ),
         CheckConstraint(
             _portable_hex_check("bundle_hash"),
-            name="ck_review_candidates_bundle_hash_strict",
+            name="ck_bundle_hash_strict_sha256",
         ),
         CheckConstraint(
             _portable_hex_check("memo_hash"),
-            name="ck_review_candidates_memo_hash_strict",
+            name="ck_memo_hash_strict_sha256",
         ),
         CheckConstraint(
             f"memo_json IS NOT NULL AND length(memo_json) BETWEEN 1 AND {REVIEW_MEMO_MAX_SERIALIZED_CHARS}",
@@ -1033,7 +1040,9 @@ class AgentReviewCandidate(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    candidate_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    # A UNIQUE constraint already owns the lookup index.  Declaring a second
+    # index made metadata require a redundant physical index after migration.
+    candidate_id: Mapped[str] = mapped_column(String(128), unique=True)
     runner: Mapped[str] = mapped_column(String(64), index=True)
     bundle_hash: Mapped[str] = mapped_column(String(64), index=True)
     memo_hash: Mapped[str] = mapped_column(String(64), index=True)

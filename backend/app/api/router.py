@@ -5,12 +5,14 @@ import json
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.api.schemas import (
+    BoardFundAdd,
+    DemoLoadRequest,
     HoldingImportCandidatePatch,
     HoldingImportCandidateResponse,
     HoldingImportCloudConsent,
@@ -20,6 +22,7 @@ from app.api.schemas import (
     ReviewEnqueueRequest,
     ReviewRunner,
     ReviewTransitionRequest,
+    MarketProbeRequest,
     RuntimeUpdate,
     TaskRequest,
 )
@@ -29,7 +32,9 @@ from app.db.session import SessionLocal, get_db
 from app.models import EventLog, ReportArtifact
 from app.ocr.image_validation import ImageValidationError, read_limited_bytes
 from app.services.analysis_persistence_service import AnalysisStorageNotMigrated
+from app.services.board_service import BoardService
 from app.services.dashboard_service import DashboardService
+from app.services.demo_service import DemoService
 from app.services.holding_import_service import (
     HoldingImportConflict,
     HoldingImportError,
@@ -43,6 +48,7 @@ from app.services.report_service import ReportService
 from app.services.review_service import CandidateNotFoundError, ReviewService
 from app.services.runtime_service import RuntimeService
 from app.services.signal_center_service import SignalCenterService
+from app.services.signal_grade_service import SignalGradeService
 from app.services.task_service import TaskBusyError, TaskExecutionError, TaskService, UnknownTaskError
 
 router = APIRouter(prefix="/api")
@@ -88,6 +94,25 @@ def bootstrap(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict:
     return DashboardService(settings).bootstrap(db)
+
+
+@private_router.post("/demo/load")
+def load_demo(
+    settings: Annotated[Settings, Depends(get_settings)],
+    _payload: DemoLoadRequest | None = Body(default=None),
+) -> dict[str, Any]:
+    del settings
+    return DemoService().load()
+
+
+@private_router.get("/demo/bootstrap")
+def demo_bootstrap() -> dict[str, Any]:
+    return DemoService().bootstrap()
+
+
+@private_router.post("/demo/reset")
+def reset_demo() -> dict[str, Any]:
+    return DemoService.reset()
 
 
 @private_router.get("/instruments")
@@ -343,6 +368,41 @@ def signal_center(
     return payload
 
 
+@private_router.get("/signals/grade")
+def signal_grade(
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict:
+    return SignalGradeService(settings).build(db)
+
+
+@private_router.get("/signals/boards")
+def signal_boards(
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict:
+    return BoardService(settings).build(db)
+
+
+@private_router.post("/signals/boards/{board_id}/funds")
+def add_board_fund(
+    board_id: str,
+    payload: BoardFundAdd,
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict:
+    try:
+        result = BoardService(settings).add_fund(db, board_id, payload.ts_code, payload.name)
+        db.commit()
+        return result
+    except KeyError:
+        db.rollback()
+        raise HTTPException(status_code=404, detail="board not found") from None
+    except ValueError:
+        db.rollback()
+        raise HTTPException(status_code=422, detail="invalid fund code") from None
+
+
 @private_router.get("/settings")
 def runtime_settings(
     db: Annotated[Session, Depends(get_db)],
@@ -360,7 +420,28 @@ def update_runtime_settings(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict:
-    result = RuntimeService(settings).update(db, payload.compact())
+    try:
+        result = RuntimeService(settings).update(db, payload.compact())
+    except ValueError:
+        db.rollback()
+        raise HTTPException(status_code=422, detail="settings update rejected") from None
+    db.commit()
+    return result
+
+
+@private_router.post("/settings/market-probe")
+def probe_market_settings(
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    payload: MarketProbeRequest | None = None,
+) -> dict:
+    token = payload.tushare_token if payload is not None else None
+    tier = payload.market_data_tier if payload is not None else None
+    try:
+        result = RuntimeService(settings).probe_market(db, token_override=token, tier_override=tier)
+    except ValueError:
+        db.rollback()
+        raise HTTPException(status_code=422, detail="market probe rejected") from None
     db.commit()
     return result
 
@@ -486,8 +567,9 @@ def run_task(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict:
+    service = TaskService(settings)
     try:
-        result = TaskService(settings).run(db, task_name, **payload.compact())
+        result = service.run(db, task_name, **payload.compact())
         db.commit()
         return result
     except UnknownTaskError as exc:
@@ -505,6 +587,8 @@ def run_task(
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="task execution failed") from None
+    finally:
+        service.close()
 
 
 @private_router.post("/reports")

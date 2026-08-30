@@ -63,6 +63,24 @@ class CompositeProvider(MarketProvider):
             raise ValueError("CompositeProvider 至少需要一个 provider")
         self.providers = providers
         self.last_trace: list[ProviderTrace] = []
+        self._closed = False
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        failures: list[str] = []
+        for provider in self.providers:
+            close = getattr(provider, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except (KeyboardInterrupt, SystemExit):
+                    raise
+                except Exception as exc:
+                    failures.append(_safe_failure_label(exc))
+        if failures:
+            raise ProviderError("provider close failed: " + ",".join(failures)) from None
 
     def _invoke(self, operation: str, call: Callable[[MarketProvider], T], allow_empty: bool = False) -> T:
         self.last_trace = []

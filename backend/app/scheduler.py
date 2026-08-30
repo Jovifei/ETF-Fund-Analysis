@@ -60,6 +60,22 @@ def _due(last: datetime | None, now: datetime, minutes: int) -> bool:
 def tick() -> dict:
     settings = get_settings()
     provider = create_provider(settings)
+    task_holder: list[object | None] = [None]
+    try:
+        return _tick_impl(settings, provider, task_holder)
+    finally:
+        task_service = task_holder[0]
+        close = getattr(task_service, "close", None)
+        try:
+            if callable(close):
+                close()
+        finally:
+            # Preserve original provider cleanup even when a rebound provider's
+            # close path reports an error.
+            provider.close()
+
+
+def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
     clock = MarketClock(settings.timezone)
     now = clock.now()
     calendar_decision = TradingCalendarService(settings, provider).decision(now.date())
@@ -70,7 +86,10 @@ def tick() -> dict:
     with session_scope() as db:
         runtime = RuntimeService(settings)
         intervals = runtime.get_all(db)
-        tasks = TaskService(settings)
+        # Share the already-created provider with the task service; tick owns
+        # this provider and closes it at the request boundary below.
+        tasks = TaskService(settings, provider=provider)
+        task_holder[0] = tasks
 
         # The first scheduler tick builds the minimum research dataset. On a real
         # provider this may take time, so production operators can run bootstrap
@@ -127,7 +146,7 @@ def tick() -> dict:
         if phase == MarketPhase.AFTER_CLOSE and _due(
             _last_success(db, "refresh_bars"), now, 12 * 60
         ):
-            tasks.run(db, "refresh_bars", lookback_days=30)
+            tasks.run(db, "refresh_bars", lookback_days=120)
             tasks.run(db, "refresh_indicators")
             tasks.run(db, "refresh_forecasts")
             tasks.run(db, "refresh_signals")

@@ -1012,8 +1012,14 @@ def test_scheduler_invokes_market_context_as_its_own_due_task(monkeypatch: pytes
     calls: list[tuple[str, dict]] = []
 
     class FakeProvider:
+        def __init__(self):
+            self.close_calls = 0
+
         def is_trade_day(self, day):
             return True
+
+        def close(self):
+            self.close_calls += 1
 
     class FakeClock:
         def __init__(self, timezone):
@@ -1035,8 +1041,15 @@ def test_scheduler_invokes_market_context_as_its_own_due_task(monkeypatch: pytes
             return False
 
     class FakeTasks:
-        def __init__(self, settings):
+        received_provider = None
+
+        def __init__(self, settings, provider=None):
             del settings
+            self.provider = provider
+            FakeTasks.received_provider = provider
+
+        def close(self):
+            return None
 
         def run(self, db, task_name, **kwargs):
             del db
@@ -1048,7 +1061,8 @@ def test_scheduler_invokes_market_context_as_its_own_due_task(monkeypatch: pytes
         yield db
 
     monkeypatch.setattr(scheduler, "get_settings", lambda: settings)
-    monkeypatch.setattr(scheduler, "create_provider", lambda settings: FakeProvider())
+    fake_provider = FakeProvider()
+    monkeypatch.setattr(scheduler, "create_provider", lambda settings: fake_provider)
     monkeypatch.setattr(scheduler, "MarketClock", FakeClock)
     monkeypatch.setattr(scheduler, "TaskService", FakeTasks)
     monkeypatch.setattr(scheduler, "session_scope", fake_session_scope)
@@ -1062,6 +1076,8 @@ def test_scheduler_invokes_market_context_as_its_own_due_task(monkeypatch: pytes
 
     assert [name for name, _ in calls] == ["sync_instruments", "refresh_market_context"]
     assert result["executed"] == ["sync_instruments", "refresh_market_context"]
+    assert FakeTasks.received_provider is fake_provider
+    assert fake_provider.close_calls == 1
     db.close()
     engine.dispose()
 
@@ -1157,8 +1173,14 @@ def test_scheduler_context_failure_isolated_and_terminal_attempt_throttles_retry
     calls: list[str] = []
 
     class FakeProvider:
+        def __init__(self):
+            self.close_calls = 0
+
         def is_trade_day(self, day):
             return True
+
+        def close(self):
+            self.close_calls += 1
 
     class FakeClock:
         def __init__(self, timezone):
@@ -1180,8 +1202,12 @@ def test_scheduler_context_failure_isolated_and_terminal_attempt_throttles_retry
             return True
 
     class FakeTasks:
-        def __init__(self, settings):
+        def __init__(self, settings, provider=None):
             del settings
+            self.provider = provider
+
+        def close(self):
+            return None
 
         def run(self, db, task_name, **kwargs):
             del kwargs
@@ -1206,7 +1232,14 @@ def test_scheduler_context_failure_isolated_and_terminal_attempt_throttles_retry
         yield db
 
     monkeypatch.setattr(scheduler, "get_settings", lambda: settings)
-    monkeypatch.setattr(scheduler, "create_provider", lambda settings: FakeProvider())
+    providers = []
+
+    def make_provider(settings):
+        provider = FakeProvider()
+        providers.append(provider)
+        return provider
+
+    monkeypatch.setattr(scheduler, "create_provider", make_provider)
     monkeypatch.setattr(scheduler, "MarketClock", FakeClock)
     monkeypatch.setattr(scheduler, "TaskService", FakeTasks)
     monkeypatch.setattr(scheduler, "session_scope", fake_session_scope)
@@ -1223,6 +1256,7 @@ def test_scheduler_context_failure_isolated_and_terminal_attempt_throttles_retry
     ]
     assert calls.count("refresh_market_context") == 1
     assert "refresh_quotes" in second["executed"] or "refresh_quotes" in calls
+    assert all(provider.close_calls == 1 for provider in providers)
     failed = db.scalar(
         select(TaskRun).where(TaskRun.task_name == "refresh_market_context", TaskRun.status == "failed")
     )

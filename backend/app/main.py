@@ -43,7 +43,14 @@ async def lifespan(_: FastAPI):
         settings.app_env,
         settings.market_provider,
     )
-    yield
+    try:
+        yield
+    finally:
+        # The demo engine is process-local and must never outlive the app
+        # lifecycle or retain its StaticPool connection across TestClient runs.
+        from app.services.demo_service import DemoService
+
+        DemoService.close()
 
 
 app = FastAPI(

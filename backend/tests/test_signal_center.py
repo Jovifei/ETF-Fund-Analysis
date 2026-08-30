@@ -238,7 +238,7 @@ def test_sector_strength_ranking_with_news_component(bootstrapped, db_session):
         technical=88.0,
         risk=30.0,
     )
-    for ts_code in ("510300.SH", "510500.SH"):
+    for ts_code in ("510300.SH",):
         instrument = _instrument(db_session, ts_code)
         _attach(
             db_session,

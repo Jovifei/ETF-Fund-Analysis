@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>中国 ETF/LOF 私有决策看板</title>
-  <link rel="stylesheet" href="/assets/app.css?v=0.6.0">
+  <link rel="stylesheet" href="/assets/app.css?v=0.7.4">
 </head>
 <body>
   <div id="authOverlay" class="overlay auth-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="authHeading">
@@ -26,11 +26,13 @@
     <nav id="tabs" class="tabs" role="tablist" aria-label="研究视图">
       <button data-tab="dashboard" class="active" role="tab" aria-selected="true">决策看板</button>
       <button data-tab="signals" role="tab" aria-selected="false">信号中心</button>
+      <button data-tab="grade" role="tab" aria-selected="false">ETF信号分级</button>
       <button data-tab="holdings" role="tab" aria-selected="false">持仓</button>
       <button data-tab="news" role="tab" aria-selected="false">新闻事件</button>
       <button data-tab="system" role="tab" aria-selected="false">系统</button>
     </nav>
     <div class="top-actions">
+      <span id="sourceBadge" class="source-badge fallback" aria-live="polite">来源 —</span>
       <span id="connectionBadge" class="status-dot offline">离线</span>
       <button id="refreshButton" class="ghost">刷新</button>
       <button id="lockButton" class="ghost">锁定</button>
@@ -38,6 +40,7 @@
   </header>
 
   <main class="page">
+    <div id="demoBanner" class="demo-banner hidden" role="status" aria-live="polite"><strong>DEMO · 隔离演示数据</strong><span>仅使用进程内 Mock 数据，不访问外网、不写生产数据库，所有结果仅供功能演示。</span><button id="demoBannerExitButton" class="ghost" type="button">退出演示</button></div>
     <section id="view-dashboard" class="view active">
       <div id="globalWarning" class="warning-banner hidden"></div>
       <div id="summaryCards" class="summary-grid"></div>
@@ -47,7 +50,7 @@
       </div>
       <section id="marketContextSection" class="panel observed-surface" aria-labelledby="marketContextHeading">
         <div class="panel-head">
-          <div><div class="eyebrow">MARKET CONTEXT · OBSERVED</div><h2 id="marketContextHeading">市场环境</h2></div>
+          <div><div class="eyebrow">MARKET CONTEXT · OBSERVED · 次要</div><h2 id="marketContextHeading">市场环境（宽基观察，不是行业进入依据）</h2></div>
           <div class="legend context-legend"><span class="status-key">观察值</span><span class="status-key status-key-muted">未验证 / 不可用</span></div>
         </div>
         <div id="marketContextCards" class="market-context-grid" role="list" aria-live="polite">
@@ -56,12 +59,23 @@
       </section>
       <div class="panel">
         <div class="panel-head">
-          <div><div class="eyebrow">DETERMINISTIC SIGNALS · OBSERVED + MODEL VIEW</div><h2>ETF / LOF 信号分级</h2></div>
-          <div class="legend"><span class="badge entry">可入场</span><span class="badge probe">可试探</span><span class="badge hold">持有</span><span class="badge reduce">减仓</span><span class="badge anomaly">数据异常</span></div>
+          <div><div class="eyebrow">ETF BOARD · INDUSTRY / CONCEPT</div><h2>行业与概念板块（主题ETF代理）</h2></div>
+          <div id="boardMeta" class="muted">研究提示，非操作指令</div>
         </div>
-        <div class="table-wrap"><table id="instrumentTable" class="signal-table"><thead><tr>
-          <th>标的</th><th>观察行情</th><th>量能</th><th>均线/趋势</th><th>MACD</th><th>KDJ</th><th>RSI</th><th>TD</th><th>近1月</th><th class="forecast-column">FORECAST · 非实际结果<br><span>明日</span></th><th class="forecast-column">FORECAST · 非实际结果<br><span>一周</span></th><th class="forecast-column">FORECAST · 非实际结果<br><span>一月</span></th><th>建议</th>
-        </tr></thead><tbody></tbody></table></div>
+        <p class="board-disclaimer">名称对齐东方财富常见叫法，分数来自池内场内 ETF 的量能/均线/MACD/KDJ/RSI/九转系数，不爬东财板块指数，不编造涨跌家数。点击卡片打开代理 ETF K 线。</p>
+        <div class="board-toolbar">
+          <div class="front-tabs" id="boardKindTabs">
+            <button type="button" data-board-kind="industry" class="active">行业板块</button>
+            <button type="button" data-board-kind="concept">概念板块</button>
+          </div>
+          <form id="boardAddForm" class="board-add-form">
+            <select id="boardAddSelect" aria-label="选择板块"></select>
+            <input id="boardAddCode" name="ts_code" placeholder="添加基金 如 512480.SH" required>
+            <input id="boardAddName" name="name" placeholder="简称（可空）">
+            <button class="primary" type="submit">添加到板块</button>
+          </form>
+        </div>
+        <div id="boardGrid" class="board-grid"><div class="empty-state">等待板块数据… 若全空请到「系统」运行完整流水线以写入日线。</div></div>
       </div>
     </section>
 
@@ -102,6 +116,19 @@
       </div>
     </section>
 
+    <section id="view-grade" class="view">
+      <div id="gradeWarning" class="warning-banner">研究提示，非操作指令。分级不改写生产信号、不下单。预测为未校准研究输出。</div>
+      <div id="gradeSummaryCards" class="summary-grid compact grade-summary"></div>
+      <div class="panel">
+        <div class="panel-head">
+          <div><div class="eyebrow">ETF SIGNAL GRADE · RESEARCH</div><h2>ETF 信号分级</h2></div>
+          <div id="gradeMeta" class="muted"></div>
+        </div>
+        <div id="gradeNarrative" class="market-narrative">等待分级数据...</div>
+      </div>
+      <div id="gradeGroups"></div>
+    </section>
+
     <section id="view-holdings" class="view">
       <div class="panel">
         <div class="panel-head"><div><div class="eyebrow">PORTFOLIO INPUT</div><h2>持仓与成本</h2></div><div class="button-row"><button id="portfolioImportButton" class="ghost" type="button">导入持仓截图</button><button id="newHoldingButton" class="primary" type="button">新增 / 修改持仓</button></div></div>
@@ -125,8 +152,34 @@
             <button class="primary" type="submit">保存设置</button>
           </form>
         </div>
-        <div class="panel"><div class="panel-head"><div><div class="eyebrow">MANUAL PIPELINE</div><h2>手动任务</h2></div></div><div id="taskButtons" class="task-buttons"></div><pre id="taskOutput" class="task-output">尚未运行任务</pre></div>
+        <div class="panel"><div class="panel-head"><div><div class="eyebrow">MARKET DATA</div><h2>行情数据源</h2></div></div>
+          <form id="marketSourceForm" class="form-grid market-source-form">
+            <fieldset class="source-choice">
+              <legend>使用哪一档</legend>
+              <label><input type="radio" name="market_data_tier" value="demo"> 演示数据 · 隔离 Mock（不访问外网、不写生产库）</label>
+              <label><input type="radio" name="market_data_tier" value="usable" checked> 先能用 · 免费公开行情</label>
+              <label><input type="radio" name="market_data_tier" value="complete"> 更真实更完整 · 需要 Tushare Token</label>
+            </fieldset>
+            <div class="data-use-cards" aria-label="三种数据用途"><div><strong>演示</strong><span>隔离 Mock · 无外网</span></div><div><strong>免费</strong><span>AKShare 主 · FTShare 备</span></div><div><strong>完整</strong><span>Tushare 主 · 公开源备</span></div></div>
+            <p class="muted market-source-hint">演示模式不会触碰正式数据库。免费档用 AKShare 调东方财富公开 ETF 日线，只有 FTShare 已启用且资格通过才作为备源；完整档才用你的 Token 走 Tushare。Token 只写入本机，接口不会回显。</p>
+            <label class="token-field">Tushare Token
+              <input id="tushareTokenInput" name="tushare_token" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴 Token；留空则不改已保存的值">
+            </label>
+            <div id="tokenStatus" class="token-status muted">未配置 Token；免费档不需要</div>
+            <div id="ftshareStatus" class="token-status muted">FTShare：未启用；未资格验证</div>
+            <div id="marketSourceMeta" class="muted">当前实际数据源：—</div>
+            <div class="source-actions">
+              <button class="primary" type="submit">保存数据源</button>
+              <button id="marketProbeButton" class="ghost" type="button">测试是否连通</button>
+              <button id="clearTushareTokenButton" class="ghost" type="button">清除已保存 Token</button>
+            </div>
+            <div id="marketProbeResult" class="probe-result muted" role="status">尚未测试</div>
+            <div id="marketProbeMatrix" class="probe-matrix" aria-live="polite"></div>
+          </form>
+        </div>
       </div>
+      <div class="panel demo-control-panel"><div class="panel-head"><div><div class="eyebrow">SAFE DEMO</div><h2>隔离演示</h2></div><span id="demoStatus" class="status-badge status-muted">未进入演示</span></div><p class="muted">加载 420+ 天合成行情来验证指标、预测和分级。演示结果带 DEMO / Mock / research-only 标记，不能产生操作级信号。</p><div class="source-actions"><button id="demoLoadButton" class="primary" type="button">加载演示数据</button><button id="demoResetButton" class="ghost" type="button">重置演示数据</button><button id="demoExitButton" class="ghost" type="button" disabled>退出演示并恢复正式数据</button></div></div>
+      <div class="panel"><div class="panel-head"><div><div class="eyebrow">MANUAL PIPELINE</div><h2>手动任务</h2></div></div><div id="taskButtons" class="task-buttons"></div><pre id="taskOutput" class="task-output">尚未运行任务</pre></div>
       <div class="panel"><div class="panel-head"><div><div class="eyebrow">PROVENANCE</div><h2>数据源健康</h2></div></div><div class="table-wrap"><table id="providerTable"><thead><tr><th>时间</th><th>操作</th><th>数据源</th><th>状态</th><th>耗时</th><th>记录</th><th>原因</th></tr></thead><tbody></tbody></table></div></div>
       <div class="panel"><div class="panel-head"><div><div class="eyebrow">TASK HISTORY</div><h2>任务运行记录</h2></div></div><div class="table-wrap"><table id="taskTable"><thead><tr><th>时间</th><th>任务</th><th>状态</th><th>Run ID</th><th>错误</th></tr></thead><tbody></tbody></table></div></div>
       <div class="panel"><div class="panel-head"><div><div class="eyebrow">IMMUTABLE REPORTS</div><h2>报告快照</h2></div><button id="generateReportButton" class="primary">生成新报告</button></div><div class="table-wrap"><table id="reportTable"><thead><tr><th>生成时间</th><th>类型</th><th>文件</th><th>内容哈希</th><th>操作</th></tr></thead><tbody></tbody></table></div></div>
@@ -169,6 +222,6 @@
     <section class="modal confirm-modal"><button class="modal-close" data-close="portfolioConfirmOverlay" aria-label="关闭确认对话框">×</button><div class="eyebrow">EXPLICIT ACTION</div><h2 id="portfolioConfirmHeading">确认写入持仓？</h2><p>仅已明确选择、数值有效且未拒绝的候选会交给持仓服务。确认后才会更新持仓与看板；重复点击是幂等的。</p><div class="button-row"><button id="portfolioConfirmNo" class="ghost" type="button">返回复核</button><button id="portfolioConfirmYes" class="primary" type="button">确认导入并写入</button></div><div id="portfolioConfirmError" class="error-text" role="alert"></div></section>
   </div>
   <div id="toast" class="toast hidden"></div>
-  <script src="/assets/app.js?v=0.6.0" defer></script>
+  <script src="/assets/app.js?v=0.7.4" defer></script>
 </body>
 </html>

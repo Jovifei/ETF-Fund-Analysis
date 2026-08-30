@@ -15,9 +15,16 @@ from app.utils.hashing import stable_hash
 
 
 class MarketService:
-    def __init__(self, provider: MarketProvider, settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        provider: MarketProvider,
+        settings: Settings | None = None,
+        *,
+        persist_provider_audits: bool = True,
+    ) -> None:
         self.provider = provider
         self.settings = settings or get_settings()
+        self.persist_provider_audits = persist_provider_audits
 
     @staticmethod
     def _qualify_quote_timestamp(item, fetched_at: datetime) -> tuple[bool, str | None]:
@@ -54,15 +61,16 @@ class MarketService:
             error = exc
             raise
         finally:
-            record_provider_audit(
-                db,
-                run_id=run_id,
-                operation="list_instruments",
-                provider=self.provider,
-                result=records,
-                error=error,
-                latency_ms=timer.elapsed_ms,
-            )
+            if self.persist_provider_audits:
+                record_provider_audit(
+                    db,
+                    run_id=run_id,
+                    operation="list_instruments",
+                    provider=self.provider,
+                    result=records,
+                    error=error,
+                    latency_ms=timer.elapsed_ms,
+                )
         created = 0
         updated = 0
         for item in records:
@@ -158,15 +166,16 @@ class MarketService:
                 error = exc
                 totals["failures"].append({"ts_code": instrument.ts_code, "error": f"{type(exc).__name__}: {exc}"})
             finally:
-                record_provider_audit(
-                    db,
-                    run_id=run_id,
-                    operation="fetch_daily_bars",
-                    provider=self.provider,
-                    result=records,
-                    error=error,
-                    latency_ms=timer.elapsed_ms,
-                )
+                if self.persist_provider_audits:
+                    record_provider_audit(
+                        db,
+                        run_id=run_id,
+                        operation="fetch_daily_bars",
+                        provider=self.provider,
+                        result=records,
+                        error=error,
+                        latency_ms=timer.elapsed_ms,
+                    )
         db.flush()
         emit_event(db, "bars.updated", {**totals, "run_id": run_id})
         return {"run_id": run_id, **totals}
@@ -194,15 +203,16 @@ class MarketService:
             error = exc
             raise
         finally:
-            record_provider_audit(
-                db,
-                run_id=run_id,
-                operation="fetch_spot_quotes",
-                provider=self.provider,
-                result=records,
-                error=error,
-                latency_ms=timer.elapsed_ms,
-            )
+            if self.persist_provider_audits:
+                record_provider_audit(
+                    db,
+                    run_id=run_id,
+                    operation="fetch_spot_quotes",
+                    provider=self.provider,
+                    result=records,
+                    error=error,
+                    latency_ms=timer.elapsed_ms,
+                )
         inserted = 0
         realtime = 0
         raw_realtime = 0
