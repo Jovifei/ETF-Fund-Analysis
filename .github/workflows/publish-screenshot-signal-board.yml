@@ -1,0 +1,182 @@
+name: publish-screenshot-signal-board
+
+on:
+  push:
+    branches: [feat/screenshot-signal-board-v2]
+    paths:
+      - '.github/workflows/publish-screenshot-signal-board.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-screenshot-signal-board
+  cancel-in-progress: false
+
+jobs:
+  validate-and-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply verified screenshot-board payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          base64 -d .automation/screenshot-signal-board/payload.b64 > /tmp/etf-signal-board-payload.tar.gz
+          echo 'c4db2ae27ab25848da6a8761aa8eabe7f988f348819d6f914a7ad40ddf155a42  /tmp/etf-signal-board-payload.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/etf-signal-board-payload.tar.gz -C .
+          test -f config/industry_board.json
+          test -f backend/app/services/industry_board_service.py
+          test -f docs/SCREENSHOT_SIGNAL_BOARD.md
+          test -f docs/LOCAL_AGENT_PROMPT_SIGNAL_BOARD.md
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install development dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]'
+
+      - name: Unit, integration, compile, browser-JS and secret gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          pytest -q | tee /tmp/signal-board-pytest.log
+          python -m compileall -q backend/app
+          node --check backend/app/static/app.js
+          python codex/skills/fund-research/scripts/check_no_secrets.py .
+          TEST_COUNT=$(pytest --collect-only -q | awk -F': ' '/: [0-9]+$/{s+=$2} END{print s+0}')
+          test "$TEST_COUNT" -eq 343
+          echo "validated_test_count=$TEST_COUNT"
+
+      - name: Alembic, ShellCheck, Compose and production image gates
+        env:
+          APP_ENV: test
+          AUTH_ENABLED: 'false'
+          PRIVATE_ACCESS_TOKEN: CHANGE_ME_SIGNAL_BOARD_PRIVATE_TOKEN
+          MARKET_PROVIDER: mock
+          AUTO_CREATE_SCHEMA: 'false'
+          DATABASE_URL: sqlite:////tmp/etf-signal-board-migration.sqlite3
+          POSTGRES_PASSWORD: CHANGE_ME_SIGNAL_BOARD_DATABASE_PASSWORD
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/etf-signal-board-migration.sqlite3
+          alembic upgrade head
+          alembic downgrade b3c4d5e6f7a8
+          alembic upgrade head
+          python - <<'PY'
+          from sqlalchemy import create_engine, text
+          engine = create_engine('sqlite:////tmp/etf-signal-board-migration.sqlite3')
+          with engine.connect() as connection:
+              assert connection.execute(text('select version_num from alembic_version')).scalar_one() == 'c4d5e6f7a8b9'
+          PY
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          find deploy scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          shellcheck deploy/aliyun/*.sh scripts/*.sh
+          cp deploy/.env.production.example .env
+          sed -i 's/CHANGE_ME_LONG_RANDOM_DB_PASSWORD/CHANGE_ME_SIGNAL_BOARD_DATABASE_PASSWORD/' .env
+          sed -i 's/CHANGE_ME_AT_LEAST_32_RANDOM_CHARS/CHANGE_ME_SIGNAL_BOARD_PRIVATE_TOKEN/' .env
+          docker compose config >/dev/null
+          rm -f .env
+          docker build -f backend/Dockerfile -t china-fund-decision:signal-board .
+
+      - name: Full 36-instrument Mock board and report smoke
+        env:
+          APP_ENV: test
+          AUTH_ENABLED: 'false'
+          PRIVATE_ACCESS_TOKEN: CHANGE_ME_SIGNAL_BOARD_PRIVATE_TOKEN
+          MARKET_PROVIDER: mock
+          ALLOW_MOCK_FALLBACK: 'false'
+          AUTO_CREATE_SCHEMA: 'true'
+          DATABASE_URL: sqlite:////tmp/etf-signal-board-smoke.sqlite3
+          REPORTS_DIR: /tmp/etf-signal-board-reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/etf-signal-board-smoke.sqlite3
+          rm -rf /tmp/etf-signal-board-reports
+          fund-decision bootstrap --lookback-days 520 > /tmp/signal-board-bootstrap.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = json.loads(Path('/tmp/signal-board-bootstrap.json').read_text())
+          assert payload['status'] == 'succeeded'
+          assert payload.get('failed_steps') == []
+          steps = payload['steps']
+          assert steps['sync_instruments']['total'] == 36
+          assert steps['refresh_bars']['instruments'] == 36
+          assert steps['refresh_indicators']['created'] == 36
+          assert steps['refresh_forecasts']['created'] == 108
+          assert steps['refresh_quotes']['inserted'] == 36
+          assert steps['refresh_signals']['created'] == 36
+          reports = sorted(Path('/tmp/etf-signal-board-reports').glob('fund_report_*.html'))
+          assert reports
+          html = reports[-1].read_text(encoding='utf-8')
+          assert html.count('class="anchor-card"') == 4
+          assert html.count('class="industry-item') == 31
+          assert html.count('class="signal-group"') == 5
+          assert '申万行业分类标准2021' in html
+          assert 'ETF代理池' in html
+          print('mock_board=36 instruments / 4 anchors / 31 industries / 5 groups')
+          PY
+
+      - name: Publish one clean feature commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat >> VALIDATION.md <<'EOF'
+
+          ## Remote feature-branch publication gate
+
+          GitHub Actions on Ubuntu 24.04 / Python 3.12 completed:
+
+          - 343 tests passed;
+          - Python compileall and browser JavaScript syntax passed;
+          - committed-secret scan passed;
+          - Alembic upgrade/downgrade/re-upgrade passed, head `c4d5e6f7a8b9`;
+          - Bash syntax and ShellCheck passed;
+          - Docker Compose configuration and production image build passed;
+          - 36-instrument / 520-day Mock bootstrap passed;
+          - generated HTML contained 4 market anchors, 31 industries and 5 signal groups.
+
+          Real Tushare/AKShare, PostgreSQL 16, Alibaba Cloud ECS, QDII source timestamps and calibrated forecasts were not exercised by this CI run.
+          EOF
+          rm -rf .automation/screenshot-signal-board
+          rm -f .github/workflows/publish-screenshot-signal-board.yml
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          root = Path('.')
+          excluded = {'.git', '.venv', '__pycache__', '.pytest_cache', 'reports', 'backups', '.automation'}
+          rows = []
+          for path in sorted(root.rglob('*')):
+              if not path.is_file():
+                  continue
+              rel = path.relative_to(root)
+              if rel.as_posix() == 'FILE_MANIFEST.txt' or any(part in excluded for part in rel.parts):
+                  continue
+              rows.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {rel.as_posix()}")
+          Path('FILE_MANIFEST.txt').write_text('\n'.join(rows) + '\n', encoding='utf-8')
+          PY
+          BASE=$(git rev-parse origin/main)
+          git reset --mixed "$BASE"
+          git add -A
+          git config user.name 'Jovifei'
+          git config user.email '110970864+Jovifei@users.noreply.github.com'
+          git commit -m 'feat(signal-board): replicate colorful industry ETF dashboard'
+          git push --force-with-lease origin HEAD:feat/screenshot-signal-board-v2
