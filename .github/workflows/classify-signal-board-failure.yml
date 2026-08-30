@@ -1,0 +1,31 @@
+name: classify-signal-board-failure
+
+on:
+  push:
+    branches: [feat/screenshot-signal-board-v2]
+    paths: ['.github/workflows/classify-signal-board-failure.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          set -euo pipefail
+          report=deployment_reports/SIGNAL_BOARD_CI_FAILED.md
+          test -f "$report"
+          rm -f deployment_reports/SB_FAIL_*.txt
+          for stage in patch install tests packaging smoke; do
+            if grep -q -- "- ${stage}: failure" "$report"; then
+              printf '%s\n' "$stage" > "deployment_reports/SB_FAIL_${stage^^}.txt"
+            fi
+          done
+          rm -f .github/workflows/classify-signal-board-failure.yml
+          git config user.name 'Jovifei'
+          git config user.email '110970864+Jovifei@users.noreply.github.com'
+          git add -A
+          git commit -m 'test(signal-board): classify failed gate stage'
+          git push origin HEAD:feat/screenshot-signal-board-v2
