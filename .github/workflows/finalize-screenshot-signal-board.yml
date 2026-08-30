@@ -1,0 +1,210 @@
+name: finalize-screenshot-signal-board
+
+on:
+  push:
+    branches: [feat/screenshot-signal-board-v2]
+    paths: ['.github/workflows/finalize-screenshot-signal-board.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: screenshot-signal-board-finalize
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Ensure integration is applied
+        run: |
+          if ! grep -q 'screenshotSignalBoard' backend/app/static/index.html || ! grep -q 'def screenshot_signal_board' backend/app/api/router.py; then
+            python .automation/screenshot_signal_board/final_repair.py
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install
+        run: python -m pip install --upgrade pip && pip install -e '.[dev]'
+      - name: Full code gates
+        run: |
+          set -o pipefail
+          pytest -q 2>&1 | tee /tmp/signal-board-final-pytest.log
+          python -m compileall -q backend/app
+          node --check backend/app/static/app.js
+          node --check backend/app/static/screenshot_signal_board.js
+          python codex/skills/fund-research/scripts/check_no_secrets.py
+      - name: Migration and packaging gates
+        env:
+          APP_ENV: test
+          AUTH_ENABLED: 'false'
+          PRIVATE_ACCESS_TOKEN: CHANGE_ME_SIGNAL_BOARD_FINAL_PRIVATE_TOKEN
+          MARKET_PROVIDER: mock
+          AUTO_CREATE_SCHEMA: 'false'
+          DATABASE_URL: sqlite:////tmp/signal-board-final-migration.sqlite3
+          POSTGRES_PASSWORD: CHANGE_ME_SIGNAL_BOARD_FINAL_DATABASE_PASSWORD
+        run: |
+          rm -f /tmp/signal-board-final-migration.sqlite3
+          alembic upgrade head
+          alembic downgrade b3c4d5e6f7a8
+          alembic upgrade head
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          shellcheck deploy/aliyun/*.sh scripts/*.sh
+          cp deploy/.env.production.example .env
+          sed -i 's/CHANGE_ME_LONG_RANDOM_DB_PASSWORD/CHANGE_ME_SIGNAL_BOARD_FINAL_DATABASE_PASSWORD/' .env
+          sed -i 's/CHANGE_ME_AT_LEAST_32_RANDOM_CHARS/CHANGE_ME_SIGNAL_BOARD_FINAL_PRIVATE_TOKEN/' .env
+          docker compose config >/dev/null
+          rm -f .env
+          docker build -f backend/Dockerfile -t china-fund-decision:screenshot-board-final .
+      - name: Mock end-to-end gates
+        env:
+          APP_ENV: test
+          AUTH_ENABLED: 'false'
+          PRIVATE_ACCESS_TOKEN: CHANGE_ME_SIGNAL_BOARD_FINAL_PRIVATE_TOKEN
+          MARKET_PROVIDER: mock
+          ALLOW_MOCK_FALLBACK: 'false'
+          AUTO_CREATE_SCHEMA: 'true'
+          DATABASE_URL: sqlite:////tmp/signal-board-final-smoke.sqlite3
+          REPORTS_DIR: /tmp/signal-board-final-reports
+        run: |
+          rm -f /tmp/signal-board-final-smoke.sqlite3
+          rm -rf /tmp/signal-board-final-reports
+          fund-decision bootstrap --lookback-days 520
+          python - <<'PY'
+          from fastapi.testclient import TestClient
+          from app.main import app
+
+          with TestClient(app) as client:
+              industry = client.get('/api/industry-board')
+              signal = client.get('/api/signal-board')
+              page = client.get('/')
+
+          assert industry.status_code == 200, industry.text
+          assert signal.status_code == 200, signal.text
+          assert page.status_code == 200, page.text
+          assert 'screenshotSignalBoard' in page.text
+          a = industry.json()
+          b = signal.json()
+          assert a['coverage']['total'] == 31
+          assert len(a['market_anchors']) == 4
+          assert len(b['signal_groups']) == 5
+          assert b['rows']
+          assert b['breadth_scope'].startswith('ETF代理池')
+          assert any(row['board_profile']['role'] == 'anchor' for row in b['rows'])
+          assert all(not row['signal']['actionable'] for row in b['rows'] if row['instrument_id'] is None)
+          print({'industries': 31, 'anchors': 4, 'rows': len(b['rows'])})
+          PY
+          fund-decision run-task validate_forecasts
+          fund-decision run-task analyze_factors
+          fund-decision run-task backtest_rotation
+          fund-decision run-task backtest_ablation
+      - name: Commit attested branch
+        run: |
+          TEST_LINE=$(tail -n 8 /tmp/signal-board-final-pytest.log | grep -E '[0-9]+ passed' | tail -n1 || true)
+          mkdir -p deployment_reports
+          cat > deployment_reports/SIGNAL_BOARD_REMOTE_VALIDATION.md <<EOF
+          # Screenshot signal board remote validation
+
+          - branch: feat/screenshot-signal-board-v2
+          - base: main / v0.7.0
+          - pytest: ${TEST_LINE:-passed}
+          - Python compile: passed
+          - browser JavaScript: passed
+          - committed-secret scan: passed
+          - Alembic upgrade/downgrade/re-upgrade: passed
+          - ShellCheck: passed
+          - Docker Compose config: passed
+          - production image build: passed
+          - Mock bootstrap and page/API smoke: passed
+          - forecast validation, factor analysis, rotation and ablation backtests: passed
+          - real Tushare/AKShare/PostgreSQL/ECS/browser visual qualification: not run in GitHub Actions
+
+          This report is an automated Mock/code qualification, not a claim of real-data calibration or investment performance.
+          EOF
+          {
+            echo
+            echo '## Screenshot signal board final remote gate'
+            echo
+            echo "- pytest: ${TEST_LINE:-passed}"
+            echo '- code, migration, packaging, Docker and Mock research gates: passed'
+            echo '- real provider and ECS qualification remains local'
+          } >> VALIDATION.md
+          rm -rf .automation/screenshot_signal_board
+          rm -f .github/workflows/build-screenshot-signal-board.yml
+          rm -f .github/workflows/build-screenshot-signal-board-v2.yml
+          rm -f .github/workflows/build-screenshot-signal-board-v3.yml
+          rm -f .github/workflows/build-screenshot-signal-board-v4.yml
+          rm -f .github/workflows/build-screenshot-signal-board-v5.yml
+          rm -f .github/workflows/classify-signal-board-failure.yml
+          rm -f .github/workflows/finalize-screenshot-signal-board.yml
+          rm -f deployment_reports/SIGNAL_BOARD_CI_FAILED.md
+          rm -f deployment_reports/SIGNAL_BOARD_CI_FAILED_V4.md
+          rm -f deployment_reports/SB_FAIL_*.txt
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+
+          root = Path('.')
+          excluded = {'.git', '.venv', '__pycache__', '.pytest_cache', 'reports', 'backups', '.automation'}
+          rows = []
+          for path in sorted(root.rglob('*')):
+              if not path.is_file():
+                  continue
+              rel = path.relative_to(root)
+              if rel.as_posix() == 'FILE_MANIFEST.txt' or any(part in excluded for part in rel.parts):
+                  continue
+              rows.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {rel.as_posix()}")
+          Path('FILE_MANIFEST.txt').write_text('\n'.join(rows) + '\n', encoding='utf-8')
+          PY
+          git config user.name 'Jovifei'
+          git config user.email '110970864+Jovifei@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat(signal-board): finalize screenshot-parity industry dashboard'
+          git push origin HEAD:feat/screenshot-signal-board-v2
+      - name: Ensure draft pull request exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh pr view feat/screenshot-signal-board-v2 --repo Jovifei/ETF-Fund-Analysis >/dev/null 2>&1; then
+            gh pr create \
+              --repo Jovifei/ETF-Fund-Analysis \
+              --base main \
+              --head feat/screenshot-signal-board-v2 \
+              --draft \
+              --title 'feat: screenshot-parity China industry ETF signal board' \
+              --body-file - <<'EOF'
+          ## Summary
+
+          Replicates the supplied colorful signal-board structure while preserving deterministic and audit boundaries:
+
+          - 31 Shenwan level-1 industries with direct/proxy/unmapped states
+          - CSI 300, S&P 500 QDII proxy, Nasdaq QDII proxy and gold ETF anchors
+          - five signal groups: add / entry / probe / watch / reduce
+          - volume, MA, MACD, KDJ, TD, RSI, ETF-proxy breadth, weekly and next-day forecast columns
+          - bottom intraday-change and next-day evidence cards
+          - docs, runbook, local Codex prompt and Skill knowledge chapter
+
+          ## Remote validation
+
+          Full pytest, compile, JS, secret scan, Alembic, ShellCheck, Compose, Docker image, Mock bootstrap/API, forecast validation, factor analysis and backtests passed. Real-provider, ECS, PostgreSQL restore and visual/browser qualification remain local tasks.
+
+          ## Truth boundaries
+
+          - industry mappings are research seeds pending real provider qualification
+          - ETF breadth is not constituent-stock breadth
+          - QDII ETFs are not live overseas index points
+          - predictions remain not_calibrated until real walk-forward/Holdout evidence
+          - no auto-trading or broker integration
+          EOF
+          fi
