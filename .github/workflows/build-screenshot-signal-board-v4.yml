@@ -1,0 +1,216 @@
+name: build-screenshot-signal-board-v4
+
+on:
+  push:
+    branches: [feat/screenshot-signal-board-v2]
+    paths: ['.github/workflows/build-screenshot-signal-board-v4.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: screenshot-signal-board-v4
+  cancel-in-progress: false
+
+jobs:
+  integrate-and-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: patch
+        name: Apply screenshot-board integration
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python .automation/screenshot_signal_board/apply_existing_v3.py 2>&1 | tee /tmp/sb-v4-patch.log
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - id: install
+        name: Install development dependencies
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python -m pip install --upgrade pip 2>&1 | tee /tmp/sb-v4-install.log
+          pip install -e '.[dev]' 2>&1 | tee -a /tmp/sb-v4-install.log
+
+      - id: tests
+        name: Run unit, integration and static gates
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          pytest -q 2>&1 | tee /tmp/sb-v4-pytest.log
+          python -m compileall -q backend/app 2>&1 | tee /tmp/sb-v4-compile.log
+          node --check backend/app/static/app.js 2>&1 | tee /tmp/sb-v4-node-app.log
+          node --check backend/app/static/screenshot_signal_board.js 2>&1 | tee /tmp/sb-v4-node-board.log
+          python codex/skills/fund-research/scripts/check_no_secrets.py 2>&1 | tee /tmp/sb-v4-secrets.log
+
+      - id: package
+        name: Run migration, shell, Compose and image gates
+        continue-on-error: true
+        env:
+          APP_ENV: test
+          AUTH_ENABLED: 'false'
+          PRIVATE_ACCESS_TOKEN: CHANGE_ME_SCREENSHOT_BOARD_PRIVATE_TOKEN
+          MARKET_PROVIDER: mock
+          AUTO_CREATE_SCHEMA: 'false'
+          DATABASE_URL: sqlite:////tmp/screenshot-board-v4-migration.sqlite3
+          POSTGRES_PASSWORD: CHANGE_ME_SCREENSHOT_BOARD_DATABASE_PASSWORD
+        run: |
+          set -o pipefail
+          rm -f /tmp/screenshot-board-v4-migration.sqlite3
+          alembic upgrade head 2>&1 | tee /tmp/sb-v4-migration.log
+          alembic downgrade b3c4d5e6f7a8 2>&1 | tee -a /tmp/sb-v4-migration.log
+          alembic upgrade head 2>&1 | tee -a /tmp/sb-v4-migration.log
+          sudo apt-get update >/tmp/sb-v4-apt.log 2>&1
+          sudo apt-get install -y shellcheck >>/tmp/sb-v4-apt.log 2>&1
+          shellcheck deploy/aliyun/*.sh scripts/*.sh 2>&1 | tee /tmp/sb-v4-shellcheck.log
+          cp deploy/.env.production.example .env
+          sed -i 's/CHANGE_ME_LONG_RANDOM_DB_PASSWORD/CHANGE_ME_SCREENSHOT_BOARD_DATABASE_PASSWORD/' .env
+          sed -i 's/CHANGE_ME_AT_LEAST_32_RANDOM_CHARS/CHANGE_ME_SCREENSHOT_BOARD_PRIVATE_TOKEN/' .env
+          docker compose config 2>&1 | tee /tmp/sb-v4-compose.log >/dev/null
+          rm -f .env
+          docker build -f backend/Dockerfile -t china-fund-decision:screenshot-board-v4 . 2>&1 | tee /tmp/sb-v4-docker.log
+
+      - id: smoke
+        name: Run Mock pipeline, API and research smoke
+        continue-on-error: true
+        env:
+          APP_ENV: test
+          AUTH_ENABLED: 'false'
+          PRIVATE_ACCESS_TOKEN: CHANGE_ME_SCREENSHOT_BOARD_PRIVATE_TOKEN
+          MARKET_PROVIDER: mock
+          ALLOW_MOCK_FALLBACK: 'false'
+          AUTO_CREATE_SCHEMA: 'true'
+          DATABASE_URL: sqlite:////tmp/screenshot-board-v4-smoke.sqlite3
+          REPORTS_DIR: /tmp/screenshot-board-v4-reports
+        run: |
+          set -o pipefail
+          rm -f /tmp/screenshot-board-v4-smoke.sqlite3
+          rm -rf /tmp/screenshot-board-v4-reports
+          fund-decision bootstrap --lookback-days 520 2>&1 | tee /tmp/sb-v4-bootstrap.log
+          python - <<'PY' 2>&1 | tee /tmp/sb-v4-api.log
+          from fastapi.testclient import TestClient
+          from app.main import app
+
+          with TestClient(app) as client:
+              industry = client.get('/api/industry-board')
+              signal = client.get('/api/signal-board')
+
+          assert industry.status_code == 200, industry.text
+          assert signal.status_code == 200, signal.text
+          industry_body = industry.json()
+          signal_body = signal.json()
+          assert industry_body['coverage']['total'] == 31
+          assert len(industry_body['market_anchors']) == 4
+          assert len(signal_body['signal_groups']) == 5
+          assert signal_body['rows']
+          assert signal_body['breadth_scope'].startswith('ETF代理池')
+          assert any(row['board_profile']['role'] == 'anchor' for row in signal_body['rows'])
+          print({'industries': 31, 'anchors': 4, 'rows': len(signal_body['rows'])})
+          PY
+          fund-decision run-task validate_forecasts 2>&1 | tee /tmp/sb-v4-forecast.log
+          fund-decision run-task analyze_factors 2>&1 | tee /tmp/sb-v4-factors.log
+          fund-decision run-task backtest_rotation 2>&1 | tee /tmp/sb-v4-backtest.log
+          fund-decision run-task backtest_ablation 2>&1 | tee /tmp/sb-v4-ablation.log
+
+      - name: Collect diagnostics
+        if: always()
+        run: |
+          mkdir -p /tmp/sb-v4-logs
+          cp /tmp/sb-v4-*.log /tmp/sb-v4-logs/ 2>/dev/null || true
+          printf 'patch=%s\ninstall=%s\ntests=%s\npackage=%s\nsmoke=%s\n' \
+            '${{ steps.patch.outcome }}' '${{ steps.install.outcome }}' '${{ steps.tests.outcome }}' \
+            '${{ steps.package.outcome }}' '${{ steps.smoke.outcome }}' \
+            > /tmp/sb-v4-logs/stages.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshot-signal-board-v4-logs
+          path: /tmp/sb-v4-logs
+          retention-days: 1
+
+      - name: Publish verified branch or failure report
+        if: always()
+        env:
+          PATCH: ${{ steps.patch.outcome }}
+          INSTALL: ${{ steps.install.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+          PACKAGE: ${{ steps.package.outcome }}
+          SMOKE: ${{ steps.smoke.outcome }}
+        run: |
+          set -euo pipefail
+          git config user.name 'Jovifei'
+          git config user.email '110970864+Jovifei@users.noreply.github.com'
+          if [[ "$PATCH" == success && "$INSTALL" == success && "$TESTS" == success && "$PACKAGE" == success && "$SMOKE" == success ]]; then
+            {
+              echo
+              echo '## Screenshot signal board branch gate'
+              echo
+              echo '- branch: feat/screenshot-signal-board-v2'
+              echo '- pytest / Python compile / browser JavaScript / committed-secret scan: passed'
+              echo '- Alembic upgrade-downgrade-reupgrade: passed'
+              echo '- ShellCheck / Compose / production image: passed'
+              echo '- Mock bootstrap / industry API / signal-board API / forecast validation / factor analysis / backtests: passed'
+              echo '- real Tushare, AKShare, PostgreSQL, ECS and visual qualification: not executed by GitHub Actions'
+            } >> VALIDATION.md
+            rm -rf .automation/screenshot_signal_board
+            rm -f .github/workflows/build-screenshot-signal-board.yml
+            rm -f .github/workflows/build-screenshot-signal-board-v2.yml
+            rm -f .github/workflows/build-screenshot-signal-board-v3.yml
+            rm -f .github/workflows/build-screenshot-signal-board-v4.yml
+            rm -f .github/workflows/classify-signal-board-failure.yml
+            rm -f deployment_reports/SIGNAL_BOARD_CI_FAILED.md
+            rm -f deployment_reports/SIGNAL_BOARD_CI_FAILED_V4.md
+            rm -f deployment_reports/SB_FAIL_*.txt
+            python - <<'PY'
+          import hashlib
+          from pathlib import Path
+
+          root = Path('.')
+          excluded = {'.git', '.venv', '__pycache__', '.pytest_cache', 'reports', 'backups', '.automation'}
+          rows = []
+          for path in sorted(root.rglob('*')):
+              if not path.is_file():
+                  continue
+              rel = path.relative_to(root)
+              if rel.as_posix() == 'FILE_MANIFEST.txt' or any(part in excluded for part in rel.parts):
+                  continue
+              rows.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {rel.as_posix()}")
+          Path('FILE_MANIFEST.txt').write_text('\n'.join(rows) + '\n', encoding='utf-8')
+          PY
+            git add -A
+            git commit -m 'feat(signal-board): screenshot-parity industry ETF dashboard'
+            git push origin HEAD:feat/screenshot-signal-board-v2
+          else
+            git reset --hard HEAD
+            mkdir -p deployment_reports
+            {
+              echo '# Screenshot signal board v4 gate failure'
+              echo
+              echo "- patch: $PATCH"
+              echo "- install: $INSTALL"
+              echo "- tests: $TESTS"
+              echo "- package: $PACKAGE"
+              echo "- smoke: $SMOKE"
+              echo
+              echo 'Download the one-day GitHub Actions artifact named `screenshot-signal-board-v4-logs` for full logs.'
+            } > deployment_reports/SIGNAL_BOARD_CI_FAILED_V4.md
+            git add deployment_reports/SIGNAL_BOARD_CI_FAILED_V4.md
+            git commit -m 'test(signal-board): record v4 guarded gate failure' || true
+            git push origin HEAD:feat/screenshot-signal-board-v2
+            exit 1
+          fi
