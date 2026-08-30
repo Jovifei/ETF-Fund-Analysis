@@ -2,6 +2,7 @@
 .env.*
 !.env.example
 !deploy/.env.production.example
+!deploy/.env.local.docker.example
 __pycache__/
 *.py[cod]
 .pytest_cache/
