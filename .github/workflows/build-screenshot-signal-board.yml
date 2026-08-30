@@ -1,0 +1,134 @@
+name: build-screenshot-signal-board
+
+on:
+  push:
+    branches: [feat/screenshot-signal-board-v2]
+    paths: ['.github/workflows/build-screenshot-signal-board.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: screenshot-signal-board-v2
+  cancel-in-progress: false
+
+jobs:
+  integrate-and-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply idempotent integration patch
+        run: python .automation/screenshot_signal_board/apply_existing.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install development dependencies
+        run: python -m pip install --upgrade pip && pip install -e '.[dev]'
+      - name: Unit integration and static gates
+        run: |
+          pytest -q | tee /tmp/screenshot-board-pytest.log
+          python -m compileall -q backend/app
+          node --check backend/app/static/app.js
+          node --check backend/app/static/screenshot_signal_board.js
+          python codex/skills/fund-research/scripts/check_no_secrets.py
+      - name: Migration shell compose and image gates
+        env:
+          APP_ENV: test
+          AUTH_ENABLED: 'false'
+          PRIVATE_ACCESS_TOKEN: CHANGE_ME_SCREENSHOT_BOARD_PRIVATE_TOKEN
+          MARKET_PROVIDER: mock
+          AUTO_CREATE_SCHEMA: 'false'
+          DATABASE_URL: sqlite:////tmp/screenshot-board-migration.sqlite3
+          POSTGRES_PASSWORD: CHANGE_ME_SCREENSHOT_BOARD_DATABASE_PASSWORD
+        run: |
+          rm -f /tmp/screenshot-board-migration.sqlite3
+          alembic upgrade head
+          alembic downgrade b3c4d5e6f7a8
+          alembic upgrade head
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          shellcheck deploy/aliyun/*.sh scripts/*.sh
+          cp deploy/.env.production.example .env
+          sed -i 's/CHANGE_ME_LONG_RANDOM_DB_PASSWORD/CHANGE_ME_SCREENSHOT_BOARD_DATABASE_PASSWORD/' .env
+          sed -i 's/CHANGE_ME_AT_LEAST_32_RANDOM_CHARS/CHANGE_ME_SCREENSHOT_BOARD_PRIVATE_TOKEN/' .env
+          docker compose config >/dev/null
+          rm -f .env
+          docker build -f backend/Dockerfile -t china-fund-decision:screenshot-board .
+      - name: Mock pipeline and API smoke
+        env:
+          APP_ENV: test
+          AUTH_ENABLED: 'false'
+          PRIVATE_ACCESS_TOKEN: CHANGE_ME_SCREENSHOT_BOARD_PRIVATE_TOKEN
+          MARKET_PROVIDER: mock
+          ALLOW_MOCK_FALLBACK: 'false'
+          AUTO_CREATE_SCHEMA: 'true'
+          DATABASE_URL: sqlite:////tmp/screenshot-board-smoke.sqlite3
+          REPORTS_DIR: /tmp/screenshot-board-reports
+        run: |
+          rm -f /tmp/screenshot-board-smoke.sqlite3
+          rm -rf /tmp/screenshot-board-reports
+          fund-decision bootstrap --lookback-days 520
+          python - <<'PY'
+          from fastapi.testclient import TestClient
+          from app.main import app
+          with TestClient(app) as client:
+              industry = client.get('/api/industry-board')
+              signal = client.get('/api/signal-board')
+          assert industry.status_code == 200, industry.text
+          assert signal.status_code == 200, signal.text
+          industry_body = industry.json()
+          signal_body = signal.json()
+          assert industry_body['coverage']['total'] == 31
+          assert len(industry_body['market_anchors']) == 4
+          assert signal_body['rows']
+          assert signal_body['breadth_scope'].startswith('ETF代理池')
+          print({'industries': 31, 'anchors': 4, 'rows': len(signal_body['rows'])})
+          PY
+          fund-decision run-task validate_forecasts
+          fund-decision run-task backtest_rotation
+          fund-decision run-task backtest_ablation
+      - name: Record validation and publish branch
+        run: |
+          PASSED_LINE=$(tail -n 8 /tmp/screenshot-board-pytest.log | grep -E '[0-9]+ passed' | tail -n1 || true)
+          {
+            echo
+            echo '## Screenshot signal board branch gate'
+            echo
+            echo "- branch: feat/screenshot-signal-board-v2"
+            echo "- pytest: ${PASSED_LINE:-passed}"
+            echo '- Python compile / browser JavaScript / committed-secret scan: passed'
+            echo '- Alembic upgrade-downgrade-reupgrade: passed'
+            echo '- ShellCheck / Compose / production image: passed'
+            echo '- Mock bootstrap / industry API / signal-board API / forecast validation / backtests: passed'
+            echo '- real Tushare, AKShare, PostgreSQL, ECS and visual qualification: not executed by GitHub Actions'
+          } >> VALIDATION.md
+          rm -rf .automation/screenshot_signal_board
+          rm -f .github/workflows/build-screenshot-signal-board.yml
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          root=Path('.')
+          excluded={'.git','.venv','__pycache__','.pytest_cache','reports','backups','.automation'}
+          rows=[]
+          for path in sorted(root.rglob('*')):
+              if not path.is_file():
+                  continue
+              rel=path.relative_to(root)
+              if rel.as_posix()=='FILE_MANIFEST.txt' or any(part in excluded for part in rel.parts):
+                  continue
+              rows.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {rel.as_posix()}")
+          Path('FILE_MANIFEST.txt').write_text('\n'.join(rows)+'\n',encoding='utf-8')
+          PY
+          git config user.name 'Jovifei'
+          git config user.email '110970864+Jovifei@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat(signal-board): screenshot-parity industry ETF dashboard'
+          git push origin HEAD:feat/screenshot-signal-board-v2
