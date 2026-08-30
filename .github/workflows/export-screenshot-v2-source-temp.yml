@@ -1,0 +1,22 @@
+name: export-screenshot-v2-source-temp
+
+on:
+  push:
+    branches: [feat/screenshot-signal-board-v2]
+    paths: ['.github/workflows/export-screenshot-v2-source-temp.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: tar --exclude='.git' --exclude='.github/workflows/export-screenshot-v2-source-temp.yml' -czf /tmp/screenshot-v2.tar.gz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-v2-source-temp
+          path: /tmp/screenshot-v2.tar.gz
+          retention-days: 1
