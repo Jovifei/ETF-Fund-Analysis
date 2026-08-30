@@ -1,0 +1,182 @@
+name: build-screenshot-signal-board-v2
+
+on:
+  push:
+    branches: [feat/screenshot-signal-board-v2]
+    paths: ['.github/workflows/build-screenshot-signal-board-v2.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: screenshot-signal-board-v2
+  cancel-in-progress: false
+
+jobs:
+  integrate-and-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: patch
+        name: Apply integration patch
+        continue-on-error: true
+        run: python .automation/screenshot_signal_board/apply_existing.py >/tmp/sb-patch.log 2>&1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - id: install
+        name: Install development dependencies
+        continue-on-error: true
+        run: python -m pip install --upgrade pip >/tmp/sb-install.log 2>&1 && pip install -e '.[dev]' >>/tmp/sb-install.log 2>&1
+      - id: tests
+        name: Unit integration and static gates
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          pytest -q >/tmp/sb-pytest.log 2>&1
+          python -m compileall -q backend/app >/tmp/sb-compile.log 2>&1
+          node --check backend/app/static/app.js >/tmp/sb-node-app.log 2>&1
+          node --check backend/app/static/screenshot_signal_board.js >/tmp/sb-node-board.log 2>&1
+          python codex/skills/fund-research/scripts/check_no_secrets.py >/tmp/sb-secrets.log 2>&1
+      - id: packaging
+        name: Migration shell compose and image gates
+        continue-on-error: true
+        env:
+          APP_ENV: test
+          AUTH_ENABLED: 'false'
+          PRIVATE_ACCESS_TOKEN: CHANGE_ME_SCREENSHOT_BOARD_PRIVATE_TOKEN
+          MARKET_PROVIDER: mock
+          AUTO_CREATE_SCHEMA: 'false'
+          DATABASE_URL: sqlite:////tmp/screenshot-board-migration.sqlite3
+          POSTGRES_PASSWORD: CHANGE_ME_SCREENSHOT_BOARD_DATABASE_PASSWORD
+        run: |
+          set -o pipefail
+          rm -f /tmp/screenshot-board-migration.sqlite3
+          alembic upgrade head >/tmp/sb-migration.log 2>&1
+          alembic downgrade b3c4d5e6f7a8 >>/tmp/sb-migration.log 2>&1
+          alembic upgrade head >>/tmp/sb-migration.log 2>&1
+          sudo apt-get update >/tmp/sb-apt.log 2>&1
+          sudo apt-get install -y shellcheck >>/tmp/sb-apt.log 2>&1
+          shellcheck deploy/aliyun/*.sh scripts/*.sh >/tmp/sb-shellcheck.log 2>&1
+          cp deploy/.env.production.example .env
+          sed -i 's/CHANGE_ME_LONG_RANDOM_DB_PASSWORD/CHANGE_ME_SCREENSHOT_BOARD_DATABASE_PASSWORD/' .env
+          sed -i 's/CHANGE_ME_AT_LEAST_32_RANDOM_CHARS/CHANGE_ME_SCREENSHOT_BOARD_PRIVATE_TOKEN/' .env
+          docker compose config >/tmp/sb-compose.log 2>&1
+          rm -f .env
+          docker build -f backend/Dockerfile -t china-fund-decision:screenshot-board . >/tmp/sb-docker.log 2>&1
+      - id: smoke
+        name: Mock pipeline and API smoke
+        continue-on-error: true
+        env:
+          APP_ENV: test
+          AUTH_ENABLED: 'false'
+          PRIVATE_ACCESS_TOKEN: CHANGE_ME_SCREENSHOT_BOARD_PRIVATE_TOKEN
+          MARKET_PROVIDER: mock
+          ALLOW_MOCK_FALLBACK: 'false'
+          AUTO_CREATE_SCHEMA: 'true'
+          DATABASE_URL: sqlite:////tmp/screenshot-board-smoke.sqlite3
+          REPORTS_DIR: /tmp/screenshot-board-reports
+        run: |
+          set -o pipefail
+          rm -f /tmp/screenshot-board-smoke.sqlite3
+          rm -rf /tmp/screenshot-board-reports
+          fund-decision bootstrap --lookback-days 520 >/tmp/sb-bootstrap.log 2>&1
+          python - <<'PY' >/tmp/sb-api.log 2>&1
+          from fastapi.testclient import TestClient
+          from app.main import app
+          with TestClient(app) as client:
+              industry = client.get('/api/industry-board')
+              signal = client.get('/api/signal-board')
+          assert industry.status_code == 200, industry.text
+          assert signal.status_code == 200, signal.text
+          industry_body = industry.json()
+          signal_body = signal.json()
+          assert industry_body['coverage']['total'] == 31
+          assert len(industry_body['market_anchors']) == 4
+          assert signal_body['rows']
+          assert signal_body['breadth_scope'].startswith('ETF代理池')
+          print({'industries': 31, 'anchors': 4, 'rows': len(signal_body['rows'])})
+          PY
+          fund-decision run-task validate_forecasts >/tmp/sb-forecast.log 2>&1
+          fund-decision run-task backtest_rotation >/tmp/sb-backtest.log 2>&1
+          fund-decision run-task backtest_ablation >/tmp/sb-ablation.log 2>&1
+      - name: Publish success or a fixed-path diagnostic
+        if: always()
+        env:
+          PATCH: ${{ steps.patch.outcome }}
+          INSTALL: ${{ steps.install.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+          PACKAGING: ${{ steps.packaging.outcome }}
+          SMOKE: ${{ steps.smoke.outcome }}
+        run: |
+          set -euo pipefail
+          git config user.name 'Jovifei'
+          git config user.email '110970864+Jovifei@users.noreply.github.com'
+          if [[ "$PATCH" == success && "$INSTALL" == success && "$TESTS" == success && "$PACKAGING" == success && "$SMOKE" == success ]]; then
+            {
+              echo
+              echo '## Screenshot signal board branch gate'
+              echo
+              echo '- branch: feat/screenshot-signal-board-v2'
+              echo '- pytest / Python compile / browser JavaScript / secret scan: passed'
+              echo '- Alembic upgrade-downgrade-reupgrade: passed'
+              echo '- ShellCheck / Compose / production image: passed'
+              echo '- Mock bootstrap / industry API / signal-board API / forecast validation / backtests: passed'
+              echo '- real Tushare, AKShare, PostgreSQL, ECS and visual qualification: not executed by GitHub Actions'
+            } >> VALIDATION.md
+            rm -rf .automation/screenshot_signal_board
+            rm -f .github/workflows/build-screenshot-signal-board.yml
+            rm -f .github/workflows/build-screenshot-signal-board-v2.yml
+            rm -f deployment_reports/SIGNAL_BOARD_CI_FAILED.md
+            python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          root=Path('.')
+          excluded={'.git','.venv','__pycache__','.pytest_cache','reports','backups','.automation'}
+          rows=[]
+          for path in sorted(root.rglob('*')):
+              if not path.is_file():
+                  continue
+              rel=path.relative_to(root)
+              if rel.as_posix()=='FILE_MANIFEST.txt' or any(part in excluded for part in rel.parts):
+                  continue
+              rows.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {rel.as_posix()}")
+          Path('FILE_MANIFEST.txt').write_text('\n'.join(rows)+'\n',encoding='utf-8')
+          PY
+            git add -A
+            git commit -m 'feat(signal-board): screenshot-parity industry ETF dashboard'
+            git push origin HEAD:feat/screenshot-signal-board-v2
+          else
+            git reset --hard HEAD
+            mkdir -p deployment_reports
+            {
+              echo '# Screenshot signal board CI failure'
+              echo
+              echo "- patch: $PATCH"
+              echo "- install: $INSTALL"
+              echo "- tests: $TESTS"
+              echo "- packaging: $PACKAGING"
+              echo "- smoke: $SMOKE"
+              echo
+              for file in /tmp/sb-patch.log /tmp/sb-install.log /tmp/sb-pytest.log /tmp/sb-compile.log /tmp/sb-node-app.log /tmp/sb-node-board.log /tmp/sb-secrets.log /tmp/sb-migration.log /tmp/sb-shellcheck.log /tmp/sb-compose.log /tmp/sb-docker.log /tmp/sb-bootstrap.log /tmp/sb-api.log /tmp/sb-forecast.log /tmp/sb-backtest.log /tmp/sb-ablation.log; do
+                [[ -f "$file" ]] || continue
+                echo
+                echo "## $(basename "$file")"
+                echo '```text'
+                tail -n 120 "$file" | sed -E 's/(token|api[_-]?key|password)=([^ ]+)/\1=[REDACTED]/Ig'
+                echo '```'
+              done
+            } > deployment_reports/SIGNAL_BOARD_CI_FAILED.md
+            git add deployment_reports/SIGNAL_BOARD_CI_FAILED.md
+            git commit -m 'test(signal-board): record guarded integration failure' || true
+            git push origin HEAD:feat/screenshot-signal-board-v2
+            exit 1
+          fi
