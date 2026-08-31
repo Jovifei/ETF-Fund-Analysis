@@ -1,0 +1,26 @@
+name: export-full-repo-temp
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/export-full-repo-temp.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Package exact main source
+        run: |
+          tar --exclude='.git' --exclude='.github/workflows/export-full-repo-temp.yml' -czf /tmp/ETF-Fund-Analysis-main-current.tar.gz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ETF-Fund-Analysis-main-current-source
+          path: /tmp/ETF-Fund-Analysis-main-current.tar.gz
+          retention-days: 1
