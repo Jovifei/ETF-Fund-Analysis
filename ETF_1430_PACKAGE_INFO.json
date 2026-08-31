@@ -1,0 +1,20 @@
+{
+  "package_name": "ETF-Fund-Analysis-etf-1430-complete",
+  "package_version": "etf-1430-workbench-v0.1.0",
+  "repository": "Jovifei/ETF-Fund-Analysis",
+  "base_main_commit": "42c7203022bb1f9e9716bffe73b44a4f134c1fc5",
+  "base_tree": "d8f470df0df189a294e98bab8e46a9971f3e2c9c",
+  "workbench_path": "/workbench/1430",
+  "forecast_horizons_trading_days": [1, 3, 5, 10],
+  "tests_passed": 462,
+  "targeted_tests_passed": 5,
+  "calibration_status": "not_calibrated",
+  "historical_1430_backtest": "not_qualified",
+  "automatic_trading": false,
+  "notes": [
+    "Mock, degraded daily data or unverified source timestamps force actionable=false.",
+    "Forecast candles are conditional scenarios, not actual future OHLC.",
+    "chan_zone_approx is not a complete Chan-theory implementation.",
+    "Docker, ShellCheck, real providers, PostgreSQL, CZSC and browser visual qualification remain local/ECS gates."
+  ]
+}

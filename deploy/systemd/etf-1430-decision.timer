@@ -1,0 +1,11 @@
+[Unit]
+Description=Run ETF 14:30 research decision on China market weekdays
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 14:30:00 Asia/Shanghai
+Persistent=true
+AccuracySec=30s
+Unit=etf-1430-decision.service
+
+[Install]
+WantedBy=timers.target

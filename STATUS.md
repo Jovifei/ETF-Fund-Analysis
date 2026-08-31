@@ -44,3 +44,12 @@
 ## 明确不做
 
 本项目没有自动交易、券商连接、模型自动持仓写入或投资建议。Codex/Claude Code 仅可生成异步、只读、待人工接受的审阅候选；不能把本地测试、Mock 数据、候选报告或历史快照描述为生产/实时/已校准事实。
+
+## ETF 14:30 Workbench 覆盖包状态
+
+- 代码：已加入本地完整仓库覆盖包，尚待用户本地 Git 提交。
+- 页面：`/workbench/1430`。
+- API：`/api/workbench/1430/summary`、`/{ts_code}`、`/generate`。
+- 预测：1/3/5/10 日相似样本研究基线，继续 `not_calibrated`。
+- 支撑压力：分形、均线、布林、ATR、Fibonacci、成交密集成本、指标确认拐点、趋势线及缠论重叠区近似。
+- 未完成资格：真实 5/15 分钟 point-in-time、CZSC 对账、ECS systemd、真实 Provider 和 20 日影子运行。

@@ -39,3 +39,7 @@
 - ShellCheck / Compose / production image: passed
 - Mock forecast / corridor / factor / backtest research smoke: passed
 - real provider and ECS qualification: not executed by CI
+
+## ETF 14:30 Workbench 覆盖包
+
+新增模块必须执行：完整 pytest、compileall、主 JS 与 `etf_1430_workbench.js` 语法、密钥扫描、Bash/ShellCheck、Mock API 和浏览器尺寸验收。远端环境无法替代真实 5/15 分钟 point-in-time、Provider、PostgreSQL、CZSC 和 ECS timer 验证。

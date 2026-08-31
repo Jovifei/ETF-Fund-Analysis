@@ -2,7 +2,7 @@
 name: fund-research
 slug: fund-research
 description: 部署、验证和维护中国 ETF/LOF 私有研究看板。用于数据源冒烟、指标核验、预测 walk-forward、组合回测、报告审计和阿里云部署。不得自动下单。
-version: 0.3.0
+version: 0.4.0
 requirements:
   python: 3.11+
   network_access: true
@@ -18,6 +18,7 @@ requirements:
 - 运行时间序列预测验证；
 - 为后续事件驱动组合回测补充代码和测试；
 - 部署或更新阿里云 ECS。
+- 运行 ETF 14:30 决策工作台和支撑压力资格检查；
 
 ## 禁止事项
 
@@ -66,3 +67,12 @@ docker compose up -d scheduler
 - 做事件驱动审计；
 - 检查前视、幸存者偏差和数据修订；
 - 未通过则保留负结论，不通过调参隐藏。
+
+## ETF 14:30 工作台
+
+涉及 14:30 决策、未来情景蜡烛、支撑压力或缠论近似时，必须先阅读 `references/etf-1430-workbench.md`。
+
+```bash
+node --check backend/app/static/etf_1430_workbench.js
+python scripts/build_1430_point_in_time_dataset.py --help
+```

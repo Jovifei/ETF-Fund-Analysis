@@ -80,3 +80,22 @@ PNG/JPEG/WebP upload
 | ETF 信号分级 | `signal-grade-v0.2.0` | IndicatorSnapshot + Quote + 1 日 Forecast | 单基五档彩色表 |
 
 板块分数由量能/均线/MACD/KDJ/RSI/九转/近周系数加权。无代理 ETF 时显示未验证。市场环境六卡不是行业进入依据。预测单元格必须带「FORECAST · 非实际结果」。
+
+## ETF 14:30 Workbench
+
+```text
+DailyBar / Quote / Indicator / Forecast / News / Holding
+                    │
+                    ▼
+        ETF1430WorkbenchService
+       ├── 1/3/5/10 similarity forecast
+       ├── support_resistance clustering
+       ├── research scoring / fail-closed gate
+       └── forecast scenario candles
+                    │
+          /api/workbench/1430/*
+                    │
+          /workbench/1430 Canvas UI
+```
+
+历史 14:30 验证另由 5/15 分钟 point-in-time 数据集承担，不能从全天日线倒推。

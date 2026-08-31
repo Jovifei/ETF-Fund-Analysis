@@ -1,0 +1,53 @@
+{
+  "version": "etf-1430-workbench-v0.1.0",
+  "decision_timezone": "Asia/Shanghai",
+  "decision_window": {
+    "start": "14:20",
+    "target": "14:30",
+    "end": "14:40"
+  },
+  "forecast_horizons": [1, 3, 5, 10],
+  "minimum_history": 180,
+  "historical_candles": 160,
+  "scenario_candles": 10,
+  "news_lookback_hours": 72,
+  "weights": {
+    "trend": 0.22,
+    "momentum": 0.20,
+    "volume_flow": 0.14,
+    "structure": 0.18,
+    "forecast": 0.21,
+    "news": 0.05
+  },
+  "thresholds": {
+    "buy_candidate": 70,
+    "probe": 60,
+    "hold": 45,
+    "reduce": 35,
+    "minimum_risk_reward": 1.25,
+    "maximum_quote_age_minutes": 8
+  },
+  "support_resistance": {
+    "pivot_window": 2,
+    "pivot_lookback": 120,
+    "cluster_tolerance_pct": 0.006,
+    "volume_profile_window": 120,
+    "volume_profile_bins": 32,
+    "chan_segments": 3,
+    "chan_segment_bars": 18
+  },
+  "point_in_time": {
+    "accepted_intervals_minutes": [5, 15],
+    "feature_cutoff": "14:30",
+    "execution_rule": "first_tradable_bar_after_14_30",
+    "required_for_historical_1430_claim": true
+  },
+  "governance": {
+    "research_only": true,
+    "automatic_orders": false,
+    "manual_model_promotion_only": true,
+    "default_calibration_status": "not_calibrated",
+    "future_candles_are_scenarios": true,
+    "chan_is_approximation": true
+  }
+}

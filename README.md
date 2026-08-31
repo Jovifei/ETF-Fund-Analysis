@@ -136,3 +136,7 @@ fund-decision bootstrap --lookback-days 900
 ## 安全与许可证
 
 个人私用并不会自动取消第三方许可证、署名要求、保密义务或服务条款。参考源码采用隔离方式；生产应用不从 `vendor/src` 导入代码。严禁把 GitHub 中发现的 Token、内网地址、账户 ID 或历史数据复制到本项目。第三方说明见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+
+## ETF 14:30 决策工作台（本地覆盖包新增）
+
+新增 `/workbench/1430`：提供 1/3/5/10 日研究预测、历史蜡烛与未来情景蜡烛、MACD/KDJ/RSI 确认的价格拐点、均线/箱体/ATR/Fibonacci/成交密集成本支撑压力，以及 `chan_zone_approx`。新增 API、定时脚本和 point-in-time 数据集构建器。详见 [`docs/ETF_1430_DECISION_WORKBENCH.md`](docs/ETF_1430_DECISION_WORKBENCH.md)。该模块仍为研究态，真实分钟数据验证前保持 `historical_1430_backtest=not_qualified`。

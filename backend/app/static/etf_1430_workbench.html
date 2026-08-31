@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ETF 14:30 决策工作台</title>
+  <link rel="stylesheet" href="/assets/etf_1430_workbench.css?v=0.1.0">
+</head>
+<body>
+  <div id="authOverlay" class="overlay hidden" role="dialog" aria-modal="true">
+    <form id="authForm" class="modal auth-card">
+      <div class="eyebrow">PRIVATE RESEARCH</div>
+      <h1>输入私有访问令牌</h1>
+      <p>令牌只保存在当前浏览器 localStorage。</p>
+      <input id="tokenInput" type="password" autocomplete="current-password" placeholder="PRIVATE_ACCESS_TOKEN" required>
+      <button class="primary" type="submit">进入工作台</button>
+      <div id="authError" class="error"></div>
+    </form>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="mark">14:30</div>
+      <div><strong>ETF 决策工作台</strong><span>中国场内 ETF / LOF · 研究模式</span></div>
+    </div>
+    <div class="top-actions">
+      <a class="ghost link" href="/">返回主看板</a>
+      <button id="refreshButton" class="ghost">刷新</button>
+      <button id="generateButton" class="primary">生成研究报告</button>
+      <button id="lockButton" class="ghost">锁定</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="hero panel">
+      <div>
+        <div class="eyebrow">POINT-IN-TIME RESEARCH · NO AUTOMATIC ORDERS</div>
+        <h1>北京时间 14:30 ETF 买入 / 卖出研究候选</h1>
+        <p>综合趋势、MACD、KDJ、RSI、量能、资金流、支撑压力、新闻与 1/3/5/10 日预测。未完成真实分钟数据验证前，仅为研究视图。</p>
+      </div>
+      <div id="heroMeta" class="hero-meta">等待数据…</div>
+    </section>
+
+    <section id="warningBanner" class="warning panel"></section>
+    <section id="summaryCards" class="summary-grid"></section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div><div class="eyebrow">RANKED DECISIONS</div><h2>14:30 候选排名</h2></div>
+        <div id="generatedAt" class="muted"></div>
+      </div>
+      <div class="table-wrap">
+        <table class="decision-table">
+          <thead>
+            <tr>
+              <th>标的</th><th>现价 / 今日</th><th>综合分</th><th>趋势</th><th>动量</th><th>量能资金</th><th>结构</th><th>预测</th><th>支撑</th><th>压力</th><th>风险收益</th><th>建议</th>
+            </tr>
+          </thead>
+          <tbody id="decisionRows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="detailOverlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+    <section class="modal detail-modal">
+      <button id="detailClose" class="close" aria-label="关闭">×</button>
+      <div class="detail-head">
+        <div><div class="eyebrow">ACTUAL HISTORY + FORECAST SCENARIO</div><h2 id="detailTitle">ETF 详情</h2><div id="detailSub" class="muted"></div></div>
+        <div id="detailAction"></div>
+      </div>
+      <div id="detailWarnings" class="detail-warning"></div>
+      <div id="detailScores" class="score-grid"></div>
+      <div class="mode-tabs" id="modeTabs"></div>
+      <div class="chart-shell">
+        <canvas id="candleCanvas" width="1400" height="610" aria-label="历史及预测情景蜡烛图"></canvas>
+        <div class="chart-legend">
+          <span><i class="dot actual-up"></i>历史上涨</span>
+          <span><i class="dot actual-down"></i>历史下跌</span>
+          <span><i class="dot forecast"></i>未来预测情景</span>
+          <span><i class="line support"></i>支撑</span>
+          <span><i class="line resistance"></i>压力</span>
+        </div>
+      </div>
+      <div class="detail-grid">
+        <section class="subpanel"><h3>1 / 3 / 5 / 10 日预测</h3><div id="forecastCards" class="forecast-grid"></div></section>
+        <section class="subpanel"><h3>支撑 / 压力依据</h3><div id="levelTable" class="level-table"></div></section>
+        <section class="subpanel"><h3>技术指标快照</h3><div id="indicatorGrid" class="indicator-grid"></div></section>
+        <section class="subpanel"><h3>新闻与风险证据</h3><div id="newsList" class="news-list"></div></section>
+      </div>
+    </section>
+  </div>
+
+  <script src="/assets/etf_1430_workbench.js?v=0.1.0" defer></script>
+</body>
+</html>

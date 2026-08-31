@@ -62,3 +62,7 @@ The disposable SQLite migration chain now passes `alembic upgrade head`, `curren
 - 决策看板现为行业/概念板块卡片（`GET /api/signals/boards`，`config/board_catalog.json`），不是东财实时板块指数。
 
 - 使用说明：`docs/USER_GUIDE.md`。令牌从仓库根 `.env` 的 `PRIVATE_ACCESS_TOKEN` 复制到登录框，不要发到聊天或提交 Git。
+
+## ETF 14:30 Workbench 本地接收
+
+本交付以完整 ZIP 覆盖包提供，不依赖此前远端空壳分支。使用 `docs/LOCAL_AGENT_PROMPT_ETF_1430.md` 覆盖到本地仓库、运行门禁、创建新分支、提交 PR 后再合并。不要把日线 Mock 结果描述成历史 14:30 策略验证。
