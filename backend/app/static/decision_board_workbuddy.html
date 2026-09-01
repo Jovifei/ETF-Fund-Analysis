@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>ETF 决策评分台</title>
-  <link rel="stylesheet" href="/assets/decision_board_workbuddy.css?v=0.1.0">
+  <link rel="stylesheet" href="/assets/decision_board_workbuddy.css?v=0.1.1">
 </head>
 <body>
   <div id="authOverlay" class="auth-overlay hidden">
@@ -18,7 +18,7 @@
     </form>
   </div>
   <header class="topbar">
-    <div class="brand"><span class="brand-mark">基</span><div><strong>ETF 决策评分台</strong><small>技术指标 × 多期限预测 × 数据源资格</small></div></div>
+    <div class="brand"><span class="brand-mark">基</span><div><strong>ETF 决策评分台</strong><small>ETF / LOF 决策台 · 技术指标 × 多期限预测 × 数据源资格</small></div></div>
     <div class="top-actions"><a class="ghost-link" href="/legacy">完整系统</a><span id="connectionBadge" class="source-chip muted">等待数据</span><button id="refreshButton" type="button" class="ghost">刷新快照</button></div>
   </header>
   <main class="shell">
@@ -36,6 +36,6 @@
   </main>
   <div id="detailOverlay" class="overlay hidden" role="dialog" aria-modal="true"><div class="drawer"><div class="drawer-head"><div><div class="eyebrow">ETF DETAIL</div><h2 id="detailTitle">—</h2></div><button id="detailClose" class="ghost" type="button">关闭</button></div><div id="detailBody"></div><canvas id="detailChart"></canvas></div></div>
   <div id="toast" class="toast hidden"></div>
-  <script src="/assets/decision_board_workbuddy.js?v=0.1.0"></script>
+  <script src="/assets/decision_board_workbuddy.js?v=0.1.1"></script>
 </body>
 </html>
