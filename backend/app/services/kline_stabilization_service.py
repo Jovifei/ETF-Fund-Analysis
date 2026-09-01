@@ -424,9 +424,11 @@ class KlineStabilizationService:
         sector = self._sector_state(db, instrument, self._sector_alias(), board_type="industry")
         sector_concept = self._sector_state(db, instrument, self._concept_alias(), board_type="concept")
 
-        # 全市场宽度：仅宽基 / 指数主题 ETF 作为广度参考（config.broad_market_themes）。
+        # 全市场宽度：仅宽基 / 指数主题 ETF 作为广度参考（config.broad_market_themes，
+        # 同时匹配 theme_l1 与 theme_l2，以覆盖 创业板/科创50 等跨行业指数）。
         market_breadth: dict[str, Any] | None = None
-        if instrument.theme_l1 in self._broad_market_themes():
+        broad_themes = set(self._broad_market_themes())
+        if instrument.theme_l1 in broad_themes or instrument.theme_l2 in broad_themes:
             market_breadth = self._market_breadth(db)
 
         forecast_expected = pattern.get("expected_return")

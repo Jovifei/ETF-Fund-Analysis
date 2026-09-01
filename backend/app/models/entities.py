@@ -344,7 +344,7 @@ class SectorSnapshot(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    board_type: Mapped[str] = mapped_column(String(16), default="industry", index=True)
+    board_type: Mapped[str] = mapped_column(String(16), default="industry")
     sector_name: Mapped[str] = mapped_column(String(64), index=True)
     trade_date: Mapped[date] = mapped_column(Date, index=True)
     up_count: Mapped[int] = mapped_column(Integer, default=0)

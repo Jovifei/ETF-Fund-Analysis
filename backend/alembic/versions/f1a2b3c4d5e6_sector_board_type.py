@@ -31,7 +31,8 @@ def upgrade() -> None:
             "uq_sector_name_date_source",
             ["sector_name", "trade_date", "source", "board_type"],
         )
-        # 新复合索引：按 board_type + 板块 + 日期查询
+        # 旧索引 ix_sector_name_date 不含 board_type，替换为新的复合索引 ix_sector_board_date
+        batch_op.drop_index("ix_sector_name_date")
         batch_op.create_index(
             "ix_sector_board_date",
             ["board_type", "sector_name", "trade_date"],
@@ -47,3 +48,5 @@ def downgrade() -> None:
             ["sector_name", "trade_date", "source"],
         )
         batch_op.drop_column("board_type")
+        # 还原 e7f8a9b0c1d2 的索引形态，保证 downgrade -> base 链路自洽
+        batch_op.create_index("ix_sector_name_date", ["sector_name", "trade_date"])
