@@ -98,6 +98,7 @@ function adaptRow(row) {
     sectorUp: sector.up != null ? `${sector.up}涨` : '—',
     sectorDown: sector.down != null ? `${sector.down}跌` : '—',
     sectorRatio: sector.ratio != null ? `跌比${sector.ratio}%` : '—',
+    sectorName: sector.sector_name || null,
     week,
     forecast: forecast.label || (forecast.expected_return != null ? `${forecast.expected_return >= 0 ? '+' : ''}${(Number(forecast.expected_return) * 100).toFixed(2)}%` : '—'),
     conf: confText,
@@ -136,7 +137,7 @@ function renderRow(r) {
   const vsCls = r.vs === '↑' ? 'dk-cu' : (r.vs === '↓' ? 'dk-cd' : 'dk-cs');
   const volCls = r.volCls ? `dk-vt dk-${r.volCls}` : 'dk-vt dk-vf';
   const sector = (r.sectorUp === '—') ? '<span style="color:var(--text-dim)">—</span>'
-    : `<span style="color:#2ecc71; font-size:11px">${esc(r.sectorUp)}</span><br><span style="color:#e74c3c; font-size:11px">${esc(r.sectorDown)}</span><br><span style="color:var(--text-dim); font-size:10px">${esc(r.sectorRatio)}</span>`;
+    : `${r.sectorName ? `<div style="font-size:10px; color:var(--text-muted); margin-bottom:1px">${esc(r.sectorName)}</div>` : ''}<span style="color:#2ecc71; font-size:11px">${esc(r.sectorUp)}</span><br><span style="color:#e74c3c; font-size:11px">${esc(r.sectorDown)}</span><br><span style="color:var(--text-dim); font-size:10px">${esc(r.sectorRatio)}</span>`;
   const weekColor = String(r.week).includes('-') ? '#2ecc71' : '#e74c3c';
   const fcastCls = String(r.forecast).startsWith('-') ? 'dk-pd' : 'dk-pu';
   return `<tr>
