@@ -1,0 +1,36 @@
+from fastapi.testclient import TestClient
+
+from app.main import app
+
+
+def test_workbuddy_scoring_board_is_primary_and_legacy_is_preserved() -> None:
+    client = TestClient(app)
+
+    primary = client.get("/")
+    legacy = client.get("/legacy")
+    compatibility = client.get("/workbench/1430", follow_redirects=False)
+
+    assert primary.status_code == 200
+    assert "ETF 决策评分台" in primary.text
+    assert "scoreSummary" in primary.text
+    assert "horizonSelect" in primary.text
+    assert "/assets/decision_board_workbuddy.js" in primary.text
+    assert "workbuddy.link" not in primary.text
+
+    assert legacy.status_code == 200
+    assert "ETF / LOF 决策台" in legacy.text
+
+    assert compatibility.status_code == 307
+    assert compatibility.headers["location"] == "/"
+
+
+def test_workbuddy_assets_are_served_from_same_origin() -> None:
+    client = TestClient(app)
+    css = client.get("/assets/decision_board_workbuddy.css")
+    js = client.get("/assets/decision_board_workbuddy.js")
+
+    assert css.status_code == 200
+    assert "score-badge" in css.text
+    assert js.status_code == 200
+    assert "J≥90" in js.text
+    assert "WorkBuddyDecisionBoard" in js.text
