@@ -75,6 +75,12 @@ LLM_ENABLED=false
 SCHEDULER_ENABLED=false
 ```
 
+浏览器认证使用单一账户：填入 `AUTH_USERNAME`、由本机
+`python scripts/generate_password_hash.py` 生成的 `AUTH_PASSWORD_HASH`，以及
+随机 `AUTH_SESSION_SECRET`；`AUTH_EMAIL` 仅是同一账户的可选登录别名。浏览器提交用户名/邮箱和原始密码，
+会话只存在 Secure HttpOnly SameSite cookie，生产 HTTPS 必须保持 `AUTH_COOKIE_SECURE=true`。不要保存或回显明文密码、哈希或会话密钥。
+`PRIVATE_ACCESS_TOKEN` 可留空；只有旧 CLI/API 必须迁移时才可配置为 Bearer 凭据，不能用于浏览器登录。
+
 说明：scheduler 进程同时受 Compose 是否启动和 `SCHEDULER_ENABLED` 控制。首次冒烟建议保持 `false`，完成数据核验后改为 `true` 并启动 scheduler service。
 
 ## 4. 构建
@@ -122,9 +128,9 @@ sudo systemctl reload caddy
 - 域名 A/AAAA 记录；
 - 安全组开放 80/443；
 - `fund.example.com` 改成真实域名；
-- 可增加 Caddy Basic Auth，应用 Bearer Token仍保留。
+- 可增加 Caddy Basic Auth；浏览器仍使用应用账户密码会话。`PRIVATE_ACCESS_TOKEN` 若保留，仅限旧 CLI/API Bearer 兼容。
 
-使用 Nginx 时必须关闭 `/api/events` 的代理缓冲并把 read timeout 调长，示例已包含。
+使用 Nginx 时必须关闭 `/api/events` 的代理缓冲并把 read timeout 调长，示例已包含。反代必须覆盖客户端传来的 `X-Forwarded-For`，而 Compose/Dockerfile 已禁用 Uvicorn proxy-header trust，登录限流不会接受任意转发链。
 
 ## 7. 云盘和备份
 

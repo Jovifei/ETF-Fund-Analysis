@@ -3,7 +3,7 @@
 const qs = (selector, root = document) => root.querySelector(selector);
 const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
 const state = {
-  token: localStorage.getItem('fundDecisionToken') || '',
+  sessionActive: false,
   data: null,
   settings: null,
   reports: [],
@@ -540,15 +540,18 @@ async function api(path, options = {}) {
     state.formalMutationCount += 1;
   }
   const headers = new Headers(requestOptions.headers || {});
-  if (state.token) headers.set('Authorization', `Bearer ${state.token}`);
+  if (method !== 'GET' && method !== 'HEAD' && !headers.has('X-CSRF-Token')) {
+    const csrf = String(document.cookie || '').split('; ').find(value => value.startsWith('__Host-fund-csrf=') || value.startsWith('fund-csrf='))?.split('=').slice(1).join('');
+    if (csrf) headers.set('X-CSRF-Token', decodeURIComponent(csrf));
+  }
   if (requestOptions.body instanceof FormData) {
     headers.delete('Content-Type');
     for (const name of [...headers.keys()]) if (name.toLowerCase() === 'content-type') headers.delete(name);
   } else if (requestOptions.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   try {
-    const response = await fetch(path, {...requestOptions, headers});
+    const response = await fetch(path, {...requestOptions, headers, credentials:'same-origin'});
     if (response.status === 401) {
-      if (authGeneration === state.authRequestGeneration) showAuth('令牌无效或已变更');
+      if (authGeneration === state.authRequestGeneration) { state.sessionActive=false; showAuth('会话已失效，请重新登录'); }
       throw new Error('unauthorized');
     }
     if (!response.ok) {
@@ -661,8 +664,8 @@ function setImportInteractionDisabled(disabled) {
 function showAuth(error = '') {
   qs('#authOverlay').classList.remove('hidden');
   qs('#authError').textContent = error;
-  qs('#tokenInput').value = state.token;
-  setTimeout(() => qs('#tokenInput').focus(), 30);
+  qs('#passwordInput').value = '';
+  setTimeout(() => qs('#identifierInput').focus(), 30);
 }
 function hideAuth() { qs('#authOverlay').classList.add('hidden'); }
 function openModal(id, focusSelector = '.modal-close') {
@@ -720,7 +723,7 @@ function trapModalFocus(event) {
 async function loadBootstrap(silent = false) {
   if (state.modeTransition && !(state.modeTransition.target === 'formal' && !state.demoMode)) return;
   if (state.demoMode) return loadDemoBootstrap(silent);
-  const requestGeneration = authRequestGeneration(), requestToken = state.token, controller = new AbortController();
+  const requestGeneration = authRequestGeneration(), sessionActive = state.sessionActive, controller = new AbortController();
   const modeGeneration = state.modeGeneration;
   state.bootstrapController?.abort(); state.bootstrapController = controller;
   if (!silent) qs('#refreshButton').disabled = true;
@@ -732,7 +735,7 @@ async function loadBootstrap(silent = false) {
     } catch (reportError) {
       console.warn('report list unavailable', reportError);
     }
-    if (requestGeneration !== authRequestGeneration() || requestToken !== state.token || controller.signal.aborted || !modeRequestCurrent(modeGeneration, false)) return;
+    if (requestGeneration !== authRequestGeneration() || sessionActive !== state.sessionActive || controller.signal.aborted || !modeRequestCurrent(modeGeneration, false)) return;
     state.data = bootstrap;
     state.reports = reports;
     state.signalGrade = null;
@@ -743,7 +746,7 @@ async function loadBootstrap(silent = false) {
     scheduleDecisionStatusPoll();
     scheduleBrowserRefresh();
   } catch (error) {
-    if (error.name !== 'AbortError' && requestGeneration === authRequestGeneration() && requestToken === state.token && modeRequestCurrent(modeGeneration, false)) toast(`刷新失败：${error.message}`, 5000);
+    if (error.name !== 'AbortError' && requestGeneration === authRequestGeneration() && sessionActive === state.sessionActive && modeRequestCurrent(modeGeneration, false)) toast(`刷新失败：${error.message}`, 5000);
   } finally {
     if (state.bootstrapController === controller) { state.bootstrapController = null; syncDecisionRefreshButton(); }
   }
@@ -751,13 +754,13 @@ async function loadBootstrap(silent = false) {
 
 async function loadDemoBootstrap(silent = false) {
   if (state.modeTransition && state.modeTransition.target !== 'demo') return;
-  const requestGeneration = authRequestGeneration(), requestToken = state.token;
+  const requestGeneration = authRequestGeneration(), sessionActive = state.sessionActive;
   const modeGeneration = state.modeGeneration, controller = new AbortController();
   state.demoBootstrapController?.abort(); state.demoBootstrapController = controller;
   if (!silent) qs('#refreshButton').disabled = true;
   try {
     const bootstrap = await api('/api/demo/bootstrap', {authGeneration: requestGeneration, signal: controller.signal});
-    if (requestGeneration !== authRequestGeneration() || requestToken !== state.token || !modeRequestCurrent(modeGeneration, true)) return;
+    if (requestGeneration !== authRequestGeneration() || sessionActive !== state.sessionActive || !modeRequestCurrent(modeGeneration, true)) return;
     state.data = bootstrap;
     state.reports = [];
     state.signalGrade = bootstrap.signal_grade || null;
@@ -1388,12 +1391,12 @@ async function cancelPortfolioImport() {
   if (state.cancelPromise) return state.cancelPromise;
   const workflow = state.holdingImport, sessionId = workflow?.sessionId || '';
   if (!sessionId) { newImportGeneration(); resetImportWorkflow({advance:false}); closeModal('portfolioConfirmOverlay'); closeModal('portfolioImportOverlay'); return; }
-  const generation = newImportGeneration(), authGenerationAtCancel = authRequestGeneration(), capturedToken = state.token;
+  const generation = newImportGeneration(), authGenerationAtCancel = authRequestGeneration();
   workflow.generation = generation; workflow.canceling = true; workflow.cancelError = false; workflow.busy = true; workflow.status = '正在取消导入…'; setImportInteractionDisabled(true); renderImportReview();
   const controller = new AbortController(); state.cancelController = controller;
   const cancelPromise = (async () => {
     try {
-      await api(`/api/holding-imports/${encodeURIComponent(sessionId)}/cancel`, {method:'POST', headers: capturedToken ? {Authorization:`Bearer ${capturedToken}`} : {}, signal:controller.signal, authGeneration:authGenerationAtCancel});
+      await api(`/api/holding-imports/${encodeURIComponent(sessionId)}/cancel`, {method:'POST', signal:controller.signal, authGeneration:authGenerationAtCancel});
       if (isImportCurrent(generation, sessionId)) { state.cancelPromise = null; state.cancelController = null; closeModal('portfolioConfirmOverlay'); closeModal('portfolioImportOverlay'); resetImportWorkflow(); toast('已取消截图导入'); }
     } catch (error) {
       if (isImportCurrent(generation, sessionId)) { workflow.canceling = false; workflow.busy = false; workflow.cancelError = true; workflow.status = '取消失败，请重试'; qs('#portfolioImportError').textContent = `取消失败，请重试：${formatImportError(error)}`; setImportInteractionDisabled(false); renderImportReview(); }
@@ -1418,10 +1421,10 @@ function renderNews() {
 
 async function downloadReport(filename) {
   if (blockFormalMutation('正式报告下载')) return;
-  const requestGeneration = authRequestGeneration(), requestToken = state.token;
+  const requestGeneration = authRequestGeneration(), sessionActive = state.sessionActive;
   try {
-    const response = await fetch(`/api/reports/${encodeURIComponent(filename)}`, {headers: {Authorization: `Bearer ${state.token}`}});
-    if (response.status === 401) { if (requestGeneration === authRequestGeneration() && requestToken === state.token) showAuth('令牌无效或已变更'); return; }
+    const response = await fetch(`/api/reports/${encodeURIComponent(filename)}`, {credentials:'same-origin'});
+    if (response.status === 401) { if (requestGeneration === authRequestGeneration() && sessionActive === state.sessionActive) { state.sessionActive=false; showAuth('会话已失效，请重新登录'); } return; }
     if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
@@ -1433,12 +1436,12 @@ async function downloadReport(filename) {
 
 async function loadSettings() {
   if (state.demoMode || (state.modeTransition && state.modeTransition.target !== 'formal')) return;
-  const requestGeneration = authRequestGeneration(), requestToken = state.token, controller = new AbortController();
+  const requestGeneration = authRequestGeneration(), sessionActive = state.sessionActive, controller = new AbortController();
   const modeGeneration = state.modeGeneration;
   state.settingsController?.abort(); state.settingsController = controller;
   try {
     const settings = await api('/api/settings', {signal:controller.signal, authGeneration:requestGeneration});
-    if (requestGeneration !== authRequestGeneration() || requestToken !== state.token || controller.signal.aborted || !modeRequestCurrent(modeGeneration, false)) return;
+    if (requestGeneration !== authRequestGeneration() || sessionActive !== state.sessionActive || controller.signal.aborted || !modeRequestCurrent(modeGeneration, false)) return;
     state.settings = settings;
     const frequencyKeys = new Set(['quote_refresh_minutes','signal_refresh_minutes','news_refresh_minutes','lunch_news_refresh_minutes']);
     for (const [key,value] of Object.entries(state.settings)) {
@@ -1448,7 +1451,7 @@ async function loadSettings() {
     }
     applyMarketSettings(state.settings);
     scheduleBrowserRefresh();
-  } catch (error) { if (error.name !== 'AbortError' && requestGeneration === authRequestGeneration() && requestToken === state.token && modeRequestCurrent(modeGeneration, false)) toast(`读取设置失败：${error.message}`); }
+  } catch (error) { if (error.name !== 'AbortError' && requestGeneration === authRequestGeneration() && sessionActive === state.sessionActive && modeRequestCurrent(modeGeneration, false)) toast(`读取设置失败：${error.message}`); }
   finally { if (state.settingsController === controller) state.settingsController = null; }
 }
 function applyMarketSettings(settings) {
@@ -2087,16 +2090,16 @@ async function connectEvents() {
   if (state.eventAbort) state.eventAbort.abort();
   clearTimeout(state.eventRetry);
   if (state.modeTransition) return;
-  const requestGeneration = authRequestGeneration(), requestToken = state.token;
+  const requestGeneration = authRequestGeneration(), sessionActive = state.sessionActive;
   const controller = new AbortController();
   state.eventAbort = controller;
   try {
     const response = await fetch('/api/events', {
-      headers: state.token ? {Authorization: `Bearer ${state.token}`} : {},
       signal: controller.signal,
       cache: 'no-store',
+      credentials:'same-origin',
     });
-    if (response.status === 401) { if (requestGeneration === authRequestGeneration() && requestToken === state.token) showAuth('令牌无效或已变更'); return; }
+    if (response.status === 401) { if (requestGeneration === authRequestGeneration() && sessionActive === state.sessionActive) { state.sessionActive=false; showAuth('会话已失效，请重新登录'); } return; }
     if (!response.ok || !response.body) throw new Error(`SSE ${response.status}`);
     qs('#connectionBadge').className='status-dot online';
     qs('#connectionBadge').textContent='实时连接';
@@ -2139,10 +2142,16 @@ async function connectEvents() {
 
 function bindEvents() {
   qs('#authForm').addEventListener('submit', async event => {
-    event.preventDefault(); state.token=qs('#tokenInput').value.trim(); localStorage.setItem('fundDecisionToken',state.token); advanceAuthRequestGeneration(); await loadBootstrap(); if (state.token) { connectEvents(); loadSettings(); }
+    event.preventDefault();
+    const error = qs('#authError'); error.textContent = '';
+    try {
+      const response = await fetch('/api/auth/login', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({identifier:qs('#identifierInput').value.trim(), password:qs('#passwordInput').value})});
+      if (!response.ok) { error.textContent = '登录失败，请检查凭据后重试'; return; }
+      state.sessionActive=true; advanceAuthRequestGeneration(); await loadBootstrap(); if (state.sessionActive) { connectEvents(); loadSettings(); }
+    } catch (_) { error.textContent = '登录暂不可用，请稍后重试'; }
   });
   qs('#refreshButton').addEventListener('click', requestDecisionBoardRefresh);
-  qs('#lockButton').addEventListener('click',()=>{state.token='';localStorage.removeItem('fundDecisionToken');advanceAuthRequestGeneration();showAuth();});
+  qs('#lockButton').addEventListener('click', async ()=>{ try { await api('/api/auth/logout',{method:'POST'}); } catch (_) {} state.sessionActive=false; advanceAuthRequestGeneration(); showAuth(); });
   qsa('#tabs button').forEach(button=>button.addEventListener('click',()=>switchTab(button.dataset.tab)));
   qs('#decisionModeGrouped')?.addEventListener('click', () => { state.decisionUi.mode = 'grouped'; renderDecisionBoard(); });
   qs('#decisionModeGlobal')?.addEventListener('click', () => { state.decisionUi.mode = 'global'; renderDecisionBoard(); });
@@ -2217,10 +2226,15 @@ function bindEvents() {
 
 async function start() {
   handleDecisionBoardRoute(); bindEvents(); renderTaskButtons();
+  try {
+    const response = await fetch('/api/auth/me', {credentials:'same-origin'});
+    const auth = response.ok ? await response.json() : {authenticated:false};
+    state.sessionActive = Boolean(auth.authenticated);
+  } catch (_) { state.sessionActive = false; }
+  if (!state.sessionActive) { showAuth(); return; }
   await loadBootstrap();
-  // Auth is discovered from the API: auth-disabled servers serve read models
-  // without a browser token; auth-enabled servers have already shown the
-  // overlay through api() after an actual 401.
+  // Auth-disabled servers report an authenticated anonymous browser from
+  // /api/auth/me, preserving the existing local demo/test experience.
   if (state.data) { connectEvents(); loadSettings(); loadDecisionBoard(true); scheduleDecisionStatusPoll(); }
 }
 

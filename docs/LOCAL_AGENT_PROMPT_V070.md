@@ -103,7 +103,6 @@ python codex/skills/fund-research/scripts/check_no_secrets.py
 
 ```bash
 export APP_ENV=test AUTH_ENABLED=false MARKET_PROVIDER=mock AUTO_CREATE_SCHEMA=false
-export PRIVATE_ACCESS_TOKEN=CHANGE_ME_LOCAL_TEST_TOKEN
 export DATABASE_URL=sqlite:////tmp/etf-v070-migration.sqlite3
 rm -f /tmp/etf-v070-migration.sqlite3
 alembic upgrade head
@@ -126,7 +125,10 @@ chmod 600 .env
 人工填写但不要回显：
 
 - `POSTGRES_PASSWORD`
-- `PRIVATE_ACCESS_TOKEN`
+- `AUTH_USERNAME`
+- `AUTH_PASSWORD_HASH`（Argon2id；使用 `python scripts/generate_password_hash.py` 本机生成）
+- `AUTH_SESSION_SECRET`
+- 可选 `AUTH_EMAIL`（同一账户的登录别名；无 SMTP/OTP）
 - `TUSHARE_TOKEN`
 - OpenAI-compatible 模型配置
 - 可选新闻 RSS URL
@@ -141,6 +143,8 @@ ALLOW_MOCK_FALLBACK=false
 SCHEDULER_ENABLED=false
 ANALYSIS_ENABLED=false
 ```
+
+浏览器登录使用 `AUTH_USERNAME` 或 `AUTH_EMAIL` 加原始密码；服务器只保存 `AUTH_PASSWORD_HASH` 与 `AUTH_SESSION_SECRET`，不在浏览器保存密码或会话令牌。`PRIVATE_ACCESS_TOKEN` 是可选旧 Bearer CLI/API 兼容凭据，不能用于浏览器登录。
 
 初次数据资格完成前不要启动 scheduler 或分析模型。
 

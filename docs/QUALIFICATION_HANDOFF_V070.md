@@ -165,9 +165,10 @@ fund-decision run-task research_capabilities
 
 `deployment_reports/YYYY-MM-DD-production-qualification.md`——commit/版本/OS/测试/迁移/Provider 矩阵/池规模/10 只核对/实时资格/预测验证/因子验证/消融/第二引擎对账/组合/影子状态/未完成项/回滚点。不含 Token/密码/账户号/公网 IP/持仓截图。
 
-## 本地看板与 Token（2026-08-30）
+## 本地看板与账户认证（2026-09-01）
 
-- Docker：`docker compose up -d db api`，浏览器 `http://127.0.0.1:8080/`。登录框填仓库根 `.env` 的 `PRIVATE_ACCESS_TOKEN`（整段复制，不要截断）。
+- Docker：`docker compose up -d db api`，浏览器 `http://127.0.0.1:8080/`。登录框填写 `AUTH_USERNAME` 或可选 `AUTH_EMAIL` 与原始密码；服务器 `.env` 只保存 `AUTH_PASSWORD_HASH`（本地 `scripts/generate_password_hash.py` 生成）和 `AUTH_SESSION_SECRET`。本机 HTTP 模板使用 `APP_ENV=development` 与 `AUTH_COOKIE_SECURE=false`；生产 HTTPS 必须使用 `AUTH_COOKIE_SECURE=true`。
+- `PRIVATE_ACCESS_TOKEN` 是可选旧 Bearer CLI/API 凭据，不能用于浏览器登录。当前版本没有 SMTP 或邮件 OTP，邮箱只是同一账户的别名。
 - 页签：决策看板 | 信号中心 | **ETF信号分级** | 持仓 | 新闻事件 | 系统。分级页是研究复刻，不是下单。
 - 演示/行业池已写入 `config/watchlist.json`（含行业 ETF、标普500、纳斯达克、黄金）。无 `TUSHARE_TOKEN` 时走 Mock，分级可渲染但 `actionable=false`。
 - **下一步 Token**：本机 `.env` 写入 `TUSHARE_TOKEN`（不要发到聊天）→ 跑 Provider 矩阵与 `fund_basic` 核对停牌/清盘替换 → 再 bootstrap 真实日线。scheduler 仍等资格，不要提前开。

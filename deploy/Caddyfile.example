@@ -1,5 +1,6 @@
 # Replace the domain and email, then install this file as /etc/caddy/Caddyfile.
-# The application itself still requires PRIVATE_ACCESS_TOKEN.
+# The application uses the server-local account password configuration. Keep
+# AUTH_COOKIE_SECURE=true behind this HTTPS reverse proxy.
 {
   email admin@example.com
 }
@@ -10,7 +11,12 @@ fund.example.com {
   request_body {
     max_size 12MB
   }
-  reverse_proxy 127.0.0.1:8080
+  reverse_proxy 127.0.0.1:8080 {
+    # Do not forward a client-provided X-Forwarded-For chain. Uvicorn proxy
+    # headers are disabled in Compose, so this is defence in depth.
+    header_up -X-Forwarded-For
+    header_up X-Forwarded-For {remote_host}
+  }
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains"
     X-Frame-Options "SAMEORIGIN"

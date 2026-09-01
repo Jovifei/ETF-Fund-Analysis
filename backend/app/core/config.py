@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Literal
 from zoneinfo import ZoneInfo
 
+from argon2 import Type, extract_parameters
 from pydantic import AliasChoices, Field, FiniteFloat, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -38,6 +39,17 @@ _ANALYSIS_CONFIG_FIELDS = frozenset(
         "analysis_deepseek_timeout_seconds",
     }
 )
+_UNSAFE_PRIVATE_ACCESS_TOKENS = frozenset(
+    {
+        "change-this-private-token-at-least-32-chars",
+        "CHANGE_ME_AT_LEAST_32_RANDOM_CHARS",
+    }
+)
+
+
+def _is_unsafe_private_access_token(value: str) -> bool:
+    token = value.strip()
+    return token in _UNSAFE_PRIVATE_ACCESS_TOKENS or token.upper().startswith("CHANGE_ME")
 
 
 class Settings(BaseSettings):
@@ -59,7 +71,21 @@ class Settings(BaseSettings):
     sql_echo: bool = False
 
     auth_enabled: bool = True
-    private_access_token: str = "change-this-private-token-at-least-32-chars"
+    # Browser authentication is account/password based. This remains only as
+    # an optional machine/API credential while existing CLI callers migrate.
+    private_access_token: str = Field(default="", repr=False, exclude=True)
+    auth_username: str = Field(default="", validation_alias="AUTH_USERNAME", max_length=128)
+    auth_email: str = Field(default="", validation_alias="AUTH_EMAIL", max_length=320)
+    auth_password_hash: SecretStr = Field(
+        default=SecretStr(""), validation_alias="AUTH_PASSWORD_HASH", repr=False, exclude=True
+    )
+    auth_session_secret: SecretStr = Field(
+        default=SecretStr(""), validation_alias="AUTH_SESSION_SECRET", repr=False, exclude=True
+    )
+    auth_session_ttl_minutes: int = Field(
+        default=480, validation_alias="AUTH_SESSION_TTL_MINUTES", ge=1, le=1440
+    )
+    auth_cookie_secure: bool = Field(default=True, validation_alias="AUTH_COOKIE_SECURE")
     trusted_proxy_headers: bool = False
 
     market_provider: Literal["mock", "tushare", "akshare", "ftshare", "public_composite", "composite"] = "mock"
@@ -213,9 +239,30 @@ class Settings(BaseSettings):
     @field_validator("private_access_token")
     @classmethod
     def validate_token(cls, value: str) -> str:
+        value = value.strip()
         if value and len(value) < 16:
             raise ValueError("PRIVATE_ACCESS_TOKEN 至少 16 个字符；生产环境建议 32 个以上")
         return value
+
+    @field_validator("auth_username", "auth_email")
+    @classmethod
+    def normalize_auth_identifiers(cls, value: str) -> str:
+        return value.strip().casefold()
+
+    @model_validator(mode="after")
+    def validate_auth_password_hash(self) -> Settings:
+        password_hash = self.auth_password_hash.get_secret_value()
+        if not password_hash:
+            return self
+        if not password_hash.startswith("$argon2id$"):
+            raise ValueError("AUTH_PASSWORD_HASH 必须是 Argon2id 哈希")
+        try:
+            parameters = extract_parameters(password_hash)
+        except Exception as exc:
+            raise ValueError("AUTH_PASSWORD_HASH 不是有效的 Argon2id 哈希") from exc
+        if parameters.type != Type.ID:
+            raise ValueError("AUTH_PASSWORD_HASH 必须是 Argon2id 哈希")
+        return self
 
     @field_validator("quote_refresh_minutes")
     @classmethod
@@ -254,16 +301,46 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_production_secrets(self) -> Settings:
         if self.app_env == "production":
-            unsafe_tokens = {
-                "change-this-private-token-at-least-32-chars",
-                "CHANGE_ME_AT_LEAST_32_RANDOM_CHARS",
-                "",
-            }
-            if self.auth_enabled and self.private_access_token in unsafe_tokens:
-                raise ValueError("生产环境必须配置随机 PRIVATE_ACCESS_TOKEN")
+            configured_account_fields = (
+                bool(self.auth_username),
+                bool(self.auth_password_hash.get_secret_value()),
+                bool(self.auth_session_secret.get_secret_value()),
+            )
+            account_configured = all(configured_account_fields)
+            private_token = self.private_access_token.strip()
+            session_secret = self.auth_session_secret.get_secret_value().strip()
+            if any(configured_account_fields) and not account_configured:
+                raise ValueError("生产环境账户认证必须同时配置 AUTH_USERNAME、AUTH_PASSWORD_HASH 和 AUTH_SESSION_SECRET")
+            if self.auth_enabled and private_token and _is_unsafe_private_access_token(private_token):
+                raise ValueError("生产环境 PRIVATE_ACCESS_TOKEN 不得使用示例占位符")
+            if self.auth_enabled and not account_configured and not self.legacy_bearer_configured:
+                raise ValueError("生产环境必须配置账户认证或随机 PRIVATE_ACCESS_TOKEN")
+            if account_configured and not self.auth_password_hash.get_secret_value().startswith("$argon2id$"):
+                raise ValueError("生产环境 AUTH_PASSWORD_HASH 必须是 Argon2id 哈希")
+            if account_configured and session_secret.upper().startswith("CHANGE_ME"):
+                raise ValueError("生产环境 AUTH_SESSION_SECRET 不得使用示例占位符")
+            if account_configured and len(session_secret) < 32:
+                raise ValueError("生产环境 AUTH_SESSION_SECRET 必须至少 32 个字符")
+            if self.auth_enabled and account_configured and not self.auth_cookie_secure:
+                raise ValueError("生产环境 AUTH_COOKIE_SECURE 必须为 true")
             if self.llm_enabled and not (self.llm_api_key and self.llm_model):
                 raise ValueError("LLM_ENABLED=true 时必须配置 LLM_API_KEY 与 LLM_MODEL")
         return self
+
+    @property
+    def password_auth_configured(self) -> bool:
+        return bool(
+            self.auth_username
+            and self.auth_password_hash.get_secret_value()
+            and self.auth_session_secret.get_secret_value()
+        )
+
+    @property
+    def legacy_bearer_configured(self) -> bool:
+        """Whether the optional legacy credential is non-placeholder and usable."""
+
+        token = self.private_access_token.strip()
+        return bool(token and not _is_unsafe_private_access_token(token))
 
     @model_validator(mode="after")
     def validate_ocr_configuration(self) -> Settings:

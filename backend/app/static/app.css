@@ -148,6 +148,7 @@ td .forecast-surface { min-height:132px; padding:8px 9px; white-space:normal; }
 .auth-card { width:min(92vw,420px); }
 .auth-card h1 { margin:8px 0; font-family:Georgia,"Times New Roman",serif; font-weight:500; }
 .auth-card p { color:var(--muted); }
+.auth-label { display:block; margin:12px 0 5px; color:var(--muted); font-size:12px; }
 .auth-card input,.form-modal input,.form-modal select,.form-modal textarea,.form-grid input { width:100%; border:1px solid var(--line); border-radius:2px; background:#091722; color:var(--text); padding:10px; }
 .button-row { margin-top:14px; display:flex; justify-content:flex-end; }
 .modal-close { position:absolute; right:12px; top:9px; width:34px; height:34px; border:0; background:transparent; color:var(--muted); font-size:24px; }

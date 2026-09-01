@@ -61,7 +61,7 @@ The disposable SQLite migration chain now passes `alembic upgrade head`, `curren
 - 卡点：免费档（系统页默认）即可拉东财公开 ETF；完整档才需要 Token。Token 在系统页只写不回显，可用「测试是否连通」。规格见 `docs/superpowers/specs/2026-08-30-etf-signal-grade-design.md`。
 - 决策看板现为行业/概念板块卡片（`GET /api/signals/boards`，`config/board_catalog.json`），不是东财实时板块指数。
 
-- 使用说明：`docs/USER_GUIDE.md`。令牌从仓库根 `.env` 的 `PRIVATE_ACCESS_TOKEN` 复制到登录框，不要发到聊天或提交 Git。
+- 使用说明：`docs/USER_GUIDE.md`。浏览器使用 `AUTH_USERNAME`（或可选 `AUTH_EMAIL`）和原始密码；服务器只保存 `AUTH_PASSWORD_HASH`（Argon2id）与 `AUTH_SESSION_SECRET`，不要发到聊天或提交 Git。`PRIVATE_ACCESS_TOKEN` 仅为旧 CLI/API 的可选 Bearer 兼容凭据，不能用于浏览器登录。
 
 ## ETF 14:30 Workbench 本地接收
 

@@ -2,7 +2,7 @@
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const state = {
-  token: localStorage.getItem('fundDecisionToken') || '',
+  sessionActive: false,
   summary: null,
   detail: null,
   mode: '综合',
@@ -34,12 +34,16 @@ function timeText(value) {
 }
 async function api(path, options = {}) {
   const headers = new Headers(options.headers || {});
-  if (state.token) headers.set('Authorization', `Bearer ${state.token}`);
+  if (String(options.method || 'GET').toUpperCase() !== 'GET') {
+    const csrf = String(document.cookie || '').split('; ').find(value => value.startsWith('__Host-fund-csrf=') || value.startsWith('fund-csrf='))?.split('=').slice(1).join('');
+    if (csrf) headers.set('X-CSRF-Token', decodeURIComponent(csrf));
+  }
   if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-  const response = await fetch(path, {...options, headers});
+  const response = await fetch(path, {...options, headers, credentials:'same-origin'});
   if (response.status === 401) {
     showAuth();
-    throw new Error('需要私有访问令牌');
+    state.sessionActive = false;
+    throw new Error('需要重新登录');
   }
   if (!response.ok) {
     let detail = `HTTP ${response.status}`;
@@ -48,7 +52,7 @@ async function api(path, options = {}) {
   }
   return response.json();
 }
-function showAuth() { $('#authOverlay').classList.remove('hidden'); $('#tokenInput').focus(); }
+function showAuth() { $('#authOverlay').classList.remove('hidden'); $('#passwordInput').value=''; $('#identifierInput').focus(); }
 function hideAuth() { $('#authOverlay').classList.add('hidden'); }
 
 function summaryCard(label, value, note, accent) {
@@ -222,13 +226,12 @@ async function generateReport() {
   finally{button.disabled=false;button.textContent=original;}
 }
 
-$('#authForm').addEventListener('submit', async event => { event.preventDefault(); state.token=$('#tokenInput').value.trim(); localStorage.setItem('fundDecisionToken',state.token); await loadSummary(); });
+$('#authForm').addEventListener('submit', async event => { event.preventDefault(); const response=await fetch('/api/auth/login',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier:$('#identifierInput').value.trim(),password:$('#passwordInput').value})}); if(!response.ok){$('#authError').textContent='登录失败，请检查凭据后重试';return;} state.sessionActive=true; await loadSummary(); });
 $('#refreshButton').addEventListener('click', loadSummary);
 $('#generateButton').addEventListener('click', generateReport);
-$('#lockButton').addEventListener('click', ()=>{state.token='';localStorage.removeItem('fundDecisionToken');showAuth();});
+$('#lockButton').addEventListener('click', async ()=>{try{await api('/api/auth/logout',{method:'POST'});}catch(_){ } state.sessionActive=false;showAuth();});
 $('#detailClose').addEventListener('click', ()=>$('#detailOverlay').classList.add('hidden'));
 $('#detailOverlay').addEventListener('click', event=>{if(event.target===$('#detailOverlay')) $('#detailOverlay').classList.add('hidden')});
 window.addEventListener('resize', ()=>{clearTimeout(state.resizeTimer);state.resizeTimer=setTimeout(()=>{if(state.detail)drawChart(state.detail)},120)});
 
-if (!state.token) showAuth();
-loadSummary();
+fetch('/api/auth/me',{credentials:'same-origin'}).then(response=>response.ok?response.json():{authenticated:false}).then(auth=>{state.sessionActive=Boolean(auth.authenticated);if(!state.sessionActive){showAuth();return;}loadSummary();}).catch(showAuth);

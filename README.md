@@ -50,6 +50,18 @@ uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 
 打开 `http://127.0.0.1:8000`。Mock 仅用于验证页面和流水线，所有信号都会被标记为不可执行。
 
+## 私有账户登录
+
+浏览器使用单一服务器账户登录：设置 `AUTH_USERNAME`、可选的 `AUTH_EMAIL`（仅用户名别名，不发送邮件）、
+`AUTH_PASSWORD_HASH` 与 `AUTH_SESSION_SECRET`。在服务器本地运行
+`python scripts/generate_password_hash.py`，把输出的 Argon2id 哈希填入 `.env`；不要保存或粘贴明文密码。
+会话只在 HttpOnly、SameSite cookie 中存在，浏览器不会把密码或会话写入 localStorage。生产 HTTPS 使用
+`AUTH_COOKIE_SECURE=true`；仅本机 HTTP Docker 可设为 `false`。
+
+`PRIVATE_ACCESS_TOKEN` 现在是可选的旧版 Bearer 凭据，仅供已有 CLI/API 调用迁移使用，不能作为浏览器身份。
+本版本没有 SMTP、邮件验证码或 OTP；`AUTH_EMAIL` 只用于识别同一个账户，邮件登录能力需单独设计和审查。
+认证依赖固定为已验证的 `pwdlib[argon2]==0.3.1`、`argon2-cffi==25.1.0` 与 `argon2-cffi-bindings==26.1.0`；更新时必须重新审查密码哈希与登录回归。
+
 ## 分析模型配置（单一主 provider）
 
 默认关闭。配置后只启用一个主 provider：Codex/OpenAI Responses。服务器本地 `.env` 使用以下变量：`OPENAI_API_KEY`、`ANALYSIS_PRIMARY_MODEL`、`ANALYSIS_CODEX_BASE_URL`、`ANALYSIS_PRIMARY_MODE=responses`，并设置 `ANALYSIS_ENABLED=true`、`ANALYSIS_CODEX_ENABLED=true`、`ANALYSIS_PRIMARY_PROVIDER=codex_openai_responses`。Anthropic Messages 与 DeepSeek 兼容适配器仅注册为手工切换候选，不能与 Codex 同时启用；失败不会静默切换。

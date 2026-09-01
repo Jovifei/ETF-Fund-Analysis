@@ -48,10 +48,14 @@ FTShare 是可选、只读的公开数据备用源，默认不启用，也不需
 ```bash
 cp deploy/.env.production.example .env
 python3 scripts/generate_secrets.py
+python3 scripts/generate_password_hash.py
 chmod 600 .env
 ```
 
-必须修改 `POSTGRES_PASSWORD`、`PRIVATE_ACCESS_TOKEN`、`TUSHARE_TOKEN`（如使用 Tushare）。生产保持 `MARKET_PROVIDER=composite`、`ALLOW_MOCK_FALLBACK=false`。
+必须修改 `POSTGRES_PASSWORD`、`AUTH_USERNAME`、`AUTH_PASSWORD_HASH`、`AUTH_SESSION_SECRET` 与 `TUSHARE_TOKEN`（如使用 Tushare）。
+`generate_password_hash.py` 隐藏输入密码，只输出 Argon2id 哈希；`generate_secrets.py` 输出数据库密码和会话密钥。生产保持
+`AUTH_COOKIE_SECURE=true`、`MARKET_PROVIDER=composite`、`ALLOW_MOCK_FALLBACK=false`。`AUTH_EMAIL` 只是同一账户的可选登录别名，
+本版本不发 SMTP 邮件或 OTP。`PRIVATE_ACCESS_TOKEN` 可留空；若为旧 CLI/API 保留，使用 `Authorization: Bearer`，不再用于浏览器登录。
 
 ### 单一分析 provider
 
@@ -75,7 +79,7 @@ Pillow 核心校验 PNG/JPEG/WebP。默认 `OCR_MAX_IMAGE_BYTES=10485760`（10 M
 
 生产 Windows OCR fail-closed。Linux 上 `OCR_TRANSIENT_ROOT` 须为独立 0700 私有目录，模型根目录私有只读。上传 → 本地 OCR → 候选编辑/拒绝 → 显式确认；确认前不写持仓。云复核默认关闭，只有用户明确同意才可发起；当前版本关闭出网，不自动重试。
 
-反向代理必须设置 12MB body limit（Caddy `request_body max_size 12MB` 或 Nginx `client_max_body_size 12m`），以覆盖 10MiB 图像上限和 multipart 开销。
+反向代理必须设置 12MB body limit（Caddy `request_body max_size 12MB` 或 Nginx `client_max_body_size 12m`），以覆盖 10MiB 图像上限和 multipart 开销。Nginx 必须以 `$remote_addr` 覆盖而不是追加 `X-Forwarded-For`；Compose 已禁用 Uvicorn proxy-header trust，登录限流不会信任客户端自带的转发链。
 
 ## D. 迁移、备份与部署
 
@@ -119,8 +123,10 @@ docker compose run --rm api python scripts/provider_smoke.py
 ```bash
 # 1. 准备配置（Windows PowerShell 或 Git Bash 均可）
 cp deploy/.env.local.docker.example .env
-python scripts/generate_secrets.py   # 将输出的两行粘贴替换 .env 中 POSTGRES_PASSWORD / PRIVATE_ACCESS_TOKEN
+python scripts/generate_secrets.py        # 将输出填入 POSTGRES_PASSWORD / AUTH_SESSION_SECRET
+python scripts/generate_password_hash.py  # 将唯一输出填入 AUTH_PASSWORD_HASH，并设置 AUTH_USERNAME
 # 编辑 .env：前期测试用 MARKET_PROVIDER=akshare（免费东财公开接口，TUSHARE_TOKEN 可留空）
+# 保持本机 HTTP 模板的 APP_ENV=development 与 AUTH_COOKIE_SECURE=false；生产 HTTPS 使用 production 模板并设为 true。
 # Token 也可登录后在「系统 → 行情数据源」保存；完整档才会启用 Tushare
 
 # 2. 构建并启动（先不启 scheduler）
@@ -131,7 +137,7 @@ docker compose logs --tail=100 api
 
 # 3. 健康检查
 curl -fsS http://127.0.0.1:8080/api/health
-# 带 Token 访问（替换为你的 PRIVATE_ACCESS_TOKEN）
+# 可选旧 Bearer API 访问（仅兼容 CLI；浏览器使用账户密码会话）
 curl -fsS -H "Authorization: Bearer <PRIVATE_ACCESS_TOKEN>" http://127.0.0.1:8080/api/instruments
 
 # 4. Provider 冒烟（需 TUSHARE_TOKEN）
@@ -151,7 +157,7 @@ docker compose up -d scheduler
 - `SCHEDULER_ENABLED=false`（数据资格通过前）
 - `OCR_MODE=disabled`（未 provision Paddle 模型前）
 - API 绑定 `127.0.0.1:8080`，PostgreSQL 不映射宿主机端口
-- 浏览器访问：http://127.0.0.1:8080/ 。登录框填写仓库根 `.env` 里的 `PRIVATE_ACCESS_TOKEN`（整段复制到密码框；不要发到聊天、不要提交 `.env`）。API 请求头等价于 `Authorization: Bearer <该值>`。
+- 浏览器访问：http://127.0.0.1:8080/ 。登录框填写 `AUTH_USERNAME` 或可选 `AUTH_EMAIL` 与原始密码；密码、会话和旧 Bearer 凭据不会写入 localStorage。Docker 本机 HTTP 模板设 `AUTH_COOKIE_SECURE=false`；生产 HTTPS 必须为 `true`。不提供 SMTP/邮件 OTP。
 - 页签含「ETF信号分级」（研究五档宽表）。静态资源在镜像内，改 HTML/JS/CSS 后需 `docker compose build api` 再起；`config/` 一般已 volume 挂载。
 
 ## F. 明确边界

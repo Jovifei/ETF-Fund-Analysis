@@ -1,16 +1,30 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
+import secrets
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.api.schemas import (
+    AuthStatusResponse,
     BoardFundAdd,
     DemoLoadRequest,
     HoldingImportCandidatePatch,
@@ -18,6 +32,7 @@ from app.api.schemas import (
     HoldingImportCloudConsent,
     HoldingImportResponse,
     HoldingUpsert,
+    LoginRequest,
     MarketProbeRequest,
     ReviewCandidateResponse,
     ReviewEnqueueRequest,
@@ -27,7 +42,15 @@ from app.api.schemas import (
     TaskRequest,
 )
 from app.core.config import Settings, get_settings
-from app.core.security import require_private_access
+from app.core.security import (
+    AuthSessionManager,
+    _extract_bearer,
+    csrf_cookie_name,
+    login_throttle,
+    password_matches,
+    require_private_access,
+    session_cookie_name,
+)
 from app.db.session import SessionLocal, get_db
 from app.models import EventLog, ReportArtifact
 from app.ocr.image_validation import ImageValidationError, read_limited_bytes
@@ -87,6 +110,83 @@ def health(
         "provider": settings.market_provider,
         "auth_enabled": settings.auth_enabled,
     }
+
+
+def _login_throttle_key(request: Request) -> str:
+    client = request.client.host if request.client else "unknown"
+    # Keep the limiter bounded without retaining a readable client address.
+    # Per-IP keys prevent identifier rotation from evading the verifier budget.
+    return hashlib.sha256(client.encode()).hexdigest()
+
+
+def _set_auth_cookies(response: Response, settings: Settings, identifier: str) -> None:
+    max_age = settings.auth_session_ttl_minutes * 60
+    response.set_cookie(
+        key=session_cookie_name(settings),
+        value=AuthSessionManager(settings).issue(identifier),
+        max_age=max_age,
+        httponly=True,
+        secure=settings.auth_cookie_secure,
+        samesite="lax",
+        path="/",
+    )
+    response.set_cookie(
+        key=csrf_cookie_name(settings),
+        value=secrets.token_urlsafe(32),
+        max_age=max_age,
+        httponly=False,
+        secure=settings.auth_cookie_secure,
+        samesite="lax",
+        path="/",
+    )
+
+
+def _clear_auth_cookies(response: Response, settings: Settings) -> None:
+    for name in (session_cookie_name(settings), csrf_cookie_name(settings)):
+        response.delete_cookie(key=name, path="/", secure=settings.auth_cookie_secure, samesite="lax")
+
+
+@router.post("/auth/login", response_model=AuthStatusResponse)
+def login(
+    payload: LoginRequest,
+    request: Request,
+    response: Response,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> AuthStatusResponse:
+    failure = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="登录失败，请检查凭据后重试")
+    if not settings.auth_enabled or not settings.password_auth_configured:
+        raise failure
+    key = _login_throttle_key(request)
+    if login_throttle.is_limited(key):
+        login_throttle.record_failure(key)
+        raise failure
+    matches = password_matches(settings, payload.identifier, payload.password)
+    if not matches:
+        login_throttle.record_failure(key)
+        raise failure
+    login_throttle.record_success(key)
+    _set_auth_cookies(response, settings, settings.auth_username)
+    return AuthStatusResponse(authenticated=True, identifier=settings.auth_username)
+
+
+@router.get("/auth/me", response_model=AuthStatusResponse)
+def auth_me(request: Request, settings: Annotated[Settings, Depends(get_settings)]) -> AuthStatusResponse:
+    if not settings.auth_enabled:
+        return AuthStatusResponse(authenticated=True)
+    if settings.password_auth_configured:
+        identifier = AuthSessionManager(settings).verify(request.cookies.get(session_cookie_name(settings)))
+        if identifier:
+            return AuthStatusResponse(authenticated=True, identifier=identifier)
+    supplied = _extract_bearer(request.headers.get("Authorization"))
+    if supplied and settings.legacy_bearer_configured and secrets.compare_digest(supplied, settings.private_access_token):
+        return AuthStatusResponse(authenticated=True)
+    return AuthStatusResponse(authenticated=False)
+
+
+@router.post("/auth/logout", response_model=AuthStatusResponse, dependencies=[Depends(require_private_access)])
+def logout(response: Response, settings: Annotated[Settings, Depends(get_settings)]) -> AuthStatusResponse:
+    _clear_auth_cookies(response, settings)
+    return AuthStatusResponse(authenticated=False)
 
 
 @private_router.get("/bootstrap")

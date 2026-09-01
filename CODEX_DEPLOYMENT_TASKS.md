@@ -30,18 +30,23 @@ sudo docker compose version
 cd /opt/china-fund-decision
 cp deploy/.env.production.example .env
 python3 scripts/generate_secrets.py
+python3 scripts/generate_password_hash.py
 chmod 600 .env
 ```
 
 人工写入：
 
 - [ ] `POSTGRES_PASSWORD`
-- [ ] `PRIVATE_ACCESS_TOKEN`
+- [ ] `AUTH_USERNAME`
+- [ ] `AUTH_PASSWORD_HASH`（仅 Argon2id 哈希；不要保存明文密码）
+- [ ] `AUTH_SESSION_SECRET`
+- [ ] 可选 `AUTH_EMAIL`（仅同一账户登录别名；当前无 SMTP/OTP）
 - [ ] `TUSHARE_TOKEN`
 - [ ] `MARKET_PROVIDER=composite`
 - [ ] `ALLOW_MOCK_FALLBACK=false`
 - [ ] LLM 配置（初次数据验证时先保持 `LLM_ENABLED=false`）
 - [ ] 可选 `NEWS_RSS_URLS`
+- [ ] 若旧 CLI/API 仍需要 Bearer，再单独配置非占位符 `PRIVATE_ACCESS_TOKEN`；它不能用于浏览器登录。
 
 禁止：
 
@@ -59,6 +64,7 @@ POSTGRES_PASSWORD=dummy docker compose config >/dev/null
 ```
 
 - [ ] 全部通过。
+- [ ] 生产反代必须覆盖客户端传入的 `X-Forwarded-For`，且 Compose 不启用 Uvicorn `--proxy-headers`；登录限流不得信任任意转发头。
 - [ ] 若修改策略参数，更新版本号和测试，不得只改阈值。
 
 ## 4. 构建和数据库
@@ -222,9 +228,10 @@ docker compose logs -f --tail=100 scheduler
 
 - [ ] 使用 `deploy/Caddyfile.example` 或 Nginx 示例。
 - [ ] 启用 HTTPS。
-- [ ] 保持应用 Bearer Token。
+- [ ] 浏览器使用账户密码登录；服务器仅保存 `AUTH_PASSWORD_HASH`（Argon2id）和 `AUTH_SESSION_SECRET`，HTTPS 下会话为 Secure HttpOnly SameSite cookie。
+- [ ] `PRIVATE_ACCESS_TOKEN` 仅在旧 CLI/API 明确需要时保留为 Bearer 兼容凭据，不能作为浏览器身份。
 - [ ] 可额外使用反向代理 Basic Auth 或仅通过 VPN/SSH 隧道。
-- [ ] 检查浏览器 Network：SSE Token 只在 Authorization Header，不出现在 URL。
+- [ ] 检查浏览器 Network：SSE 与下载使用同源 cookie（无 URL Token、无 Authorization 会话令牌），非安全 cookie 请求包含 CSRF header。
 - [ ] 检查 CSP、HSTS、nosniff、frame 和 referrer headers。
 
 ## 13. 备份与恢复

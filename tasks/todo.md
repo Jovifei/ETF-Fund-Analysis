@@ -467,3 +467,10 @@ python codex/skills/fund-research/scripts/check_no_secrets.py .
 - [x] Runtime probe and TaskService tests cover stored-token binding; no Mock fallback was introduced.
 - [x] Focused Provider/settings suite and full pytest passed; Ruff, compileall, Node syntax and diff checks passed.
 - [x] Independent Terra review: APPROVED after the persisted-token binding repair.
+
+## Password-account browser authentication (2026-09-01)
+
+- [x] RED: account login/session/CSRF/legacy/static UI regression tests (initial import failed as expected before implementation).
+- [x] GREEN: Argon2id account auth, signed cookie session, CSRF and throttling.
+- [x] GREEN: remove browser token persistence and document deployment setup.
+- [x] Review: focused Python auth/API/holding tests, full pytest, Node decision-board tests, compileall, JS syntax, Ruff and diff checks pass; 2 existing platform skips only. Final specification and quality reviews approved the account/session/CSRF/legacy boundaries.

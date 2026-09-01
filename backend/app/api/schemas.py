@@ -13,6 +13,18 @@ SHA256Hash = Annotated[StrictStr, StringConstraints(min_length=64, max_length=64
 ReviewRunner = Literal["codex_review_runner", "claude_code_review_runner"]
 
 
+class LoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    identifier: str = Field(min_length=1, max_length=320)
+    password: str = Field(min_length=1, max_length=1024)
+
+
+class AuthStatusResponse(BaseModel):
+    authenticated: bool
+    identifier: str | None = None
+
+
 class HoldingUpsert(BaseModel):
     ts_code: str = Field(min_length=6, max_length=32)
     shares: float = Field(ge=0)
