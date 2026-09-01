@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ETF 决策评分台</title>
+  <link rel="stylesheet" href="/assets/decision_board_workbuddy.css?v=0.1.0">
+</head>
+<body>
+  <div id="authOverlay" class="auth-overlay hidden">
+    <form id="authForm" class="auth-card">
+      <div class="eyebrow">PRIVATE RESEARCH</div>
+      <h2>输入私有访问令牌</h2>
+      <p>令牌仅保存在当前浏览器 localStorage。</p>
+      <input id="tokenInput" type="password" autocomplete="current-password" placeholder="PRIVATE_ACCESS_TOKEN" required>
+      <button type="submit" class="primary">进入决策台</button>
+      <div id="authError" class="error"></div>
+    </form>
+  </div>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">基</span><div><strong>ETF 决策评分台</strong><small>技术指标 × 多期限预测 × 数据源资格</small></div></div>
+    <div class="top-actions"><a class="ghost-link" href="/legacy">完整系统</a><span id="connectionBadge" class="source-chip muted">等待数据</span><button id="refreshButton" type="button" class="ghost">刷新快照</button></div>
+  </header>
+  <main class="shell">
+    <section class="hero-grid">
+      <article class="hero-card hero-primary"><div class="eyebrow">DECISION BOARD</div><h1>ETF 多指标评分与分级</h1><p>分数是读取层研究评分，不修改生产信号阈值。高分代表多项技术状态一致，不代表未来收益确定。</p><div class="legend" id="scoreLegend"></div></article>
+      <article class="hero-card"><span>快照</span><strong id="snapshotTime">—</strong><small id="snapshotId">—</small></article>
+      <article class="hero-card"><span>数据源</span><strong id="providerSummary">—</strong><small id="verifiedSummary">—</small></article>
+      <article class="hero-card"><span>下次刷新</span><strong id="nextRefresh">—</strong><small>北京时间 · 只读研究</small></article>
+    </section>
+    <section id="warningBanner" class="warning hidden"></section>
+    <section class="score-summary" id="scoreSummary"></section>
+    <section class="toolbar"><div class="segmented" id="modeSwitch"><button data-mode="grouped" class="active">五档分组</button><button data-mode="global">综合排名</button></div><label>预测周期<select id="horizonSelect"><option value="1">1 日</option><option value="3">3 日</option><option value="5">5 日</option><option value="10">10 日</option></select></label><label class="search">筛选<input id="searchInput" type="search" placeholder="ETF / 行业 / 主题 / 分级"></label></section>
+    <section class="method-note"><strong>评分口径</strong><span>趋势 22%</span><span>动量 22%</span><span>量能 14%</span><span>结构 14%</span><span>预测 20%</span><span>数据资格 8%</span><em>未校准预测不会被当作准确率；Mock / 退化 / 未验证数据会降权。</em></section>
+    <section id="boardArea" class="board-area"><div class="empty">正在读取决策快照…</div></section>
+  </main>
+  <div id="detailOverlay" class="overlay hidden" role="dialog" aria-modal="true"><div class="drawer"><div class="drawer-head"><div><div class="eyebrow">ETF DETAIL</div><h2 id="detailTitle">—</h2></div><button id="detailClose" class="ghost" type="button">关闭</button></div><div id="detailBody"></div><canvas id="detailChart"></canvas></div></div>
+  <div id="toast" class="toast hidden"></div>
+  <script src="/assets/decision_board_workbuddy.js?v=0.1.0"></script>
+</body>
+</html>
