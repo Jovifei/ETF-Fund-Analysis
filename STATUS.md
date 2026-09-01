@@ -1,6 +1,6 @@
 # 工程状态
 
-更新时间：2026-08-30
+更新时间：2026-08-30（板块与 14:30 工作台进展补记 2026-09-02）
 发行版本：`0.7.0`
 
 ## 已实现（本地测试范围）
@@ -47,9 +47,27 @@
 
 ## ETF 14:30 Workbench 覆盖包状态
 
-- 代码：已加入本地完整仓库覆盖包，尚待用户本地 Git 提交。
+- 代码：已在分支 `feat/etf-1430-workbench-complete-local` 提交并推送（本轮 `76c5f2b` → `47debe2` → `ac8baf4`）。
 - 页面：`/workbench/1430`。
 - API：`/api/workbench/1430/summary`、`/{ts_code}`、`/generate`。
 - 预测：1/3/5/10 日相似样本研究基线，继续 `not_calibrated`。
 - 支撑压力：分形、均线、布林、ATR、Fibonacci、成交密集成本、指标确认拐点、趋势线及缠论重叠区近似。
 - 未完成资格：真实 5/15 分钟 point-in-time、CZSC 对账、ECS systemd、真实 Provider 和 20 日影子运行。
+
+## 板块数据（行业 / 概念 / 全市场宽度）
+
+`SectorSnapshot.board_type` 三分类落库，两个只读研究视图共用同一口径：
+
+| board_type | 含义 | 数据源 | 消费视图 |
+|---|---|---|---|
+| `industry` | 行业板块涨跌家数 | AKShare（东财主源 → 同花顺备用） | K线企稳分析看板、ETF信号分级 |
+| `concept` | 概念板块涨跌家数 | AKShare | K线企稳分析看板、ETF信号分级 |
+| `market` | 全市场（全 A）涨跌家数 | AKShare（Sina `stock_zh_a_spot` 主源 → 腾讯 `qt.gtimg.cn` 回退） | K线企稳分析看板、ETF信号分级 |
+
+- 主题 → 板块名 走 `config/etf_1430_workbench.json` 的 `sector_alias` / `concept_alias` **精确映射**，不做模糊匹配；`broad_market_themes`（宽基 / 创业板 / 科创50）命中者改取全市场宽度。未登记主题显示「—」，**不用无关板块兜底**（避免把无关板块的涨跌家数显示在标的旁误导判断）。
+- 健壮性：`_market_breadth` 用 `case` 排序让真实源（`source != "mock-sector"`）恒优先，仅当不存在任何真实源时才回退 mock；返回值带 `source` / `is_mock` 供前端标注演示态，防止 mock 假数据遮蔽真实研究结论（对应 `47debe2`）。
+- ETF信号分级（`signal-grade-v0.2.0`，只读研究视图）此前 sector 列恒为「未验证 / 不可用」：根因是旧实现按「池内同主题 ETF 互比」计算，而自选池每个行业主题仅 1 只 ETF，恒不满足「≥2 只」条件。已改为复用 K线企稳分析看板的同一套真实板块查询（`ac8baf4`），两视图口径一致，且前端 `app.js` 仅消费 `sector.label` / `sector.note`，字段结构保持兼容、前端零改动。
+- 本地实测（2026-09-02，9 只标的，live HTTP 200）：4 只宽基 ETF 显示全市场 3094 涨 / 1995 跌（源 `akshare`）；5 只行业 ETF 显示真实行业板块（半导体 21/165、军工装备 49/33、医药 45/210、电池 39/67、黄金 8/47）。
+- 门禁：全量 `pytest` 退出 0、0 失败、1 skip；`python -m compileall -q backend/app` 与 `node --check` 均通过。
+- 本地预览：`AUTH_ENABLED=false` 下 http://127.0.0.1:8000 （仅本地预览；真实 ECS / PostgreSQL / HTTPS 部署仍为部署门槛）。
+- 免费数据源现状：AkShare 已集成（板块、全市场宽度、ETF 基础数据）；Baostock、通达信 mootdx 未集成。盘中实时 tick / 分钟线 AkShare 不可得，若需补该能力须另行接入 mootdx 或 Tushare 实时档，属独立增强项。
