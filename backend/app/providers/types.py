@@ -11,6 +11,7 @@ __all__ = [
     "BarRecord",
     "QuoteRecord",
     "NewsRecord",
+    "SectorRecord",
     "MarketContextItem",
     "MarketContextObservation",
 ]
@@ -81,6 +82,34 @@ class NewsRecord:
     published_at: datetime
     summary: str | None = None
     url: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class SectorRecord:
+    """板块涨跌家数快照（K线企稳看板用）。
+
+    Attributes:
+        sector_name: 板块名称（如 "AI应用"、"有色金属"）。
+        trade_date: 交易日。
+        up_count: 上涨家数。
+        down_count: 下跌家数。
+        flat_count: 平盘家数。
+        total_count: 总家数。
+        pct_change: 板块涨跌幅（百分比，可选）。
+        source: 数据源（默认 akshare）。
+    """
+
+    sector_name: str
+    trade_date: date
+    up_count: int = 0
+    down_count: int = 0
+    flat_count: int = 0
+    total_count: int = 0
+    pct_change: float | None = None
+    source: str = "akshare"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

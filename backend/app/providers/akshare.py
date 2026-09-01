@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from app.core.config import Settings, get_settings
 from app.providers.base import MarketProvider, ProviderError
-from app.providers.types import BarRecord, InstrumentRecord, QuoteRecord
+from app.providers.types import BarRecord, InstrumentRecord, QuoteRecord, SectorRecord
 from app.utils.numbers import finite_or_none
 
 logger = logging.getLogger(__name__)
@@ -150,4 +150,50 @@ class AKShareProvider(MarketProvider):
             )
         if not result:
             raise ProviderError("AKShare spot returned no matching rows; " + "; ".join(errors))
+        return result
+
+    def fetch_sector_snapshots(self, trade_date: date | None = None) -> list[SectorRecord]:
+        """获取行业板块涨跌家数快照（K线企稳看板用）。
+
+        基于 AKShare 东财行业板块实时行情接口（stock_board_industry_name_em）。
+        网络不可达/接口变动时抛 ProviderError，由调用方决定降级（板块列显示 "—"）。
+
+        Args:
+            trade_date: 目标交易日，缺省为本地时区今天。
+
+        Returns:
+            SectorRecord 列表（每板块一条）。
+        """
+        function = getattr(self.ak, "stock_board_industry_name_em", None)
+        if function is None:
+            raise ProviderError("AKShare 板块接口不可用（akshare 版本过旧）")
+        try:
+            frame = function()
+        except Exception as exc:
+            raise ProviderError(f"AKShare sector fetch failed: {exc}") from exc
+
+        target = trade_date or date.today()
+        result: list[SectorRecord] = []
+        for row in self._records(frame):
+            name = str(row.get("板块名称") or row.get("name") or "").strip()
+            if not name:
+                continue
+            up_count = finite_or_none(row.get("上涨家数") or row.get("up_count")) or 0
+            down_count = finite_or_none(row.get("下跌家数") or row.get("down_count")) or 0
+            flat_count = finite_or_none(row.get("平盘家数") or row.get("flat_count")) or 0
+            total = up_count + down_count + flat_count
+            result.append(
+                SectorRecord(
+                    sector_name=name,
+                    trade_date=target,
+                    up_count=int(up_count),
+                    down_count=int(down_count),
+                    flat_count=int(flat_count),
+                    total_count=int(total),
+                    pct_change=finite_or_none(row.get("涨跌幅") or row.get("pct_change")),
+                    source=self.name,
+                )
+            )
+        if not result:
+            raise ProviderError("AKShare sector returned no rows")
         return result

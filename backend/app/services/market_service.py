@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, timedelta
 from uuid import uuid4
 
@@ -7,11 +8,13 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.models import DailyBar, Instrument, QuoteSnapshot
-from app.providers.base import MarketProvider
+from app.models import DailyBar, Instrument, QuoteSnapshot, SectorSnapshot
+from app.providers.base import MarketProvider, ProviderError
 from app.services.audit_service import AuditTimer, record_provider_audit
 from app.services.event_service import emit_event
 from app.utils.hashing import stable_hash
+
+logger = logging.getLogger(__name__)
 
 
 class MarketService:
@@ -274,3 +277,80 @@ class MarketService:
         cutoff = datetime.now(self.settings.timezone) - timedelta(days=keep_days)
         result = db.execute(delete(QuoteSnapshot).where(QuoteSnapshot.quote_time < cutoff))
         return int(result.rowcount or 0)
+
+    def refresh_sector_snapshots(self, db: Session, run_id: str | None = None) -> dict:
+        """回填行业板块涨跌家数快照（K线企稳看板用）。
+
+        AKShare 板块接口不可达时（如网络受限）返回 inserted=0 + error，不抛出
+        阻断主流程；由调用方决定板块列显示 "—"。
+        """
+        run_id = run_id or uuid4().hex
+        timer = AuditTimer()
+        error: Exception | None = None
+        records = []
+        try:
+            if not hasattr(self.provider, "fetch_sector_snapshots"):
+                raise ProviderError("provider 不支持板块快照")
+            records = self.provider.fetch_sector_snapshots()
+        except Exception as exc:
+            error = exc
+            logger.warning("sector snapshot refresh failed (degraded to empty): %s", exc)
+        finally:
+            if self.persist_provider_audits:
+                record_provider_audit(
+                    db,
+                    run_id=run_id,
+                    operation="fetch_sector_snapshots",
+                    provider=self.provider,
+                    result=records,
+                    error=error,
+                    latency_ms=timer.elapsed_ms,
+                )
+        if error:
+            emit_event(
+                db,
+                "sector_snapshots.failed",
+                {"run_id": run_id, "error": type(error).__name__},
+            )
+            return {"run_id": run_id, "inserted": 0, "error": type(error).__name__}
+
+        inserted = 0
+        for item in records:
+            existing = db.scalar(
+                select(SectorSnapshot).where(
+                    SectorSnapshot.sector_name == item.sector_name,
+                    SectorSnapshot.trade_date == item.trade_date,
+                    SectorSnapshot.source == item.source,
+                )
+            )
+            if existing:
+                existing.up_count = item.up_count
+                existing.down_count = item.down_count
+                existing.flat_count = item.flat_count
+                existing.total_count = item.total_count
+                existing.pct_change = item.pct_change
+                existing.fetched_at = datetime.now(self.settings.timezone)
+                existing.quality_hash = stable_hash(item.to_dict())
+            else:
+                db.add(
+                    SectorSnapshot(
+                        sector_name=item.sector_name,
+                        trade_date=item.trade_date,
+                        up_count=item.up_count,
+                        down_count=item.down_count,
+                        flat_count=item.flat_count,
+                        total_count=item.total_count,
+                        pct_change=item.pct_change,
+                        source=item.source,
+                        fetched_at=datetime.now(self.settings.timezone),
+                        quality_hash=stable_hash(item.to_dict()),
+                    )
+                )
+            inserted += 1
+        db.flush()
+        emit_event(
+            db,
+            "sector_snapshots.updated",
+            {"inserted": inserted, "run_id": run_id},
+        )
+        return {"run_id": run_id, "inserted": inserted, "error": None}

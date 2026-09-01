@@ -323,6 +323,32 @@ class QuoteSnapshot(Base):
     quality_hash: Mapped[str] = mapped_column(String(64), index=True)
 
 
+class SectorSnapshot(Base):
+    """板块涨跌家数快照（K线企稳看板用）。
+
+    由 AKShare 板块接口（stock_board_industry_name_em / concept）回填，
+    记录某个板块在某交易日的上涨/下跌成分股家数，用于看板"390涨/142跌/跌比27%"展示。
+    """
+
+    __tablename__ = "sector_snapshots"
+    __table_args__ = (
+        Index("ix_sector_name_date", "sector_name", "trade_date"),
+        UniqueConstraint("sector_name", "trade_date", "source", name="uq_sector_name_date_source"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sector_name: Mapped[str] = mapped_column(String(64), index=True)
+    trade_date: Mapped[date] = mapped_column(Date, index=True)
+    up_count: Mapped[int] = mapped_column(Integer, default=0)
+    down_count: Mapped[int] = mapped_column(Integer, default=0)
+    flat_count: Mapped[int] = mapped_column(Integer, default=0)
+    total_count: Mapped[int] = mapped_column(Integer, default=0)
+    pct_change: Mapped[float | None] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String(32), default="akshare")
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    quality_hash: Mapped[str] = mapped_column(String(64), index=True)
+
+
 class MarketContextRegistry(Base, TimestampMixin):
     """Configuration-backed context item kept independent from ETF instruments."""
 

@@ -13,7 +13,7 @@ from app.market_context.contracts import (
     VerificationStatus,
 )
 from app.providers.base import MarketProvider
-from app.providers.types import BarRecord, InstrumentRecord, NewsRecord, QuoteRecord
+from app.providers.types import BarRecord, InstrumentRecord, NewsRecord, QuoteRecord, SectorRecord
 
 
 class MockProvider(MarketProvider):
@@ -176,3 +176,31 @@ class MockProvider(MarketProvider):
 
     def is_trade_day(self, day: date) -> bool:
         return day.weekday() < 5
+
+    def fetch_sector_snapshots(self, trade_date: date | None = None) -> list[SectorRecord]:
+        """确定性 mock 板块涨跌家数（演示用；明确标记为合成数据）。"""
+        target = trade_date or date.today()
+        samples = [
+            ("AI应用", 390, 142, 8),
+            ("商业航天", 363, 131, 6),
+            ("半导体", 168, 41, 3),
+            ("有色金属", 20, 180, 5),
+            ("黄金", 8, 47, 2),
+            ("医药", 45, 210, 10),
+            ("新能源", 120, 88, 4),
+            ("军工", 70, 130, 5),
+            ("宽基", 310, 180, 12),
+        ]
+        return [
+            SectorRecord(
+                sector_name=name,
+                trade_date=target,
+                up_count=up,
+                down_count=down,
+                flat_count=flat,
+                total_count=up + down + flat,
+                pct_change=round(((up - down) / max(up + down, 1)) * 100, 2),
+                source="mock-sector",
+            )
+            for name, up, down, flat in samples
+        ]

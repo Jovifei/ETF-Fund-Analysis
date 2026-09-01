@@ -38,6 +38,7 @@ research = [
 market = [
   "tushare>=1.4.20",
   "akshare>=1.17.0",
+  "chanlun>=2606.73",
   "feedparser>=6.0,<7",
 ]
 ocr = [

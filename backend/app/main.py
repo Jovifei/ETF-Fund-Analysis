@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.router import router as api_router
 from app.api.workbench_1430 import router as workbench_1430_router
+from app.api.workbench_kline import router as workbench_kline_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.session import init_db, session_scope
@@ -92,6 +93,7 @@ async def request_id(request: Request, call_next):
 
 app.include_router(api_router)
 app.include_router(workbench_1430_router)
+app.include_router(workbench_kline_router)
 app.mount("/assets", StaticFiles(directory=STATIC_DIR), name="assets")
 
 
@@ -103,3 +105,8 @@ def index() -> FileResponse:
 @app.get("/workbench/1430", include_in_schema=False)
 def etf_1430_workbench() -> FileResponse:
     return FileResponse(STATIC_DIR / "etf_1430_workbench.html", media_type="text/html; charset=utf-8")
+
+
+@app.get("/workbench/kline", include_in_schema=False)
+def kline_stabilization() -> FileResponse:
+    return FileResponse(STATIC_DIR / "kline_stabilization.html", media_type="text/html; charset=utf-8")
