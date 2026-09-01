@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 import pytest
 
 from app.services.kline_stabilization_service import KlineStabilizationService
@@ -48,3 +50,61 @@ def test_kline_stabilization_disclaimers(bootstrapped, db_session):
     summary = service.summary(db_session)
     assert any("研究视图" in item for item in summary["disclaimers"])
     assert any("不构成投资建议" in item for item in summary["disclaimers"])
+
+
+def test_pct_change_unit_is_percent_not_ratio():
+    """回归：pct_change 单位是百分比，_pct 不能再乘 100（历史 bug 曾输出 367.26）。"""
+    from app.services.kline_stabilization_service import _pct
+
+    assert _pct(3.6726) == 3.67
+    assert _pct(-1.3636) == -1.36
+    assert _pct(None) is None
+
+
+class _StubInstrument:
+    """仅暴露 _sector_state 需要的属性，避免改动真实标的行。"""
+
+    def __init__(self, theme_l1=None, theme_l2=None):
+        self.theme_l1 = theme_l1
+        self.theme_l2 = theme_l2
+
+
+def test_sector_alias_maps_theme_to_board(bootstrapped, db_session):
+    """主题名（如 新能源车）经显式别名表映射后应命中板块（电池）。
+
+    用「新能源车 → 电池」是因为 mock 数据里没有名为 电池/新能源车 的板块，
+    能干净地验证别名兜底路径（不直接命中时才走别名）。
+    """
+    from app.models import SectorSnapshot
+
+    db_session.add(
+        SectorSnapshot(
+            sector_name="电池",
+            trade_date=date(2026, 9, 1),
+            up_count=30,
+            down_count=10,
+            flat_count=0,
+            total_count=40,
+            pct_change=1.5,
+            source="unit-test",
+            quality_hash="unit-test-battery",
+        )
+    )
+    db_session.flush()
+
+    result = KlineStabilizationService._sector_state(
+        db_session, _StubInstrument(theme_l1="新能源车"), {"新能源车": "电池"}
+    )
+    assert result["up"] == 30
+    assert result["down"] == 10
+    assert result["sector_name"] == "电池"
+
+
+def test_sector_unmapped_theme_returns_null_not_arbitrary_board(bootstrapped, db_session):
+    """无映射的主题必须返回 null（前端显示 —），不能拿无关板块兜底。"""
+    result = KlineStabilizationService._sector_state(
+        db_session, _StubInstrument(theme_l1="__no_such_theme__"), {}
+    )
+    assert result["up"] is None
+    assert result["down"] is None
+    assert result["ratio"] is None

@@ -38,7 +38,14 @@ def _finite(value: Any) -> float | None:
 
 
 def _pct(value: float | None) -> float | None:
-    return round(value * 100.0, 2) if value is not None else None
+    """规范化涨跌幅数值。
+
+    重要：QuoteSnapshot.pct_change 的单位约定是「百分比」（与 dashboard_service
+    等既有消费方一致，东财「涨跌幅」列也是百分比）。这里只做精度收敛，
+    不做 ×100 换算——历史版本曾在此误乘 100，导致看板出现 -136% / +367% 之类的
+    不可能数值。单位口径一旦存疑应停止信号，而不是猜测性换算。
+    """
+    return round(value, 2) if value is not None else None
 
 
 class KlineStabilizationService:
@@ -90,19 +97,42 @@ class KlineStabilizationService:
             .limit(1)
         )
 
+    def _sector_alias(self) -> dict[str, str]:
+        """读取 config 中的主题→板块显式映射表（去掉下划线开头的注释键）。"""
+        raw = self.config.get("sector_alias") or {}
+        if not isinstance(raw, dict):
+            return {}
+        return {k: str(v) for k, v in raw.items() if not k.startswith("_") and isinstance(v, str)}
+
     @staticmethod
-    def _sector_state(db: Session, instrument: Instrument) -> dict[str, Any]:
+    def _sector_state(db: Session, instrument: Instrument, alias: dict[str, str] | None = None) -> dict[str, Any]:
         """读取板块涨跌家数（SectorSnapshot 表）。
 
-        匹配策略：theme_l1/theme_l2 精确命中 → 最新交易日快照；
-        无精确匹配 → 最近一条任意板块兜底（仅当表非空）。
-        返回 None 表示前端显示 "—"。
+        匹配策略（严格，不做模糊猜测）：
+        1. theme_l1/theme_l2 原样精确命中板块名；
+        2. 经 config.sector_alias 显式映射后的板块名精确命中。
+
+        匹配不到一律返回 null（前端显示 "—"）——刻意**不**用"最近一条任意板块"兜底，
+        因为把无关板块的涨跌家数显示在某标的旁边会误导判断。
+
+        Args:
+            db: 数据库会话。
+            instrument: 标的实例。
+            alias: 主题 → 板块名 的显式映射表，缺省为空。
+
+        Returns:
+            含 up/down/ratio 的字典；无匹配时三个值均为 None。
         """
+        alias = {k: v for k, v in (alias or {}).items() if not k.startswith("_")}
         candidates: list[str] = []
-        if instrument.theme_l1:
-            candidates.append(instrument.theme_l1)
-        if instrument.theme_l2 and instrument.theme_l2 != instrument.theme_l1:
-            candidates.append(instrument.theme_l2)
+        for theme in (instrument.theme_l1, instrument.theme_l2):
+            if not theme:
+                continue
+            if theme not in candidates:
+                candidates.append(theme)
+            mapped = alias.get(theme)
+            if mapped and mapped not in candidates:
+                candidates.append(mapped)
         if not candidates:
             return {"up": None, "down": None, "ratio": None}
 
@@ -113,7 +143,9 @@ class KlineStabilizationService:
         ).all()
         if not rows:
             return {"up": None, "down": None, "ratio": None}
-        latest = rows[0]
+        # 多个候选板块同时命中时，按 candidates 的优先级（原始 theme 优先于别名）
+        # 选，而不是单纯取日期最新——避免别名盖掉更贴切的直接匹配。
+        latest = min(rows, key=lambda row: (candidates.index(row.sector_name), -row.trade_date.toordinal()))
         total = latest.total_count or (latest.up_count + latest.down_count + latest.flat_count)
         ratio = round(latest.down_count / total * 100, 1) if total > 0 else None
         return {
@@ -338,9 +370,9 @@ class KlineStabilizationService:
         pattern = pattern_forecast_snapshot(frame) if not frame.empty else {"expected_return": None, "p_up": None, "confidence": 0, "sample_count": 0, "calibration_status": "not_calibrated", "note": "数据不足"}
         chan = self._chanlun_state(frame)
 
-        # 板块涨跌家数：优先按 theme_l1/theme_l2 精确匹配 SectorSnapshot，
-        # 匹配不到时用 "最新一条" 兜底；无数据则占位 null（前端显示 "—"）。
-        sector = self._sector_state(db, instrument)
+        # 板块涨跌家数：theme 直接命中 → 再试 config.sector_alias 显式映射；
+        # 都没命中就是没数据，占位 null（前端显示 "—"），不用无关板块兜底。
+        sector = self._sector_state(db, instrument, self._sector_alias())
 
         forecast_expected = pattern.get("expected_return")
         forecast_label = f"{forecast_expected:+.2%}" if forecast_expected is not None else "—"
