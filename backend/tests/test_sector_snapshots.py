@@ -313,3 +313,81 @@ def test_akshare_sector_raises_when_all_sources_fail():
     message = str(excinfo.value)
     assert "em-down" in message
     assert "ths-down" in message
+
+
+def _fake_code_df():
+    import pandas as pd
+
+    return pd.DataFrame(
+        {"code": ["600000", "000001", "600519", "300750"], "name": ["a", "b", "c", "d"]}
+    )
+
+
+def _tencent_payload(pct: float) -> str:
+    """构造腾讯行情行 payload：第 33 个 ~ 分隔字段(索引 32)为涨跌幅%。"""
+    parts = ["x"] * 32 + [f"{pct}"] + ["y"] * 5
+    return "~".join(parts)
+
+
+def _provider_no_init(fake_ak):
+    """绕过 __init__ 构造 AKShareProvider 实例（单元测试用，不触发真实网络/watchlist）。"""
+    prov = AKShareProvider.__new__(AKShareProvider)
+    prov.name = "akshare"
+    prov.ak = fake_ak
+    return prov
+
+
+def test_akshare_market_breadth_tencent_parses_quotes():
+    """腾讯回退：批量报价按字段 32(涨跌幅%) 统计 涨/跌/平。"""
+    import io
+    from unittest.mock import MagicMock, patch
+
+    fake_ak = MagicMock()
+    fake_ak.stock_info_a_code_name.return_value = _fake_code_df()
+    prov = _provider_no_init(fake_ak)
+    body = ";".join(
+        [
+            'v_sh600000="' + _tencent_payload(1.71) + '"',
+            'v_sz000001="' + _tencent_payload(0.00) + '"',
+            'v_sh600519="' + _tencent_payload(-0.50) + '"',
+            'v_sz300750="' + _tencent_payload(3.20) + '"',
+        ]
+    )
+    with patch("urllib.request.urlopen", return_value=io.BytesIO(body.encode("gbk"))):
+        rec = prov._fetch_market_breadth_tencent(date(2026, 9, 1))
+    assert rec is not None
+    assert rec.board_type == "market"
+    assert rec.sector_name == "全市场"
+    assert rec.up_count == 2  # 600000(+1.71), 300750(+3.20)
+    assert rec.down_count == 1  # 600519(-0.50)
+    assert rec.flat_count == 1  # 000001(0.00)
+    assert rec.total_count == 4
+    assert rec.pct_change is not None
+
+
+def test_akshare_market_breadth_falls_back_to_tencent_when_sina_fails():
+    """sina 主源失败时应回退到腾讯并成功返回真实结构。"""
+    import io
+    from unittest.mock import MagicMock, patch
+
+    fake_ak = MagicMock()
+    fake_ak.stock_zh_a_spot.side_effect = RuntimeError("sina-down")
+    fake_ak.stock_info_a_code_name.return_value = _fake_code_df()
+    prov = _provider_no_init(fake_ak)
+    body = 'v_sh600000="' + _tencent_payload(2.0) + '"'
+    with patch("urllib.request.urlopen", return_value=io.BytesIO(body.encode("gbk"))):
+        rec = prov.fetch_market_breadth(date(2026, 9, 1))
+    assert rec is not None
+    assert rec.up_count == 1
+    assert rec.down_count == 0
+
+
+def test_akshare_market_breadth_returns_none_when_both_fail():
+    """sina 与腾讯都失败时应优雅降级返回 None（不抛异常）。"""
+    from unittest.mock import MagicMock
+
+    fake_ak = MagicMock()
+    fake_ak.stock_zh_a_spot.side_effect = RuntimeError("sina-down")
+    fake_ak.stock_info_a_code_name.side_effect = RuntimeError("code-list-down")
+    prov = _provider_no_init(fake_ak)
+    assert prov.fetch_market_breadth(date(2026, 9, 1)) is None

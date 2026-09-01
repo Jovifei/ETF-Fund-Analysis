@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime
 from typing import Any
+import urllib.request
 from zoneinfo import ZoneInfo
 
 from app.core.config import Settings, get_settings
@@ -265,12 +266,20 @@ class AKShareProvider(MarketProvider):
     def fetch_market_breadth(self, trade_date: date | None = None) -> SectorRecord | None:
         """获取全市场涨跌家数（宽度），作为指数 ETF 的广度参考。
 
-        数据源为 AKShare 新浪全A行情（stock_zh_a_spot），按涨跌幅符号统计 涨/跌/平 家数。
-        东财/新浪不可达时返回 None（优雅降级）。
+        主源：AKShare 新浪全A行情（stock_zh_a_spot），按涨跌幅符号统计 涨/跌/平 家数。
+        新浪分页拉取在受限网络下偶发中断，故失败时回退到腾讯 qt.gtimg.cn 批量行情
+        （全A代码表 + 批量报价，逐只解析涨跌幅字段）。两者都不可达时返回 None（优雅降级）。
 
         Returns:
             单条 board_type="market" 的 SectorRecord；无数据返回 None。
         """
+        rec = self._fetch_market_breadth_sina(trade_date)
+        if rec is not None:
+            return rec
+        logger.warning("market breadth: sina source failed, falling back to tencent")
+        return self._fetch_market_breadth_tencent(trade_date)
+
+    def _fetch_market_breadth_sina(self, trade_date: date | None) -> SectorRecord | None:
         function = getattr(self.ak, "stock_zh_a_spot", None)
         if function is None:
             logger.info("market breadth source (stock_zh_a_spot) unavailable")
@@ -278,10 +287,10 @@ class AKShareProvider(MarketProvider):
         try:
             frame = function()
         except Exception as exc:
-            logger.warning("market breadth fetch failed: %s", exc)
+            logger.warning("market breadth (sina) fetch failed: %s", exc)
             return None
         if frame is None or len(frame) == 0:
-            logger.warning("market breadth returned empty")
+            logger.warning("market breadth (sina) returned empty")
             return None
         up = int((frame["涨跌幅"] > 0).sum())
         down = int((frame["涨跌幅"] < 0).sum())
@@ -289,7 +298,7 @@ class AKShareProvider(MarketProvider):
         total = up + down + flat
         avg_pct = float(frame["涨跌幅"].mean()) if total else None
         target = trade_date or date.today()
-        logger.info("market breadth: 涨%d 跌%d 平%d", up, down, flat)
+        logger.info("market breadth (sina): 涨%d 跌%d 平%d", up, down, flat)
         return SectorRecord(
             sector_name="全市场",
             trade_date=target,
@@ -298,6 +307,89 @@ class AKShareProvider(MarketProvider):
             flat_count=flat,
             total_count=total,
             pct_change=round(avg_pct, 2) if avg_pct is not None else None,
+            source=self.name,
+            board_type="market",
+        )
+
+    @staticmethod
+    def _tencent_symbol(code: str) -> str:
+        """把 A 股代码规范成腾讯行情符号（sh/sz/bj 前缀）。"""
+        code = code.strip()
+        if code.startswith(("sh", "sz", "bj")):
+            return code
+        if code.startswith(("6", "9")):
+            return "sh" + code
+        if code.startswith(("0", "3", "2")):
+            return "sz" + code
+        if code.startswith(("8", "4")):
+            return "bj" + code
+        return code
+
+    def _fetch_market_breadth_tencent(self, trade_date: date | None) -> SectorRecord | None:
+        """回退源：腾讯 qt.gtimg.cn 批量行情。
+
+        先取全A代码表（stock_info_a_code_name），再分块批量拉取实时报价，逐只解析
+        涨跌幅字段（腾讯格式第 33 个 ~ 分隔字段，索引 32）统计 涨/跌/平 家数。
+        """
+        try:
+            df = self.ak.stock_info_a_code_name()
+        except Exception as exc:
+            logger.warning("market breadth (tencent) code list failed: %s", exc)
+            return None
+        if df is None or len(df) == 0:
+            logger.warning("market breadth (tencent) code list empty")
+            return None
+        codes = [str(c) for c in df["code"].tolist()]
+        up = down = flat = 0
+        sum_pct = 0.0
+        chunk = 200
+        for i in range(0, len(codes), chunk):
+            syms = [self._tencent_symbol(c) for c in codes[i : i + chunk]]
+            url = "https://qt.gtimg.cn/q=" + ",".join(syms)
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "Mozilla/5.0", "Referer": "https://gu.qq.com/"},
+            )
+            try:
+                raw = urllib.request.urlopen(req, timeout=15).read().decode("gbk", "ignore")
+            except Exception as exc:
+                logger.warning("market breadth (tencent) batch failed: %s", exc)
+                continue
+            for line in raw.split(";"):
+                line = line.strip()
+                if not line.startswith("v_"):
+                    continue
+                payload = line.split("=", 1)[1].strip().strip('"')
+                if not payload:
+                    continue
+                parts = payload.split("~")
+                if len(parts) <= 32:
+                    continue
+                try:
+                    pct = float(parts[32])
+                except ValueError:
+                    continue
+                if pct > 0:
+                    up += 1
+                elif pct < 0:
+                    down += 1
+                else:
+                    flat += 1
+                sum_pct += pct
+        if up + down + flat == 0:
+            logger.warning("market breadth (tencent) yielded no quotes")
+            return None
+        total = up + down + flat
+        target = trade_date or date.today()
+        logger.info("market breadth (tencent): 涨%d 跌%d 平%d", up, down, flat)
+        return SectorRecord(
+            sector_name="全市场",
+            trade_date=target,
+            up_count=up,
+            down_count=down,
+            flat_count=flat,
+            total_count=total,
+            pct_change=round(sum_pct / total, 2),
             source=self.name,
             board_type="market",
         )
