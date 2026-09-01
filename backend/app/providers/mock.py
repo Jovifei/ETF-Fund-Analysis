@@ -189,7 +189,6 @@ class MockProvider(MarketProvider):
             ("医药", 45, 210, 10),
             ("新能源", 120, 88, 4),
             ("军工", 70, 130, 5),
-            ("宽基", 310, 180, 12),
         ]
         return [
             SectorRecord(
