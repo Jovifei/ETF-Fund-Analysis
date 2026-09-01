@@ -232,6 +232,62 @@ def test_market_breadth_reads_single_row(bootstrapped, db_session):
     assert round(breadth["ratio"], 1) == 39.2
 
 
+def test_market_breadth_prefers_real_source_over_mock(bootstrapped, db_session):
+    """健壮性核心：即使 mock 行更新（trade_date/fetched_at 更晚），真实源也必须优先。
+
+    模拟真实风险场景——mock provider 在演示模式手动刷出一条「全市场」假数据，
+    其时间戳晚于之前落库的真实 AKShare 宽度。_market_breadth 必须用 case 排序把
+    真实源(source != 'mock-sector')顶到最前，避免假数据遮蔽真实研究结论。
+    """
+    from app.models import SectorSnapshot as SS
+    from datetime import datetime
+
+    db_session.query(SS).filter(SS.board_type == "market").delete()
+
+    # 真实源：较早落库（akshare）
+    db_session.add(
+        SS(sector_name="全市场", trade_date=date(2026, 9, 1), up_count=3094, down_count=1995,
+           flat_count=125, total_count=5214, pct_change=0.41, source="akshare", board_type="market",
+           fetched_at=datetime(2026, 9, 1, 20, 2, 14), quality_hash="u-mkt-real")
+    )
+    # mock 源：更晚落库（演示假数据 3387/2039/126）——必须被真实源压过
+    db_session.add(
+        SS(sector_name="全市场", trade_date=date(2026, 9, 2), up_count=3387, down_count=2039,
+           flat_count=126, total_count=5552, pct_change=-0.20, source="mock-sector", board_type="market",
+           fetched_at=datetime(2026, 9, 2, 9, 0, 0), quality_hash="u-mkt-mock")
+    )
+    db_session.flush()
+
+    breadth = KlineStabilizationService._market_breadth(db_session)
+    assert breadth is not None
+    # 取到的必须是真实 akshare 行，而不是更晚的 mock 行
+    assert breadth["source"] == "akshare"
+    assert breadth["is_mock"] is False
+    assert breadth["up"] == 3094
+    assert breadth["down"] == 1995
+    assert breadth["total"] == 5214
+
+
+def test_market_breadth_falls_back_to_mock_only_when_no_real(bootstrapped, db_session):
+    """无任何真实源时，才回退到 mock 行（保留演示可用性，但显式标注 is_mock）。"""
+    from app.models import SectorSnapshot as SS
+    from datetime import datetime
+
+    db_session.query(SS).filter(SS.board_type == "market").delete()
+    db_session.add(
+        SS(sector_name="全市场", trade_date=date(2026, 9, 2), up_count=3387, down_count=2039,
+           flat_count=126, total_count=5552, pct_change=-0.20, source="mock-sector", board_type="market",
+           fetched_at=datetime(2026, 9, 2, 9, 0, 0), quality_hash="u-mkt-mock")
+    )
+    db_session.flush()
+
+    breadth = KlineStabilizationService._market_breadth(db_session)
+    assert breadth is not None
+    assert breadth["source"] == "mock-sector"
+    assert breadth["is_mock"] is True
+    assert breadth["up"] == 3387
+
+
 class _StubInstrument:
     """仅暴露 _sector_state 需要的属性，避免改动真实标的行。"""
 

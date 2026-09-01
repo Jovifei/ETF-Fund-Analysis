@@ -18,7 +18,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import pandas as pd
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.orm import Session
 
 from app.core.config import PROJECT_ROOT, Settings, get_settings
@@ -183,11 +183,20 @@ class KlineStabilizationService:
         """读取全市场宽度快照（SectorSnapshot.board_type == "market"，单条 "全市场"）。
 
         用作指数 ETF 的广度参考：全市场涨/跌/平家数与跌比。无数据返回 None。
+
+        健壮性：优先取「真实源」（`source != "mock-sector"`），仅当不存在任何真实源时
+        才回退到 mock 行。这样可避免 mock provider 的演示假数据（如 3387/2039/126）
+        顶掉真实 AKShare 宽度，防止演示数据遮蔽真实研究结论。
         """
         row = db.scalar(
             select(SectorSnapshot)
             .where(SectorSnapshot.board_type == "market")
-            .order_by(SectorSnapshot.trade_date.desc(), SectorSnapshot.fetched_at.desc())
+            .order_by(
+                # 真实源排在最前（0），mock 源排最后（1）
+                case((SectorSnapshot.source != "mock-sector", 0), else_=1),
+                SectorSnapshot.trade_date.desc(),
+                SectorSnapshot.fetched_at.desc(),
+            )
             .limit(1)
         )
         if not row:
@@ -202,6 +211,8 @@ class KlineStabilizationService:
             "ratio": ratio,
             "sector_name": row.sector_name,
             "trade_date": row.trade_date.isoformat(),
+            "source": row.source,
+            "is_mock": row.source == "mock-sector",
         }
 
     # ---------- 指标快照 ----------
