@@ -464,6 +464,28 @@ def test_factory_explicit_ftshare_requires_enabled_and_composites_order(monkeypa
     assert [item.name for item in provider.providers] == ["tushare", "akshare", "ftshare"]
 
 
+def test_public_composite_uses_tushare_only_after_akshare_when_token_is_available(monkeypatch):
+    class Fake:
+        def __init__(self, settings):
+            self.settings = settings
+
+    monkeypatch.setattr("app.providers.factory.AKShareProvider", type("AK", (Fake,), {"name": "akshare"}))
+    monkeypatch.setattr("app.providers.factory.TushareProvider", type("TS", (Fake,), {"name": "tushare"}))
+    monkeypatch.setattr("app.providers.factory.FTShareProvider", type("FT", (Fake,), {"name": "ftshare"}))
+
+    provider = build_provider(
+        Settings(
+            _env_file=None,
+            market_provider="public_composite",
+            tushare_token="unit-test-token-123456",
+            ftshare_enabled=True,
+            ftshare_qualification="qualified",
+        )
+    )
+
+    assert [item.name for item in provider.providers] == ["akshare", "tushare", "ftshare"]
+
+
 def test_new_factory_chains_never_add_mock_even_when_legacy_flag_is_true(monkeypatch):
     class Fake:
         def __init__(self, settings):

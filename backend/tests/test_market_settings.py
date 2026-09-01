@@ -2,15 +2,13 @@ from __future__ import annotations
 
 import json
 
-from fastapi.testclient import TestClient
-
 from app.core.config import Settings
 from app.main import app
 from app.providers.mock import MockProvider
+from app.providers.types import BarRecord
 from app.services.runtime_service import RuntimeService
 from app.services.task_service import TaskService
-from app.providers.types import BarRecord
-from datetime import date
+from fastapi.testclient import TestClient
 
 FAKE_TOKEN = "unit-ts-1234567890"
 
@@ -170,6 +168,29 @@ def test_market_probe_returns_bounded_provider_matrix_without_raw_errors(db_sess
         assert set(("provider", "operation", "ok", "status", "records", "latency", "failure_class", "qualification")) == set(row)
 
 
+def test_usable_market_probe_keeps_akshare_before_tushare_when_token_exists(db_session, monkeypatch):
+    settings = Settings(_env_file=None, market_provider="akshare", tushare_token=FAKE_TOKEN, ftshare_enabled=False)
+    runtime = RuntimeService(settings)
+
+    class FakeProvider:
+        def __init__(self, provider_settings):
+            self.name = provider_settings.market_provider
+
+        def fetch_daily_bars(self, code, start, end):
+            return [BarRecord(ts_code=code, trade_date=end, open=1, high=1, low=1, close=1, volume=1, amount=1, source=self.name)]
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr("app.services.runtime_service.create_provider", FakeProvider)
+    result = runtime.probe_market(db_session, tier_override="usable")
+
+    assert [row["provider"] for row in result["providers"]] == ["akshare", "tushare", "ftshare"]
+    assert result["providers"][0]["status"] == "ok"
+    assert result["providers"][1]["status"] == "ok"
+    assert result["providers"][2]["status"] == "skipped"
+
+
 def test_market_probe_rejects_arbitrary_controls(bootstrapped):
     with TestClient(app) as client:
         response = client.post("/api/settings/market-probe", json={"provider_url": "https://evil.invalid"})
@@ -196,6 +217,29 @@ def test_task_service_rebinds_non_mock_provider(db_session, monkeypatch):
     service._bind_runtime_provider(db_session)
     assert captured["provider"] == "composite"
     assert captured["token"] == FAKE_TOKEN
+    RuntimeService(live).update(db_session, {"clear_tushare_token": True, "market_data_tier": "usable"})
+
+
+def test_usable_runtime_with_stored_token_binds_public_composite(db_session, monkeypatch):
+    live = Settings(_env_file=None, market_provider="akshare", tushare_token="")
+    RuntimeService(live).update(db_session, {"market_data_tier": "usable", "tushare_token": FAKE_TOKEN})
+    captured: dict[str, str] = {}
+
+    class FakeProvider:
+        name = "public_composite"
+
+    def fake_create(resolved):
+        captured["provider"] = resolved.market_provider
+        captured["token"] = resolved.tushare_token
+        return FakeProvider()
+
+    monkeypatch.setattr("app.services.task_service.create_provider", fake_create)
+    service = TaskService(live, provider=MockProvider(Settings(_env_file=None, market_provider="mock")))
+    service.settings = live
+    service.runtime = RuntimeService(live)
+    service._bind_runtime_provider(db_session)
+
+    assert captured == {"provider": "public_composite", "token": FAKE_TOKEN}
     RuntimeService(live).update(db_session, {"clear_tushare_token": True, "market_data_tier": "usable"})
 
 

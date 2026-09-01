@@ -7,3 +7,4 @@
 - 2026-09-01: 宽表排序键必须是后端提供的原始数值语义，不能依赖指标对象文本或 UI 猜测；预测排序只可用选定 horizon 的收益和置信度并将缺失值置后。
 - 2026-09-01: 排序同档必须提供数值次级键（量比、均线箭头、TD9 计数），并用实际 read/API snapshot payload 验证 horizon 切换，不能只测试纯辅助函数。
 - 2026-09-01: Provider percentage-points 与内部 decimal-ratio 必须在边界显式转换一次；任务入队、时效、新鲜度和事件都要以多 session/时间边界测试，而不能只凭单进程顺序假设。
+- 2026-09-01: 免费档加入备用 Provider 时，必须同时验证工厂顺序和 RuntimeService/TaskService 对持久化 Token 的实际绑定；只测直接 Settings token 会漏掉 UI 配置无法进入执行链的问题。

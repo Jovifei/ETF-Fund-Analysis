@@ -8,7 +8,7 @@
 
 ## 已实现
 
-- Tushare 主数据源、AKShare 备用源，生产环境禁止静默回退到 Mock。
+- 完整档使用 Tushare 主源、AKShare 备用；免费档使用 AKShare 主源，若配置了 Tushare Token 则作为第二候选，生产环境禁止静默回退到 Mock。
 - ETF/LOF 自选池、日线、盘中快照、数据源审计和退化标记；技术指标、预测基线、事件驱动轮动回测和信号状态机。
 - 新闻去重、主题映射、提示注入隔离和 provider-neutral 多模型分析网关。
 - 暗色网页看板、市场上下文卡片、K 线/MACD Canvas 图、持仓录入、SSE 增量更新、HTML 报告。
@@ -73,7 +73,7 @@ uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 
 ## 行情数据源与安全演示
 
-看板把数据用途分成三档：隔离演示（Mock）、免费公开行情（AKShare 主源）和更完整行情（Tushare
+看板把数据用途分成三档：隔离演示（Mock）、免费公开行情（AKShare 主源，Tushare 可作为第二候选）和更完整行情（Tushare
 主源）。FTShare 是可选的只读备用源，默认 `FTSHARE_ENABLED=false` 且
 `FTSHARE_QUALIFICATION=unverified`；应用不会执行第三方 Skill，也不接受前端传入 URL、工具名或
 Shell 参数。通过资格探测前，FTShare 完全跳过；探测失败只会记录脱敏状态并继续其他公开源，绝不

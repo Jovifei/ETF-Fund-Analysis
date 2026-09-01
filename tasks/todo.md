@@ -459,3 +459,11 @@ python codex/skills/fund-research/scripts/check_no_secrets.py .
 - Isolated Docker API/DB healthy; Alembic current/head `f7a8b9c0d1e2`; `alembic check`: no pending operations.
 - Browser visual smoke: 37 rendered rows across six groups at 1440/1024/390 widths; grouped/global table, detail, forecast and responsive screenshots captured under `E:\Claude_allow\Download`.
 - Final independent review: APPROVED. Mock data remains explicitly research-only/non-actionable; no credentials, production DB, or broker access was used.
+
+## Free-tier provider fallback correction (2026-09-01)
+
+- [x] RED: regression showed `public_composite` omitted a configured Tushare candidate and persisted UI tokens still bound tasks to direct AKShare.
+- [x] GREEN: free/public execution now orders AKShare → configured Tushare → qualified FTShare; complete execution remains Tushare → AKShare → qualified FTShare.
+- [x] Runtime probe and TaskService tests cover stored-token binding; no Mock fallback was introduced.
+- [x] Focused Provider/settings suite and full pytest passed; Ruff, compileall, Node syntax and diff checks passed.
+- [x] Independent Terra review: APPROVED after the persisted-token binding repair.

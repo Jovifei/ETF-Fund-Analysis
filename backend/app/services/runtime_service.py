@@ -13,7 +13,6 @@ from app.core.config import Settings, get_settings
 from app.models import RuntimeSetting
 from app.providers.factory import create_provider
 
-
 DEFAULT_KEYS = {
     "quote_refresh_minutes": "盘中行情刷新分钟数",
     "signal_refresh_minutes": "盘中信号重算分钟数",
@@ -135,8 +134,13 @@ class RuntimeService:
         # These modes are complete provider selections, rather than the
         # legacy usable/complete Tushare tier switch.  Preserve them so the
         # factory can enforce FTShare's explicit enablement and ordering.
-        if self.settings.market_provider in {"ftshare", "public_composite"}:
+        if self.settings.market_provider == "ftshare":
             return self.settings
+        if self.settings.market_provider == "public_composite":
+            # Keep the explicit public chain while still resolving a token
+            # saved through the settings UI into the provider instance.
+            token = self._resolve_token(db)
+            return self.settings.model_copy(update={"tushare_token": token})
         raw = self._raw_settings(db)
         tier = raw.get("market_data_tier") or self._default_tier()
         token = self._resolve_token(db, token_override)
@@ -144,7 +148,7 @@ class RuntimeService:
             return self.settings.model_copy(update={"market_provider": "composite", "tushare_token": token})
         public_provider = (
             "public_composite"
-            if self.settings.ftshare_enabled and self.settings.ftshare_qualification == "qualified"
+            if token or (self.settings.ftshare_enabled and self.settings.ftshare_qualification == "qualified")
             else "akshare"
         )
         return self.settings.model_copy(update={"market_provider": public_provider, "tushare_token": token})
@@ -196,6 +200,8 @@ class RuntimeService:
         if tier == "complete":
             candidates.append(("tushare", self.settings.model_copy(update={"market_provider": "tushare", "tushare_token": token}) if token else None, "credentials_missing" if not token else None))
         candidates.append(("akshare", self.settings.model_copy(update={"market_provider": "akshare", "tushare_token": token}), None))
+        if tier != "complete" and token:
+            candidates.append(("tushare", self.settings.model_copy(update={"market_provider": "tushare", "tushare_token": token}), None))
         if self.settings.ftshare_enabled and self.settings.ftshare_qualification == "qualified":
             candidates.append(("ftshare", self.settings.model_copy(update={"market_provider": "ftshare"}), None))
         else:

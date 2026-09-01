@@ -26,7 +26,15 @@ def build_provider(settings: Settings | None = None) -> MarketProvider:
     providers: list[MarketProvider] = []
     errors: list[str] = []
     if settings.market_provider == "public_composite":
-        provider_classes = (AKShareProvider, FTShareProvider)
+        # The usable/free tier keeps AKShare as the primary public source.  A
+        # configured Tushare token is an explicit second candidate for the
+        # same tier, so a transient upstream block does not force the user to
+        # switch tiers; the complete tier below intentionally remains
+        # Tushare-first.
+        provider_classes = [AKShareProvider]
+        if settings.tushare_token:
+            provider_classes.append(TushareProvider)
+        provider_classes.append(FTShareProvider)
     else:
         provider_classes = (TushareProvider, AKShareProvider, FTShareProvider)
     for provider_cls in provider_classes:

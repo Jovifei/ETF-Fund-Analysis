@@ -38,9 +38,9 @@ SQLite 和 420+ 天合成日线，不访问外网、不写正式 PostgreSQL、�
 
 ### FTShare 备用源
 
-FTShare 是可选、只读的公开数据备用源，默认不启用，也不需要 Token。免费档仍为 AKShare 主源；
+FTShare 是可选、只读的公开数据备用源，默认不启用，也不需要 Token。免费档仍为 AKShare 主源；如已配置 Tushare Token，Tushare 仅作为第二候选；
 只有运行 `scripts/qualify_ftshare.py` 得到合格报告、确认独立的数据服务条款，并在服务器 `.env`
-明确设置 `FTSHARE_QUALIFICATION=qualified` 与 `FTSHARE_ENABLED=true` 后，FTShare 才会加入备用链。
+明确设置 `FTSHARE_QUALIFICATION=qualified` 与 `FTSHARE_ENABLED=true` 后，FTShare 才会加入最后备用链。
 详见 [`docs/FTSHARE_PROVIDER.md`](docs/FTSHARE_PROVIDER.md)。
 
 ## B. 生产环境配置
