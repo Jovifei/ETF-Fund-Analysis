@@ -24,6 +24,7 @@ from sqlalchemy import (
     UniqueConstraint,
     event,
     inspect,
+    text,
 )
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
@@ -1198,7 +1199,16 @@ class RuntimeSetting(Base, TimestampMixin):
 
 class TaskRun(Base):
     __tablename__ = "task_runs"
-    __table_args__ = (Index("ix_task_run_name_started", "task_name", "started_at"),)
+    __table_args__ = (
+        Index("ix_task_run_name_started", "task_name", "started_at"),
+        Index(
+            "uq_task_runs_active_decision_board_refresh",
+            "task_name",
+            unique=True,
+            sqlite_where=text("task_name = 'refresh_decision_board' AND status IN ('queued', 'running')"),
+            postgresql_where=text("task_name = 'refresh_decision_board' AND status IN ('queued', 'running')"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     run_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
@@ -1208,6 +1218,62 @@ class TaskRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     result_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     error: Mapped[str | None] = mapped_column(Text)
+
+
+class DecisionBoardSnapshot(Base):
+    """Immutable materialized read model for the unified ETF decision board."""
+
+    __tablename__ = "decision_board_snapshots"
+    __table_args__ = (
+        UniqueConstraint("snapshot_id", name="uq_decision_board_snapshots_snapshot_id"),
+        Index("ix_decision_board_snapshots_generated_at", "generated_at"),
+        CheckConstraint(
+            "freshness IN ('fresh', 'stale', 'missing', 'degraded', 'unknown')",
+            name="ck_decision_board_snapshots_freshness",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    snapshot_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    next_refresh_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    freshness: Mapped[str] = mapped_column(String(16), nullable=False, default="unknown")
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class DecisionBoardProvisionalInput(Base):
+    """Raw intraday OHLCV observation kept separate from confirmed DailyBar rows."""
+
+    __tablename__ = "decision_board_provisional_inputs"
+    __table_args__ = (
+        UniqueConstraint(
+            "instrument_id", "observed_at", "source", name="uq_decision_board_provisional_input"
+        ),
+        Index("ix_decision_board_provisional_input_instrument_time", "instrument_id", "observed_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id", ondelete="CASCADE"), index=True)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    timestamp_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    open_price: Mapped[float | None] = mapped_column(Float)
+    high_price: Mapped[float | None] = mapped_column(Float)
+    low_price: Mapped[float | None] = mapped_column(Float)
+    last_price: Mapped[float | None] = mapped_column(Float)
+    volume: Mapped[float | None] = mapped_column(Float)
+    amount: Mapped[float | None] = mapped_column(Float)
+    pct_change_percent_points: Mapped[float | None] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DecisionBoardSlotRun(Base):
+    """Persistent once-per-slot claim; prevents duplicate work after restarts."""
+
+    __tablename__ = "decision_board_slot_runs"
+
+    slot_key: Mapped[str] = mapped_column(String(32), primary_key=True)
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class ProviderAudit(Base):

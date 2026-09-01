@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.router import router as api_router
@@ -101,5 +101,7 @@ def index() -> FileResponse:
 
 
 @app.get("/workbench/1430", include_in_schema=False)
-def etf_1430_workbench() -> FileResponse:
-    return FileResponse(STATIC_DIR / "etf_1430_workbench.html", media_type="text/html; charset=utf-8")
+def etf_1430_workbench() -> RedirectResponse:
+    """Compatibility entrypoint; the unified decision board owns the UI."""
+
+    return RedirectResponse(url="/", status_code=307)

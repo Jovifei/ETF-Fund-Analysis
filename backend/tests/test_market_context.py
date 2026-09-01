@@ -1251,11 +1251,11 @@ def test_scheduler_context_failure_isolated_and_terminal_attempt_throttles_retry
     assert [name for name in calls[:4]] == [
         "sync_instruments",
         "refresh_market_context",
-        "refresh_quotes",
         "refresh_signals",
+        "refresh_news",
     ]
     assert calls.count("refresh_market_context") == 1
-    assert "refresh_quotes" in second["executed"] or "refresh_quotes" in calls
+    assert "refresh_quotes" not in second["executed"]
     assert all(provider.close_calls == 1 for provider in providers)
     failed = db.scalar(
         select(TaskRun).where(TaskRun.task_name == "refresh_market_context", TaskRun.status == "failed")

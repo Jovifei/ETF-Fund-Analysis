@@ -8,16 +8,17 @@ from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.models import Instrument, ProviderAudit, TaskRun
 from app.providers.factory import create_provider
+from app.research.integrations import capability_matrix
 from app.services.backtest_v05_service import RotationBacktestV05Service
 from app.services.calibration_service import CalibrationService
-from app.services.portfolio_optimization_service import PortfolioOptimizationService
 from app.services.crosscheck_engine import crosscheck_main
-from app.services.shadow_run_audit_service import ShadowRunAuditService
+from app.services.decision_board_service import DecisionBoardService
 from app.services.event_service import emit_event
 from app.services.execution_policy import TaskExecutionPolicy
 from app.services.factor_analysis_service import FactorAnalysisService
@@ -27,11 +28,12 @@ from app.services.indicator_service import IndicatorService
 from app.services.market_context_service import MarketContextService
 from app.services.market_service import MarketService
 from app.services.news_service import NewsService
+from app.services.portfolio_optimization_service import PortfolioOptimizationService
 from app.services.report_service import ReportService
 from app.services.runtime_service import RuntimeService
+from app.services.shadow_run_audit_service import ShadowRunAuditService
 from app.services.signal_v05_service import SignalV05Service
 from app.services.validation_service import ForecastValidationService
-from app.research.integrations import capability_matrix
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +128,7 @@ class TaskService:
         self.portfolio = PortfolioOptimizationService(self.settings)
         self.shadow_audit = ShadowRunAuditService(self.settings)
         self.backtest = RotationBacktestV05Service(self.settings)
+        self.decision_board = DecisionBoardService(self.settings)
 
     def close(self) -> None:
         """Close only providers created by this service instance."""
@@ -149,6 +152,7 @@ class TaskService:
             "refresh_news",
             "analyze_news",
             "refresh_signals",
+            "refresh_decision_board",
             "generate_report",
             "validate_forecasts",
             "calibrate_forecasts",
@@ -192,6 +196,7 @@ class TaskService:
         self.news = NewsService(
             self.provider, resolved, persist_provider_audits=self.execution_policy.persist_provider_audits
         )
+        self.decision_board = DecisionBoardService(resolved)
 
     def _ensure_instruments(self, db: Session, run_id: str) -> dict | None:
         count = db.scalar(select(Instrument.id).limit(1))
@@ -257,6 +262,28 @@ class TaskService:
             )
         if task_name == "refresh_signals":
             return self.signals.refresh_all(db, run_id=run_id)
+        if task_name == "refresh_decision_board":
+            input_result = None
+            if bool(kwargs.get("refresh_input", False)):
+                input_result = self.market.refresh_quotes(db, run_id=run_id)
+                captured = self.decision_board.capture_latest_quotes(db)
+                input_result = {**input_result, "provisional_captured": captured}
+            built = self.decision_board.refresh(db)
+            emit_event(
+                db,
+                "decision_board.updated",
+                {"snapshot_id": built.snapshot.snapshot_id, "generated_at": built.payload["generated_at"], "freshness": built.payload["freshness"]},
+            )
+            return {
+                "run_id": run_id,
+                "status": "succeeded",
+                "snapshot_id": built.snapshot.snapshot_id,
+                "generated_at": built.payload["generated_at"],
+                "freshness": built.payload["freshness"],
+                "research_only": True,
+                "actionable": False,
+                "input": input_result,
+            }
         if task_name == "generate_report":
             return self.reports.generate(db, run_id=run_id)
         if task_name == "validate_forecasts":
@@ -398,18 +425,69 @@ class TaskService:
         if task_name not in self.task_names:
             raise UnknownTaskError(task_name)
         with _task_lock(db):
-            run_id = kwargs.pop("run_id", None) or uuid4().hex
+            requested_run_id = kwargs.pop("run_id", None)
+            run_id = requested_run_id or uuid4().hex
             started = datetime.now(self.settings.timezone)
             task = None
             if self.execution_policy.persist_task_runs:
-                task = TaskRun(
-                    run_id=run_id,
-                    task_name=task_name,
-                    status="running",
-                    started_at=started,
-                    result_json={},
+                task = (
+                    db.scalar(
+                        select(TaskRun).where(
+                            TaskRun.run_id == requested_run_id,
+                            TaskRun.task_name == task_name,
+                            TaskRun.status == "queued",
+                        )
+                    )
+                    if requested_run_id
+                    else None
                 )
-                db.add(task)
+                if task is None and task_name == "refresh_decision_board" and requested_run_id is None:
+                    active = db.scalar(
+                        select(TaskRun)
+                        .where(
+                            TaskRun.task_name == task_name,
+                            TaskRun.status.in_(("queued", "running")),
+                        )
+                        .order_by(TaskRun.started_at)
+                        .limit(1)
+                    )
+                    if active is not None:
+                        if active.status == "running":
+                            raise TaskBusyError("decision-board refresh is already running")
+                        task = active
+                        run_id = task.run_id
+                if task is None:
+                    task = TaskRun(
+                        run_id=run_id,
+                        task_name=task_name,
+                        status="running",
+                        started_at=started,
+                        result_json={},
+                    )
+                    if task_name == "refresh_decision_board":
+                        try:
+                            with db.begin_nested():
+                                db.add(task)
+                                db.flush()
+                        except IntegrityError:
+                            active = db.scalar(
+                                select(TaskRun)
+                                .where(
+                                    TaskRun.task_name == task_name,
+                                    TaskRun.status.in_(("queued", "running")),
+                                )
+                                .order_by(TaskRun.started_at)
+                                .limit(1)
+                            )
+                            if active is None or active.status == "running":
+                                raise TaskBusyError("decision-board refresh is already running") from None
+                            task = active
+                            run_id = task.run_id
+                    else:
+                        db.add(task)
+                else:
+                    task.status = "running"
+                    task.started_at = started
                 db.flush()
             try:
                 result = self._execute(db, task_name, run_id, **kwargs)

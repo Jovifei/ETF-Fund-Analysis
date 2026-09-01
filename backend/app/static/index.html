@@ -26,7 +26,6 @@
     <nav id="tabs" class="tabs" role="tablist" aria-label="研究视图">
       <button data-tab="dashboard" class="active" role="tab" aria-selected="true">决策看板</button>
       <button data-tab="signals" role="tab" aria-selected="false">信号中心</button>
-      <button data-tab="grade" role="tab" aria-selected="false">ETF信号分级</button>
       <button data-tab="holdings" role="tab" aria-selected="false">持仓</button>
       <button data-tab="news" role="tab" aria-selected="false">新闻事件</button>
       <button data-tab="system" role="tab" aria-selected="false">系统</button>
@@ -42,41 +41,22 @@
   <main class="page">
     <div id="demoBanner" class="demo-banner hidden" role="status" aria-live="polite"><strong>DEMO · 隔离演示数据</strong><span>仅使用进程内 Mock 数据，不访问外网、不写生产数据库，所有结果仅供功能演示。</span><button id="demoBannerExitButton" class="ghost" type="button">退出演示</button></div>
     <section id="view-dashboard" class="view active">
-      <div id="globalWarning" class="warning-banner hidden"></div>
-      <div id="summaryCards" class="summary-grid"></div>
-      <div class="panel market-summary-panel">
-        <div class="panel-head"><div><div class="eyebrow">INTRADAY SNAPSHOT</div><h2>盘中总结与核心变化</h2></div><div id="lastUpdated" class="muted"></div></div>
-        <div id="marketNarrative" class="market-narrative">等待数据...</div>
-      </div>
-      <section id="marketContextSection" class="panel observed-surface" aria-labelledby="marketContextHeading">
-        <div class="panel-head">
-          <div><div class="eyebrow">MARKET CONTEXT · OBSERVED · 次要</div><h2 id="marketContextHeading">市场环境（宽基观察，不是行业进入依据）</h2></div>
-          <div class="legend context-legend"><span class="status-key">观察值</span><span class="status-key status-key-muted">未验证 / 不可用</span></div>
+      <section id="decisionBoard" class="decision-board" aria-labelledby="decisionBoardHeading">
+        <div class="decision-board-head"><div><div class="eyebrow">UNIFIED ETF DECISION BOARD · READ ONLY</div><h1 id="decisionBoardHeading">ETF 决策总表</h1></div><div id="decisionSnapshotMeta" class="decision-snapshot-meta" aria-live="polite">等待快照…</div></div>
+        <section id="marketContextSection" class="decision-context-ribbon observed-surface" aria-labelledby="marketContextHeading">
+          <div class="decision-context-head"><div><div class="eyebrow">MARKET CONTEXT · OBSERVED · 次要</div><h2 id="marketContextHeading">市场环境（观察）</h2></div><span>六项注册观察值 · 非行业进入依据</span></div>
+          <div id="marketContextCards" class="market-context-grid" role="list" aria-live="polite"><div class="empty-state">等待市场环境数据…</div></div>
+        </section>
+        <div id="decisionWarning" class="warning-banner hidden" role="status"></div>
+        <div id="decisionCounts" class="decision-counts" aria-label="分级计数"></div>
+        <div class="decision-toolbar" aria-label="决策表筛选与视图">
+          <div class="decision-mode" role="group" aria-label="视图模式"><button id="decisionModeGrouped" type="button" class="active">五组视图</button><button id="decisionModeGlobal" type="button">全局排名</button></div>
+          <label class="decision-filter-label">筛选 <input id="decisionSearch" type="search" autocomplete="off" placeholder="搜索主题、分类、ETF 代码或名称"></label>
+          <label class="decision-horizon-label">预测周期 <select id="decisionHorizon" aria-label="预测周期"><option value="1">1 日</option><option value="3">3 日</option><option value="5">5 日</option><option value="10">10 日</option></select></label>
         </div>
-        <div id="marketContextCards" class="market-context-grid" role="list" aria-live="polite">
-          <div class="empty-state">等待市场环境数据...</div>
-        </div>
+        <div id="decisionTableArea" class="decision-table-area" aria-live="polite"><div class="empty-state">正在读取只读决策快照…</div></div>
+        <section class="decision-explanations" aria-label="看板说明"><div><strong>核心变化</strong><span>今日、较昨日、近 1 周与指标状态均来自同一快照；缺失、退化或未验证字段不作推断。</span></div><div><strong>预测说明</strong><span>预测仅为研究情景，非实际结果；未完成校准时不构成操作指令。</span></div></section>
       </section>
-      <div class="panel">
-        <div class="panel-head">
-          <div><div class="eyebrow">ETF BOARD · INDUSTRY / CONCEPT</div><h2>行业与概念板块（主题ETF代理）</h2></div>
-          <div id="boardMeta" class="muted">研究提示，非操作指令</div>
-        </div>
-        <p class="board-disclaimer">名称对齐东方财富常见叫法，分数来自池内场内 ETF 的量能/均线/MACD/KDJ/RSI/九转系数，不爬东财板块指数，不编造涨跌家数。点击卡片打开代理 ETF K 线。</p>
-        <div class="board-toolbar">
-          <div class="front-tabs" id="boardKindTabs">
-            <button type="button" data-board-kind="industry" class="active">行业板块</button>
-            <button type="button" data-board-kind="concept">概念板块</button>
-          </div>
-          <form id="boardAddForm" class="board-add-form">
-            <select id="boardAddSelect" aria-label="选择板块"></select>
-            <input id="boardAddCode" name="ts_code" placeholder="添加基金 如 512480.SH" required>
-            <input id="boardAddName" name="name" placeholder="简称（可空）">
-            <button class="primary" type="submit">添加到板块</button>
-          </form>
-        </div>
-        <div id="boardGrid" class="board-grid"><div class="empty-state">等待板块数据… 若全空请到「系统」运行完整流水线以写入日线。</div></div>
-      </div>
     </section>
 
     <section id="view-signals" class="view">
@@ -114,19 +94,6 @@
         <div id="frontCount" class="muted front-count"></div>
         <div id="frontList" class="front-list"><div class="loading-row">等待信号中心数据...</div></div>
       </div>
-    </section>
-
-    <section id="view-grade" class="view">
-      <div id="gradeWarning" class="warning-banner">研究提示，非操作指令。分级不改写生产信号、不下单。预测为未校准研究输出。</div>
-      <div id="gradeSummaryCards" class="summary-grid compact grade-summary"></div>
-      <div class="panel">
-        <div class="panel-head">
-          <div><div class="eyebrow">ETF SIGNAL GRADE · RESEARCH</div><h2>ETF 信号分级</h2></div>
-          <div id="gradeMeta" class="muted"></div>
-        </div>
-        <div id="gradeNarrative" class="market-narrative">等待分级数据...</div>
-      </div>
-      <div id="gradeGroups"></div>
     </section>
 
     <section id="view-holdings" class="view">

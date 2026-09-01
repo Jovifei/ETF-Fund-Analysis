@@ -18,11 +18,11 @@ from app.api.schemas import (
     HoldingImportCloudConsent,
     HoldingImportResponse,
     HoldingUpsert,
+    MarketProbeRequest,
     ReviewCandidateResponse,
     ReviewEnqueueRequest,
     ReviewRunner,
     ReviewTransitionRequest,
-    MarketProbeRequest,
     RuntimeUpdate,
     TaskRequest,
 )
@@ -34,6 +34,7 @@ from app.ocr.image_validation import ImageValidationError, read_limited_bytes
 from app.services.analysis_persistence_service import AnalysisStorageNotMigrated
 from app.services.board_service import BoardService
 from app.services.dashboard_service import DashboardService
+from app.services.decision_board_service import DecisionBoardRefreshBusy, DecisionBoardService
 from app.services.demo_service import DemoService
 from app.services.holding_import_service import (
     HoldingImportConflict,
@@ -94,6 +95,55 @@ def bootstrap(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict:
     return DashboardService(settings).bootstrap(db)
+
+
+@private_router.get("/decision-board")
+def decision_board(
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    horizon: int = Query(default=1),
+    snapshot_id: str | None = Query(default=None, min_length=1, max_length=64),
+) -> dict:
+    try:
+        payload = DecisionBoardService(settings).read_latest(db, horizon=horizon, snapshot_id=snapshot_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="horizon must be one of 1, 3, 5, 10") from None
+    if payload is None:
+        raise HTTPException(status_code=404, detail="decision-board snapshot not found")
+    return payload
+
+
+@private_router.get("/decision-board/{ts_code}")
+def decision_board_detail(
+    ts_code: str,
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    horizon: int = Query(default=1),
+    snapshot_id: str | None = Query(default=None, min_length=1, max_length=64),
+) -> dict:
+    try:
+        row = DecisionBoardService(settings).read_instrument(
+            db, ts_code, horizon=horizon, snapshot_id=snapshot_id
+        )
+    except ValueError:
+        raise HTTPException(status_code=422, detail="horizon must be one of 1, 3, 5, 10") from None
+    if row is None:
+        raise HTTPException(status_code=404, detail="decision-board instrument not found")
+    return row
+
+
+@private_router.post("/decision-board/refresh", status_code=status.HTTP_202_ACCEPTED)
+def queue_decision_board_refresh(
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict:
+    try:
+        result = DecisionBoardService(settings).enqueue_refresh(db)
+        db.commit()
+        return result
+    except DecisionBoardRefreshBusy:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="decision-board refresh already active") from None
 
 
 @private_router.post("/demo/load")

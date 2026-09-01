@@ -27,6 +27,12 @@ GRADE_REASONS = {
 }
 
 
+def percent_points_to_ratio(value: object) -> float | None:
+    """QuoteSnapshot persists provider percentage points; grade logic uses ratios."""
+    number = finite_or_none(value)
+    return round(number / 100.0, 12) if number is not None else None
+
+
 def _f(values: dict[str, Any], key: str) -> float | None:
     return finite_or_none(values.get(key))
 
@@ -260,7 +266,7 @@ class SignalGradeService:
             indicator = latest_indicators.get(instrument.id)
             values = dict(indicator.values_json) if indicator and indicator.values_json else {}
             quote = latest_quotes.get(instrument.id)
-            pct = finite_or_none(quote.pct_change) if quote else _f(values, "return_1d")
+            pct = percent_points_to_ratio(quote.pct_change) if quote else _f(values, "return_1d")
             if pct is not None:
                 theme_moves[instrument.theme_l2 or instrument.theme_l1 or "未分类"].append(pct)
             previous = previous_indicators.get(instrument.id)
@@ -301,6 +307,7 @@ class SignalGradeService:
 
         groups = {key: [row for row in classified if row["grade"] == key] for key in GRADE_ORDER}
         anomaly = [row for row in classified if row["grade"] == "数据异常"]
+        groups["数据异常"] = anomaly
         counts = {key: len(items) for key, items in groups.items()}
         counts["数据异常"] = len(anomaly)
         up_count = sum(1 for row in classified if (row["pct_change"] or 0) > 0)

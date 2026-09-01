@@ -45,6 +45,14 @@ const state = {
   formalMutationCount: 0,
   renderOverride: null,
   eventsRestartOverride: null,
+  decisionBoard: null,
+  decisionBoardController: null,
+  decisionStatusTimer: null,
+  decisionRefreshTask: null,
+  decisionUi: {
+    mode: 'grouped', filter: '', sort: {key: null, direction: null}, horizon: 1,
+    scrollPositions: [], openDetailCode: null, openDetailSnapshotId: null,
+  },
 };
 
 const DEFAULT_MARKET_CONTEXT = Object.freeze([
@@ -81,6 +89,165 @@ function pct(value, digits = 2, ratio = false) {
   if (!numericValue(value)) return '—';
   const n = Number(value) * (ratio ? 100 : 1);
   return `${n >= 0 ? '+' : ''}${n.toFixed(digits)}%`;
+}
+
+// Decision-board values are API decimal ratios.  This intentionally has no
+// magnitude heuristic: 0.0009 means +0.09%, not +0.0009% or +0.9%.
+function decisionPercent(value, digits = 2) {
+  if (!numericValue(value)) return '—';
+  const n = Number(value) * 100;
+  return `${n >= 0 ? '+' : ''}${n.toFixed(digits)}%`;
+}
+const DECISION_GROUPS = Object.freeze(['可加仓', '可入场', '可试探', '观望', '减仓', '数据异常']);
+const DECISION_COLUMNS = Object.freeze([
+  ['instrument', '标的'], ['theme', '分类'], ['today', '今日'], ['previous_day_delta', '较昨日'], ['week_1', '近1周'],
+  ['volume', '量能'], ['ma', '均线'], ['macd', 'MACD'], ['kdj', 'KDJ'], ['td', '九转'], ['rsi', 'RSI'], ['chan', '缠论'],
+  ['sector', '板块'], ['forecast', '预测'], ['grade', '分级'], ['health', '数据状态'], ['reason', '理由 / 风险'],
+]);
+const DECISION_SORTABLE = Object.freeze(new Set(['today', 'previous_day_delta', 'week_1', 'volume', 'ma', 'macd', 'kdj', 'td', 'rsi', 'chan', 'forecast', 'grade']));
+const DECISION_SORT_KEY = Object.freeze({grade: 'grade_health'});
+
+function decisionRows(payload) {
+  const byCode = new Map();
+  const add = row => { if (row && row.ts_code && !byCode.has(String(row.ts_code))) byCode.set(String(row.ts_code), row); };
+  (payload?.rows || []).forEach(add);
+  Object.values(payload?.groups || {}).forEach(rows => (rows || []).forEach(add));
+  return [...byCode.values()];
+}
+function decisionValue(row, key) {
+  const supplied = row?.sort_keys?.[DECISION_SORT_KEY[key] || key];
+  if (supplied !== null && supplied !== undefined && supplied !== '') return supplied;
+  if (key in (row?.returns || {})) return row.returns[key];
+  return row?.[key];
+}
+function decisionCompareValue(left, right) {
+  const leftMissing = left === null || left === undefined || left === '';
+  const rightMissing = right === null || right === undefined || right === '';
+  if (leftMissing || rightMissing) return leftMissing === rightMissing ? 0 : leftMissing ? 1 : -1;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    const a = Array.isArray(left) ? left : [left], b = Array.isArray(right) ? right : [right];
+    for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+      const result = decisionCompareValue(a[index], b[index]);
+      if (result) return result;
+    }
+    return 0;
+  }
+  if (numericValue(left) && numericValue(right)) return Number(left) - Number(right);
+  return String(left).localeCompare(String(right), 'zh-CN');
+}
+function decisionHealthPriority(row) { return row?.sort_keys?.grade_health ?? row?.sort_keys?.health_priority ?? null; }
+function decisionSorted(rows, sort) {
+  if (!sort?.key || !sort?.direction) return [...rows];
+  const sign = sort.direction === 'desc' ? -1 : 1;
+  return [...rows].sort((a, b) => {
+    const result = decisionCompareValue(decisionValue(a, sort.key), decisionValue(b, sort.key));
+    if (result) return result * sign;
+    const healthResult = decisionCompareValue(decisionHealthPriority(a), decisionHealthPriority(b));
+    if (healthResult) return healthResult;
+    return String(a?.ts_code || '').localeCompare(String(b?.ts_code || ''), 'en');
+  });
+}
+function decisionMatches(row, filter) {
+  const query = String(filter || '').trim().toLowerCase();
+  if (!query) return true;
+  return [row?.ts_code, row?.name, row?.theme_l1, row?.theme_l2, row?.grade, row?.sector?.label]
+    .filter(value => value !== null && value !== undefined).join(' ').toLowerCase().includes(query);
+}
+function decisionVisibleRows(payload, ui) { return decisionSorted(decisionRows(payload).filter(row => decisionMatches(row, ui?.filter)), ui?.sort); }
+function decisionGroupedRows(payload, ui) {
+  const rows = decisionVisibleRows(payload, ui);
+  const membership = new Map();
+  for (const [group, members] of Object.entries(payload?.groups || {})) for (const row of members || []) if (row?.ts_code && !membership.has(String(row.ts_code))) membership.set(String(row.ts_code), group);
+  const grouped = new Map(DECISION_GROUPS.map(group => [group, []]));
+  for (const row of rows) {
+    const requested = membership.get(String(row.ts_code)) || row.grade;
+    const group = DECISION_GROUPS.includes(requested) ? requested : '数据异常';
+    grouped.get(group).push(row);
+  }
+  return grouped;
+}
+function decisionNextSort(current, key) {
+  if (current?.key !== key) return {key, direction: 'asc'};
+  if (current.direction === 'asc') return {key, direction: 'desc'};
+  return {key: null, direction: null};
+}
+function decisionForecast(row, horizon) {
+  const forecast = row?.forecast || {};
+  const item = forecast[String(horizon)] || forecast[horizon] || forecast;
+  if (numericValue(item)) return Number(item);
+  return item?.expected_return ?? item?.return ?? item?.median_return ?? item?.q50_return ?? null;
+}
+function decisionBlocked(row) {
+  const values = [row?.data_status, row?.source_status, row?.indicator_basis?.status, row?.indicator_basis?.verification_status]
+    .filter(Boolean).map(value => typeof value === 'object' ? JSON.stringify(value) : String(value)).join(' ').toLowerCase();
+  return /(mock|degraded|unverified|unavailable|stale|missing)/.test(values);
+}
+function decisionHealthText(row) { return [row?.data_status, row?.source_status].filter(Boolean).map(value => typeof value === 'string' ? value : value?.label || value?.status).filter(Boolean).join(' · ') || '未验证'; }
+function decisionCellText(value, fallback = '—') {
+  if (value === null || value === undefined || value === '') return fallback;
+  if (typeof value === 'object') return value.label || value.text || value.status || fallback;
+  return String(value);
+}
+function decisionMetricHtml(primary, lines = []) {
+  return `<div class="decision-metric"><strong>${escapeHtml(primary)}</strong>${lines.filter(Boolean).map(line => `<span>${escapeHtml(line)}</span>`).join('')}</div>`;
+}
+function decisionVolumeHtml(volume, provisional) {
+  const ratio = numericValue(volume?.ratio) ? `量比 ${fmt(volume.ratio, 2)}` : '量比 —';
+  const status = String(provisional?.status || 'confirmed_snapshot');
+  const provisionalLine = /provisional|computed|unverified|research_only/i.test(status) ? `临时观测 · ${status}` : '确认快照';
+  return decisionMetricHtml(decisionCellText(volume), [ratio, provisionalLine]);
+}
+function decisionMaHtml(ma) {
+  const arrows = Array.isArray(ma?.arrows) ? ma.arrows.map(item => `${item?.window || 'M?'}${item?.dir === 'up' ? '↑' : item?.dir === 'down' ? '↓' : '·'}`).join(' ') : '—';
+  return decisionMetricHtml(decisionCellText(ma), [arrows, decisionCellText(ma?.values_text, '')]);
+}
+function decisionMacdHtml(macd) { return decisionMetricHtml(decisionCellText(macd), [`DIF ${fmt(macd?.dif, 4)} · DEA ${fmt(macd?.dea, 4)}`]); }
+function decisionKdjHtml(kdj) { return decisionMetricHtml(`J ${fmt(kdj?.j, 1)} · ${decisionCellText(kdj)}`, [decisionCellText(kdj?.note, ''), `K/D ${fmt(kdj?.k, 1)}/${fmt(kdj?.d, 1)}`]); }
+function decisionTdHtml(td) {
+  const count = String(td?.label || '').match(/(\d+)$/)?.[1] || '—';
+  const direction = td?.kind === 'buy' ? '多头' : td?.kind === 'sell' ? '空头' : '中性';
+  return decisionMetricHtml(`TD9 ${direction} · ${count}`, [decisionCellText(td)]);
+}
+function decisionRsiHtml(rsi) { return decisionMetricHtml(`RSI ${fmt(rsi?.value, 1)}`, [decisionCellText(rsi)]); }
+function decisionChanRange(zone) {
+  const low = Array.isArray(zone) ? zone[0] : zone?.low ?? zone?.lower ?? zone?.start;
+  const high = Array.isArray(zone) ? zone[1] : zone?.high ?? zone?.upper ?? zone?.end;
+  return numericValue(low) && numericValue(high) ? `区间 ${fmt(low, 4)}–${fmt(high, 4)}` : '区间 —';
+}
+function decisionChanHtml(chan) { return decisionMetricHtml(decisionCellText(chan), [decisionCellText(chan?.status, ''), decisionChanRange(chan?.zone)]); }
+function decisionSectorHtml(sector) {
+  const count = value => numericValue(value) ? String(Number(value)) : '—';
+  const coverage = sector?.coverage_count ?? sector?.coverage ?? sector?.fund_count;
+  return decisionMetricHtml(decisionCellText(sector), [`${count(sector?.up)}↑ ${count(sector?.down)}↓ ${count(sector?.flat)}平 · 覆盖 ${count(coverage)}`, decisionCellText(sector?.note, '')]);
+}
+function decisionRowHtml(row, index, horizon = 1) {
+  const returns = row?.returns || {}, blocked = decisionBlocked(row), health = decisionHealthText(row);
+  const forecast = decisionForecast(row, horizon), healthClass = blocked ? 'health-badge--degraded' : 'health-badge--verified';
+  const metric = (value, fallback = '—') => decisionMetricHtml(decisionCellText(value, fallback));
+  return `<tr class="decision-row ${blocked ? 'decision-row--blocked' : ''}" data-decision-code="${escapeHtml(row?.ts_code || '')}" tabindex="0" aria-label="查看 ${escapeHtml(row?.name || row?.ts_code || 'ETF')} 详情">
+    <td class="decision-sticky-first"><div class="instrument-name">${escapeHtml(row?.name || row?.ts_code || '未知标的')}</div><div class="instrument-meta">${escapeHtml(row?.ts_code || '—')}</div></td>
+    <td>${metric(`${decisionCellText(row?.theme_l1)}/${decisionCellText(row?.theme_l2)}`)}</td>
+    <td class="${escapeHtml(colorClass(returns.today))}">${escapeHtml(decisionPercent(returns.today))}</td>
+    <td class="${escapeHtml(colorClass(returns.previous_day_delta))}">${escapeHtml(decisionPercent(returns.previous_day_delta))}</td>
+    <td class="${escapeHtml(colorClass(returns.week_1))}">${escapeHtml(decisionPercent(returns.week_1))}</td>
+    <td>${decisionVolumeHtml(row?.volume, row?.provisional)}</td><td>${decisionMaHtml(row?.ma)}</td><td>${decisionMacdHtml(row?.macd)}</td><td>${decisionKdjHtml(row?.kdj)}</td><td>${decisionTdHtml(row?.td)}</td><td>${decisionRsiHtml(row?.rsi)}</td><td>${decisionChanHtml(row?.chan)}</td><td>${decisionSectorHtml(row?.sector)}</td>
+    <td class="${escapeHtml(colorClass(forecast))}"><div>${escapeHtml(decisionPercent(forecast))}</div><div class="forecast-flag">${horizon} 日 · 研究情景</div></td>
+    <td><span class="badge ${escapeHtml(stateClass(row?.grade))}">${escapeHtml(row?.grade || '—')}</span>${blocked ? '<div class="decision-block-note">已阻断</div>' : ''}</td>
+    <td><span class="health-badge ${healthClass}">${escapeHtml(health)}</span></td>
+    <td class="decision-sticky-last"><div class="decision-reason">${escapeHtml(row?.grade_reason || '—')}</div><span class="risk-badge">${blocked ? '不可操作' : '研究提示'}</span></td>
+  </tr>`;
+}
+function decisionHeaderHtml(sort) {
+  return `<thead><tr>${DECISION_COLUMNS.map(([key, label], index) => {
+    const direction = sort?.key === key ? (sort.direction === 'asc' ? ' ↑' : ' ↓') : '';
+    const sticky = index === 0 ? ' decision-sticky-first' : index === DECISION_COLUMNS.length - 1 ? ' decision-sticky-last' : '';
+    const sortable = DECISION_SORTABLE.has(key);
+    return `<th class="${sticky}"${sortable ? `><button type="button" class="decision-sort" data-decision-sort="${key}">${escapeHtml(label)}${direction}</button>` : `>${escapeHtml(label)}`}</th>`;
+  }).join('')}</tr></thead>`;
+}
+function decisionTableHtml(rows, ui, label = '', tableId = 'decisionBoardTable-global') {
+  const empty = rows.length ? rows.map((row, index) => decisionRowHtml(row, index, ui.horizon)).join('') : `<tr><td colspan="${DECISION_COLUMNS.length}" class="loading-row">无符合条件的 ETF</td></tr>`;
+  return `${label}<div class="decision-table-wrap"><table id="${escapeHtml(tableId)}" class="decision-table">${decisionHeaderHtml(ui.sort)}<tbody>${empty}</tbody></table></div>`;
 }
 function colorClass(value) { return !numericValue(value) ? 'neutral' : Number(value) >= 0 ? 'up' : 'down'; }
 function safeHttpUrl(value) {
@@ -131,6 +298,185 @@ function blockFormalMutation(action = '此操作') {
   return true;
 }
 
+function rememberDecisionScroll() {
+  state.decisionUi.scrollPositions = qsa('.decision-table-wrap').map(wrap => ({left: wrap.scrollLeft, top: wrap.scrollTop}));
+}
+function restoreDecisionScroll() {
+  qsa('.decision-table-wrap').forEach((wrap, index) => {
+    const saved = state.decisionUi.scrollPositions[index];
+    if (saved) { wrap.scrollLeft = saved.left; wrap.scrollTop = saved.top; }
+  });
+}
+function decisionRefreshLabel(payload = state.decisionBoard) {
+  const pending = state.decisionRefreshTask;
+  if (pending) return `刷新任务 ${pending.status || 'queued'} · 等待新快照`;
+  return payload?.refresh_state || '只读快照';
+}
+function syncDecisionRefreshButton() {
+  const button = qs('#refreshButton');
+  if (!button) return;
+  const pending = state.decisionRefreshTask;
+  button.disabled = Boolean(pending?.status === 'queued' || pending?.status === 'running');
+  button.textContent = pending ? `刷新 ${pending.status || 'queued'}` : '刷新';
+}
+function renderDecisionBoard() {
+  const area = qs('#decisionTableArea'), payload = state.decisionBoard;
+  if (!area) return;
+  if (!payload) { area.innerHTML = '<div class="empty-state">正在读取只读决策快照…</div>'; return; }
+  rememberDecisionScroll();
+  const ui = state.decisionUi, counts = payload.counts || {}, grouped = decisionGroupedRows(payload, ui);
+  const countEl = qs('#decisionCounts');
+  if (countEl) countEl.innerHTML = DECISION_GROUPS.map(group => `<button type="button" class="decision-count ${group === '数据异常' ? 'decision-count--anomaly' : ''}" data-decision-group="${escapeHtml(group)}"><strong>${escapeHtml(group)}</strong><span>${escapeHtml(String(counts[group] ?? grouped.get(group)?.length ?? 0))}</span></button>`).join('');
+  const meta = qs('#decisionSnapshotMeta');
+  if (meta) meta.textContent = `快照 ${payload.snapshot_id || '—'} · 生成 ${timeText(payload.generated_at)} · 下次 ${timeText(payload.next_refresh_at)} · ${decisionRefreshLabel(payload)}`;
+  syncDecisionRefreshButton();
+  const warning = qs('#decisionWarning');
+  const hasBlocked = decisionRows(payload).some(decisionBlocked);
+  if (warning) { warning.classList.toggle('hidden', !hasBlocked); warning.textContent = hasBlocked ? '存在 Mock、退化、未验证或缺失状态：表格仍可阅读，但所有操作级呈现已阻断。' : ''; }
+  if (ui.mode === 'global') area.innerHTML = decisionTableHtml(decisionVisibleRows(payload, ui), ui, '<div class="decision-global-label">全局排名 · 使用服务端提供的 sort_keys</div>', 'decisionBoardTable-global');
+  else {
+    area.innerHTML = [...grouped.entries()].map(([group, rows], index) => `<section class="decision-group decision-group--${group === '数据异常' ? 'anomaly' : 'normal'}"><div class="decision-group-head"><span class="badge ${escapeHtml(stateClass(group))}">${escapeHtml(group)}</span><span>${escapeHtml(String(rows.length))} 个标的</span></div>${decisionTableHtml(rows, ui, '', `decisionBoardTable-${index}`)}</section>`).join('');
+  }
+  const horizon = qs('#decisionHorizon'); if (horizon) horizon.value = String(ui.horizon);
+  qs('#decisionModeGrouped')?.classList.toggle('active', ui.mode === 'grouped'); qs('#decisionModeGlobal')?.classList.toggle('active', ui.mode === 'global');
+  qsa('[data-decision-sort]').forEach(button => button.addEventListener('click', () => { state.decisionUi.sort = decisionNextSort(state.decisionUi.sort, button.dataset.decisionSort); renderDecisionBoard(); }));
+  qsa('[data-decision-code]').forEach(row => {
+    row.addEventListener('click', () => openDecisionDetail(row.dataset.decisionCode));
+    row.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDecisionDetail(row.dataset.decisionCode); } });
+  });
+  qsa('[data-decision-group]').forEach(button => button.addEventListener('click', () => { state.decisionUi.filter = button.dataset.decisionGroup; const search = qs('#decisionSearch'); if (search) search.value = state.decisionUi.filter; renderDecisionBoard(); }));
+  restoreDecisionScroll();
+}
+async function loadDecisionBoard(silent = false) {
+  if (state.demoMode || state.modeTransition) return;
+  const controller = new AbortController();
+  state.decisionBoardController?.abort(); state.decisionBoardController = controller;
+  try {
+    const horizon = Number(state.decisionUi.horizon || 1);
+    const payload = await api(`/api/decision-board?horizon=${encodeURIComponent(horizon)}`, {signal: controller.signal});
+    if (controller.signal.aborted) return;
+    const selectedHorizon = Number(payload.selected_horizon ?? payload.selected_forecast_horizon ?? horizon);
+    if ([1, 3, 5, 10].includes(selectedHorizon)) state.decisionUi.horizon = selectedHorizon;
+    const changed = !state.decisionBoard || payload.snapshot_id !== state.decisionBoard.snapshot_id;
+    state.decisionBoard = payload;
+    if (changed && state.decisionRefreshTask) state.decisionRefreshTask = null;
+    else if (state.decisionRefreshTask && payload.refresh_state) state.decisionRefreshTask.status = payload.refresh_state;
+    renderDecisionBoard();
+    if (changed && state.decisionUi.openDetailCode) openDecisionDetail(state.decisionUi.openDetailCode, true);
+  } catch (error) {
+    if (!silent && error.name !== 'AbortError' && error.message !== 'unauthorized') toast(`决策快照读取失败：${error.message}`, 5000);
+  } finally { if (state.decisionBoardController === controller) state.decisionBoardController = null; }
+}
+function scheduleDecisionStatusPoll() {
+  clearInterval(state.decisionStatusTimer);
+  state.decisionStatusTimer = setInterval(() => loadDecisionBoard(true), 30 * 1000);
+}
+async function requestDecisionBoardRefresh() {
+  if (blockFormalMutation('决策快照刷新')) return;
+  if (state.decisionRefreshTask?.status === 'queued' || state.decisionRefreshTask?.status === 'running') return;
+  try {
+    const result = await api('/api/decision-board/refresh', {method: 'POST', body: JSON.stringify({})});
+    state.decisionRefreshTask = {taskId: result.task_id || result.run_id || '—', status: result.status || 'queued'};
+    syncDecisionRefreshButton();
+    renderDecisionBoard();
+    toast(`决策快照刷新已排队：${state.decisionRefreshTask.taskId}`);
+  } catch (error) {
+    toast(`快照刷新请求失败：${error.message}`, 5000);
+  }
+}
+function decisionDetailLevel(level) { return numericValue(level?.price ?? level) ? fmt(level?.price ?? level, 4) : '—'; }
+function decisionDetailHtml(detail) {
+  const history = Array.isArray(detail?.history) ? detail.history : [];
+  const scenario = Array.isArray(detail?.forecast_scenario) ? detail.forecast_scenario : [];
+  const metric = (label, value) => `<div class="detail-metric" aria-label="${escapeHtml(`${label} ${value}`)}"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`;
+  const selectedHorizon = [1, 3, 5, 10].includes(Number(detail?.selected_horizon)) ? Number(detail.selected_horizon) : 1;
+  const forecasts = detail?.forecasts && typeof detail.forecasts === 'object' ? detail.forecasts : {};
+  const selectedForecast = detail?.forecast && typeof detail.forecast === 'object' ? detail.forecast : {};
+  const forecastCards = [1, 3, 5, 10].map(horizon => {
+    const forecast = forecasts[String(horizon)] || forecasts[horizon] || (horizon === selectedHorizon ? selectedForecast : {});
+    const selectedClass = horizon === selectedHorizon ? ' detail-forecast-card--selected' : '';
+    return `<article class="detail-forecast-card${selectedClass}" aria-label="${escapeHtml(`${horizon} 日预测`)}">
+      <div class="forecast-label">FORECAST · 非实际结果 · 仅供研究</div><h4>${escapeHtml(`${horizon} 日预测`)}</h4>
+      <div class="detail-forecast-card-grid">${[
+        ['期望收益', decisionPercent(forecast?.expected_return)], ['上涨概率', decisionPercent(forecast?.p_up)], ['q10/q50/q90', `${decisionPercent(forecast?.q10)} / ${decisionPercent(forecast?.q50)} / ${decisionPercent(forecast?.q90)}`], ['置信度', fmt(forecast?.confidence, 0)], ['校准状态', decisionCellText(forecast?.calibration_status)],
+      ].map(([label, value]) => metric(label, value)).join('')}</div>
+      <div class="forecast-card-disclaimer">研究情景 · 非实际结果 · 不构成投资建议</div></article>`;
+  }).join('');
+  const levels = detail?.support_resistance || detail?.support_resistance_levels || {};
+  const quote = detail?.quote || {}, provisional = detail?.provisional || {}, indicator = detail?.indicator || {}, chan = detail?.chan || {};
+  const indicatorText = [
+    `量能 ${decisionCellText(detail?.volume)} / 量比 ${fmt(detail?.volume?.ratio, 2)}`,
+    `均线 ${decisionCellText(detail?.ma)} / ${decisionCellText(detail?.ma?.values_text, '—')}`,
+    `MACD ${decisionCellText(detail?.macd)} / DIF ${fmt(detail?.macd?.dif, 4)} DEA ${fmt(detail?.macd?.dea, 4)}`,
+    `KDJ J ${fmt(detail?.kdj?.j, 1)} K ${fmt(detail?.kdj?.k, 1)} D ${fmt(detail?.kdj?.d, 1)}`,
+    `TD9 ${decisionCellText(detail?.td)} / RSI ${fmt(detail?.rsi?.value, 1)}`,
+  ].join(' · ');
+  const levelText = levels => (Array.isArray(levels) ? levels : []).slice(0, 3).map(level => `${decisionDetailLevel(level)} ${decisionCellText(level?.label, '')}`.trim()).join(' / ') || '—';
+  return `<div class="eyebrow">DECISION SNAPSHOT · ${escapeHtml(detail?.snapshot_id || '—')}</div>
+    <h2>${escapeHtml(detail?.name || detail?.ts_code || 'ETF')} · ${escapeHtml(detail?.ts_code || '—')}</h2>
+    <div class="detail-grid">${[
+      ['数据状态', decisionCellText(detail?.data_status)], ['来源状态', decisionCellText(detail?.source_status)],
+      ['历史K线', `${history.length} 根`], ['预测情景', `${scenario.length} 根 · 非实际结果`],
+      ['指标版本', decisionCellText(indicator?.version)], ['指标日期', decisionCellText(indicator?.as_of_date)],
+      ['来源时间', timeText(quote?.source_time)], ['临时观测', decisionCellText(provisional?.status)], ['临时观测时间', timeText(provisional?.observed_at || provisional?.source_time)],
+    ].map(([label, value]) => metric(label, value)).join('')}</div>
+    <section class="detail-forecast forecast-surface"><div class="forecast-label">FORECAST · 非实际结果 · 仅供研究</div><h3>1 / 3 / 5 / 10 日预测 · 当前 ${escapeHtml(String(selectedHorizon))} 日</h3>
+      <div class="detail-forecast-grid detail-forecast-cards">${forecastCards}</div></section>
+    <div class="detail-chart-note">历史K线 ${history.length} 根 → 预测情景 ${scenario.length} 根 · 边界后的紫色虚线蜡烛均为非实际结果。</div>
+    <section class="reason-box"><strong>支撑 / 压力 / 缠论近似</strong><br>支撑 ${escapeHtml(decisionDetailLevel(levels?.nearest_support))} · 压力 ${escapeHtml(decisionDetailLevel(levels?.nearest_resistance))} · ${escapeHtml(decisionChanRange(chan?.zone || levels?.chan_zone_approx))}<br>支撑层级 ${escapeHtml(levelText(levels?.support_levels))}<br>压力层级 ${escapeHtml(levelText(levels?.resistance_levels))}<br>${escapeHtml(decisionCellText(chan?.label))} · ${escapeHtml(decisionCellText(chan?.detail))}</section>
+    <section class="reason-box"><strong>指标与来源</strong><br>${escapeHtml(indicatorText)}<br>来源 ${escapeHtml(decisionCellText(quote?.source))} · 时间已验证 ${escapeHtml(String(Boolean(quote?.timestamp_verified)))} · 临时来源 ${escapeHtml(decisionCellText(provisional?.source))}</section>`;
+}
+function drawDecisionSnapshotChart(history, forecastScenario) {
+  const canvas = qs('#chartCanvas');
+  const ctx = canvas?.getContext?.('2d');
+  if (!canvas || !ctx) return;
+  const historical = (Array.isArray(history) ? history : []).filter(item => numericValue(item?.close));
+  const forecast = (Array.isArray(forecastScenario) ? forecastScenario : []).filter(item => numericValue(item?.close));
+  const data = [...historical, ...forecast];
+  if (!data.length) { canvas.classList.add('hidden'); return; }
+  canvas.classList.remove('hidden');
+  const rect = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const width = Math.max(360, rect.width || 720), height = 290;
+  canvas.width = width * dpr; canvas.height = height * dpr;
+  if (typeof ctx.setTransform === 'function') ctx.setTransform(dpr, 0, 0, dpr, 0, 0); else ctx.scale?.(dpr, dpr);
+  ctx.clearRect(0, 0, width, height);
+  const candles = data.map(item => ({open: Number(item.open ?? item.close), high: Number(item.high ?? item.close), low: Number(item.low ?? item.close), close: Number(item.close), forecast: Boolean(item.is_forecast || item.not_actual)}));
+  const high = Math.max(...candles.map(item => item.high)), low = Math.min(...candles.map(item => item.low)), range = high - low || 1;
+  const left = 43, right = 15, top = 25, bottom = height - 30, step = (width - left - right) / Math.max(candles.length, 1);
+  const y = value => top + (high - value) / range * (bottom - top);
+  ctx.font = '10px system-ui'; ctx.strokeStyle = '#2a3545'; ctx.fillStyle = '#94a5b8';
+  for (let index = 0; index <= 4; index += 1) { const yy = top + (bottom - top) * index / 4; ctx.beginPath(); ctx.moveTo(left, yy); ctx.lineTo(width - right, yy); ctx.stroke(); ctx.fillText((high - range * index / 4).toFixed(3), 2, yy + 3); }
+  candles.forEach((item, index) => {
+    const x = left + step * (index + .5), forecastCandle = index >= historical.length || item.forecast;
+    ctx.strokeStyle = forecastCandle ? '#b283ff' : item.close >= item.open ? '#ff766e' : '#5bd0a5';
+    if (ctx.setLineDash) ctx.setLineDash(forecastCandle ? [3, 2] : []);
+    ctx.beginPath(); ctx.moveTo(x, y(item.high)); ctx.lineTo(x, y(item.low)); ctx.stroke();
+    ctx.fillStyle = ctx.strokeStyle; ctx.fillRect(x - Math.max(1, step * .25), Math.min(y(item.open), y(item.close)), Math.max(2, step * .5), Math.max(1, Math.abs(y(item.open) - y(item.close))));
+  });
+  if (ctx.setLineDash) ctx.setLineDash([]);
+  if (forecast.length) { const boundary = left + step * historical.length; ctx.strokeStyle = '#b283ff'; ctx.setLineDash?.([4, 3]); ctx.beginPath(); ctx.moveTo(boundary, top); ctx.lineTo(boundary, bottom); ctx.stroke(); ctx.setLineDash?.([]); ctx.fillStyle = '#d6c2ff'; ctx.fillText('预测情景 · 非实际结果', Math.min(boundary + 5, width - 115), 16); }
+  ctx.fillStyle = '#9dafc1'; ctx.fillText(`历史 ${historical.length} 根`, left, height - 9); ctx.fillText(`预测 ${forecast.length} 根`, width - 75, height - 9);
+}
+async function openDecisionDetail(code, preserve = false) {
+  if (!code || !state.decisionBoard) return;
+  const snapshotId = String(state.decisionBoard.snapshot_id || '');
+  state.decisionUi.openDetailCode = code;
+  state.decisionUi.openDetailSnapshotId = snapshotId;
+  state.detailCode = code;
+  qs('#chartCanvas')?.classList.add('hidden');
+  try {
+    const detail = await api(`/api/decision-board/${encodeURIComponent(code)}?horizon=${encodeURIComponent(state.decisionUi.horizon)}&snapshot_id=${encodeURIComponent(snapshotId)}`);
+    if (state.decisionUi.openDetailCode !== code || state.decisionUi.openDetailSnapshotId !== snapshotId) return;
+    if (detail.snapshot_id && snapshotId && detail.snapshot_id !== snapshotId) throw new Error('详情快照与当前表格不一致');
+    qs('#detailContent').innerHTML = decisionDetailHtml(detail);
+    drawDecisionSnapshotChart(detail.history, detail.forecast_scenario);
+    if (!preserve) openModal('detailOverlay');
+  } catch (error) { if (!preserve) toast(`详情读取失败：${error.message}`, 5000); }
+}
+function handleDecisionBoardRoute() {
+  if (window.location.pathname === '/workbench/1430') window.history?.replaceState?.(null, '', '/');
+}
+
 function renderCurrentView() {
   if (typeof state.renderOverride === 'function') return state.renderOverride();
   return renderAll();
@@ -158,6 +504,8 @@ function beginModeTransition(target) {
   state.bootstrapController?.abort();
   state.demoBootstrapController?.abort();
   state.settingsController?.abort();
+  state.decisionBoardController?.abort();
+  clearInterval(state.decisionStatusTimer);
   cancelDetailRequest();
   state.eventAbort?.abort();
   clearTimeout(state.eventRetry);
@@ -326,7 +674,7 @@ function openModal(id, focusSelector = '.modal-close') {
 }
 function closeModal(id) {
   qs(`#${id}`)?.classList.add('hidden');
-  if (id === 'detailOverlay') cancelDetailRequest();
+  if (id === 'detailOverlay') { cancelDetailRequest(); state.decisionUi.openDetailCode = null; state.decisionUi.openDetailSnapshotId = null; }
   if (state.modalReturnFocus && typeof state.modalReturnFocus.focus === 'function') state.modalReturnFocus.focus();
   state.modalReturnFocus = null;
 }
@@ -370,7 +718,6 @@ function trapModalFocus(event) {
 }
 
 async function loadBootstrap(silent = false) {
-  if (!state.token) { showAuth(); return; }
   if (state.modeTransition && !(state.modeTransition.target === 'formal' && !state.demoMode)) return;
   if (state.demoMode) return loadDemoBootstrap(silent);
   const requestGeneration = authRequestGeneration(), requestToken = state.token, controller = new AbortController();
@@ -392,18 +739,17 @@ async function loadBootstrap(silent = false) {
     state.boards = null;
     hideAuth();
     renderAll();
-    if (state.signalGrade) loadSignalGrade(true);
-    loadSignalBoards(true);
+    loadDecisionBoard(true);
+    scheduleDecisionStatusPoll();
     scheduleBrowserRefresh();
   } catch (error) {
     if (error.name !== 'AbortError' && requestGeneration === authRequestGeneration() && requestToken === state.token && modeRequestCurrent(modeGeneration, false)) toast(`刷新失败：${error.message}`, 5000);
   } finally {
-    if (state.bootstrapController === controller) { state.bootstrapController = null; qs('#refreshButton').disabled = false; }
+    if (state.bootstrapController === controller) { state.bootstrapController = null; syncDecisionRefreshButton(); }
   }
 }
 
 async function loadDemoBootstrap(silent = false) {
-  if (!state.token) { showAuth(); return; }
   if (state.modeTransition && state.modeTransition.target !== 'demo') return;
   const requestGeneration = authRequestGeneration(), requestToken = state.token;
   const modeGeneration = state.modeGeneration, controller = new AbortController();
@@ -434,6 +780,7 @@ async function enterDemoMode() {
     const demoRadio = qs('input[name="market_data_tier"][value="demo"]');
     if (demoRadio) demoRadio.checked = true;
     state.data = result;
+    state.decisionBoard = null;
     state.reports = [];
     state.signalGrade = result.signal_grade || null;
     state.boards = result.boards || null;
@@ -583,7 +930,8 @@ function mergeMarketContext(items) {
 
 function renderMarketContext() {
   const node = qs('#marketContextCards');
-  const rows = mergeMarketContext(state.data.market_context);
+  if (!node) return;
+  const rows = mergeMarketContext(state.data?.market_context);
   node.innerHTML = rows.map(marketContextCard).join('');
 }
 
@@ -1084,7 +1432,7 @@ async function downloadReport(filename) {
 }
 
 async function loadSettings() {
-  if (!state.token || state.demoMode || (state.modeTransition && state.modeTransition.target !== 'formal')) return;
+  if (state.demoMode || (state.modeTransition && state.modeTransition.target !== 'formal')) return;
   const requestGeneration = authRequestGeneration(), requestToken = state.token, controller = new AbortController();
   const modeGeneration = state.modeGeneration;
   state.settingsController?.abort(); state.settingsController = controller;
@@ -1225,7 +1573,7 @@ function gradePct(value) {
 }
 
 async function loadSignalGrade(silent = false) {
-  if (!state.token || state.demoMode || state.modeTransition) return;
+  if (state.demoMode || state.modeTransition) return;
   const modeGeneration = state.modeGeneration;
   try {
     const result = await api('/api/signals/grade');
@@ -1320,7 +1668,7 @@ function renderSignalGrade() {
 }
 
 async function loadSignalBoards(silent = false) {
-  if (!state.token || state.demoMode || state.modeTransition) return;
+  if (state.demoMode || state.modeTransition) return;
   const modeGeneration = state.modeGeneration;
   try {
     const result = await api('/api/signals/boards');
@@ -1403,7 +1751,7 @@ async function submitBoardFund(event) {
 }
 
 async function loadSignalCenter(silent = false, coefficientOverride = null) {
-  if (!state.token || state.demoMode || state.modeTransition || state.signalCenterLoading) return;
+  if (state.demoMode || state.modeTransition || state.signalCenterLoading) return;
   const modeGeneration = state.modeGeneration;
   state.signalCenterLoading = true;
   if (!silent) qs('#signalCurveMeta').textContent = '加载中...';
@@ -1621,7 +1969,7 @@ async function saveCoefficient() {
 }
 
 function renderAll() {
-  renderSummary(); renderNarrative(); renderMarketContext(); renderInstruments(); renderHoldings(); renderNews(); renderSystem(); renderSignalCenter(); renderSignalGrade(); renderBoards(); renderTaskButtons();
+  renderDecisionBoard(); renderMarketContext(); renderHoldings(); renderNews(); renderSystem(); renderSignalCenter(); renderTaskButtons();
 }
 
 function switchTab(tab) {
@@ -1630,8 +1978,7 @@ function switchTab(tab) {
   qsa('#tabs button').forEach(b => { const selected = b.dataset.tab === tab; b.classList.toggle('active', selected); b.setAttribute('aria-selected', String(selected)); });
   if (tab === 'system' && !state.settings) loadSettings();
   if (tab === 'signals' && !state.signalCenter) loadSignalCenter();
-  if (tab === 'grade' && !state.signalGrade) loadSignalGrade();
-  if (!state.boards) loadSignalBoards();
+  if (tab === 'dashboard') loadDecisionBoard(true);
 }
 
 function openHolding(code = null) {
@@ -1686,7 +2033,10 @@ async function runTask(name, button = null) {
 }
 
 async function openDetail(code) {
+  if (state.activeTab === 'dashboard' && state.decisionBoard) return openDecisionDetail(code);
   const row = (state.data.instruments || []).find(r => r.ts_code === code) || {ts_code: code, name: code, theme_l1: '', theme_l2: '', indicator: {}, signal: {}, quote: {}, forecasts: {}};
+  state.decisionUi.openDetailCode = null; state.decisionUi.openDetailSnapshotId = null;
+  qs('#chartCanvas')?.classList.remove('hidden');
   state.detailCode = code;
   const i = row.indicator || {}, v = i.values || {}, s = row.signal || {}, q = row.quote || {};
   const forecastHtml = Object.values(row.forecasts || {}).map(forecastCell).join('');
@@ -1736,13 +2086,13 @@ function scheduleEventReconnect() {
 async function connectEvents() {
   if (state.eventAbort) state.eventAbort.abort();
   clearTimeout(state.eventRetry);
-  if (!state.token || state.modeTransition) return;
+  if (state.modeTransition) return;
   const requestGeneration = authRequestGeneration(), requestToken = state.token;
   const controller = new AbortController();
   state.eventAbort = controller;
   try {
     const response = await fetch('/api/events', {
-      headers: {Authorization: `Bearer ${state.token}`},
+      headers: state.token ? {Authorization: `Bearer ${state.token}`} : {},
       signal: controller.signal,
       cache: 'no-store',
     });
@@ -1752,7 +2102,7 @@ async function connectEvents() {
     qs('#connectionBadge').textContent='实时连接';
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    const watched = new Set(['instruments.updated','bars.updated','indicators.updated','forecasts.updated','quotes.updated','news.updated','signals.updated','holdings.updated','market_context.updated','report.generated']);
+    const watched = new Set(['decision_board.updated','instruments.updated','bars.updated','indicators.updated','forecasts.updated','quotes.updated','news.updated','signals.updated','holdings.updated','market_context.updated','report.generated']);
     let buffer = '';
     let timer = null;
     while (true) {
@@ -1770,10 +2120,10 @@ async function connectEvents() {
         if (watched.has(eventName)) {
           clearTimeout(timer);
           timer = setTimeout(() => {
-            loadBootstrap(true);
+            // Both reads consume an already materialized snapshot; neither asks a
+            // provider to refresh data from the browser.
+            loadDecisionBoard(true);
             if (state.activeTab === 'signals') loadSignalCenter(true);
-            if (state.activeTab === 'grade') loadSignalGrade(true);
-            loadSignalBoards(true);
           }, 450);
         }
       }
@@ -1791,9 +2141,13 @@ function bindEvents() {
   qs('#authForm').addEventListener('submit', async event => {
     event.preventDefault(); state.token=qs('#tokenInput').value.trim(); localStorage.setItem('fundDecisionToken',state.token); advanceAuthRequestGeneration(); await loadBootstrap(); if (state.token) { connectEvents(); loadSettings(); }
   });
-  qs('#refreshButton').addEventListener('click',()=>loadBootstrap());
+  qs('#refreshButton').addEventListener('click', requestDecisionBoardRefresh);
   qs('#lockButton').addEventListener('click',()=>{state.token='';localStorage.removeItem('fundDecisionToken');advanceAuthRequestGeneration();showAuth();});
   qsa('#tabs button').forEach(button=>button.addEventListener('click',()=>switchTab(button.dataset.tab)));
+  qs('#decisionModeGrouped')?.addEventListener('click', () => { state.decisionUi.mode = 'grouped'; renderDecisionBoard(); });
+  qs('#decisionModeGlobal')?.addEventListener('click', () => { state.decisionUi.mode = 'global'; renderDecisionBoard(); });
+  qs('#decisionSearch')?.addEventListener('input', event => { state.decisionUi.filter = event.currentTarget.value; renderDecisionBoard(); });
+  qs('#decisionHorizon')?.addEventListener('change', event => { state.decisionUi.horizon = Number(event.currentTarget.value); loadDecisionBoard(true); });
   qsa('#boardKindTabs button').forEach(button => button.addEventListener('click', () => {
     state.boardKind = button.dataset.boardKind;
     qsa('#boardKindTabs button').forEach(item => item.classList.toggle('active', item === button));
@@ -1858,13 +2212,34 @@ function bindEvents() {
     drawSignalCurveHover(index);
   });
   curveCanvas.addEventListener('mouseleave', () => { if (qs('#signalCurveCanvas')._curve) drawSignalCurve(); });
-  window.addEventListener('resize',()=>{if(!qs('#detailOverlay').classList.contains('hidden') && state.detailCode) scheduleDetailBars(state.detailCode); if(state.activeTab==='signals') drawSignalCurve();});
+  window.addEventListener('resize',()=>{if(!qs('#detailOverlay').classList.contains('hidden') && state.detailCode && !state.decisionUi.openDetailCode) scheduleDetailBars(state.detailCode); if(state.activeTab==='signals') drawSignalCurve();});
 }
 
 async function start() {
-  bindEvents(); renderTaskButtons();
-  if (!state.token) showAuth();
-  else { await loadBootstrap(); if (state.token) { connectEvents(); loadSettings(); } }
+  handleDecisionBoardRoute(); bindEvents(); renderTaskButtons();
+  await loadBootstrap();
+  // Auth is discovered from the API: auth-disabled servers serve read models
+  // without a browser token; auth-enabled servers have already shown the
+  // overlay through api() after an actual 401.
+  if (state.data) { connectEvents(); loadSettings(); loadDecisionBoard(true); scheduleDecisionStatusPoll(); }
 }
+
+// Kept deliberately small so the pure ordering/formatting/escaping contract can
+// be covered by Node without a browser DOM or a live provider.
+globalThis.DecisionBoardUi = Object.freeze({
+  api,
+  detailHtml: decisionDetailHtml,
+  groupedRows: decisionGroupedRows,
+  headerHtml: decisionHeaderHtml,
+  loadBootstrap,
+  loadDecisionBoard,
+  nextSort: decisionNextSort,
+  percent: decisionPercent,
+  rowHtml: decisionRowHtml,
+  requestRefresh: requestDecisionBoardRefresh,
+  state,
+  tableHtml: decisionTableHtml,
+  visibleRows: decisionVisibleRows,
+});
 
 document.addEventListener('DOMContentLoaded', start);

@@ -11,8 +11,9 @@ from app.core.clock import MarketClock, MarketPhase
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.session import init_db, session_scope
-from app.models import TaskRun
+from app.models import DecisionBoardSlotRun, TaskRun
 from app.providers.factory import create_provider
+from app.services.decision_board_service import decision_board_due_slot
 from app.services.runtime_service import RuntimeService
 from app.services.task_service import TaskBusyError, TaskExecutionError, TaskService
 from app.services.trading_calendar_service import TradingCalendarService
@@ -55,6 +56,21 @@ def _due(last: datetime | None, now: datetime, minutes: int) -> bool:
     if last.tzinfo is None:
         last = last.replace(tzinfo=now.tzinfo)
     return now - last >= timedelta(minutes=minutes)
+
+
+def claim_decision_board_slot(db, slot_key: str, now: datetime) -> bool:
+    """Durably claim one Shanghai decision-board slot; safe across restarts."""
+    if db.get(DecisionBoardSlotRun, slot_key) is not None:
+        return False
+    try:
+        with db.begin_nested():
+            db.add(DecisionBoardSlotRun(slot_key=slot_key, claimed_at=now))
+            db.flush()
+        return True
+    except Exception:
+        # A concurrent claimant sees the unique key; do not turn scheduler
+        # deduplication into a provider/network retry.
+        return False
 
 
 def tick() -> dict:
@@ -115,19 +131,12 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
                 logger.warning("market context refresh failed: %s", failure_class)
             executed.append("refresh_market_context")
 
-        quote_minutes = int(intervals["quote_refresh_minutes"])
         signal_minutes = int(intervals["signal_refresh_minutes"])
         news_minutes = int(
             intervals["lunch_news_refresh_minutes"]
             if phase == MarketPhase.LUNCH
             else intervals["news_refresh_minutes"]
         )
-
-        if clock.price_session_open(now, is_trade_day) and _due(
-            _last_success(db, "refresh_quotes"), now, quote_minutes
-        ):
-            tasks.run(db, "refresh_quotes")
-            executed.append("refresh_quotes")
 
         if clock.signals_allowed(now, is_trade_day) and _due(
             _last_success(db, "refresh_signals"), now, signal_minutes
@@ -136,6 +145,37 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
             # the live quote is used separately in the state machine.
             tasks.run(db, "refresh_signals")
             executed.append("refresh_signals")
+
+        slot_key = decision_board_due_slot(now, is_trade_day=is_trade_day)
+        queued = db.scalar(
+            select(TaskRun.run_id)
+            .where(TaskRun.task_name == "refresh_decision_board", TaskRun.status == "queued")
+            .order_by(TaskRun.started_at)
+            .limit(1)
+        )
+        if slot_key is not None and claim_decision_board_slot(db, slot_key, now):
+            try:
+                tasks.run(
+                    db,
+                    "refresh_decision_board",
+                    refresh_input=True,
+                    **({"run_id": queued} if queued else {}),
+                )
+                executed.append("refresh_decision_board")
+            except (TaskExecutionError, TaskBusyError) as exc:
+                if isinstance(exc, TaskBusyError):
+                    claim = db.get(DecisionBoardSlotRun, slot_key)
+                    if claim is not None:
+                        db.delete(claim)
+                        db.flush()
+                logger.warning("decision-board refresh failed: %s", getattr(exc, "failure_class", type(exc).__name__))
+        elif queued is not None:
+            # Manual refreshes use the same quote → provisional → snapshot path.
+            try:
+                tasks.run(db, "refresh_decision_board", run_id=queued, refresh_input=True)
+                executed.append("refresh_decision_board")
+            except (TaskExecutionError, TaskBusyError) as exc:
+                logger.warning("queued decision-board refresh failed: %s", getattr(exc, "failure_class", type(exc).__name__))
 
         if _due(_last_success(db, "refresh_news"), now, news_minutes):
             tasks.run(db, "refresh_news", since_hours=72)

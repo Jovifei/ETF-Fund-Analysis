@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 from app.main import app
 from app.services.etf_1430_service import ETF1430WorkbenchService
+from fastapi.testclient import TestClient
 
 
 def test_etf_1430_summary_and_detail_contract(bootstrapped, db_session):
@@ -35,9 +34,9 @@ def test_etf_1430_summary_and_detail_contract(bootstrapped, db_session):
 
 def test_etf_1430_http_and_static_contract(bootstrapped):
     with TestClient(app) as client:
-        page = client.get("/workbench/1430")
-        assert page.status_code == 200
-        assert "ETF 14:30 决策工作台" in page.text
+        page = client.get("/workbench/1430", follow_redirects=False)
+        assert page.status_code in {307, 308}
+        assert page.headers["location"] == "/"
         script = client.get("/assets/etf_1430_workbench.js")
         assert script.status_code == 200
         assert "预测情景 · 非实际结果" in script.text

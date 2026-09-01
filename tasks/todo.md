@@ -426,3 +426,36 @@ python codex/skills/fund-research/scripts/check_no_secrets.py .
 - [x] Parent-controller evidence: `pytest -q` exited 0 (447 collected test nodes; 2 existing platform skips); `python -m compileall -q backend/app scripts/qualify_ftshare.py` passed; `node --check backend/app/static/app.js` passed; diff secret scan found no configured-secret patterns (environment files excluded). This child task does not relabel that controller run as its own full-suite result.
 - [x] Isolated headless browser smoke on port 18988 with a worktree-pinned app and temporary SQLite: DEMO banner/load/status/source badge, formal task and portfolio locks, FTShare disabled status, DEMO exit, and zero external requests passed. Exact smoke processes and temporary SQLite artifacts were cleaned up; ports 18981-18988 verified closed.
 - [x] Audited ORM/migration reconciliation: clean disposable SQLite passes `upgrade head`, `current`, full `downgrade base`/re-upgrade, and `alembic check` at `d5e6f7a8b9c0`. The metadata-only repair preserves historical review/analysis hash-check names, restores the separately named opaque import-session constraint, keeps nullable legacy calibration JSON, and removes only a redundant candidate-id index declaration covered by the existing UNIQUE constraint. Regression: `backend/tests/test_migration_schema_parity.py`; real PostgreSQL qualification remains a deployment gate.
+## Unified decision-board backend plan (approved)
+
+- [x] Inspect current models, private routes, task lifecycle, scheduler, and backend fixtures.
+- [x] RED: add isolated decision-board service/API/scheduler tests for response semantics, storage isolation, slot eligibility/deduplication, and refresh concurrency. (Initial run was environment-blocked before functional execution; dependencies were then isolated under the permitted download directory.)
+- [x] GREEN: add snapshot/provisional persistence migration and read-only snapshot service with explicit provenance/freshness state.
+- [x] GREEN: wire the three private API endpoints, async refresh task, and Asia/Shanghai slot scheduler without changing strategy-grade logic.
+- [x] Verify focused backend tests, compileall, migration chain/schema parity where practical; record exact outcome and blockers below.
+
+### Unified decision-board backend review
+
+- [x] `backend/tests/test_decision_board.py` (13) + signal-grade/workbench regression (7): 20 passed with isolated Python 3.12 dependencies.
+- [x] Contract repair: snapshot rows now contain normalized wide-table `volume`/`ma`/`macd`/`kdj`/`td`/`rsi`/`chan`/`sector` objects; horizon selection rebuilds groups; details are snapshot-captured history, 10 scenario candles, support/resistance, Chan approximation and sort basis.
+- [x] Contract repair: complete provisional OHLCV produces a temporary research-only derived view even with an unverified timestamp; it cannot be actionable and never writes `DailyBar`.
+- [x] Contract repair: only decision slots fetch board quote input then capture provisional then materialize the board; queued API requests are consumed without an extra provider fetch; no decision-board news/AI side effect.
+- [x] Corrected focused suite: `test_decision_board.py` + `test_signal_grade.py` + `test_market_context.py`: 80 passed. `node --test backend/app/static/decision_board.test.js` exited 0.
+- [x] Spec review repair: `/workbench/1430` now 307 redirects to `/`; the legacy API remains compatibility-only.
+- [x] Spec review repair: `previous_day_delta` is `today - previous confirmed DailyBar return` in decimal-ratio units; list/detail accept exact `snapshot_id`, unknown snapshots return 404.
+- [x] Spec review repair: next slot uses `TradingCalendarService`, skips non-trading dates, and snapshots retain all entries for only the latest 20 trading dates.
+- [x] Final sorting repair: all sortable technical columns expose numeric `sort_keys` with documented health priority; forecast key binds selected horizon expected return with confidence as a tie-break only and missing values last.
+- [x] Sorting tie repair: volume ratio/direction, MA up-arrow count, and parsed TD9 setup count are packed into primitive numeric ties; actual persisted snapshot + API horizon tests verify `forecast` keys rematerialize for 1 versus 5 days.
+- [x] Quality critical loop closed: the isolated Python 3.12 full suite completed with exit 0; the earlier shared SQLite lock was not reproduced.
+- [x] Disposable SQLite Alembic `upgrade head`, `current` (`e6f7a8b9c0d1`), and `check`: passed; no new upgrade operations.
+- [x] `py -3.14 -m compileall -q backend/app backend/tests`, scoped Ruff `I,F`, and scoped `git diff --check`: passed (Git only reported existing CRLF conversion notices).
+- [x] Migration parity verified in the isolated Docker PostgreSQL service at head `f7a8b9c0d1e2`; `alembic check` reported no new operations.
+- [x] Final frontend/API integration verified after the unified UI changes; the prior `marketContextSection` mismatch is no longer present in the active contract.
+
+### Unified decision-board final release review (2026-09-01)
+
+- Full pytest: exit 0; 2 existing platform skips and deprecation warnings only.
+- `python -m compileall -q backend/app`, `node --check backend/app/static/app.js`, `node --test backend/app/static/decision_board.test.js` (11/11), and `git diff --check`: pass.
+- Isolated Docker API/DB healthy; Alembic current/head `f7a8b9c0d1e2`; `alembic check`: no pending operations.
+- Browser visual smoke: 37 rendered rows across six groups at 1440/1024/390 widths; grouped/global table, detail, forecast and responsive screenshots captured under `E:\Claude_allow\Download`.
+- Final independent review: APPROVED. Mock data remains explicitly research-only/non-actionable; no credentials, production DB, or broker access was used.

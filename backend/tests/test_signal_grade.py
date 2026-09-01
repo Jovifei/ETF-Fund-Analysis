@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
-
 from app.main import app
 from app.services.holding_service import HoldingService
 from app.services.signal_grade_service import GRADE_ORDER, assign_grade, classify_row
+from fastapi.testclient import TestClient
 
 
 def _base_values(**overrides) -> dict:
@@ -89,8 +88,8 @@ def test_grade_view_does_not_write_holdings(db_session):
     assert payload["version"] == "signal-grade-v0.2.0"
     assert before == after
     assert all(not row["actionable"] for row in payload["rows"])
-    assert set(payload["groups"]) == set(GRADE_ORDER)
-    assert "数据异常" not in payload["groups"]
+    assert set(payload["groups"]) == {*GRADE_ORDER, "数据异常"}
+    assert payload["counts"]["数据异常"] == len(payload["groups"]["数据异常"])
 
 
 def test_assign_grade_reduce_beats_add_when_death_cross():
