@@ -108,3 +108,50 @@ def test_sector_unmapped_theme_returns_null_not_arbitrary_board(bootstrapped, db
     assert result["up"] is None
     assert result["down"] is None
     assert result["ratio"] is None
+
+
+def test_summary_rows_expose_concept_and_market_breadth(bootstrapped, db_session):
+    """每行必须同时携带行业板块(sector)、概念板块(sector_concept)、全市场宽度(market_breadth)。"""
+    service = KlineStabilizationService()
+    summary = service.summary(db_session)
+    for row in summary["rows"]:
+        assert "sector_concept" in row
+        assert "market_breadth" in row
+        assert set(row["sector_concept"]) >= {"up", "down", "ratio"}
+        # market_breadth 允许为 None（仅宽基/指数 ETF 有值）
+        assert row["market_breadth"] is None or set(row["market_breadth"]) >= {"up", "down", "ratio"}
+
+
+def test_concept_alias_maps_theme_to_concept_board(bootstrapped, db_session):
+    """主题(半导体)经 concept_alias 映射后应命中概念板块(芯片)。"""
+    from app.models import SectorSnapshot
+
+    db_session.add(
+        SectorSnapshot(
+            sector_name="芯片",
+            trade_date=date(2026, 9, 1),
+            up_count=300,
+            down_count=80,
+            flat_count=5,
+            total_count=385,
+            pct_change=3.0,
+            source="ut-conceptalias",
+            board_type="concept",
+            quality_hash="u-con2",
+        )
+    )
+    db_session.flush()
+    result = KlineStabilizationService._sector_state(
+        db_session, _StubInstrument(theme_l2="半导体"), {"半导体": "芯片"}, board_type="concept"
+    )
+    assert result["sector_name"] == "芯片"
+    assert result["board_type"] == "concept"
+
+
+def test_config_readers_expose_concept_alias_and_broad_market_themes():
+    """config 读取器应暴露 concept_alias 与 broad_market_themes（来自 etf_1430_workbench.json）。"""
+    service = KlineStabilizationService()
+    concept_alias = service._concept_alias()
+    assert isinstance(concept_alias, dict)
+    assert concept_alias.get("半导体") == "芯片"
+    assert "宽基" in service._broad_market_themes()

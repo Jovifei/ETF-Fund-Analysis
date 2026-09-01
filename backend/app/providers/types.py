@@ -92,7 +92,7 @@ class SectorRecord:
     """板块涨跌家数快照（K线企稳看板用）。
 
     Attributes:
-        sector_name: 板块名称（如 "AI应用"、"有色金属"）。
+        sector_name: 板块名称（如 "半导体"、"芯片概念"、"全市场"）。
         trade_date: 交易日。
         up_count: 上涨家数。
         down_count: 下跌家数。
@@ -100,6 +100,7 @@ class SectorRecord:
         total_count: 总家数。
         pct_change: 板块涨跌幅（百分比，可选）。
         source: 数据源（默认 akshare）。
+        board_type: 板块类别，"industry" 行业 / "concept" 概念 / "market" 全市场。
     """
 
     sector_name: str
@@ -110,6 +111,7 @@ class SectorRecord:
     total_count: int = 0
     pct_change: float | None = None
     source: str = "akshare"
+    board_type: str = "industry"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

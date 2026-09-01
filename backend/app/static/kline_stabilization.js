@@ -58,6 +58,8 @@ function adaptRow(row) {
   const td = row.td || {};
   const forecast = row.forecast || {};
   const sector = row.sector || {};
+  const sectorConcept = row.sector_concept || {};
+  const breadth = row.market_breadth || null;
   const ma = row.ma || {};
   const kdj = row.kdj || {};
   const macd = row.macd || {};
@@ -99,6 +101,16 @@ function adaptRow(row) {
     sectorDown: sector.down != null ? `${sector.down}跌` : '—',
     sectorRatio: sector.ratio != null ? `跌比${sector.ratio}%` : '—',
     sectorName: sector.sector_name || null,
+    conceptUp: sectorConcept.up != null ? `${sectorConcept.up}涨` : '—',
+    conceptDown: sectorConcept.down != null ? `${sectorConcept.down}跌` : '—',
+    conceptRatio: sectorConcept.ratio != null ? `跌比${sectorConcept.ratio}%` : '—',
+    conceptName: sectorConcept.sector_name || null,
+    breathUp: breadth && breadth.up != null ? `${breadth.up}涨` : '—',
+    breathDown: breadth && breadth.down != null ? `${breadth.down}跌` : '—',
+    breathFlat: breadth && breadth.flat != null ? `${breadth.flat}平` : '—',
+    breathTotal: breadth && breadth.total != null ? `共${breadth.total}` : '—',
+    breathRatio: breadth && breadth.ratio != null ? `跌比${breadth.ratio}%` : '—',
+    breathName: breadth && breadth.sector_name ? breadth.sector_name : null,
     week,
     forecast: forecast.label || (forecast.expected_return != null ? `${forecast.expected_return >= 0 ? '+' : ''}${(Number(forecast.expected_return) * 100).toFixed(2)}%` : '—'),
     conf: confText,
@@ -132,14 +144,31 @@ function tdCell(row) {
   return `<span class="${cls}">${esc(num)}</span>${sub}${desc}`;
 }
 
+// 板块/概念涨跌家数单元（涨/跌/跌比 + 板块名）
+function breadthCell(up, down, ratio, name) {
+  if (up === '—' && down === '—') return '<span style="color:var(--text-dim)">—</span>';
+  return `${name ? `<div style="font-size:10px; color:var(--text-muted); margin-bottom:1px">${esc(name)}</div>` : ''}<span style="color:#2ecc71; font-size:11px">${esc(up)}</span><br><span style="color:#e74c3c; font-size:11px">${esc(down)}</span><br><span style="color:var(--text-dim); font-size:10px">${esc(ratio)}</span>`;
+}
+
+// 全市场宽度单元（涨/跌/平/总数 + 跌比），仅指数 ETF 有数据
+function marketBreadthCell(r) {
+  if (!r.breathName) return '<span style="color:var(--text-dim)">—</span>';
+  return `<div style="font-size:10px; color:var(--text-muted); margin-bottom:1px">${esc(r.breathName)}</div>
+    <span style="color:#2ecc71; font-size:11px">${esc(r.breathUp)}</span><br>
+    <span style="color:#e74c3c; font-size:11px">${esc(r.breathDown)}</span><br>
+    <span style="color:var(--text-dim); font-size:10px">${esc(r.breathFlat)} · ${esc(r.breathTotal)}</span><br>
+    <span style="color:var(--text-dim); font-size:10px">${esc(r.breathRatio)}</span>`;
+}
+
 function renderRow(r) {
   const pctCls = String(r.pct).startsWith('-') ? 'dk-pd' : 'dk-pu';
   const vsCls = r.vs === '↑' ? 'dk-cu' : (r.vs === '↓' ? 'dk-cd' : 'dk-cs');
   const volCls = r.volCls ? `dk-vt dk-${r.volCls}` : 'dk-vt dk-vf';
-  const sector = (r.sectorUp === '—') ? '<span style="color:var(--text-dim)">—</span>'
-    : `${r.sectorName ? `<div style="font-size:10px; color:var(--text-muted); margin-bottom:1px">${esc(r.sectorName)}</div>` : ''}<span style="color:#2ecc71; font-size:11px">${esc(r.sectorUp)}</span><br><span style="color:#e74c3c; font-size:11px">${esc(r.sectorDown)}</span><br><span style="color:var(--text-dim); font-size:10px">${esc(r.sectorRatio)}</span>`;
   const weekColor = String(r.week).includes('-') ? '#2ecc71' : '#e74c3c';
   const fcastCls = String(r.forecast).startsWith('-') ? 'dk-pd' : 'dk-pu';
+  const industryCell = breadthCell(r.sectorUp, r.sectorDown, r.sectorRatio, r.sectorName);
+  const conceptCell = breadthCell(r.conceptUp, r.conceptDown, r.conceptRatio, r.conceptName);
+  const marketCell = marketBreadthCell(r);
   return `<tr>
     <td><div class="dk-nc">${esc(r.name)}</div><div class="dk-cc">${esc(r.code)}</div></td>
     <td class="${pctCls}" style="font-weight:600">${esc(r.pct)}</td>
@@ -150,7 +179,9 @@ function renderRow(r) {
     <td>${kdjCell(r)}</td>
     <td style="text-align:center">${tdCell(r)}</td>
     <td style="text-align:center"><span style="color:var(--text); font-weight:600; font-family:var(--font-mono)">${esc(r.rsiVal)}</span><br><span style="font-size:9px; color:var(--text-muted)">${esc(r.rsiDesc)}</span></td>
-    <td>${sector}</td>
+    <td>${industryCell}</td>
+    <td>${conceptCell}</td>
+    <td>${marketCell}</td>
     <td style="text-align:center"><span style="color:${weekColor}; font-family:var(--font-mono)">${esc(r.week)}</span></td>
     <td style="text-align:center"><span class="${fcastCls}" style="font-weight:600">${esc(r.forecast)}</span><br><span style="font-size:10px; color:var(--text-dim)">${esc(r.conf)}</span></td>
     <td class="dk-ac" style="color:${r.actionColor}">${esc(r.action)}</td>
@@ -178,7 +209,7 @@ function renderGroup(action, rows) {
   const rule = GROUP_RULES[action] || '';
   const body = rows.length
     ? rows.map(renderRow).join('')
-    : `<tr><td colspan="13" style="text-align:center; color:var(--text-dim); padding:12px">今日无「${esc(action)}」标的</td></tr>`;
+    : `<tr><td colspan="15" style="text-align:center; color:var(--text-dim); padding:12px">今日无「${esc(action)}」标的</td></tr>`;
   return `<div class="dk-gh">
       <span class="dk-gb" style="background:${color.bg}; color:${color.fg}">${esc(action)}</span>
       <span class="dk-gt">${esc(rule)}</span>
@@ -186,7 +217,7 @@ function renderGroup(action, rows) {
     </div>
     <table class="dk-tbl">
       <thead><tr>
-        <th>标的</th><th>今日涨幅</th><th>较昨日</th><th>量能</th><th>均线多空</th><th>MACD</th><th>KDJ</th><th>九转</th><th>RSI</th><th>板块涨跌</th><th>近1周</th><th>明日预测</th><th>操作建议</th>
+        <th>标的</th><th>今日涨幅</th><th>较昨日</th><th>量能</th><th>均线多空</th><th>MACD</th><th>KDJ</th><th>九转</th><th>RSI</th><th>行业板块</th><th>概念板块</th><th>全市场宽度</th><th>近1周</th><th>明日预测</th><th>操作建议</th>
       </tr></thead>
       <tbody>${body}</tbody>
     </table>`;

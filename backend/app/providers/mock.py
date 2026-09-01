@@ -204,3 +204,48 @@ class MockProvider(MarketProvider):
             )
             for name, up, down, flat in samples
         ]
+
+    def fetch_concept_snapshots(self, trade_date: date | None = None) -> list[SectorRecord]:
+        """确定性 mock 概念板块涨跌家数（演示用；明确标记为合成数据）。"""
+        target = trade_date or date.today()
+        samples = [
+            ("芯片", 320, 80, 5),
+            ("人工智能", 290, 60, 4),
+            ("新能源汽车", 150, 90, 3),
+            ("机器人", 210, 70, 4),
+            ("华为概念", 130, 110, 6),
+            ("医药", 95, 160, 7),
+            ("黄金概念", 40, 90, 3),
+            ("军工", 70, 130, 5),
+        ]
+        return [
+            SectorRecord(
+                sector_name=name,
+                trade_date=target,
+                up_count=up,
+                down_count=down,
+                flat_count=flat,
+                total_count=up + down + flat,
+                pct_change=round(((up - down) / max(up + down, 1)) * 100, 2),
+                source="mock-sector",
+                board_type="concept",
+            )
+            for name, up, down, flat in samples
+        ]
+
+    def fetch_market_breadth(self, trade_date: date | None = None) -> SectorRecord | None:
+        """确定性 mock 全市场涨跌家数（演示用；明确标记为合成数据）。"""
+        target = trade_date or date.today()
+        up, down, flat = 3387, 2039, 126
+        total = up + down + flat
+        return SectorRecord(
+            sector_name="全市场",
+            trade_date=target,
+            up_count=up,
+            down_count=down,
+            flat_count=flat,
+            total_count=total,
+            pct_change=round((up - down) / max(total, 1) * 100, 2),
+            source="mock-sector",
+            board_type="market",
+        )

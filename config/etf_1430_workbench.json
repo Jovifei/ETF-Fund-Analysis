@@ -1,5 +1,5 @@
 {
-  "version": "etf-1430-workbench-v0.1.1",
+  "version": "etf-1430-workbench-v0.1.2",
   "decision_timezone": "Asia/Shanghai",
   "decision_window": {
     "start": "14:20",
@@ -22,6 +22,20 @@
     "新能源车": "电池",
     "黄金": "贵金属"
   },
+  "concept_alias": {
+    "_comment": "主题标签 → 概念板块名 的显式映射表（与 sector_alias 平行）。生产环境应使用 AKShare stock_board_concept_name_em 返回的概念板块名；此处示例值对应 mock 与东财常见命名。未登记的主题不显示概念板块（前端 —）。",
+    "半导体": "芯片",
+    "人工智能": "人工智能",
+    "新能源车": "新能源汽车",
+    "机器人": "机器人",
+    "国防军工": "军工",
+    "军工": "军工",
+    "医药": "医药",
+    "医疗": "医药",
+    "创新药": "医药",
+    "黄金": "黄金概念"
+  },
+  "broad_market_themes": ["宽基"],
   "weights": {
     "trend": 0.22,
     "momentum": 0.20,

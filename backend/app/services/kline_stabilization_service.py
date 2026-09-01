@@ -98,19 +98,38 @@ class KlineStabilizationService:
         )
 
     def _sector_alias(self) -> dict[str, str]:
-        """读取 config 中的主题→板块显式映射表（去掉下划线开头的注释键）。"""
+        """读取 config 中的主题→行业板块显式映射表（去掉下划线开头的注释键）。"""
         raw = self.config.get("sector_alias") or {}
         if not isinstance(raw, dict):
             return {}
         return {k: str(v) for k, v in raw.items() if not k.startswith("_") and isinstance(v, str)}
 
+    def _concept_alias(self) -> dict[str, str]:
+        """读取 config 中的主题→概念板块显式映射表（去掉下划线开头的注释键）。"""
+        raw = self.config.get("concept_alias") or {}
+        if not isinstance(raw, dict):
+            return {}
+        return {k: str(v) for k, v in raw.items() if not k.startswith("_") and isinstance(v, str)}
+
+    def _broad_market_themes(self) -> list[str]:
+        """读取 config 中需要展示全市场宽度的宽基/指数主题（theme_l1）。"""
+        raw = self.config.get("broad_market_themes") or []
+        if not isinstance(raw, list):
+            return []
+        return [str(t) for t in raw if isinstance(t, str)]
+
     @staticmethod
-    def _sector_state(db: Session, instrument: Instrument, alias: dict[str, str] | None = None) -> dict[str, Any]:
+    def _sector_state(
+        db: Session,
+        instrument: Instrument,
+        alias: dict[str, str] | None = None,
+        board_type: str | None = None,
+    ) -> dict[str, Any]:
         """读取板块涨跌家数（SectorSnapshot 表）。
 
         匹配策略（严格，不做模糊猜测）：
         1. theme_l1/theme_l2 原样精确命中板块名；
-        2. 经 config.sector_alias 显式映射后的板块名精确命中。
+        2. 经 config 显式映射表（sector_alias / concept_alias）映射后的板块名精确命中。
 
         匹配不到一律返回 null（前端显示 "—"）——刻意**不**用"最近一条任意板块"兜底，
         因为把无关板块的涨跌家数显示在某标的旁边会误导判断。
@@ -119,6 +138,7 @@ class KlineStabilizationService:
             db: 数据库会话。
             instrument: 标的实例。
             alias: 主题 → 板块名 的显式映射表，缺省为空。
+            board_type: 限定板块类别，"industry" 行业 / "concept" 概念；为 None 时不过滤。
 
         Returns:
             含 up/down/ratio 的字典；无匹配时三个值均为 None。
@@ -136,10 +156,11 @@ class KlineStabilizationService:
         if not candidates:
             return {"up": None, "down": None, "ratio": None}
 
+        stmt = select(SectorSnapshot).where(SectorSnapshot.sector_name.in_(candidates))
+        if board_type is not None:
+            stmt = stmt.where(SectorSnapshot.board_type == board_type)
         rows = db.scalars(
-            select(SectorSnapshot)
-            .where(SectorSnapshot.sector_name.in_(candidates))
-            .order_by(SectorSnapshot.trade_date.desc(), SectorSnapshot.fetched_at.desc())
+            stmt.order_by(SectorSnapshot.trade_date.desc(), SectorSnapshot.fetched_at.desc())
         ).all()
         if not rows:
             return {"up": None, "down": None, "ratio": None}
@@ -153,7 +174,34 @@ class KlineStabilizationService:
             "down": latest.down_count,
             "ratio": ratio,
             "sector_name": latest.sector_name,
+            "board_type": latest.board_type,
             "trade_date": latest.trade_date.isoformat(),
+        }
+
+    @staticmethod
+    def _market_breadth(db: Session) -> dict[str, Any] | None:
+        """读取全市场宽度快照（SectorSnapshot.board_type == "market"，单条 "全市场"）。
+
+        用作指数 ETF 的广度参考：全市场涨/跌/平家数与跌比。无数据返回 None。
+        """
+        row = db.scalar(
+            select(SectorSnapshot)
+            .where(SectorSnapshot.board_type == "market")
+            .order_by(SectorSnapshot.trade_date.desc(), SectorSnapshot.fetched_at.desc())
+            .limit(1)
+        )
+        if not row:
+            return None
+        total = row.total_count or (row.up_count + row.down_count + row.flat_count)
+        ratio = round(row.down_count / total * 100, 1) if total > 0 else None
+        return {
+            "up": row.up_count,
+            "down": row.down_count,
+            "flat": row.flat_count,
+            "total": total,
+            "ratio": ratio,
+            "sector_name": row.sector_name,
+            "trade_date": row.trade_date.isoformat(),
         }
 
     # ---------- 指标快照 ----------
@@ -370,9 +418,16 @@ class KlineStabilizationService:
         pattern = pattern_forecast_snapshot(frame) if not frame.empty else {"expected_return": None, "p_up": None, "confidence": 0, "sample_count": 0, "calibration_status": "not_calibrated", "note": "数据不足"}
         chan = self._chanlun_state(frame)
 
-        # 板块涨跌家数：theme 直接命中 → 再试 config.sector_alias 显式映射；
-        # 都没命中就是没数据，占位 null（前端显示 "—"），不用无关板块兜底。
-        sector = self._sector_state(db, instrument, self._sector_alias())
+        # 板块涨跌家数：行业板块（theme 直接命中 → 再试 config.sector_alias 显式映射）；
+        # 概念板块（config.concept_alias）；都没命中就是没数据，占位 null（前端显示 "—"），
+        # 不用无关板块兜底。
+        sector = self._sector_state(db, instrument, self._sector_alias(), board_type="industry")
+        sector_concept = self._sector_state(db, instrument, self._concept_alias(), board_type="concept")
+
+        # 全市场宽度：仅宽基 / 指数主题 ETF 作为广度参考（config.broad_market_themes）。
+        market_breadth: dict[str, Any] | None = None
+        if instrument.theme_l1 in self._broad_market_themes():
+            market_breadth = self._market_breadth(db)
 
         forecast_expected = pattern.get("expected_return")
         forecast_label = f"{forecast_expected:+.2%}" if forecast_expected is not None else "—"
@@ -406,6 +461,8 @@ class KlineStabilizationService:
             "td": td,
             "rsi": self._rsi_state(frame),
             "sector": sector,
+            "sector_concept": sector_concept,
+            "market_breadth": market_breadth,
             "week_label": week_label,
             "forecast": {
                 "label": forecast_label,

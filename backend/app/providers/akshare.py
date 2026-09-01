@@ -199,6 +199,7 @@ class AKShareProvider(MarketProvider):
         frame: Any,
         target: date,
         name_field: str,
+        board_type: str = "industry",
     ) -> list[SectorRecord]:
         """把板块 DataFrame 归一化为 SectorRecord 列表。
 
@@ -206,6 +207,7 @@ class AKShareProvider(MarketProvider):
             frame: AKShare 返回的板块 DataFrame。
             target: 目标交易日。
             name_field: 板块名称列名（东财 "板块名称" / 同花顺 "板块"）。
+            board_type: 板块类别，industry/concept/market。
 
         Returns:
             SectorRecord 列表；无有效行时返回空列表。
@@ -229,6 +231,73 @@ class AKShareProvider(MarketProvider):
                     total_count=total,
                     pct_change=finite_or_none(row.get("涨跌幅") or row.get("pct_change")),
                     source=self.name,
+                    board_type=board_type,
                 )
             )
         return result
+
+    def fetch_concept_snapshots(self, trade_date: date | None = None) -> list[SectorRecord]:
+        """获取概念板块涨跌家数快照（K线企稳看板用）。
+
+        数据源为 AKShare 东财概念板块（stock_board_concept_name_em），含 上涨家数/下跌家数；
+        东财不可达时返回空列表（优雅降级，不抛异常）。
+
+        Returns:
+            SectorRecord 列表，board_type="concept"；无数据返回 []。
+        """
+        target = trade_date or date.today()
+        function = getattr(self.ak, "stock_board_concept_name_em", None)
+        if function is None:
+            logger.info("concept source em unavailable (akshare version too old)")
+            return []
+        try:
+            frame = function()
+        except Exception as exc:
+            logger.warning("concept snapshots em failed: %s", exc)
+            return []
+        result = self._parse_sector_frame(frame, target, "板块名称", board_type="concept")
+        if not result:
+            logger.warning("concept snapshots returned no rows")
+            return []
+        logger.info("concept snapshots: %d rows", len(result))
+        return result
+
+    def fetch_market_breadth(self, trade_date: date | None = None) -> SectorRecord | None:
+        """获取全市场涨跌家数（宽度），作为指数 ETF 的广度参考。
+
+        数据源为 AKShare 新浪全A行情（stock_zh_a_spot），按涨跌幅符号统计 涨/跌/平 家数。
+        东财/新浪不可达时返回 None（优雅降级）。
+
+        Returns:
+            单条 board_type="market" 的 SectorRecord；无数据返回 None。
+        """
+        function = getattr(self.ak, "stock_zh_a_spot", None)
+        if function is None:
+            logger.info("market breadth source (stock_zh_a_spot) unavailable")
+            return None
+        try:
+            frame = function()
+        except Exception as exc:
+            logger.warning("market breadth fetch failed: %s", exc)
+            return None
+        if frame is None or len(frame) == 0:
+            logger.warning("market breadth returned empty")
+            return None
+        up = int((frame["涨跌幅"] > 0).sum())
+        down = int((frame["涨跌幅"] < 0).sum())
+        flat = int((frame["涨跌幅"] == 0).sum())
+        total = up + down + flat
+        avg_pct = float(frame["涨跌幅"].mean()) if total else None
+        target = trade_date or date.today()
+        logger.info("market breadth: 涨%d 跌%d 平%d", up, down, flat)
+        return SectorRecord(
+            sector_name="全市场",
+            trade_date=target,
+            up_count=up,
+            down_count=down,
+            flat_count=flat,
+            total_count=total,
+            pct_change=round(avg_pct, 2) if avg_pct is not None else None,
+            source=self.name,
+            board_type="market",
+        )

@@ -41,11 +41,61 @@ class _FakeSectorProvider:
         ]
 
 
+class _FakeAllBoardsProvider:
+    """同时支持 行业 / 概念 / 全市场 三类板块快照的假 provider。"""
+
+    name = "fake-all"
+
+    def fetch_sector_snapshots(self, trade_date=None) -> list[SectorRecord]:
+        return [
+            SectorRecord(
+                sector_name="AI应用",
+                trade_date=date(2026, 8, 31),
+                up_count=390,
+                down_count=142,
+                flat_count=8,
+                total_count=540,
+                pct_change=2.02,
+                board_type="industry",
+            )
+        ]
+
+    def fetch_concept_snapshots(self, trade_date=None) -> list[SectorRecord]:
+        return [
+            SectorRecord(
+                sector_name="芯片",
+                trade_date=date(2026, 8, 31),
+                up_count=300,
+                down_count=80,
+                flat_count=5,
+                total_count=385,
+                pct_change=3.0,
+                board_type="concept",
+            )
+        ]
+
+    def fetch_market_breadth(self, trade_date=None) -> SectorRecord | None:
+        return SectorRecord(
+            sector_name="全市场",
+            trade_date=date(2026, 8, 31),
+            up_count=3000,
+            down_count=2000,
+            flat_count=100,
+            total_count=5100,
+            pct_change=0.5,
+            board_type="market",
+        )
+
+
 def test_market_service_refresh_sector_snapshots_inserts(bootstrapped, db_session):
     service = MarketService(_FakeSectorProvider(), persist_provider_audits=False)
     result = service.refresh_sector_snapshots(db_session)
     assert result["inserted"] == 2
-    assert result["error"] is None
+    # 行业板块成功落库；概念/全市场因该 fake provider 不支持而优雅降级（不抛异常）
+    assert result["boards"]["industry"]["error"] is None
+    assert result["boards"]["industry"]["inserted"] == 2
+    assert result["boards"]["concept"]["error"] == "ProviderError"
+    assert result["boards"]["market"]["error"] == "ProviderError"
     # 验证 fake provider 的板块已落库（按名称过滤，避免与其他来源数据串扰）
     ai = db_session.query(SectorSnapshot).filter(SectorSnapshot.sector_name == "AI应用").first()
     assert ai is not None
@@ -82,7 +132,12 @@ def test_market_service_refresh_sector_snapshots_degrades_when_unsupported(boots
     service = MarketService(_NoSectorProvider(), persist_provider_audits=False)
     result = service.refresh_sector_snapshots(db_session)
     assert result["inserted"] == 0
-    assert result["error"] == "ProviderError"
+    # 三类板块均降级，总 error 非 None 且首类为 ProviderError
+    assert result["error"] is not None
+    assert result["error"].startswith("industry:")
+    assert result["boards"]["industry"]["error"] == "ProviderError"
+    assert result["boards"]["concept"]["error"] == "ProviderError"
+    assert result["boards"]["market"]["error"] == "ProviderError"
     after = db_session.query(SectorSnapshot).count()
     assert after == before  # 降级不写入任何新行
 
@@ -97,6 +152,92 @@ def test_kline_service_reads_sector_snapshot(bootstrapped, db_session):
     # 任一行的 sector 结构必须合法（可能 null 或带值）
     for row in summary["rows"]:
         assert set(row["sector"]) >= {"up", "down", "ratio"}
+
+
+def test_market_service_refresh_all_three_boards(bootstrapped, db_session):
+    """provider 同时支持 行业/概念/全市场 时，三类快照都应落库。"""
+    service = MarketService(_FakeAllBoardsProvider(), persist_provider_audits=False)
+    result = service.refresh_sector_snapshots(db_session)
+    assert result["inserted"] == 3
+    assert result["error"] is None
+    assert result["boards"]["industry"]["inserted"] == 1
+    assert result["boards"]["concept"]["inserted"] == 1
+    assert result["boards"]["market"]["inserted"] == 1
+    # 验证 board_type 已正确落库（行业 / 概念 / 市场 各一条）
+    boards = {
+        s.board_type
+        for s in db_session.query(SectorSnapshot)
+        .filter(SectorSnapshot.trade_date == date(2026, 8, 31))
+        .all()
+    }
+    assert boards == {"industry", "concept", "market"}
+
+
+def test_sector_state_filters_by_board_type(bootstrapped, db_session):
+    """_sector_state 必须按 board_type 精准隔离：行业命中不污染概念。"""
+    from app.models import SectorSnapshot as SS
+
+    db_session.add_all(
+        [
+            SS(sector_name="电池", trade_date=date(2026, 9, 1), up_count=30, down_count=10,
+               flat_count=0, total_count=40, pct_change=1.5, source="ut-boardfilter", board_type="industry",
+               quality_hash="u-ind"),
+            SS(sector_name="芯片", trade_date=date(2026, 9, 1), up_count=300, down_count=80,
+               flat_count=5, total_count=385, pct_change=3.0, source="ut-boardfilter", board_type="concept",
+               quality_hash="u-con"),
+        ]
+    )
+    db_session.flush()
+
+    industry = KlineStabilizationService._sector_state(
+        db_session, _StubInstrument(theme_l1="新能源车"), {"新能源车": "电池"}, board_type="industry"
+    )
+    assert industry["sector_name"] == "电池"
+    assert industry["board_type"] == "industry"
+
+    concept = KlineStabilizationService._sector_state(
+        db_session, _StubInstrument(theme_l2="半导体"), {"半导体": "芯片"}, board_type="concept"
+    )
+    assert concept["sector_name"] == "芯片"
+    assert concept["board_type"] == "concept"
+
+    # 反向：用行业别名查 concept 类型必须落空（不串类别）
+    miss = KlineStabilizationService._sector_state(
+        db_session, _StubInstrument(theme_l1="新能源车"), {"新能源车": "电池"}, board_type="concept"
+    )
+    assert miss["up"] is None
+
+
+def test_market_breadth_reads_single_row(bootstrapped, db_session):
+    """_market_breadth 只取 board_type='market' 的唯一全市场行。"""
+    from app.models import SectorSnapshot as SS
+
+    # 清除 bootstrap（mock）可能写入的全市场行，避免污染断言
+    db_session.query(SS).filter(SS.board_type == "market").delete()
+    db_session.add(
+        SS(sector_name="全市场", trade_date=date(2026, 9, 1), up_count=3000, down_count=2000,
+           flat_count=100, total_count=5100, pct_change=0.5, source="ut-breadth", board_type="market",
+           quality_hash="u-mkt")
+    )
+    db_session.flush()
+
+    breadth = KlineStabilizationService._market_breadth(db_session)
+    assert breadth is not None
+    assert breadth["sector_name"] == "全市场"
+    assert breadth["up"] == 3000
+    assert breadth["down"] == 2000
+    assert breadth["flat"] == 100
+    assert breadth["total"] == 5100
+    # 跌比 = 2000/5100 ≈ 39.2%
+    assert round(breadth["ratio"], 1) == 39.2
+
+
+class _StubInstrument:
+    """仅暴露 _sector_state 需要的属性，避免改动真实标的行。"""
+
+    def __init__(self, theme_l1=None, theme_l2=None):
+        self.theme_l1 = theme_l1
+        self.theme_l2 = theme_l2
 
 
 def test_task_service_registers_sector_snapshot_task():
