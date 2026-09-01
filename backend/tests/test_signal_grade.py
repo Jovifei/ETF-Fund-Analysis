@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.models import SectorSnapshot
 from app.services.holding_service import HoldingService
-from app.services.signal_grade_service import GRADE_ORDER, assign_grade, classify_row
+from app.services.signal_grade_service import GRADE_ORDER, SignalGradeService, assign_grade, classify_row
 
 
 def _base_values(**overrides) -> dict:
@@ -103,3 +106,95 @@ def test_assign_grade_reduce_beats_add_when_death_cross():
         cfg={"j_add_cap": 90, "stall_return": 0.002},
     )
     assert grade == "减仓"
+
+
+# --------------------------------------------------------------------------
+# 板块口径：与「K线企稳分析看板」共用真实板块数据（行业 / 概念 / 全市场宽度）
+# --------------------------------------------------------------------------
+
+class _StubInstrument:
+    """仅暴露 _sector_for 需要的主题属性。"""
+
+    def __init__(self, theme_l1=None, theme_l2=None):
+        self.theme_l1 = theme_l1
+        self.theme_l2 = theme_l2
+
+
+def _clear_sectors(db_session):
+    db_session.query(SectorSnapshot).delete()
+    db_session.flush()
+
+
+def _add_sector(db_session, name, board_type, up, down, flat=0, total=None):
+    db_session.add(
+        SectorSnapshot(
+            sector_name=name,
+            trade_date=date(2026, 9, 1),
+            up_count=up,
+            down_count=down,
+            flat_count=flat,
+            total_count=total if total is not None else up + down + flat,
+            pct_change=0.5,
+            source="ut-signal-grade",
+            board_type=board_type,
+            quality_hash=f"u-{name}-{board_type}",
+        )
+    )
+    db_session.flush()
+
+
+def test_signal_grade_sector_uses_industry_board(db_session):
+    """行业 ETF 应命中 board_type='industry' 的真实行业板块涨跌家数。"""
+    _clear_sectors(db_session)
+    _add_sector(db_session, "半导体", "industry", up=21, down=165)
+
+    service = SignalGradeService()
+    sector = service._sector_for(db_session, _StubInstrument(theme_l1="科技", theme_l2="半导体"))
+
+    assert sector["board_type"] == "industry"
+    assert sector["sector_name"] == "半导体"
+    assert sector["up"] == 21
+    assert sector["down"] == 165
+    assert "半导体 21涨 165跌" in sector["label"]
+
+
+def test_signal_grade_sector_falls_back_to_concept_board(db_session):
+    """无行业板块命中时，应回退到 board_type='concept' 的概念板块。"""
+    _clear_sectors(db_session)
+    # 只落概念板块（半导体 → 芯片），不落行业板块
+    _add_sector(db_session, "芯片", "concept", up=320, down=80)
+
+    service = SignalGradeService()
+    sector = service._sector_for(db_session, _StubInstrument(theme_l1="科技", theme_l2="半导体"))
+
+    assert sector["board_type"] == "concept"
+    assert sector["sector_name"] == "芯片"
+    assert sector["up"] == 320
+    assert sector["down"] == 80
+
+
+def test_signal_grade_sector_uses_market_breadth_for_broad_theme(db_session):
+    """宽基/指数主题 ETF 应取全市场涨跌家数（board_type='market'）。"""
+    _clear_sectors(db_session)
+    _add_sector(db_session, "全市场", "market", up=3094, down=1995, flat=125, total=5214)
+
+    service = SignalGradeService()
+    sector = service._sector_for(db_session, _StubInstrument(theme_l1="宽基", theme_l2="大盘核心"))
+
+    assert sector["board_type"] == "market"
+    assert sector["up"] == 3094
+    assert sector["down"] == 1995
+    assert "全市场 3094涨 1995跌" in sector["label"]
+
+
+def test_signal_grade_sector_note_is_accurate_when_no_board(db_session):
+    """无板块数据时 up/down 为 None，且 note 不得误导为"无全市场涨跌家数"。"""
+    _clear_sectors(db_session)
+
+    service = SignalGradeService()
+    sector = service._sector_for(db_session, _StubInstrument(theme_l1="不存在的主题"))
+
+    assert sector["up"] is None
+    assert sector["down"] is None
+    assert sector["board_type"] is None
+    assert sector["note"] == "无对应行业/概念板块数据"
