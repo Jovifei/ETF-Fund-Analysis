@@ -393,7 +393,7 @@ start_isolated_pg_step() {
         "$PG_IMAGE")"
     [ -n "$cid" ] || { log "ERROR: docker run failed"; return 1; }
 
-    local ready=0 i
+    local ready=0
     for i in $(seq 1 "$READY_TIMEOUT_SECONDS"); do
         if docker exec "$CONTAINER" pg_isready -U "$PG_USER" -d "$PG_DB" >/dev/null 2>&1; then
             ready=1
