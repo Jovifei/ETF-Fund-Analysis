@@ -35,8 +35,6 @@ async def lifespan(_: FastAPI):
         with session_scope() as db:
             HoldingImportService(settings).cleanup_expired(db)
     except Exception:
-        # Cleanup is retryable maintenance; it must not prevent the private
-        # API from starting, and its log must never expose paths/tracebacks.
         logger.warning("holding import cleanup unavailable; retrying later")
     logger.info(
         "starting %s version=%s env=%s provider=%s",
@@ -48,10 +46,7 @@ async def lifespan(_: FastAPI):
     try:
         yield
     finally:
-        # The demo engine is process-local and must never outlive the app
-        # lifecycle or retain its StaticPool connection across TestClient runs.
         from app.services.demo_service import DemoService
-
         DemoService.close()
 
 
@@ -99,13 +94,16 @@ app.mount("/assets", StaticFiles(directory=STATIC_DIR), name="assets")
 
 @app.get("/", include_in_schema=False)
 def index() -> FileResponse:
+    return FileResponse(STATIC_DIR / "decision_board_workbuddy.html", media_type="text/html; charset=utf-8")
+
+
+@app.get("/legacy", include_in_schema=False)
+def legacy() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html", media_type="text/html; charset=utf-8")
 
 
 @app.get("/workbench/1430", include_in_schema=False)
 def etf_1430_workbench() -> RedirectResponse:
-    """Compatibility entrypoint; the unified decision board owns the UI."""
-
     return RedirectResponse(url="/", status_code=307)
 
 

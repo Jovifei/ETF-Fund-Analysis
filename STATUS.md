@@ -87,3 +87,9 @@
 - 已合入行业/概念/全市场三类 `SectorSnapshot`、AKShare 真实宽度优先、K 线企稳看板与 `refresh_sector_snapshots`。
 - 多用户认证与持仓隔离继续作为基础安全边界；板块数据属于共享市场数据。
 - Alembic 单链：`... -> f7a8b9c0d1e2 -> 0a9b1c2d3e4f -> 1b2c3d4e5f6a -> 2c3d4e5f6a7b -> e7f8a9b0c1d2 -> f1a2b3c4d5e6`。
+
+
+## 集成：多用户 + 统一评分首页
+
+- `/` 使用 WorkBuddy 风格 ETF 评分首页；`/legacy` 保留完整多页签系统；`/workbench/kline` 保留 K 线企稳分析。
+- 新评分首页使用数据库多用户 Session Cookie 登录与 CSRF，不再使用 localStorage Token。行情、行业/概念/全市场宽度是共享市场数据；持仓、OCR、报告和私有事件继续按 `user_id` 隔离。
