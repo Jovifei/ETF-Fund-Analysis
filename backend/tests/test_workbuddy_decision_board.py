@@ -12,8 +12,11 @@ def test_workbuddy_scoring_board_is_primary_and_legacy_is_preserved() -> None:
     compatibility = client.get("/workbench/1430", follow_redirects=False)
 
     assert primary.status_code == 200
-    assert "ETF 决策评分台" in primary.text
+    assert "ETF 决策看板" in primary.text
+    assert "五档分级 × 综合评分" in primary.text
     assert "scoreSummary" in primary.text
+    assert "marketSummary" in primary.text
+    assert "boardArea" in primary.text
     assert "horizonSelect" in primary.text
     assert "/assets/decision_board_workbuddy.js" in primary.text
     assert "workbuddy.link" not in primary.text
@@ -31,9 +34,13 @@ def test_workbuddy_assets_are_served_from_same_origin() -> None:
     js = client.get("/assets/decision_board_workbuddy.js")
 
     assert css.status_code == 200
+    assert "decision-data-row" in css.text
+    assert "grade-pill" in css.text
     assert "score-badge" in css.text
     assert js.status_code == 200
     assert "J≥90" in js.text
+    assert "KDJ死叉" in js.text
+    assert "rowHtml" in js.text
     assert "WorkBuddyDecisionBoard" in js.text
 
 
