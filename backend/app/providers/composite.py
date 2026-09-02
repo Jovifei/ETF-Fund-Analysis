@@ -9,7 +9,7 @@ from typing import Any, TypeVar
 
 from app.market_context.contracts import MarketContextItem, MarketContextObservation
 from app.providers.base import CapabilityUnavailable, MarketProvider, ProviderError
-from app.providers.types import BarRecord, InstrumentRecord, NewsRecord, QuoteRecord
+from app.providers.types import BarRecord, InstrumentRecord, NewsRecord, QuoteRecord, SectorRecord
 from app.utils.hashing import stable_hash
 
 logger = logging.getLogger(__name__)
@@ -147,6 +147,26 @@ class CompositeProvider(MarketProvider):
 
     def fetch_spot_quotes(self, codes: list[str]) -> list[QuoteRecord]:
         return self._invoke("fetch_spot_quotes", lambda provider: provider.fetch_spot_quotes(codes))
+
+    def fetch_sector_snapshots(self, trade_date: date | None = None) -> list[SectorRecord]:
+        return self._invoke(
+            "fetch_sector_snapshots", lambda provider: provider.fetch_sector_snapshots(trade_date)
+        )
+
+    def fetch_concept_snapshots(self, trade_date: date | None = None) -> list[SectorRecord]:
+        return self._invoke(
+            "fetch_concept_snapshots", lambda provider: provider.fetch_concept_snapshots(trade_date)
+        )
+
+    def fetch_market_breadth(self, trade_date: date | None = None) -> SectorRecord | None:
+        # market breadth is a single record and may legitimately be None when the
+        # provider cannot reach any breadth source; treat a missing row as empty.
+        return self._invoke(
+            "fetch_market_breadth",
+            lambda provider: provider.fetch_market_breadth(trade_date),
+            allow_empty=True,
+        )
+
 
     def fetch_news(self, since_hours: int = 24) -> list[NewsRecord]:
         # News is additive rather than a strict primary/fallback capability. Pull

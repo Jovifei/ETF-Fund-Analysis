@@ -58,6 +58,15 @@ class AKShareProvider(MarketProvider):
     def fetch_daily_bars(self, ts_code: str, start_date: date, end_date: date) -> list[BarRecord]:
         symbol = ts_code.split(".")[0]
         kind = next((item.get("kind", "ETF") for item in self._watchlist if item["symbol"] == symbol), "ETF")
+        try:
+            return self._fetch_daily_bars_em(symbol, kind, start_date, end_date, ts_code)
+        except Exception as exc:
+            logger.warning("AKShare EM history failed for %s, falling back to sina: %s", ts_code, exc)
+            return self._fetch_daily_bars_sina(ts_code, symbol, start_date, end_date)
+
+    def _fetch_daily_bars_em(
+        self, symbol: str, kind: str, start_date: date, end_date: date, ts_code: str
+    ) -> list[BarRecord]:
         function = self.ak.fund_etf_hist_em if kind.upper() == "ETF" else self.ak.fund_lof_hist_em
         try:
             frame = function(
@@ -71,6 +80,63 @@ class AKShareProvider(MarketProvider):
             frame = function(symbol=symbol, period="daily", start_date=start_date.strftime("%Y%m%d"), end_date=end_date.strftime("%Y%m%d"))
         except Exception as exc:
             raise ProviderError(f"AKShare history failed for {ts_code}: {exc}") from exc
+        return self._parse_bars_frame(frame, ts_code)
+
+    def _fetch_daily_bars_sina(
+        self, ts_code: str, symbol: str, start_date: date, end_date: date
+    ) -> list[BarRecord]:
+        """新浪 ETF/LOF 历史行情降级源（fund_etf_hist_sina）。
+
+        东财 fund_etf_hist_em 在部分网络环境下被反爬断连，新浪接口通常可用。
+        新浪 symbol 需带交易所前缀（sh/sz），且不区分 ETF/LOF（fund_etf_hist_sina
+        同时覆盖二者）。返回列：date/open/high/low/close/volume/amount。
+        """
+        prefix = "sh" if ts_code.upper().endswith(".SH") else "sz"
+        function = getattr(self.ak, "fund_etf_hist_sina", None)
+        if function is None:
+            raise ProviderError(f"AKShare sina history unavailable for {ts_code}")
+        try:
+            frame = function(symbol=f"{prefix}{symbol}")
+        except Exception as exc:
+            raise ProviderError(f"AKShare sina history failed for {ts_code}: {exc}") from exc
+        result: list[BarRecord] = []
+        for row in self._records(frame):
+            raw_date = row.get("date")
+            try:
+                trade_date = raw_date.date() if hasattr(raw_date, "date") else datetime.strptime(str(raw_date)[:10], "%Y-%m-%d").date()
+            except Exception:
+                continue
+            if trade_date < start_date or trade_date > end_date:
+                continue
+            close = finite_or_none(row.get("close"))
+            open_price = finite_or_none(row.get("open"))
+            high = finite_or_none(row.get("high"))
+            low = finite_or_none(row.get("low"))
+            if None in (close, open_price, high, low):
+                continue
+            result.append(
+                BarRecord(
+                    ts_code=ts_code,
+                    trade_date=trade_date,
+                    open=open_price or 0,
+                    high=high or 0,
+                    low=low or 0,
+                    close=close or 0,
+                    pre_close=None,
+                    volume=finite_or_none(row.get("volume")),
+                    amount=finite_or_none(row.get("amount")),
+                    pct_change=None,
+                    adjust="none",
+                    source=self.name,
+                )
+            )
+        result.sort(key=lambda item: item.trade_date)
+        for idx, item in enumerate(result):
+            if idx > 0 and item.pre_close is None:
+                item.pre_close = result[idx - 1].close
+        return result
+
+    def _parse_bars_frame(self, frame: Any, ts_code: str) -> list[BarRecord]:
         result: list[BarRecord] = []
         for row in self._records(frame):
             raw_date = row.get("日期") or row.get("date")
@@ -238,29 +304,58 @@ class AKShareProvider(MarketProvider):
         return result
 
     def fetch_concept_snapshots(self, trade_date: date | None = None) -> list[SectorRecord]:
-        """获取概念板块涨跌家数快照（K线企稳看板用）。
+        """获取概念板块快照（K线企稳看板用）。
 
-        数据源为 AKShare 东财概念板块（stock_board_concept_name_em），含 上涨家数/下跌家数；
-        东财不可达时返回空列表（优雅降级，不抛异常）。
+        主源为 AKShare 东财概念板块（stock_board_concept_name_em），含 上涨家数/下跌家数；
+        东财不可达（部分网络被反爬断连）时降级到同花顺概念汇总
+        （stock_board_concept_summary_ths），该源仅提供 概念名称/驱动事件/龙头股/成分股数量，
+        无涨跌家数，故 up/down 置空（消费侧显示 "—"），total_count 用成分股数量填充。
+        两者都失败返回空列表（优雅降级，不抛异常）。
 
         Returns:
             SectorRecord 列表，board_type="concept"；无数据返回 []。
         """
         target = trade_date or date.today()
         function = getattr(self.ak, "stock_board_concept_name_em", None)
-        if function is None:
-            logger.info("concept source em unavailable (akshare version too old)")
+        if function is not None:
+            try:
+                frame = function()
+                result = self._parse_sector_frame(frame, target, "板块名称", board_type="concept")
+                if result:
+                    logger.info("concept snapshots: %d rows (em)", len(result))
+                    return result
+            except Exception as exc:
+                logger.warning("concept snapshots em failed, falling back to ths: %s", exc)
+        # 同花顺概念汇总降级（无涨跌家数）
+        ths = getattr(self.ak, "stock_board_concept_summary_ths", None)
+        if ths is None:
+            logger.info("concept source unavailable (akshare version too old)")
             return []
         try:
-            frame = function()
+            frame = ths()
         except Exception as exc:
-            logger.warning("concept snapshots em failed: %s", exc)
+            logger.warning("concept snapshots ths failed: %s", exc)
             return []
-        result = self._parse_sector_frame(frame, target, "板块名称", board_type="concept")
-        if not result:
-            logger.warning("concept snapshots returned no rows")
-            return []
-        logger.info("concept snapshots: %d rows", len(result))
+        result: list[SectorRecord] = []
+        for row in self._records(frame):
+            name = str(row.get("概念名称") or row.get("概念") or "").strip()
+            if not name:
+                continue
+            total = finite_or_none(row.get("成分股数量")) or 0
+            result.append(
+                SectorRecord(
+                    sector_name=name,
+                    trade_date=target,
+                    up_count=0,
+                    down_count=0,
+                    flat_count=0,
+                    total_count=int(total),
+                    pct_change=None,
+                    source=self.name,
+                    board_type="concept",
+                )
+            )
+        logger.info("concept snapshots: %d rows (ths)", len(result))
         return result
 
     def fetch_market_breadth(self, trade_date: date | None = None) -> SectorRecord | None:

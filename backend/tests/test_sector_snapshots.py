@@ -447,3 +447,79 @@ def test_akshare_market_breadth_returns_none_when_both_fail():
     fake_ak.stock_info_a_code_name.side_effect = RuntimeError("code-list-down")
     prov = _provider_no_init(fake_ak)
     assert prov.fetch_market_breadth(date(2026, 9, 1)) is None
+
+
+# --------------------------------------------------------------------------
+# AKShare provider：概念板块东财 → 同花顺降级（无涨跌家数）
+# --------------------------------------------------------------------------
+
+def test_akshare_concept_uses_eastmoney_when_available():
+    """东财概念可用时优先用东财（含涨跌家数）。"""
+    from unittest.mock import MagicMock
+
+    fake_ak = MagicMock()
+    fake_ak.stock_board_concept_name_em.return_value = _frame(
+        [{"板块名称": "芯片概念", "上涨家数": 300, "下跌家数": 80, "平盘家数": 5, "涨跌幅": 3.0}]
+    )
+    prov = _provider_no_init(fake_ak)
+    rows = prov.fetch_concept_snapshots(trade_date=date(2026, 8, 31))
+    assert len(rows) == 1
+    assert rows[0].sector_name == "芯片概念"
+    assert rows[0].board_type == "concept"
+    assert (rows[0].up_count, rows[0].down_count) == (300, 80)
+
+
+def test_akshare_concept_falls_back_to_ths_without_breadth():
+    """东财概念被断时降级同花顺：有成分股数量但无涨跌家数，up/down 记 0。"""
+    from unittest.mock import MagicMock
+
+    fake_ak = MagicMock()
+    fake_ak.stock_board_concept_name_em.side_effect = RuntimeError("em-down")
+    fake_ak.stock_board_concept_summary_ths.return_value = _frame(
+        [{"概念名称": "MLCC概念", "成分股数量": 37, "驱动事件": "x", "龙头股": "y"}]
+    )
+    prov = _provider_no_init(fake_ak)
+    rows = prov.fetch_concept_snapshots(trade_date=date(2026, 8, 31))
+    assert len(rows) == 1
+    assert rows[0].sector_name == "MLCC概念"
+    assert rows[0].board_type == "concept"
+    assert rows[0].total_count == 37
+    assert (rows[0].up_count, rows[0].down_count) == (0, 0)
+
+
+def test_akshare_concept_returns_empty_when_all_fail():
+    """概念两源都失败时返回空列表（优雅降级，不抛异常）。"""
+    from unittest.mock import MagicMock
+
+    fake_ak = MagicMock()
+    fake_ak.stock_board_concept_name_em.side_effect = RuntimeError("em-down")
+    fake_ak.stock_board_concept_summary_ths.side_effect = RuntimeError("ths-down")
+    prov = _provider_no_init(fake_ak)
+    assert prov.fetch_concept_snapshots(trade_date=date(2026, 8, 31)) == []
+
+
+# --------------------------------------------------------------------------
+# AKShare provider：K线东财 → 新浪降级
+# --------------------------------------------------------------------------
+
+def test_akshare_daily_bars_falls_back_to_sina():
+    """东财 fund_etf_hist_em 被断时降级新浪 fund_etf_hist_sina。"""
+    from unittest.mock import MagicMock
+
+    fake_ak = MagicMock()
+    fake_ak.fund_etf_hist_em.side_effect = RuntimeError("em-down")
+    fake_ak.fund_etf_hist_sina.return_value = _frame(
+        [
+            {"date": "2025-01-02", "open": 3.90, "high": 3.95, "low": 3.88, "close": 3.91, "volume": 1000, "amount": 2000},
+            {"date": "2025-01-03", "open": 3.91, "high": 3.96, "low": 3.89, "close": 3.92, "volume": 1100, "amount": 2200},
+        ]
+    )
+    prov = _provider_no_init(fake_ak)
+    prov._watchlist = [{"symbol": "510300", "kind": "ETF"}]
+    rows = prov.fetch_daily_bars("510300.SH", date(2025, 1, 1), date(2025, 1, 31))
+    assert len(rows) == 2
+    assert rows[0].trade_date == date(2025, 1, 2)
+    assert rows[0].close == 3.91
+    # 新浪源无涨跌幅字段，pct_change 记 None，但 pre_close 由前一日 close 回填
+    assert rows[1].pre_close == 3.91
+
