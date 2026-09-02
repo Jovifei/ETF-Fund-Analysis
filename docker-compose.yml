@@ -95,6 +95,10 @@ services:
         condition: service_healthy
       api:
         condition: service_healthy
+    # The scheduler is a background worker without an HTTP listener; the
+    # curl-based HEALTHCHECK baked into the image would always fail here.
+    healthcheck:
+      disable: true
     volumes:
       - ./config:/app/config:ro
       - ./reports:/app/reports

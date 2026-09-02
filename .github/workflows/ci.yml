@@ -65,3 +65,33 @@ jobs:
           docker compose config >/dev/null
       - name: Build production image
         run: docker build -f backend/Dockerfile -t china-fund-decision:ci .
+      - name: Smoke test production image
+        run: |
+          docker network create ci-smoke
+          docker run -d --name ci-smoke-db --network ci-smoke \
+            -e POSTGRES_DB=fund_decision -e POSTGRES_USER=fundapp \
+            -e POSTGRES_PASSWORD=CHANGE_ME_CI_DATABASE_PASSWORD \
+            postgres:16-alpine
+          for i in $(seq 1 30); do
+            docker exec ci-smoke-db pg_isready -U fundapp -d fund_decision >/dev/null 2>&1 && break
+            sleep 2
+          done
+          docker run -d --name ci-smoke-api --network ci-smoke -p 127.0.0.1:18099:8000 \
+            -e DATABASE_URL=postgresql+psycopg://fundapp:CHANGE_ME_CI_DATABASE_PASSWORD@ci-smoke-db:5432/fund_decision \
+            -e APP_ENV=production -e AUTH_ENABLED=true -e AUTO_CREATE_SCHEMA=false \
+            -e MARKET_PROVIDER=mock -e ALLOW_MOCK_FALLBACK=false \
+            -e LLM_ENABLED=false -e ANALYSIS_ENABLED=false \
+            -e OCR_MODE=disabled \
+            -e OCR_TRANSIENT_ROOT=/var/lib/china-fund-decision/ocr-transient \
+            --tmpfs /var/lib/china-fund-decision/ocr-transient:size=64m,mode=0700,uid=10001,gid=10001 \
+            china-fund-decision:ci \
+            sh -c "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"
+          ok=0
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18099/api/health | grep -q '"status":"ok"'; then ok=1; break; fi
+            sleep 2
+          done
+          docker logs ci-smoke-api >&2 || true
+          docker rm -f ci-smoke-api ci-smoke-db >/dev/null
+          docker network rm ci-smoke >/dev/null
+          test "$ok" = "1"
