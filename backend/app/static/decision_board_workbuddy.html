@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>ETF 决策看板</title>
-  <link rel="stylesheet" href="/assets/decision_board_workbuddy.css?v=0.2.0">
+  <title>K线企稳分析看板</title>
+  <link rel="stylesheet" href="/assets/decision_board_workbuddy.css?v=0.3.0">
 </head>
 <body>
   <div id="authOverlay" class="auth-overlay hidden">
@@ -12,51 +12,72 @@
       <div class="eyebrow">PRIVATE RESEARCH</div>
       <h2>账户登录</h2>
       <p>使用服务器中已创建的私有账户。会话使用 HttpOnly Cookie，页面不保存密码或令牌。</p>
-      <label for="identifierInput">用户名或邮箱</label><input id="identifierInput" type="text" autocomplete="username" maxlength="320" required>
-      <label for="passwordInput">密码</label><input id="passwordInput" type="password" autocomplete="current-password" maxlength="1024" required>
-      <button type="submit" class="primary">进入决策台</button>
+      <label for="identifierInput">用户名或邮箱</label>
+      <input id="identifierInput" type="text" autocomplete="username" maxlength="320" required>
+      <label for="passwordInput">密码</label>
+      <input id="passwordInput" type="password" autocomplete="current-password" maxlength="1024" required>
+      <button type="submit" class="primary">进入决策看板</button>
       <div id="authError" class="error"></div>
     </form>
   </div>
 
-  <header class="topbar">
-    <div class="brand">
+  <header class="app-topbar">
+    <div class="top-brand">
       <span class="brand-mark">基</span>
-      <div>
-        <strong>ETF 决策看板</strong>
-        <small>ETF / LOF 决策台 · 五档分级 × 综合评分 × 技术指标 × 多期限预测</small>
-      </div>
+      <div><strong>ETF / LOF 决策</strong><small>私有研究系统</small></div>
     </div>
     <div class="top-actions">
       <a class="ghost-link" href="/legacy">完整系统</a>
       <span id="accountBadge" class="source-chip muted">未登录</span>
-      <button id="logoutButton" type="button" class="ghost hidden">退出</button>
       <span id="connectionBadge" class="source-chip muted">等待数据</span>
-      <button id="refreshButton" type="button" class="ghost">刷新快照</button>
+      <button id="refreshButton" type="button" class="ghost">刷新</button>
+      <button id="logoutButton" type="button" class="ghost hidden">退出</button>
     </div>
   </header>
 
-  <main class="shell">
-    <section class="hero-grid">
-      <article class="hero-card hero-primary">
-        <div class="eyebrow">UNIFIED DECISION BOARD</div>
-        <h1>ETF 信号分级与综合评分合并看板</h1>
-        <p>每只 ETF 只保留一行主视图：后端五档分级负责“属于哪一档”，综合分负责“这一档内部的多指标一致程度”。评分不覆盖生产分级，也不代表未来收益概率。</p>
-        <div class="legend" id="scoreLegend"></div>
-      </article>
-      <article class="hero-card"><span>快照</span><strong id="snapshotTime">—</strong><small id="snapshotId">—</small></article>
-      <article class="hero-card"><span>数据源</span><strong id="providerSummary">—</strong><small id="verifiedSummary">—</small></article>
-      <article class="hero-card"><span>下次刷新</span><strong id="nextRefresh">—</strong><small>北京时间 · 只读研究</small></article>
+  <main class="report-shell">
+    <section class="report-title-row">
+      <div>
+        <h1 id="reportTitle">K线企稳分析看板 · 盘中实时 v5</h1>
+        <p id="reportSubtitle">ETF / LOF 场内研究 · 技术指标 + 板块宽度 + 历史形态预测</p>
+        <p class="disclaimer">※ 仅为系统根据盘中行情与历史样本生成的研究结果，不构成任何投资操作建议。</p>
+      </div>
+      <div class="report-meta">
+        <strong id="snapshotTime">—</strong>
+        <span id="snapshotId">—</span>
+        <span id="providerSummary">数据源 —</span>
+      </div>
     </section>
 
-    <section id="warningBanner" class="warning hidden"></section>
-    <section class="score-summary" id="scoreSummary"></section>
+    <section id="gradeCounters" class="grade-counters"></section>
+    <section id="tickerStrip" class="ticker-strip"></section>
+
+    <section id="referenceLegend" class="legend-panel">
+      <div class="legend-title">图例说明：RSI · KDJ · 九转变盘 · 置信 · MACD</div>
+      <div class="legend-grid">
+        <div><b>RSI≥70</b><span>超买 · 短期回调风险高</span></div>
+        <div><b>50~70</b><span>正常偏强 · 趋势中段</span></div>
+        <div><b>30~50</b><span>偏弱 · 动能不足</span></div>
+        <div><b>RSI&lt;30</b><span>超卖 · 反弹概率升高</span></div>
+        <div><b>超买</b><span>J&gt;100 · 短期过热 · 回调风险高</span></div>
+        <div><b>偏高</b><span>J 90~100 · 动能偏强 · 谨慎追高</span></div>
+        <div><b>健康</b><span>J 20~90 且 K≥D · 趋势健康</span></div>
+        <div><b>死叉</b><span>K 下穿 D · 空头信号 · 短线谨慎</span></div>
+        <div><b>低位</b><span>J&lt;20 · 超卖 · 等待拐点确认</span></div>
+        <div><b>TD≥9</b><span>连续趋势衰竭 · 变盘节奏参考</span></div>
+        <div><b>均线 ↑↓</b><span>↑价格在均线上方 · ↓价格在均线下方</span></div>
+        <div><b>量能</b><span>放量≥1.15 · 平量0.9~1.15 · 缩量&lt;0.9</span></div>
+        <div><b>conf≥60</b><span>历史样本方向较一致 · 可参考</span></div>
+        <div><b>40~60</b><span>方向有倾向 · 弱信号</span></div>
+        <div><b>conf&lt;40</b><span>方向接近随机 · 低参考价值</span></div>
+        <div><b>MACD</b><span>金叉 / 多头延续 / 修复 / 将死叉 / 死叉</span></div>
+      </div>
+    </section>
 
     <section class="toolbar">
-      <div class="segmented" id="modeSwitch">
-        <button data-mode="grouped" class="active">五档分组</button>
-        <button data-mode="global">综合排名</button>
-      </div>
+      <label class="search">筛选
+        <input id="searchInput" type="search" placeholder="标的 / 行业 / 主题 / 分级 / 板块">
+      </label>
       <label>预测周期
         <select id="horizonSelect">
           <option value="1">1 日 / 明日</option>
@@ -65,19 +86,18 @@
           <option value="10">10 日</option>
         </select>
       </label>
-      <label class="search">筛选
-        <input id="searchInput" type="search" placeholder="ETF / 行业 / 主题 / 分级 / 板块">
-      </label>
     </section>
 
-    <section class="method-note">
-      <strong>综合分口径</strong><span>趋势 22%</span><span>动量 22%</span><span>量能 14%</span><span>结构 14%</span><span>预测 20%</span><span>数据资格 8%</span>
-      <em>J≥90 明确视为偏热；Mock / 陈旧 / 未验证数据自动降权。</em>
-    </section>
-
-    <section id="marketSummary" class="market-summary"><strong>盘中总结</strong><span>正在读取决策快照…</span></section>
+    <section id="warningBanner" class="warning hidden"></section>
+    <section id="marketSummary" class="market-summary"><strong>⚠ 盘中总结</strong><span>正在读取决策快照…</span></section>
     <section id="boardArea" class="board-area"><div class="empty">正在读取决策快照…</div></section>
     <section id="insightGrid" class="insight-grid"></section>
+
+    <footer class="report-footer">
+      <div id="sourceFooter">数据来源：—</div>
+      <div>技术指标：MACD(12,26,9) · KDJ(9,3,3) · RSI(14) · MA5/10/20/30/60 · TD9 · 量能</div>
+      <div>预测：历史相似形态研究基线 · conf 为样本一致度/支持度，不等于未来准确率；not_calibrated 时必须视为研究结果。</div>
+    </footer>
   </main>
 
   <div id="detailOverlay" class="overlay hidden" role="dialog" aria-modal="true">
@@ -90,7 +110,8 @@
       <canvas id="detailChart"></canvas>
     </div>
   </div>
+
   <div id="toast" class="toast hidden"></div>
-  <script src="/assets/decision_board_workbuddy.js?v=0.2.0"></script>
+  <script src="/assets/decision_board_workbuddy.js?v=0.3.0"></script>
 </body>
 </html>
