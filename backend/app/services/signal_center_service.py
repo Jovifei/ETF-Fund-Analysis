@@ -7,12 +7,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.models import IndicatorSnapshot, Instrument, NewsItem, SignalSnapshot
+from app.models import DecisionBoardSnapshot, IndicatorSnapshot, Instrument, NewsItem, SignalSnapshot
 from app.services.holding_service import HoldingService
 from app.utils.numbers import clamp, finite_or_none, percentile_rank
 
-OPPORTUNITY_STATES = frozenset({"可入场", "可试探", "加仓", "小幅加仓"})
-RISK_STATES = frozenset({"减仓", "风险观察", "数据异常"})
+OPPORTUNITY_STATES = frozenset({"可加仓", "可入场", "可试探", "加仓", "小幅加仓"})
+RISK_STATES = frozenset({"观望", "减仓", "风险观察", "数据异常"})
+CANONICAL_OPPORTUNITY_GRADES = frozenset({"可加仓", "可入场", "可试探"})
+CANONICAL_RISK_GRADES = frozenset({"观望", "减仓", "数据异常"})
 
 
 class SignalCenterService:
@@ -51,6 +53,7 @@ class SignalCenterService:
         latest_signals = self._latest_signals(db)
         latest_indicators = self._latest_indicators(db)
         holdings = {row["ts_code"]: row for row in HoldingService().list(db, user_id=user_id) if row.get("ts_code")}
+        decision_snapshot_id, decision_rows = self._latest_decision_rows(db)
 
         rows: list[dict[str, Any]] = []
         for instrument in instruments:
@@ -60,6 +63,19 @@ class SignalCenterService:
             indicator = latest_indicators.get(instrument.id)
             values = indicator.values_json if indicator else {}
             effective = round(float(signal.score or 0) * coefficient, 2)
+            decision_row = decision_rows.get(instrument.ts_code)
+            current_state = (
+                str(decision_row.get("grade"))
+                if decision_row and decision_row.get("grade")
+                else signal.state
+            )
+            categories = self._categories(
+                current_state,
+                effective,
+                values,
+                coefficient,
+                canonical=decision_row is not None,
+            )
             rows.append(
                 {
                     "instrument": instrument,
@@ -67,7 +83,9 @@ class SignalCenterService:
                     "indicator": indicator,
                     "values": values,
                     "effective": effective,
-                    "categories": self._categories(signal.state, effective, values, coefficient),
+                    "current_state": current_state,
+                    "decision_row": decision_row,
+                    "categories": categories,
                     "heat": self._heat(values),
                     "holding": holdings.get(instrument.ts_code),
                 }
@@ -86,6 +104,9 @@ class SignalCenterService:
             "coefficient": coefficient,
             "coefficient_bounds": {"min": minimum, "max": maximum},
             "research_only": self.settings.market_provider == "mock",
+            "current_state_source": "decision_board_snapshot" if decision_rows else "signal_snapshot_fallback",
+            "decision_snapshot_id": decision_snapshot_id,
+            "curve_basis": "historical_signal_snapshots",
             "summary": summary,
             "fronts": {
                 "opportunity": self._front(rows, "opportunity", front_size, self._opportunity_key),
@@ -135,7 +156,9 @@ class SignalCenterService:
             "theme_l1": instrument.theme_l1,
             "theme_l2": instrument.theme_l2,
             "category": category,
-            "state": signal.state,
+            "state": row["current_state"],
+            "production_signal_state": signal.state,
+            "decision_board_grade": (row["decision_row"] or {}).get("grade"),
             "score": round(float(signal.score or 0), 2),
             "effective_score": row["effective"],
             "confidence": round(float(signal.confidence or 0), 2),
@@ -176,16 +199,30 @@ class SignalCenterService:
         )
 
     def _categories(
-        self, state: str, effective: float, values: dict[str, Any], coefficient: float
+        self,
+        state: str,
+        effective: float,
+        values: dict[str, Any],
+        coefficient: float,
+        *,
+        canonical: bool = False,
     ) -> set[str]:
-        signal_config = self.strategy.get("signal", {})
-        entry = float(signal_config.get("entry_score", 68))
-        reduce_line = float(signal_config.get("reduce_score", 38))
         categories: set[str] = set()
-        if state in OPPORTUNITY_STATES or effective >= entry:
-            categories.add("opportunity")
-        if state in RISK_STATES or effective < reduce_line:
-            categories.add("risk")
+        if canonical:
+            # Current front-page conclusion is canonical: never let a secondary
+            # score turn a current "减仓/观望" row into an opportunity or vice versa.
+            if state in CANONICAL_OPPORTUNITY_GRADES:
+                categories.add("opportunity")
+            if state in CANONICAL_RISK_GRADES:
+                categories.add("risk")
+        else:
+            signal_config = self.strategy.get("signal", {})
+            entry = float(signal_config.get("entry_score", 68))
+            reduce_line = float(signal_config.get("reduce_score", 38))
+            if state in OPPORTUNITY_STATES or effective >= entry:
+                categories.add("opportunity")
+            if state in RISK_STATES or effective < reduce_line:
+                categories.add("risk")
         if self._is_overheated(values, coefficient):
             categories.add("take_profit")
         return categories
@@ -398,6 +435,26 @@ class SignalCenterService:
                         impacts.setdefault(theme, []).append(score * decay)
         # 与 signal_service._news_theme_score 同口径：50 + 35 × 均值
         return {theme: 50.0 + 35.0 * (sum(values) / len(values)) for theme, values in impacts.items()}
+
+    @staticmethod
+    def _latest_decision_rows(db: Session) -> tuple[str | None, dict[str, dict[str, Any]]]:
+        snapshot = db.scalar(
+            select(DecisionBoardSnapshot)
+            .order_by(DecisionBoardSnapshot.generated_at.desc(), DecisionBoardSnapshot.id.desc())
+            .limit(1)
+        )
+        if snapshot is None:
+            return None, {}
+        payload = snapshot.payload_json if isinstance(snapshot.payload_json, dict) else {}
+        rows = payload.get("rows") if isinstance(payload, dict) else []
+        mapped: dict[str, dict[str, Any]] = {}
+        for row in rows or []:
+            if not isinstance(row, dict):
+                continue
+            ts_code = str(row.get("ts_code") or "").strip().upper()
+            if ts_code:
+                mapped[ts_code] = row
+        return snapshot.snapshot_id, mapped
 
     # ----------------------------------------------------------------- latest
 

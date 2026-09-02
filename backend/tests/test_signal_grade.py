@@ -89,7 +89,7 @@ def test_grade_view_does_not_write_holdings(db_session):
     after = HoldingService().list(db_session)
     assert payload["writes_holdings"] is False
     assert payload["research_only"] is True
-    assert payload["version"] == "signal-grade-v0.2.0"
+    assert payload["version"] == "signal-grade-v0.3.0"
     assert before == after
     assert all(not row["actionable"] for row in payload["rows"])
     assert set(payload["groups"]) == set(GRADE_ORDER)
@@ -198,3 +198,9 @@ def test_signal_grade_sector_note_is_accurate_when_no_board(db_session):
     assert sector["down"] is None
     assert sector["board_type"] is None
     assert sector["note"] == "无对应行业/概念板块数据"
+
+
+def test_reference_volume_thresholds_match_company_board():
+    service = SignalGradeService()
+    assert float(service.config["volume_expand"]) == 1.15
+    assert float(service.config["volume_contract"]) == 0.9

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.main import app
-from app.models import IndicatorSnapshot, Instrument, NewsItem, SignalSnapshot
+from app.models import DecisionBoardSnapshot, IndicatorSnapshot, Instrument, NewsItem, SignalSnapshot
 from app.services.holding_service import HoldingService
 from app.services.signal_center_service import (
     OPPORTUNITY_STATES,
@@ -333,3 +333,41 @@ def test_signal_center_api_and_settings(bootstrapped):
 
         persisted = client.get("/api/signals/center")
         assert persisted.json()["coefficient"] == 1.2
+
+
+def test_current_fronts_follow_latest_decision_board_grade(bootstrapped, db_session):
+    instrument = _instrument(db_session, "510300.SH")
+    when = datetime.now() + timedelta(days=30)
+    _attach(
+        db_session,
+        instrument,
+        when=when,
+        state="可入场",
+        score=90.0,
+        values=_indicator_values(return_20d=0.03, return_5d=0.01, rsi14=55.0),
+    )
+    db_session.flush()
+    snapshot_id = "canonical-signal-center-test"
+    db_session.add(
+        DecisionBoardSnapshot(
+            snapshot_id=snapshot_id,
+            generated_at=when + timedelta(minutes=1),
+            next_refresh_at=when + timedelta(minutes=10),
+            freshness="fresh",
+            payload_json={
+                "snapshot_id": snapshot_id,
+                "rows": [{"ts_code": instrument.ts_code, "grade": "减仓"}],
+            },
+        )
+    )
+    db_session.flush()
+
+    payload = SignalCenterService().build(db_session, coefficient=1.5)
+    assert payload["current_state_source"] == "decision_board_snapshot"
+    assert payload["decision_snapshot_id"] == snapshot_id
+    risk = [item for item in payload["fronts"]["risk"] if item["ts_code"] == instrument.ts_code]
+    opportunity = [item for item in payload["fronts"]["opportunity"] if item["ts_code"] == instrument.ts_code]
+    assert risk and risk[0]["state"] == "减仓"
+    assert risk[0]["production_signal_state"] == "可入场"
+    assert risk[0]["decision_board_grade"] == "减仓"
+    assert not opportunity
