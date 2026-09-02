@@ -35,7 +35,7 @@
 
 - `pytest`：**352 通过 + 2 跳过**（基线 337 + 新增 15）
 - `compileall`：✅；`node --check`：✅；`check_no_secrets.py .`：✅；`bash -n` 全部脚本：✅
-- Alembic 迁移链：`158ca7025305 → … → c4d5e6f7a8b9 → d5e6f7a8b9c0 (head)`，升级→降级→升级全链路通过
+- Alembic 迁移链：`158ca7025305 → … → c4d5e6f7a8b9 → d5e6f7a8b9c0 → e6f7a8b9c0d1 → f7a8b9c0d1e2 → 0a9b1c2d3e4f → 1b2c3d4e5f6a → 2c3d4e5f6a7b (current head)`；早期升级→降级→升级证据止于 `d5e6f7a8b9c0`，新 head 仍需独立资格验证。
 
 ## 二、任务注册表现状
 
@@ -48,7 +48,7 @@ TaskService 现有 **22 个任务**（原 18 + calibrate_forecasts + optimize_po
 - 报告：`deployment_reports/2026-08-30-local-validation.md`
 - 生产资格摘要：`deployment_reports/2026-08-30-production-qualification.md`
 - Mock 研究任务烟测全部 exit 0（含 analyze_factors，修复 `refresh_daily_bars` 回填后）
-- `qualify_postgres.sh` head 修订为 `d5e6f7a8b9c0`；Windows 上 Alembic up/down/up 手动通过；完整九步备份恢复待在 Linux ECS 执行
+- `qualify_postgres.sh` 的历史执行 head 为 `d5e6f7a8b9c0`；当前迁移 head 为 `2c3d4e5f6a7b`。Windows 上 Alembic up/down/up 手动通过；完整九步备份恢复待在 Linux ECS 执行
 
 ### Phase C — PostgreSQL 资格（部分）
 
@@ -167,8 +167,8 @@ fund-decision run-task research_capabilities
 
 ## 本地看板与账户认证（2026-09-01）
 
-- Docker：`docker compose up -d db api`，浏览器 `http://127.0.0.1:8080/`。登录框填写 `AUTH_USERNAME` 或可选 `AUTH_EMAIL` 与原始密码；服务器 `.env` 只保存 `AUTH_PASSWORD_HASH`（本地 `scripts/generate_password_hash.py` 生成）和 `AUTH_SESSION_SECRET`。本机 HTTP 模板使用 `APP_ENV=development` 与 `AUTH_COOKIE_SECURE=false`；生产 HTTPS 必须使用 `AUTH_COOKIE_SECURE=true`。
-- `PRIVATE_ACCESS_TOKEN` 是可选旧 Bearer CLI/API 凭据，不能用于浏览器登录。当前版本没有 SMTP 或邮件 OTP，邮箱只是同一账户的别名。
+- Docker：`docker compose up -d db api`，浏览器 `http://127.0.0.1:8080/`。生产浏览器认证必须显式设置 `AUTH_ENABLED=true`，并使用 PostgreSQL `DATABASE_URL`、`AUTO_CREATE_SCHEMA=false` 和 `AUTH_COOKIE_SECURE=true`；Alembic 完成后在服务器本地运行 `fund-decision auth-bootstrap-admin` 创建首个管理员。账户密码哈希和可撤销会话只保存在数据库。本机 HTTP 模板使用 `APP_ENV=development` 与 `AUTH_COOKIE_SECURE=false`。
+- 生产不得配置 `AUTH_USERNAME`、`AUTH_EMAIL`、`AUTH_PASSWORD_HASH`、`AUTH_SESSION_SECRET` 或旧 Bearer。兼容 Bearer 仅限非生产迁移/测试中的允许安全读取，不能用于浏览器身份、`/api/instruments`、私有报告、SSE 或写入。当前版本没有 SMTP 或邮件 OTP。
 - 页签：决策看板 | 信号中心 | **ETF信号分级** | 持仓 | 新闻事件 | 系统。分级页是研究复刻，不是下单。
 - 演示/行业池已写入 `config/watchlist.json`（含行业 ETF、标普500、纳斯达克、黄金）。无 `TUSHARE_TOKEN` 时走 Mock，分级可渲染但 `actionable=false`。
 - **下一步 Token**：本机 `.env` 写入 `TUSHARE_TOKEN`（不要发到聊天）→ 跑 Provider 矩阵与 `fund_basic` 核对停牌/清盘替换 → 再 bootstrap 真实日线。scheduler 仍等资格，不要提前开。

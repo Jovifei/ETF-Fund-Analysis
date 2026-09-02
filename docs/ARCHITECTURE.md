@@ -1,4 +1,4 @@
-# 系统架构（0.6.0）
+# 系统架构（0.7.0）
 
 ## 组件与边界
 
@@ -22,7 +22,7 @@ Tushare / AKShare / RSS       OpenAI Responses (可选，单一主 provider)
                     browser / reports
 ```
 
-应用/发行包版本是 `0.6.0`。策略、指标和预测版本不是发行包版本，继续由 `config/strategy.json` 提供（当前策略 `signal-v0.4.0`）；本次不改变指标公式、信号阈值、预测特征或回测版本。
+应用/发行包版本是 `0.7.0`。策略、指标和预测版本不是发行包版本，继续由 `config/strategy.json` 提供（当前策略 `signal-v0.7.0-research`）；本次不改变指标公式、信号阈值、预测特征或回测版本。
 
 ## 分析网关
 
@@ -63,7 +63,7 @@ PNG/JPEG/WebP upload
 
 - PostgreSQL 任务使用 advisory lock；SQLite 仅用于本地/测试。
 - API 与 scheduler 通过事件表共享 SSE 事件；唯一键提供幂等。
-- 迁移顺序固定为 `158ca7025305` → `9f1c2b3a4d5e` → `a2b3c4d5e6f7` → `b3c4d5e6f7a8` → `c4d5e6f7a8b9` → `d5e6f7a8b9c0`（当前 head）。生产先备份，再 `alembic upgrade head`；回滚先隔离恢复和 hash 校验，禁止手工改库。隔离 SQLite 已完成 `upgrade head`、`downgrade base`/re-upgrade 与 `alembic check`。ORM 对齐保留既有 review/analysis hash-check 名称、opaque-session 约束和 nullable legacy calibration JSON，而不是生成会重写现有数据的迁移；真实 PostgreSQL 迁移/回滚/备份恢复仍需资格验证。
+- 迁移顺序固定为 `158ca7025305` → `9f1c2b3a4d5e` → `a2b3c4d5e6f7` → `b3c4d5e6f7a8` → `c4d5e6f7a8b9` → `d5e6f7a8b9c0` → `e6f7a8b9c0d1` → `f7a8b9c0d1e2` → `0a9b1c2d3e4f` → `1b2c3d4e5f6a` → `2c3d4e5f6a7b`（当前 head）。生产先备份，再 `alembic upgrade head`；回滚先隔离恢复和 hash 校验，禁止手工改库。隔离 SQLite 已完成 `upgrade head`、`downgrade base`/re-upgrade 与 `alembic check`。ORM 对齐保留既有 review/analysis hash-check 名称、opaque-session 约束和 nullable legacy calibration JSON，而不是生成会重写现有数据的迁移；真实 PostgreSQL 迁移/回滚/备份恢复仍需资格验证。
 - Compose 只把 API 绑定到 `127.0.0.1:8080`，数据库不暴露宿主机端口，公网只经过 Caddy/Nginx HTTPS。OCR 应用图像上限 10MiB，Caddy/Nginx body limit 用 12MB 覆盖 multipart 开销。
 - `.env` 为 0600；OCR transient root 为 0700；模型根私有且只读。生产配置在 Windows 上对 OCR fail-closed。
 

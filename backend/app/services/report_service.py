@@ -8,7 +8,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.models import ReportArtifact
+from app.models import AuthUser, ReportArtifact
 from app.services.dashboard_service import DashboardService
 from app.services.event_service import emit_event
 from app.utils.hashing import stable_hash
@@ -24,15 +24,32 @@ class ReportService:
         )
         self.dashboard = DashboardService(self.settings)
 
-    def generate(self, db: Session, run_id: str | None = None) -> dict:
+    @staticmethod
+    def _include_operational_details(db: Session, user_id: int | None) -> bool:
+        """Keep global diagnostics out of private member-owned report snapshots."""
+        if user_id is None:
+            return True
+        owner = db.get(AuthUser, user_id)
+        return owner is not None and owner.role == "admin" and owner.status == "active"
+
+    def generate(self, db: Session, run_id: str | None = None, *, user_id: int | None = None) -> dict:
         run_id = run_id or uuid4().hex
         now = datetime.now(self.settings.timezone)
-        payload = self.dashboard.bootstrap(db)
+        payload = self.dashboard.bootstrap(
+            db,
+            user_id=user_id,
+            include_operational_details=self._include_operational_details(db, user_id),
+        )
         template = self.environment.get_template("report.html.j2")
         content_hash = stable_hash(payload)
-        filename = f"fund_report_{now:%Y%m%d_%H%M%S}_{content_hash[:10]}.html"
+        filename = f"fund_report_{now:%Y%m%d_%H%M%S_%f}_{content_hash[:10]}_{uuid4().hex[:8]}.html"
         self.settings.reports_dir.mkdir(parents=True, exist_ok=True)
-        path = self.settings.reports_dir / filename
+        # Scheduler/bootstrap may emit a market-only diagnostic report.  It is
+        # deliberately outside the private artifact registry and cannot be
+        # listed or downloaded through the user report API.
+        report_dir = self.settings.reports_dir / (f"user-{user_id}" if user_id is not None else "system")
+        report_dir.mkdir(parents=True, exist_ok=True)
+        path = report_dir / filename
         html = template.render(
             app_name=self.settings.app_name,
             generated_at=now,
@@ -46,11 +63,13 @@ class ReportService:
         path.write_text(html, encoding="utf-8")
         db.add(
             ReportArtifact(
+                user_id=user_id,
                 report_type="dashboard",
                 as_of_time=now,
                 file_path=str(path),
                 content_hash=content_hash,
                 metadata_json={
+                    "scope": "private" if user_id is not None else "system",
                     "run_id": run_id,
                     "filename": filename,
                     "instrument_count": len(payload["instruments"]),
@@ -59,7 +78,8 @@ class ReportService:
             )
         )
         db.flush()
-        emit_event(db, "report.generated", {"run_id": run_id, "filename": filename})
+        if user_id is not None:
+            emit_event(db, "report.generated", {"run_id": run_id, "filename": filename, "user_id": user_id})
         return {
             "run_id": run_id,
             "filename": filename,

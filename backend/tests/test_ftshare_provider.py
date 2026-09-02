@@ -664,7 +664,11 @@ def test_custom_base_url_is_rejected_in_production_even_when_flagged():
     settings = Settings(
         _env_file=None,
         app_env="production",
-        auth_enabled=False,
+        auth_enabled=True,
+        database_url="postgresql+psycopg://fund_app@db/fund_decision",
+        auto_create_schema=False,
+        auth_cookie_secure=True,
+        private_access_token="",
         ocr_mode="disabled",
         ftshare_enabled=True,
         ftshare_base_url="https://mock.local/gateway",

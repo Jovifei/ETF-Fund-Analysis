@@ -2,7 +2,7 @@
 
 ## 当前结论
 
-应用/发行包版本为 `0.7.0`。本版本加入多模型分析网关、六项市场上下文和私有持仓 OCR 流程的文档/验证闭环，但不升级 `config/strategy.json` 中的策略、指标、预测或回测版本（当前策略仍含 `signal-v0.4.0`）。当前结论必须写作本地/Mock 已验证，不能写作生产就绪、实时、calibrated 或投资建议。
+应用/发行包版本为 `0.7.0`。策略、指标、预测和回测版本由 `config/strategy.json` 独立管理，当前策略为 `signal-v0.7.0-research`（以及对应的 `indicator-v0.5.1`、`similarity-corridor-v0.7.0` 等版本）。当前结论必须写作本地/Mock 已验证，不能写作生产就绪、实时、calibrated 或投资建议。
 
 ## 接手前阅读
 
@@ -31,10 +31,10 @@
 生产数据库只用 PostgreSQL 16；先做可验证备份，再按以下顺序执行：
 
 ```text
-158ca7025305 -> 9f1c2b3a4d5e -> a2b3c4d5e6f7 -> b3c4d5e6f7a8 -> c4d5e6f7a8b9 -> d5e6f7a8b9c0 (current head)
+158ca7025305 -> 9f1c2b3a4d5e -> a2b3c4d5e6f7 -> b3c4d5e6f7a8 -> c4d5e6f7a8b9 -> d5e6f7a8b9c0 -> e6f7a8b9c0d1 -> f7a8b9c0d1e2 -> 0a9b1c2d3e4f -> 1b2c3d4e5f6a -> 2c3d4e5f6a7b (current head)
 ```
 
-The disposable SQLite migration chain now passes `alembic upgrade head`, `current`, full `downgrade base`/re-upgrade, and `alembic check` at `d5e6f7a8b9c0`.  The audited metadata reconciliation preserves the historical review/analysis hash-check names, the opaque import-session check, and legacy nullable calibration JSON; a unique `candidate_id` constraint remains its lookup index.  Real PostgreSQL upgrade/downgrade/backup-restore evidence remains a deployment gate.
+The disposable SQLite migration chain now passes `alembic upgrade head`, `current`, full `downgrade base`/re-upgrade, and `alembic check` at `2c3d4e5f6a7b`; the historical chain includes `d5e6f7a8b9c0`, `e6f7a8b9c0d1`, and `f7a8b9c0d1e2` before authentication. The audited metadata reconciliation preserves the historical review/analysis hash-check names, the opaque import-session check, and legacy nullable calibration JSON; a unique `candidate_id` constraint remains its lookup index. Real PostgreSQL upgrade/downgrade/backup-restore evidence remains a deployment gate.
 
 回滚只能在隔离实例验证备份 SHA-256 和可恢复性后执行 `alembic downgrade`，不得手工改生产库。API 仅映射 `127.0.0.1:8080`，PostgreSQL 不暴露宿主机端口，公网必须经 Caddy/Nginx HTTPS；反代上传上限 12MB 以覆盖 10MiB 图像和 multipart 开销。
 
@@ -61,7 +61,7 @@ The disposable SQLite migration chain now passes `alembic upgrade head`, `curren
 - 卡点：免费档（系统页默认）即可拉东财公开 ETF；完整档才需要 Token。Token 在系统页只写不回显，可用「测试是否连通」。规格见 `docs/superpowers/specs/2026-08-30-etf-signal-grade-design.md`。
 - 决策看板现为行业/概念板块卡片（`GET /api/signals/boards`，`config/board_catalog.json`），不是东财实时板块指数。
 
-- 使用说明：`docs/USER_GUIDE.md`。浏览器使用 `AUTH_USERNAME`（或可选 `AUTH_EMAIL`）和原始密码；服务器只保存 `AUTH_PASSWORD_HASH`（Argon2id）与 `AUTH_SESSION_SECRET`，不要发到聊天或提交 Git。`PRIVATE_ACCESS_TOKEN` 仅为旧 CLI/API 的可选 Bearer 兼容凭据，不能用于浏览器登录。
+- 使用说明：`docs/USER_GUIDE.md`。生产浏览器认证必须显式设置 `AUTH_ENABLED=true`，并使用 PostgreSQL `DATABASE_URL`、`AUTO_CREATE_SCHEMA=false` 和 `AUTH_COOKIE_SECURE=true`；完成 Alembic 后只在服务器本地运行 `fund-decision auth-bootstrap-admin` 创建首个管理员。账户密码哈希和可撤销会话仅存于数据库。生产不得配置 `AUTH_USERNAME`、`AUTH_PASSWORD_HASH`、`AUTH_SESSION_SECRET` 或旧 Bearer；兼容 Bearer 不能代表浏览器身份。
 
 ## ETF 14:30 Workbench 本地接收
 

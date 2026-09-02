@@ -75,11 +75,11 @@ LLM_ENABLED=false
 SCHEDULER_ENABLED=false
 ```
 
-浏览器认证使用单一账户：填入 `AUTH_USERNAME`、由本机
-`python scripts/generate_password_hash.py` 生成的 `AUTH_PASSWORD_HASH`，以及
-随机 `AUTH_SESSION_SECRET`；`AUTH_EMAIL` 仅是同一账户的可选登录别名。浏览器提交用户名/邮箱和原始密码，
-会话只存在 Secure HttpOnly SameSite cookie，生产 HTTPS 必须保持 `AUTH_COOKIE_SECURE=true`。不要保存或回显明文密码、哈希或会话密钥。
-`PRIVATE_ACCESS_TOKEN` 可留空；只有旧 CLI/API 必须迁移时才可配置为 Bearer 凭据，不能用于浏览器登录。
+浏览器认证使用数据库账户：显式设置 `AUTH_ENABLED=true`，使用 PostgreSQL `DATABASE_URL`、保持
+`AUTO_CREATE_SCHEMA=false` 与 `AUTH_COOKIE_SECURE=true`，完成迁移后在服务器本地运行
+`fund-decision auth-bootstrap-admin` 创建首个管理员。浏览器提交用户名和原始密码，
+会话只存在 Secure HttpOnly SameSite cookie。不要保存或回显明文密码。
+生产环境不得配置 `AUTH_USERNAME`、`AUTH_EMAIL`、`AUTH_PASSWORD_HASH`、`AUTH_SESSION_SECRET` 或旧 Bearer 凭据。
 
 说明：scheduler 进程同时受 Compose 是否启动和 `SCHEDULER_ENABLED` 控制。首次冒烟建议保持 `false`，完成数据核验后改为 `true` 并启动 scheduler service。
 
@@ -128,7 +128,7 @@ sudo systemctl reload caddy
 - 域名 A/AAAA 记录；
 - 安全组开放 80/443；
 - `fund.example.com` 改成真实域名；
-- 可增加 Caddy Basic Auth；浏览器仍使用应用账户密码会话。`PRIVATE_ACCESS_TOKEN` 若保留，仅限旧 CLI/API Bearer 兼容。
+- 可增加 Caddy Basic Auth；浏览器仍使用应用账户密码会话。`PRIVATE_ACCESS_TOKEN` 仅是非生产迁移/测试兼容项；生产数据库账户认证会拒绝该配置，不能保留或作为部署凭据。
 
 使用 Nginx 时必须关闭 `/api/events` 的代理缓冲并把 read timeout 调长，示例已包含。反代必须覆盖客户端传来的 `X-Forwarded-For`，而 Compose/Dockerfile 已禁用 Uvicorn proxy-header trust，登录限流不会接受任意转发链。
 

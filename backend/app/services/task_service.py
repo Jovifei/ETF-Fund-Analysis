@@ -291,7 +291,7 @@ class TaskService:
         if task_name == "calibrate_forecasts":
             return self.calibration.create_candidate(db, run_id=run_id)
         if task_name == "optimize_portfolio":
-            return self.portfolio.run(db, run_id=run_id)
+            return self.portfolio.run(db, run_id=run_id, user_id=kwargs.get("user_id"))
         if task_name == "backtest_rotation":
             return self.backtest.run(db, run_id=run_id)
         if task_name == "backtest_ablation":

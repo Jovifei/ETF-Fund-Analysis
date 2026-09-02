@@ -37,7 +37,7 @@
 
 当前代码应包含：
 
-1. FastAPI、PostgreSQL、Alembic、Docker Compose、Scheduler、SSE、私有 Bearer Token；
+1. FastAPI、PostgreSQL、Alembic、Docker Compose、Scheduler、SSE、数据库账户和可撤销浏览器会话认证（旧 Bearer 仅限非生产迁移/测试兼容）；
 2. Tushare 主源、AKShare 备用、Composite Provider、RSS/Atom 新闻；
 3. MA、MACD、KDJ、RSI、ATR、BOLL、TD、量比；
 4. OBV、MFI、CMF、ADX/DMI、CCI、WR、ROC、RSRS、RPS；
@@ -125,10 +125,6 @@ chmod 600 .env
 人工填写但不要回显：
 
 - `POSTGRES_PASSWORD`
-- `AUTH_USERNAME`
-- `AUTH_PASSWORD_HASH`（Argon2id；使用 `python scripts/generate_password_hash.py` 本机生成）
-- `AUTH_SESSION_SECRET`
-- 可选 `AUTH_EMAIL`（同一账户的登录别名；无 SMTP/OTP）
 - `TUSHARE_TOKEN`
 - OpenAI-compatible 模型配置
 - 可选新闻 RSS URL
@@ -138,13 +134,16 @@ chmod 600 .env
 ```env
 APP_ENV=production
 AUTH_ENABLED=true
+DATABASE_URL=postgresql+psycopg://<compose-managed-postgres-url>
+AUTO_CREATE_SCHEMA=false
+AUTH_COOKIE_SECURE=true
 MARKET_PROVIDER=composite
 ALLOW_MOCK_FALLBACK=false
 SCHEDULER_ENABLED=false
 ANALYSIS_ENABLED=false
 ```
 
-浏览器登录使用 `AUTH_USERNAME` 或 `AUTH_EMAIL` 加原始密码；服务器只保存 `AUTH_PASSWORD_HASH` 与 `AUTH_SESSION_SECRET`，不在浏览器保存密码或会话令牌。`PRIVATE_ACCESS_TOKEN` 是可选旧 Bearer CLI/API 兼容凭据，不能用于浏览器登录。
+浏览器登录使用迁移后由 `fund-decision auth-bootstrap-admin` 创建的数据库账户；密码哈希与会话只保存在数据库，不在浏览器保存密码或会话令牌。生产不得配置 `AUTH_USERNAME`、`AUTH_EMAIL`、`AUTH_PASSWORD_HASH`、`AUTH_SESSION_SECRET` 或旧 Bearer 凭据。
 
 初次数据资格完成前不要启动 scheduler 或分析模型。
 

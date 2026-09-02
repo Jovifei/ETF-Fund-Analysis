@@ -16,13 +16,41 @@ ReviewRunner = Literal["codex_review_runner", "claude_code_review_runner"]
 class LoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    identifier: str = Field(min_length=1, max_length=320)
-    password: str = Field(min_length=1, max_length=1024)
+    # Empty/whitespace identifiers intentionally reach the login handler so
+    # they receive the same non-enumerating 401 as every bad credential.
+    identifier: str = Field(max_length=320)
+    password: str = Field(max_length=1024)
 
 
 class AuthStatusResponse(BaseModel):
     authenticated: bool
     identifier: str | None = None
+    role: Literal["admin", "member"] | None = None
+
+
+class AdminUserCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(min_length=1, max_length=128)
+    email: str | None = Field(default=None, min_length=1, max_length=320)
+    password: str = Field(min_length=1, max_length=1024)
+    role: Literal["admin", "member"] = "member"
+
+
+class AdminPasswordReset(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    password: str = Field(min_length=1, max_length=1024)
+
+
+class AdminUserResponse(BaseModel):
+    id: int
+    username: str
+    email: str | None = None
+    role: Literal["admin", "member"]
+    status: Literal["active", "disabled"]
+    created_at: datetime
+    last_login_at: datetime | None = None
 
 
 class HoldingUpsert(BaseModel):

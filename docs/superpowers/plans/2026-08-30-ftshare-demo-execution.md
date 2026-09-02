@@ -189,11 +189,11 @@ $env:DATABASE_URL='sqlite:///E:/Claude_allow/Download/ETF-Fund-Analysis-worktree
 & E:\project\ETF-Fund-Analysis\.venv\Scripts\python.exe -m alembic check
 ```
 
-Expected: head 为 `d5e6f7a8b9c0`；若有操作，逐项记录约束、索引、nullable 差异，不得关闭比较器掩盖。
+Expected: head 为 `2c3d4e5f6a7b`（历史链保留 `d5e6f7a8b9c0`）；若有操作，逐项记录约束、索引、nullable 差异，不得关闭比较器掩盖。
 
 - [ ] **Step 5.2：用最低风险方式修复。** 如果历史迁移语义正确而 ORM 漂移，优先对齐 ORM：保留历史 analysis/review hash constraint 名称、独立 opaque session check、legacy nullable calibration JSON、唯一 `candidate_id` 约束及其查询索引；不要添加只为改名而重写生产数据的新迁移。若真实数据库结构确有差异，才新增可回滚 revision，并覆盖 SQLite/PostgreSQL、旧数据回填和 downgrade。
 
-- [ ] **Step 5.3：补齐文档和报告。** 全部文档统一当前 head `d5e6f7a8b9c0`；说明固定 FTShare endpoint、资格门控、`FTSHARE_MAX_RESPONSE_BYTES`、live probe 当前结果、独立数据服务条款、DEMO 零外网/零正式写入、120 天默认、四种状态文案和 Tushare 明文 Token 债务。失败接口的 schema/单位/时间戳为 `null/unverified`；错误码只能来自结构化 allowlist，不能追写旧证据。
+- [ ] **Step 5.3：补齐文档和报告。** 全部文档统一当前 head `2c3d4e5f6a7b`，并保留 `d5e6f7a8b9c0` 的历史链上下文；说明固定 FTShare endpoint、资格门控、`FTSHARE_MAX_RESPONSE_BYTES`、live probe 当前结果、独立数据服务条款、DEMO 零外网/零正式写入、120 天默认、四种状态文案和 Tushare 明文 Token 债务。失败接口的 schema/单位/时间戳为 `null/unverified`；错误码只能来自结构化 allowlist，不能追写旧证据。
 
 - [ ] **Step 5.4：验证并清理临时库。** 只删除确认位于工作树内且无进程占用的 `alembic-plan.sqlite3`，随后运行：
 

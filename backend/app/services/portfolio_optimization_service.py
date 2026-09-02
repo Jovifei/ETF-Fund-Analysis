@@ -11,19 +11,16 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import uuid
 from datetime import datetime
 from typing import Any
 
-import numpy as np
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.models import IndicatorSnapshot, Instrument, QuoteSnapshot, ReportArtifact, SignalSnapshot
+from app.models import Instrument, QuoteSnapshot, ReportArtifact, SignalSnapshot
 from app.services.event_service import emit_event
-from app.services.holding_service import HoldingService
 from app.services.holding_service import HoldingService
 from app.utils.hashing import stable_hash
 from app.utils.reproducibility import current_git_commit
@@ -54,8 +51,8 @@ class PortfolioOptimizationService:
             k: cfg[k] for k in DEFAULT_CONSTRAINTS if k in cfg
         })
 
-    def run(self, db: Session, run_id: str | None = None) -> dict[str, Any]:
-        run_id = run_id or uuid4().hex
+    def run(self, db: Session, run_id: str | None = None, *, user_id: int | None = None) -> dict[str, Any]:
+        run_id = run_id or uuid.uuid4().hex
         instruments = db.scalars(
             select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code)
         ).all()
@@ -79,11 +76,11 @@ class PortfolioOptimizationService:
             ).first()
             if sig:
                 signals_map[inst.id] = sig
-        holdings = {
-            row["ts_code"]: row
-            for row in HoldingService().list(db)
-            if row.get("ts_code")
-        }
+        holdings = (
+            {row["ts_code"]: row for row in HoldingService().list(db, user_id=user_id) if row.get("ts_code")}
+            if user_id is not None
+            else {}
+        )
 
         # 资金池 = 1.0（归一化），按信号分数 + 技术分排序
         ranked = []
@@ -207,24 +204,32 @@ class PortfolioOptimizationService:
             },
         }
         content_hash = stable_hash(payload)
+        if user_id is None:
+            # Scheduler/global invocations must stay market-only and must not
+            # create a private report with an ambiguous owner.
+            holdings = {}
         self.settings.reports_dir.mkdir(parents=True, exist_ok=True)
         now = datetime.now(self.settings.timezone)
-        filename = f"portfolio_optimization_{now:%Y%m%d_%H%M%S}_{content_hash[:10]}.json"
-        path = self.settings.reports_dir / filename
+        filename = f"portfolio_optimization_{now:%Y%m%d_%H%M%S_%f}_{content_hash[:10]}_{uuid.uuid4().hex[:8]}.json"
+        report_dir = self.settings.reports_dir / f"user-{user_id}" if user_id is not None else self.settings.reports_dir / "system"
+        report_dir.mkdir(parents=True, exist_ok=True)
+        path = report_dir / filename
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         db.add(ReportArtifact(
+            user_id=user_id,
             report_type="portfolio_optimization",
             as_of_time=now,
             file_path=str(path),
             content_hash=content_hash,
             metadata_json={
+                "scope": "private" if user_id is not None else "system",
                 "run_id": run_id,
                 "filename": filename,
                 "instrument_count": len(ranked),
             },
         ))
         db.flush()
-        emit_event(db, "portfolio.optimization.completed", {"run_id": run_id, "filename": filename})
+        emit_event(db, "portfolio.optimization.completed", {"run_id": run_id, "filename": filename, "user_id": user_id})
         return {
             "run_id": run_id,
             "filename": filename,

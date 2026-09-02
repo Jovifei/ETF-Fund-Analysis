@@ -8,8 +8,12 @@ from collections.abc import Iterator
 import pytest
 from app.core.config import Settings, get_settings
 from app.core.security import AuthSessionManager, hash_password, login_throttle
+from app.db.session import session_scope
 from app.main import app
+from app.models import AuthUser
+from app.services.auth_service import AuthService
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 
 @pytest.fixture()
@@ -36,6 +40,15 @@ def password_client(monkeypatch: pytest.MonkeyPatch, password_settings: Settings
     login_throttle.reset_for_tests()
     app.dependency_overrides[get_settings] = lambda: password_settings
     monkeypatch.setattr(main_module, "settings", password_settings)
+    with session_scope() as db:
+        if db.scalar(select(AuthUser).where(AuthUser.username == "jovi")) is None:
+            AuthService().create_user(
+                db,
+                username="jovi",
+                email="jovi@example.test",
+                password="correct horse battery staple",
+                role="admin",
+            )
     try:
         with TestClient(app) as client:
             yield client
@@ -51,7 +64,7 @@ def test_password_login_sets_http_only_session_and_csrf_cookies(password_client:
     )
 
     assert response.status_code == 200, response.text
-    assert response.json() == {"authenticated": True, "identifier": "jovi"}
+    assert response.json() == {"authenticated": True, "identifier": "jovi", "role": "admin"}
     cookies = response.headers.get_list("set-cookie")
     assert any("fund-session=" in value and "HttpOnly" in value and "SameSite=lax" in value for value in cookies)
     assert any("fund-csrf=" in value and "HttpOnly" not in value and "SameSite=lax" in value for value in cookies)
@@ -86,6 +99,20 @@ def test_password_login_has_generic_error_for_unknown_and_wrong_password(passwor
     assert unknown.json() == wrong.json() == {"detail": "登录失败，请检查凭据后重试"}
 
 
+@pytest.mark.parametrize(
+    ("identifier", "password"),
+    [("", "bad"), ("   ", "bad"), ("unknown", "")],
+)
+def test_password_login_returns_generic_401_for_blank_credentials(
+    password_client: TestClient, identifier: str, password: str
+) -> None:
+    blank = password_client.post("/api/auth/login", json={"identifier": identifier, "password": password})
+    unknown = password_client.post("/api/auth/login", json={"identifier": "unknown", "password": "bad"})
+
+    assert blank.status_code == unknown.status_code == 401
+    assert blank.json() == unknown.json() == {"detail": "登录失败，请检查凭据后重试"}
+
+
 def test_login_throttle_keeps_the_same_generic_failure(password_client: TestClient) -> None:
     responses = [
         password_client.post("/api/auth/login", json={"identifier": "jovi", "password": "bad"}) for _ in range(6)
@@ -100,7 +127,7 @@ def test_session_me_logout_and_csrf_for_unsafe_cookie_requests(password_client: 
         "/api/auth/login", json={"identifier": "jovi", "password": "correct horse battery staple"}
     )
     assert login.status_code == 200
-    assert password_client.get("/api/auth/me").json() == {"authenticated": True, "identifier": "jovi"}
+    assert password_client.get("/api/auth/me").json() == {"authenticated": True, "identifier": "jovi", "role": "admin"}
 
     rejected = password_client.post("/api/demo/reset")
     assert rejected.status_code == 403
@@ -110,19 +137,25 @@ def test_session_me_logout_and_csrf_for_unsafe_cookie_requests(password_client: 
     logout = password_client.post("/api/auth/logout", headers={"X-CSRF-Token": password_client.cookies.get("fund-csrf")})
     assert logout.status_code == 200
     assert "Max-Age=0" in logout.headers.get("set-cookie", "")
-    assert password_client.get("/api/auth/me").json() == {"authenticated": False, "identifier": None}
+    assert password_client.get("/api/auth/me").json() == {"authenticated": False, "identifier": None, "role": None}
 
 
-def test_expired_session_is_rejected_and_legacy_bearer_remains_supported(
+def test_expired_session_is_rejected_and_legacy_bearer_is_never_browser_identity(
     password_client: TestClient, password_settings: Settings
 ) -> None:
     manager = AuthSessionManager(password_settings)
     expired = manager.issue("jovi", now=0)
     password_client.cookies.set("fund-session", expired)
 
-    assert password_client.get("/api/auth/me").json() == {"authenticated": False, "identifier": None}
-    legacy = password_client.get("/api/bootstrap", headers={"Authorization": "Bearer legacy-machine-token-only"})
-    assert legacy.status_code == 200, legacy.text
+    assert password_client.get("/api/auth/me").json() == {"authenticated": False, "identifier": None, "role": None}
+    legacy_headers = {"Authorization": "Bearer legacy-machine-token-only"}
+    assert password_client.get("/api/auth/me", headers=legacy_headers).json() == {
+        "authenticated": False,
+        "identifier": None,
+        "role": None,
+    }
+    assert password_client.get("/api/news", headers=legacy_headers).status_code == 200
+    assert password_client.post("/api/demo/reset", headers=legacy_headers).status_code == 401
 
 
 def test_malformed_session_cookie_is_rejected_without_a_server_error(
@@ -134,7 +167,7 @@ def test_malformed_session_cookie_is_rejected_without_a_server_error(
     ).rstrip(b"=").decode()
     password_client.cookies.set("fund-session", f"{encoded}.{signature}")
 
-    assert password_client.get("/api/auth/me").json() == {"authenticated": False, "identifier": None}
+    assert password_client.get("/api/auth/me").json() == {"authenticated": False, "identifier": None, "role": None}
     assert password_client.get("/api/bootstrap").status_code == 401
 
 
@@ -147,7 +180,7 @@ def test_signed_json_array_session_cookie_is_rejected_without_a_server_error(
     ).rstrip(b"=").decode()
     password_client.cookies.set("fund-session", f"{encoded}.{signature}")
 
-    assert password_client.get("/api/auth/me").json() == {"authenticated": False, "identifier": None}
+    assert password_client.get("/api/auth/me").json() == {"authenticated": False, "identifier": None, "role": None}
     assert password_client.get("/api/bootstrap").status_code == 401
 
 
@@ -166,34 +199,63 @@ def test_cookie_secure_is_required_by_production_configuration() -> None:
         )
 
 
-def test_production_can_use_legacy_bearer_without_browser_account() -> None:
+def test_production_rejects_disabled_authentication() -> None:
+    with pytest.raises(ValueError, match="AUTH_ENABLED=true"):
+        Settings(
+            _env_file=None,
+            app_env="production",
+            auth_enabled=False,
+            ocr_mode="disabled",
+        )
+
+
+@pytest.mark.parametrize("app_env", ("development", "test"))
+def test_nonproduction_allows_explicitly_disabled_authentication(app_env: str) -> None:
+    settings = Settings(
+        _env_file=None,
+        app_env=app_env,
+        auth_enabled=False,
+        ocr_mode="disabled",
+    )
+
+    assert settings.auth_enabled is False
+
+
+def test_production_database_auth_requires_no_legacy_single_account_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for key in ("PRIVATE_ACCESS_TOKEN", "AUTH_USERNAME", "AUTH_PASSWORD_HASH", "AUTH_SESSION_SECRET"):
+        monkeypatch.delenv(key, raising=False)
     settings = Settings(
         _env_file=None,
         app_env="production",
         auth_enabled=True,
-        private_access_token="legacy-machine-token-only",
+        database_url="postgresql+psycopg://fund_app@db/fund_decision",
+        auto_create_schema=False,
+        auth_cookie_secure=True,
         ocr_mode="disabled",
     )
 
     assert not settings.password_auth_configured
+    assert not settings.legacy_bearer_configured
 
 
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
-        ("private_access_token", "CHANGE_ME_AT_LEAST_32_RANDOM_CHARS", "PRIVATE_ACCESS_TOKEN"),
-        ("private_access_token", "change-this-private-token-at-least-32-chars", "PRIVATE_ACCESS_TOKEN"),
+        ("private_access_token", "CHANGE_ME_AT_LEAST_32_RANDOM_CHARS", "legacy Bearer"),
+        ("private_access_token", "change-this-private-token-at-least-32-chars", "legacy Bearer"),
+        ("auth_email", "legacy@example.test", "AUTH_EMAIL"),
         ("auth_session_secret", "CHANGE_ME_SESSION_SECRET_REPLACE_THIS_VALUE", "AUTH_SESSION_SECRET"),
     ],
 )
-def test_production_rejects_known_auth_placeholders(field: str, value: str, message: str) -> None:
+def test_production_rejects_obsolete_single_account_or_bearer_settings(field: str, value: str, message: str) -> None:
     options = {
         "_env_file": None,
         "app_env": "production",
         "auth_enabled": True,
-        "auth_username": "jovi",
-        "auth_password_hash": hash_password("correct horse battery staple"),
-        "auth_session_secret": "production-session-secret-that-is-long-and-random",
+        "database_url": "postgresql+psycopg://fund_app@db/fund_decision",
+        "auto_create_schema": False,
         "auth_cookie_secure": True,
         "ocr_mode": "disabled",
     }
@@ -203,20 +265,30 @@ def test_production_rejects_known_auth_placeholders(field: str, value: str, mess
         Settings(**options)
 
 
-def test_production_accepts_non_placeholder_legacy_token_alongside_account() -> None:
+def test_development_keeps_legacy_auth_email_compatibility() -> None:
     settings = Settings(
+        _env_file=None,
+        app_env="development",
+        auth_enabled=True,
+        auth_email="legacy@example.test",
+        ocr_mode="disabled",
+    )
+
+    assert settings.auth_email == "legacy@example.test"
+
+
+def test_production_rejects_legacy_token_even_when_non_placeholder() -> None:
+    with pytest.raises(ValueError, match="legacy Bearer"):
+        Settings(
         _env_file=None,
         app_env="production",
         auth_enabled=True,
         private_access_token="legacy-only-machine-token-kept-for-cli-compatibility-1234567890",
-        auth_username="jovi",
-        auth_password_hash=hash_password("correct horse battery staple"),
-        auth_session_secret="production-session-secret-that-is-long-and-random",
+        database_url="postgresql+psycopg://fund_app@db/fund_decision",
+        auto_create_schema=False,
         auth_cookie_secure=True,
         ocr_mode="disabled",
-    )
-
-    assert settings.password_auth_configured
+        )
 
 
 def test_known_placeholder_legacy_token_is_never_an_accepted_bearer_credential() -> None:
@@ -270,9 +342,11 @@ def test_ip_login_throttle_rejects_new_identifiers_before_password_verification(
         response = password_client.post("/api/auth/login", json={"identifier": "jovi", "password": "bad"})
         assert response.status_code == 401
 
-    import app.api.router as router_module
-
-    monkeypatch.setattr(router_module, "password_matches", lambda *_: pytest.fail("rate-limited login verified a password"))
+    monkeypatch.setattr(
+        AuthService,
+        "authenticate",
+        lambda *_args, **_kwargs: pytest.fail("rate-limited login verified a password"),
+    )
     throttled = password_client.post("/api/auth/login", json={"identifier": "new-identifier", "password": "bad"})
     assert throttled.status_code == 401
     assert throttled.json() == {"detail": "登录失败，请检查凭据后重试"}
@@ -289,9 +363,11 @@ def test_forwarded_header_rotation_cannot_evade_per_ip_login_throttle(
         )
         assert response.status_code == 401
 
-    import app.api.router as router_module
-
-    monkeypatch.setattr(router_module, "password_matches", lambda *_: pytest.fail("spoofed header bypassed throttle"))
+    monkeypatch.setattr(
+        AuthService,
+        "authenticate",
+        lambda *_args, **_kwargs: pytest.fail("spoofed header bypassed throttle"),
+    )
     blocked = password_client.post(
         "/api/auth/login",
         headers={"X-Forwarded-For": "198.51.100.99"},
@@ -335,15 +411,23 @@ def test_auth_dependencies_are_pinned_to_the_reviewed_argon2_versions() -> None:
     assert '"argon2-cffi-bindings==26.1.0"' in project
 
 
-def test_deployment_handoffs_describe_cookie_browser_auth_and_cli_only_bearer() -> None:
+def test_deployment_handoffs_describe_database_browser_auth_without_legacy_bearer() -> None:
     root = __import__("pathlib").Path(__file__).resolve().parents[2]
-    for path in (root / "docs" / "ALIYUN_DEPLOYMENT.md", root / "docs" / "LOCAL_AGENT_PROMPT_V070.md"):
+    for path in (
+        root / "CODEX_DEPLOYMENT_TASKS.md",
+        root / "HANDOFF.md",
+        root / "QUICKSTART.md",
+        root / "docs" / "ALIYUN_DEPLOYMENT.md",
+        root / "docs" / "LOCAL_AGENT_PROMPT_V070.md",
+        root / "docs" / "QUALIFICATION_HANDOFF_V070.md",
+    ):
         text = path.read_text(encoding="utf-8")
-        assert "AUTH_USERNAME" in text
-        assert "AUTH_PASSWORD_HASH" in text
-        assert "AUTH_SESSION_SECRET" in text
-        assert "CLI/API" in text
-        assert "浏览器登录" in text
+        assert "AUTH_ENABLED" in text
+        assert "DATABASE_URL" in text
+        assert "AUTO_CREATE_SCHEMA=false" in text
+        assert "AUTH_COOKIE_SECURE=true" in text
+        assert "auth-bootstrap-admin" in text
+        assert "浏览器" in text
 
 
 def test_auth_disabled_keeps_demo_test_behavior(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -354,8 +438,13 @@ def test_auth_disabled_keeps_demo_test_behavior(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(main_module, "settings", settings)
     try:
         with TestClient(app) as client:
-            assert client.get("/api/bootstrap").status_code == 200
-            assert client.get("/api/auth/me").json() == {"authenticated": True, "identifier": None}
+            bootstrap = client.get("/api/bootstrap")
+            assert bootstrap.status_code == 200
+            # Offline/single-user mode retains the legacy shared operational
+            # dashboard.  Member filtering is only an enrolled-user boundary.
+            assert "tasks" in bootstrap.json()
+            assert "provider_health" in bootstrap.json()
+            assert client.get("/api/auth/me").json() == {"authenticated": True, "identifier": None, "role": None}
     finally:
         app.dependency_overrides.pop(get_settings, None)
 
@@ -371,3 +460,32 @@ def test_static_login_uses_cookies_and_never_persists_access_tokens() -> None:
     assert "X-CSRF-Token" in script
     generator = root.parent / "scripts" / "generate_password_hash.py"
     assert "getpass.getpass" in generator.read_text(encoding="utf-8")
+
+
+def test_static_account_management_is_identity_aware_and_admin_only() -> None:
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    html = (root / "app" / "static" / "index.html").read_text(encoding="utf-8")
+    script = (root / "app" / "static" / "app.js").read_text(encoding="utf-8")
+
+    for marker in (
+        'id="accountIdentity"',
+        'id="adminAccountsPanel"',
+        'id="adminCreateForm"',
+        'id="adminResetPasswordForm"',
+        'type="password"',
+        'id="adminAccountStatus"',
+    ):
+        assert marker in html
+    for marker in (
+        "refreshAuthIdentity",
+        "isEnrolledAdmin",
+        "loadAdminUsers",
+        "/api/admin/users",
+        "renderAdminAccounts",
+        "activeAdminCount",
+        "selfDisable",
+        "当前账户已停用，登录会话已失效。",
+    ):
+        assert marker in script
+    assert "password_hash" not in html
+    assert "password_hash" not in script

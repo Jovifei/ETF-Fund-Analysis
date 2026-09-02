@@ -1,6 +1,9 @@
 from app.models.entities import (
     AgentReviewCandidate,
     AnalysisRun,
+    AuthBootstrapGuard,
+    AuthSession,
+    AuthUser,
     CalibrationProfile,
     DailyBar,
     DecisionBoardProvisionalInput,
@@ -26,6 +29,9 @@ from app.models.entities import (
 
 __all__ = [
     "Instrument",
+    "AuthUser",
+    "AuthSession",
+    "AuthBootstrapGuard",
     "AnalysisRun",
     "AgentReviewCandidate",
     "DailyBar",

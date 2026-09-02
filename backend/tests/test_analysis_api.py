@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import secrets
+
 import pytest
 from app.api.schemas import ReviewEnqueueRequest, ReviewMemo, ReviewTransitionRequest, TaskRequest
 from app.core.config import Settings
@@ -261,8 +263,10 @@ def test_review_api_real_state_machine_is_hash_bound_and_does_not_touch_domain(m
 
 
 def test_review_api_auth_boundary_and_storage_readiness(monkeypatch, database) -> None:
-    from app.db.session import get_engine
+    from app.core.security import csrf_cookie_name, session_cookie_name
+    from app.db.session import get_engine, session_scope
     from app.main import app, settings
+    from app.services.auth_service import AuthService
 
     old_auth, old_token = settings.auth_enabled, settings.private_access_token
     settings.auth_enabled = True
@@ -273,22 +277,32 @@ def test_review_api_auth_boundary_and_storage_readiness(monkeypatch, database) -
         "memo": {"summary": "auth boundary", "evidence_ids": [], "risk_flags": [], "limitations": []},
     }
     try:
+        with session_scope() as db:
+            admin = AuthService().create_user(
+                db,
+                username=f"analysis-admin-{secrets.token_hex(6)}",
+                password="test-only-admin-password",
+                role="admin",
+            )
+            issued = AuthService().create_session(db, admin)
         with TestClient(app) as client:
             assert client.post("/api/analysis/reviews", json=payload).status_code == 401
-            authorized = client.post(
+            legacy_bearer = client.post(
                 "/api/analysis/reviews",
                 json=payload,
                 headers={"Authorization": "Bearer synthetic-test-token"},
             )
-            assert authorized.status_code == 201
+            assert legacy_bearer.status_code == 401
+            client.cookies.set(session_cookie_name(settings), issued.session_token)
+            client.cookies.set(csrf_cookie_name(settings), issued.csrf_token)
+            csrf_headers = {"X-CSRF-Token": issued.csrf_token}
+            authorized = client.post("/api/analysis/reviews", json=payload, headers=csrf_headers)
+            assert authorized.status_code == 201, authorized.text
 
             with get_engine().begin() as connection:
                 connection.exec_driver_sql("DROP TRIGGER trg_agent_review_candidates_no_delete")
             try:
-                unavailable = client.get(
-                    "/api/analysis/reviews",
-                    headers={"Authorization": "Bearer synthetic-test-token"},
-                )
+                unavailable = client.get("/api/analysis/reviews")
                 assert unavailable.status_code == 503
             finally:
                 with get_engine().begin() as connection:

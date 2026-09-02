@@ -48,14 +48,14 @@ FTShare 是可选、只读的公开数据备用源，默认不启用，也不需
 ```bash
 cp deploy/.env.production.example .env
 python3 scripts/generate_secrets.py
-python3 scripts/generate_password_hash.py
 chmod 600 .env
 ```
 
-必须修改 `POSTGRES_PASSWORD`、`AUTH_USERNAME`、`AUTH_PASSWORD_HASH`、`AUTH_SESSION_SECRET` 与 `TUSHARE_TOKEN`（如使用 Tushare）。
-`generate_password_hash.py` 隐藏输入密码，只输出 Argon2id 哈希；`generate_secrets.py` 输出数据库密码和会话密钥。生产保持
-`AUTH_COOKIE_SECURE=true`、`MARKET_PROVIDER=composite`、`ALLOW_MOCK_FALLBACK=false`。`AUTH_EMAIL` 只是同一账户的可选登录别名，
-本版本不发 SMTP 邮件或 OTP。`PRIVATE_ACCESS_TOKEN` 可留空；若为旧 CLI/API 保留，使用 `Authorization: Bearer`，不再用于浏览器登录。
+生产必须显式设置 `AUTH_ENABLED=true`，让 Compose 注入 PostgreSQL `DATABASE_URL`，并保持
+`AUTO_CREATE_SCHEMA=false`、`AUTH_COOKIE_SECURE=true`、`MARKET_PROVIDER=composite` 与 `ALLOW_MOCK_FALLBACK=false`。
+完成 Alembic 后，只在服务器本地运行 `fund-decision auth-bootstrap-admin` 创建首个管理员。生产不得配置
+`AUTH_USERNAME`、`AUTH_EMAIL`、`AUTH_PASSWORD_HASH`、`AUTH_SESSION_SECRET` 或旧 Bearer；账户密码哈希和可撤销会话只保存在数据库。
+本版本不发 SMTP 邮件或 OTP。
 
 ### 单一分析 provider
 
@@ -91,7 +91,12 @@ Pillow 核心校验 PNG/JPEG/WebP。默认 `OCR_MAX_IMAGE_BYTES=10485760`（10 M
   -> a2b3c4d5e6f7 (market context)
   -> b3c4d5e6f7a8 (holding import OCR)
   -> c4d5e6f7a8b9 (forecast corridor provenance)
-  -> d5e6f7a8b9c0 (calibration profiles, current head)
+  -> d5e6f7a8b9c0 (calibration profiles)
+  -> e6f7a8b9c0d1 (decision-board snapshots)
+  -> f7a8b9c0d1e2 (active decision-board lock)
+  -> 0a9b1c2d3e4f (database authentication foundation)
+  -> 1b2c3d4e5f6a (portfolio ownership)
+  -> 2c3d4e5f6a7b (legacy NULL-owner holding uniqueness, current head)
 ```
 
 The disposable SQLite exercise now passes `alembic upgrade head`, `current`, full `downgrade base`/re-upgrade, and `alembic check` at this head.  Its audited ORM reconciliation preserves the historical review/analysis hash-check names, opaque import-session constraint, nullable legacy calibration JSON, and unique `candidate_id` lookup contract.  This local evidence does not replace the required real PostgreSQL upgrade/downgrade/backup-restore qualification.
@@ -123,8 +128,7 @@ docker compose run --rm api python scripts/provider_smoke.py
 ```bash
 # 1. 准备配置（Windows PowerShell 或 Git Bash 均可）
 cp deploy/.env.local.docker.example .env
-python scripts/generate_secrets.py        # 将输出填入 POSTGRES_PASSWORD / AUTH_SESSION_SECRET
-python scripts/generate_password_hash.py  # 将唯一输出填入 AUTH_PASSWORD_HASH，并设置 AUTH_USERNAME
+python scripts/generate_secrets.py        # 将数据库密码填入 POSTGRES_PASSWORD
 # 编辑 .env：前期测试用 MARKET_PROVIDER=akshare（免费东财公开接口，TUSHARE_TOKEN 可留空）
 # 保持本机 HTTP 模板的 APP_ENV=development 与 AUTH_COOKIE_SECURE=false；生产 HTTPS 使用 production 模板并设为 true。
 # Token 也可登录后在「系统 → 行情数据源」保存；完整档才会启用 Tushare
@@ -134,11 +138,14 @@ docker compose build
 docker compose up -d db api
 docker compose ps
 docker compose logs --tail=100 api
+# 迁移完成后，创建本地 Docker 的首个管理员（生产同样只在服务器本地执行）
+docker compose exec api fund-decision auth-bootstrap-admin
 
 # 3. 健康检查
 curl -fsS http://127.0.0.1:8080/api/health
-# 可选旧 Bearer API 访问（仅兼容 CLI；浏览器使用账户密码会话）
-curl -fsS -H "Authorization: Bearer <PRIVATE_ACCESS_TOKEN>" http://127.0.0.1:8080/api/instruments
+# 访问 /api/instruments：在浏览器打开 http://127.0.0.1:8080/，
+# 使用 auth-bootstrap-admin 创建的数据库账户登录；该端点可包含当前用户的持仓叠加。
+# 旧 Bearer 仅保留给非生产迁移/测试兼容：它不是浏览器身份，不能访问 /api/instruments，也不得配置到生产环境。
 
 # 4. Provider 冒烟（需 TUSHARE_TOKEN）
 docker compose run --rm api python scripts/provider_smoke.py
@@ -157,7 +164,7 @@ docker compose up -d scheduler
 - `SCHEDULER_ENABLED=false`（数据资格通过前）
 - `OCR_MODE=disabled`（未 provision Paddle 模型前）
 - API 绑定 `127.0.0.1:8080`，PostgreSQL 不映射宿主机端口
-- 浏览器访问：http://127.0.0.1:8080/ 。登录框填写 `AUTH_USERNAME` 或可选 `AUTH_EMAIL` 与原始密码；密码、会话和旧 Bearer 凭据不会写入 localStorage。Docker 本机 HTTP 模板设 `AUTH_COOKIE_SECURE=false`；生产 HTTPS 必须为 `true`。不提供 SMTP/邮件 OTP。
+- 浏览器访问：http://127.0.0.1:8080/ 。登录框使用 `fund-decision auth-bootstrap-admin` 创建的数据库账户；密码、会话和旧 Bearer 凭据不会写入 localStorage。Docker 本机 HTTP 模板设 `AUTH_COOKIE_SECURE=false`；生产显式使用 `AUTH_ENABLED=true`、PostgreSQL `DATABASE_URL`、`AUTO_CREATE_SCHEMA=false` 和 `AUTH_COOKIE_SECURE=true`。生产不配置 `AUTH_USERNAME`、`AUTH_EMAIL`、`AUTH_PASSWORD_HASH`、`AUTH_SESSION_SECRET` 或旧 Bearer；不提供 SMTP/邮件 OTP。
 - 页签含「ETF信号分级」（研究五档宽表）。静态资源在镜像内，改 HTML/JS/CSS 后需 `docker compose build api` 再起；`config/` 一般已 volume 挂载。
 
 ## F. 明确边界

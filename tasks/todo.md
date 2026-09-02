@@ -1,5 +1,53 @@
 # v0.5.0 Local Validation Execution Plan
 
+## Multi-user security remediation (2026-09-01, active)
+
+### Browser identity / regression / deployment handoff repair (2026-09-02, in progress)
+
+- [ ] RED: prove a valid legacy Bearer can use only compatible safe reads and is never reported as a browser identity by `/api/auth/me`.
+- [ ] RED: make the global review mutation use an enrolled database-admin session, retain an explicit Bearer 401 assertion, and isolate the SSE/backfill rows from suite-wide state.
+- [ ] GREEN: expose a current-admin self-disable action only when a second active admin is listed; preserve the backend last-admin guard and clear the revoked browser session after self-disable.
+- [ ] GREEN: replace obsolete production/browser single-account configuration instructions with database-auth bootstrap requirements; distinguish historical migration evidence from current head `2c3d4e5f6a7b`.
+- [ ] Review: run focused suites, then full pytest sequentially with the project venv, plus compileall, Node syntax, and diff checks; record explicit exit codes. No commit/deploy.
+
+### CLI / report-list consistency remediation (2026-09-02, in progress)
+
+- [x] RED: auth-disabled `holding-set` was rejected for missing `--username`; an owned external `.json` was listed (`2 failed`, exit 1).
+- [x] GREEN: `holding-set`/`holding-delete` now use `user_id=NULL` only with `Settings.auth_enabled=false`; auth-enabled mode rejects missing/disabled accounts and uses the explicit active owner's ID. Direct regression also proves another active user cannot delete that owner's holding.
+- [x] GREEN: `GET /api/reports` now injects `Settings` and applies strict candidate resolution plus `relative_to(settings.reports_dir.resolve())`; it exposes only owned, safe, regular in-root `.html`/`.json` files after filtering.
+- [x] Review: final new regressions `2 passed` (exit 0); auth/ownership modules `42 passed, 1 skipped` (exit 0); sequential full pytest exit 0; `python -m compileall -q backend/app`, `node --check backend/app/static/app.js`, and `git diff --check` each exit 0. Only pre-existing third-party deprecation/CRLF warnings were emitted. No commit/deploy.
+
+### Report artifact stale-file regression (2026-09-02, complete)
+
+- [x] RED: temporary restoration of the prior SQL-limited list returned the newer `unsupported-system.txt` instead of the valid JSON (`test_multi_user_ownership.py -k stale`, exit 1).
+- [x] GREEN: retain owner/session filtering; only expose existing `.html`/`.json` artifacts under their safe basename, and apply `limit` after filtering valid rows.
+- [x] Review: focused stale regression passed (1 passed/9 deselected, exit 0); sequential ownership/API/optimizer/ETF-1430 suites passed (31 passed, exit 0); `compileall`, Node syntax, and `git diff --check` each exited 0. No commit/deploy; diff check emitted only existing CRLF notices.
+
+- [x] RED: prove shared signal persistence is independent of all user holdings.
+- [x] RED: prove members and legacy Bearer cannot perform global mutations while admins can.
+- [x] GREEN: isolate shared signal generation and add explicit active-admin authorization for global controls.
+- [x] GREEN: bind private reports/SSE/optimizer to an authenticated owner; make ownership migration portable and rollback-safe.
+- [x] Review: run focused tests, migration checks, compileall, Node syntax, and diff check; record outcomes.
+
+### Follow-up security/UI review fixes (2026-09-02, complete)
+
+- [x] RED/GREEN: bind each long-lived SSE iteration to its original database session and stop after revocation, expiry, reset, or account disable.
+- [x] RED/GREEN: serialize active-admin disable checks through the existing database guard and prove a two-session race retains one active admin.
+- [x] RED/GREEN: render the current authenticated identity and admin-only account lifecycle controls without exposing credentials or controls to members.
+- [x] Review: focused suites passed separately: auth 21 passed/1 safe PostgreSQL skip, ownership 13 passed, password/static 27 passed, API 11 passed, and migration/optimizer/ETF1430 9 passed. The single combined-order run has one pre-existing report-artifact 404 after the ownership suite; `test_api.py` passes alone. Compileall, Node syntax, and diff checks are recorded below.
+
+### Multi-user remediation review (in progress)
+
+- [ ] Final spec review: prove an admin may self-disable only while another active admin remains, and that the current database session is revoked.
+- [ ] Final spec review: make blank login credentials reach the generic 401 path, then update migration-head references without erasing historical chain context.
+- [ ] Final spec review: run focused auth/ownership/API/static/migration checks plus compileall, Node syntax, and diff validation; record exact exit codes.
+
+- P0 focused red/green: `test_global_mutations_require_an_active_admin_session` first failed because a member received 200 from `POST /api/demo/load`; after explicit `require_admin`, it and `test_shared_signal_refresh_is_independent_of_every_users_holdings` pass (2 passed).
+- P0 implementation: scheduled shared refresh no longer queries `Holding` or persists holding/current-weight evidence or input hashes; user overlays remain a read-path concern. Global mutation gates cover decision-board refresh, Demo load/reset, board fund management, runtime settings/probe, task execution/history, and global analysis review mutations/reads.
+- Current checks: `python -m compileall -q backend/app`, `node --check backend/app/static/app.js`, and `git diff --check` passed. Existing line-ending warnings were emitted only.
+- P1 completion: database-backed lifecycle is admin-only (`/api/admin/users` and hidden-prompt `auth-*` CLI), disable/reset revoke all sessions, and disabled-session reactivation requires a fresh login. Auth-enabled reports/downloads/SSE require a database session; per-user reports, ETF 14:30 artifacts, and portfolio optimization reports carry `user_id`, while deliberate auth-disabled/system artifacts remain `NULL` and are never exposed to authenticated users.
+- P1 verification: `test_multi_user_auth.py`, `test_multi_user_ownership.py`, `test_migration_schema_parity.py`, `test_portfolio_optimization.py`, `test_etf_1430_workbench.py`, and `test_api.py` passed in the focused rerun (one existing skip). The migration test also creates two owners for one instrument and proves downgrade to `0a9b1c2d3e4f` aborts. Ruff on changed P1 files, compileall, Node syntax, and `git diff --check` passed.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: use `subagent-driven-development` task by task. Every task is implemented or executed by a fresh Luna/xhigh agent, followed by a fresh specification reviewer and then a fresh code-quality/evidence reviewer. The main agent controls scope, resolves blockers, integrates results, and performs final verification.
 
 **Goal:** Audit and validate the current v0.5.0 ETF/LOF research system using the actual local working tree, then produce an evidence-backed `deployment_reports/local-v050-validation.md` without exposing secrets or overstating Mock/unavailable results.
@@ -474,3 +522,101 @@ python codex/skills/fund-research/scripts/check_no_secrets.py .
 - [x] GREEN: Argon2id account auth, signed cookie session, CSRF and throttling.
 - [x] GREEN: remove browser token persistence and document deployment setup.
 - [x] Review: focused Python auth/API/holding tests, full pytest, Node decision-board tests, compileall, JS syntax, Ruff and diff checks pass; 2 existing platform skips only. Final specification and quality reviews approved the account/session/CSRF/legacy boundaries.
+
+## Multi-user account and portfolio isolation (2026-09-01)
+
+- [x] Review-fix plan: add RED regressions for private SSE, legacy ownership/backfill, self-lockout/session invalidation, production DB auth configuration, owner-specific overlays, and legacy NULL-owner uniqueness; implement the smallest service/router/model/Alembic fixes; run focused and full gates; record evidence and remaining production limitations.
+- [x] See `tasks/plans/2026-09-01-multi-user-auth.md`; the single-account prototype is not deployed to shared users.
+- [x] Task 1: add singleton bootstrap guard, `AuthUser`/`AuthSession`,
+  database-backed Argon2id/session primitives, a hidden-prompt first-admin CLI command, and migration
+  `0a9b1c2d3e4f` from `f7a8b9c0d1e2`; no holdings ownership change.
+- [x] Task 1 focused evidence: 45 tests passed, with one explicit skip for an
+  absent PostgreSQL test URL, across new auth models/service, legacy
+  single-account compatibility, and Alembic SQLite round-trip parity.
+- [x] Task 1 P1 regression: two competing SQLite sessions create exactly one
+  admin; the other is rejected after database guard serialization.
+- [x] Task 1 quality regression: malformed/plaintext and pseudo Argon2id PHC
+  hashes, including invalid base64 and empty salt/digest records, are rejected
+  at ORM/service boundaries; optional PostgreSQL Alembic concurrency test is
+  fail-closed skipped without an explicit test database.
+- [x] Task 1 password-cost regression: ORM hash validation is structural only;
+  a real Argon2 verify occurs only in credential verification, avoiding a
+  second computation at account construction or bootstrap.
+- [x] Task 1 PostgreSQL test safety: destructive auth-row cleanup requires all
+  of `TEST_POSTGRES_URL`, `APP_ENV=test`, `ALLOW_DESTRUCTIVE_TEST_DATABASE=1`,
+  and an unmistakable test/scratch/ci database suffix; otherwise no connection
+  or delete is attempted.
+- [x] Task 1 final regression/compile/diff check completed; current-user route
+  conversion and user-owned portfolio tables are covered by the later Task 2 evidence below.
+
+## Multi-user account and portfolio isolation — Task 2 (2026-09-01)
+
+- [x] RED: add focused DB-session API and owner-isolation tests for login/revoke,
+  holdings, OCR imports, legacy Bearer boundaries, and migration/backfill parity.
+- [x] GREEN: replace the stateless browser session dependency with DB-backed
+  current-user resolution and per-session CSRF; retain legacy Bearer for shared reads only.
+- [x] GREEN: add nullable ownership FKs, per-user holding uniqueness, and a
+  deterministic admin-only legacy-holding backfill command.
+- [x] GREEN: propagate a resolved user through holdings, imports, bootstrap,
+  signal center, and user-generated reports without changing strategy logic.
+- [x] Review: run the focused suite, migration round trip/check, compileall,
+  Node syntax check, and inspect the scoped diff before handoff. No commit/push/deploy.
+
+### Multi-user final review evidence (2026-09-02)
+
+- [x] Admin/member lifecycle, DB sessions, CSRF, revocation, SSE revalidation,
+  owner-scoped holdings/OCR/reports/14:30/optimizer, shared-signal purity,
+  nullable ownership migration, dynamic legacy uniqueness, safe downgrade and
+  explicit backfill all passed independent specification and quality reviews.
+- [x] Project venv full `pytest -q` exited 0 with 3 platform skips; focused
+  auth/ownership/API/migration/holding-import/optimizer/ETF1430 suites also
+  exited 0. `compileall`, `node --check`, decision-board Node tests and
+  `git diff --check` exited 0.
+- [x] Production configuration is fail-closed and documentation/templates now
+  describe database authentication and migration head `2c3d4e5f6a7b` consistently.
+- [x] No credentials, `.env`, production database, broker, or deployment target
+  was accessed. Real PostgreSQL migration/backup/restore, ECS deployment, and
+  provider qualification remain explicit gates.
+- [x] The repository helper secret scan was run; its simple pattern checker
+  reported only synthetic test fixture strings in test files (including legacy
+  token/password labels), not configured credentials. `.env` and production
+  environment files were excluded by the checker and were not opened.
+
+### Multi-user HTTP OCR test-isolation repair (2026-09-02)
+
+- [x] Reproduce the shared SQLite residue after the authenticated OCR HTTP ownership regression.
+- [x] Add teardown scoped to only that test's created users, sessions, imports, candidates, holdings, and transient files.
+- [x] Verify `test_holding_import.py` and `test_multi_user_ownership.py`, then `pytest -q`, compileall, Node syntax, and scoped diff.
+
+#### Review evidence
+
+- [x] Specification and code-quality reviews approved the test-only cleanup. A first review required moving client creation inside the protected `try`; the re-review approved the corrected exception-safe teardown.
+- [x] Project venv `E:\project\ETF-Fund-Analysis\.venv\Scripts\python.exe`: `backend/tests/test_holding_import.py` = 68 passed, 2 skipped, exit 0; `backend/tests/test_multi_user_ownership.py` = 17 passed, exit 0; full `pytest -q` = exit 0 with 3 platform skips and existing deprecation warnings only.
+- [x] `python -m compileall -q backend/app`, `node --check backend/app/static/app.js`, and `git diff --check` each exited 0. The only diff-check output was existing CRLF conversion notices. No commit, push, deployment, credential read, or production database access.
+
+### Multi-user production auth config consistency (2026-09-02)
+
+- [x] RED: add a self-contained production-settings regression proving that obsolete `AUTH_EMAIL` is rejected by database-backed authentication, while development settings continue to accept the compatibility field. Initial focused run exited 1 on the new production `AUTH_EMAIL` case as expected.
+- [x] GREEN: include `AUTH_EMAIL` in the production-only obsolete compatibility configuration rejection without changing database-backed identity behavior.
+- [x] Review: `backend/tests/test_password_auth.py` = 31 passed (exit 0); `backend/tests/test_multi_user_auth.py` = 21 passed, 1 skipped (exit 0); `python -m compileall -q backend/app`, `node --check backend/app/static/app.js`, and `git diff --check` each exit 0. The diff check emitted only pre-existing CRLF conversion warnings. Production-template and deployment documentation now list `AUTH_EMAIL` with the retired compatibility variables. No commit, push, deployment, dotenv read, or production database access.
+
+### P1 production authentication fail-closed fix (2026-09-02)
+
+- [x] RED: exact production `AUTH_ENABLED=false` regression failed as intended (`DID NOT RAISE ValueError`; exit 1); paired development/test assertions passed.
+- [x] GREEN: production now requires explicit `AUTH_ENABLED=true`, PostgreSQL, disabled schema auto-create, a secure cookie, and no obsolete credentials; development/test offline/demo behavior remains available.
+- [x] Review: `test_password_auth.py` = 34 passed (exit 0); `test_multi_user_auth.py` = 21 passed, 1 skipped (exit 0); `test_holding_import.py` + `test_ftshare_provider.py` = 133 passed, 2 skipped (exit 0); project-venv sequential `pytest -q` = exit 0 with 3 platform skips and existing deprecation warnings. `python -m compileall -q backend/app`, `node --check backend/app/static/app.js`, and `git diff --check` each exit 0; diff check emitted only existing CRLF conversion notices. No commit, push, deployment, dotenv read, or production database access.
+
+### Multi-user report-route review fixes (2026-09-02)
+
+- [x] RED: prove `POST /api/reports` generates a system-scoped report with `AUTH_ENABLED=false`, while enabled authentication and legacy unsafe Bearer remain rejected.
+- [x] RED: prove report download resolves a single, exact registered artifact only: wildcard-like names, same-owner near matches, sibling directories, and another user cannot leak a path or file.
+- [x] GREEN: use the existing optional current-user resolution for offline report generation; retain the database-session boundary for authenticated mode.
+- [x] GREEN: replace wildcard SQL lookup with exact artifact selection plus regular-file, basename, allowed-extension, and reports-directory containment checks.
+- [x] Review: RED regression exited 1 for the intended offline-session and wildcard-near-match failures; post-fix report pair, auth (21 passed, 1 skipped), password (31 passed), ownership (19 passed), and API (12 passed) each exited 0 in isolated project-venv processes. `compileall`, Node syntax, and `git diff --check` each exited 0; diff emitted only existing CRLF notices. A single combined module process exited 1 because its shared SQLite fixture leaves ownership accounts before auth tests that require an empty account table; separate module runs avoid that pre-existing ordering constraint. No commit, push, deploy, credential read, or production DB access.
+
+### Multi-user report operational-detail isolation follow-up (2026-09-02)
+
+- [x] RED/GREEN: inject global task/provider diagnostic sentinels; member report payload has empty `tasks`/`provider_health` and its HTML has no sentinels, while system and active-admin payloads retain both sentinels. Initial RED exited 1 for the intended member-task leak; GREEN passed.
+- [x] Derive report operational-detail inclusion from the persisted owner: system and active-admin reports allow it; member, unknown, and inactive-owner private reports deny it.
+- [x] Documentation: repair the HANDOFF migration chain with `e6f7a8b9c0d1` then `f7a8b9c0d1e2` before auth; align current strategy references to `signal-v0.7.0-research` in the related current-state architecture/implementation/deployment handoffs without changing labeled historical evidence.
+- [ ] Review: ownership = 22 passed (exit 0); auth + password = 55 passed, 1 PostgreSQL safety skip (exit 0); compileall/Node/scoped Ruff/diff check = 0. One full project-venv pytest was started sequentially and completed, but this execution environment truncated its result and did not retain an exit code, so it is not claimed as passed. Full-tree Ruff exits 1 on 86 pre-existing cross-module violations; scoped Ruff for this change passes. No commit, push, deployment, dotenv read, or production database access.

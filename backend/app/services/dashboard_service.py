@@ -70,13 +70,15 @@ class DashboardService:
             result.setdefault(row.horizon, row)
         return result
 
-    def instrument_rows(self, db: Session) -> list[dict[str, Any]]:
+    def instrument_rows(self, db: Session, *, user_id: int | None = None) -> list[dict[str, Any]]:
         instruments = db.scalars(
             select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code)
         ).all()
-        holdings_by_instrument = {
-            row.instrument_id: row for row in db.scalars(select(Holding)).all()
-        }
+        holdings_by_instrument = (
+            {row.instrument_id: row for row in db.scalars(select(Holding).where(Holding.user_id == user_id)).all()}
+            if user_id is not None
+            else {}
+        )
         rows: list[dict[str, Any]] = []
         for instrument in instruments:
             quote = self._latest_quote(db, instrument.id)
@@ -379,7 +381,13 @@ class DashboardService:
             for row in rows
         ]
 
-    def bootstrap(self, db: Session) -> dict[str, Any]:
+    def bootstrap(
+        self,
+        db: Session,
+        *,
+        user_id: int | None = None,
+        include_operational_details: bool = True,
+    ) -> dict[str, Any]:
         market_context = MarketContextService(
             # The bootstrap view is read-only and must not refresh or invoke a provider.
             provider=None,  # type: ignore[arg-type]
@@ -388,10 +396,13 @@ class DashboardService:
         return {
             "generated_at": datetime.now(self.settings.timezone),
             "summary": self.summary(db),
-            "instruments": self.instrument_rows(db),
+            "instruments": self.instrument_rows(db, user_id=user_id),
             "market_context": market_context.latest_view(db),
-            "holdings": self.holdings.list(db),
+            "holdings": self.holdings.list(db, user_id=user_id) if user_id is not None else [],
             "news": self.recent_news(db, 30),
-            "tasks": self.task_runs(db, 20),
-            "provider_health": self.provider_health(db, 30),
+            # Task failures and provider audits are global operational details.
+            # An enrolled member may read shared market research, but not these
+            # cross-user diagnostic records.
+            "tasks": self.task_runs(db, 20) if include_operational_details else [],
+            "provider_health": self.provider_health(db, 30) if include_operational_details else [],
         }

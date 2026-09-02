@@ -301,28 +301,25 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_production_secrets(self) -> Settings:
         if self.app_env == "production":
-            configured_account_fields = (
-                bool(self.auth_username),
-                bool(self.auth_password_hash.get_secret_value()),
-                bool(self.auth_session_secret.get_secret_value()),
-            )
-            account_configured = all(configured_account_fields)
-            private_token = self.private_access_token.strip()
-            session_secret = self.auth_session_secret.get_secret_value().strip()
-            if any(configured_account_fields) and not account_configured:
-                raise ValueError("生产环境账户认证必须同时配置 AUTH_USERNAME、AUTH_PASSWORD_HASH 和 AUTH_SESSION_SECRET")
-            if self.auth_enabled and private_token and _is_unsafe_private_access_token(private_token):
-                raise ValueError("生产环境 PRIVATE_ACCESS_TOKEN 不得使用示例占位符")
-            if self.auth_enabled and not account_configured and not self.legacy_bearer_configured:
-                raise ValueError("生产环境必须配置账户认证或随机 PRIVATE_ACCESS_TOKEN")
-            if account_configured and not self.auth_password_hash.get_secret_value().startswith("$argon2id$"):
-                raise ValueError("生产环境 AUTH_PASSWORD_HASH 必须是 Argon2id 哈希")
-            if account_configured and session_secret.upper().startswith("CHANGE_ME"):
-                raise ValueError("生产环境 AUTH_SESSION_SECRET 不得使用示例占位符")
-            if account_configured and len(session_secret) < 32:
-                raise ValueError("生产环境 AUTH_SESSION_SECRET 必须至少 32 个字符")
-            if self.auth_enabled and account_configured and not self.auth_cookie_secure:
+            if "auth_enabled" not in self.model_fields_set:
+                raise ValueError("生产环境必须显式配置 AUTH_ENABLED")
+            if not self.auth_enabled:
+                raise ValueError("生产环境必须配置 AUTH_ENABLED=true")
+            if not self.auth_cookie_secure:
                 raise ValueError("生产环境 AUTH_COOKIE_SECURE 必须为 true")
+            if not self.database_url.startswith(("postgresql://", "postgresql+psycopg://")):
+                raise ValueError("生产环境数据库会话认证必须使用 PostgreSQL DATABASE_URL")
+            if self.auto_create_schema:
+                raise ValueError("生产环境数据库会话认证必须关闭 AUTO_CREATE_SCHEMA")
+            obsolete = (
+                self.auth_username,
+                self.auth_email,
+                self.auth_password_hash.get_secret_value(),
+                self.auth_session_secret.get_secret_value(),
+                self.private_access_token,
+            )
+            if any(obsolete):
+                raise ValueError("生产环境数据库会话认证不支持 AUTH_USERNAME、AUTH_EMAIL、AUTH_PASSWORD_HASH、AUTH_SESSION_SECRET 或 legacy Bearer")
             if self.llm_enabled and not (self.llm_api_key and self.llm_model):
                 raise ValueError("LLM_ENABLED=true 时必须配置 LLM_API_KEY 与 LLM_MODEL")
         return self
@@ -340,7 +337,7 @@ class Settings(BaseSettings):
         """Whether the optional legacy credential is non-placeholder and usable."""
 
         token = self.private_access_token.strip()
-        return bool(token and not _is_unsafe_private_access_token(token))
+        return self.app_env != "production" and bool(token and not _is_unsafe_private_access_token(token))
 
     @model_validator(mode="after")
     def validate_ocr_configuration(self) -> Settings:

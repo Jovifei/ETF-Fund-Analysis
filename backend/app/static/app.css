@@ -14,6 +14,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .tabs button { border:0; border-bottom:2px solid transparent; background:transparent; color:var(--muted); padding:10px 13px; border-radius:0; }
 .tabs button:hover,.tabs button.active { border-bottom-color:var(--cyan); color:var(--text); background:rgba(84,214,210,.06); }
 .top-actions { display:flex; align-items:center; gap:9px; }
+.account-identity { color:var(--cyan); font-size:10px; font-weight:800; white-space:nowrap; }
 .source-badge { display:inline-flex; align-items:center; min-height:24px; padding:3px 8px; border:1px solid var(--line); border-radius:999px; color:var(--muted); font-size:10px; font-weight:800; letter-spacing:.4px; }
 .source-badge.demo { color:#f0cb82; border-color:rgba(229,180,91,.7); background:rgba(229,180,91,.12); }
 .source-badge.verified { color:var(--down); border-color:rgba(91,208,165,.5); background:rgba(91,208,165,.08); }
@@ -127,6 +128,15 @@ td .forecast-surface { min-height:132px; padding:8px 9px; white-space:normal; }
 .form-grid { padding:16px; display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
 .form-grid label,.form-modal label { display:grid; gap:5px; color:var(--muted); font-size:11px; }
 .form-grid button { align-self:end; }
+.admin-account-note { margin:14px 16px 0; }
+.admin-account-status { min-height:20px; margin:0 16px 12px; }
+.admin-account-status.error-text { color:var(--danger); }
+.admin-user-list { border-top:1px solid var(--line-soft); }
+.admin-user-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 16px; border-bottom:1px solid var(--line-soft); }
+.admin-user-meta { display:grid; gap:2px; min-width:0; }
+.admin-user-meta strong { overflow-wrap:anywhere; }
+.admin-user-meta span { color:var(--muted); font-size:10px; }
+.admin-user-actions { display:flex; flex-wrap:wrap; gap:7px; justify-content:flex-end; }
 .market-source-form { grid-template-columns:1fr; }
 .market-source-form .source-choice { border:1px solid var(--line-soft); padding:10px 12px; display:grid; gap:8px; }
 .market-source-form .source-choice legend { color:var(--cyan); font-size:10px; letter-spacing:1px; padding:0 6px; }

@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.core.security import require_private_access
+from app.core.security import optional_current_user, require_private_access
 from app.db.session import get_db
+from app.models import AuthUser
 from app.services.etf_1430_service import ETF1430WorkbenchService
 
 router = APIRouter(
@@ -21,16 +22,18 @@ router = APIRouter(
 def summary(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
 ) -> dict[str, Any]:
-    return ETF1430WorkbenchService(settings).summary(db)
+    return ETF1430WorkbenchService(settings).summary(db, user_id=user.id if user is not None else None)
 
 
 @router.post("/generate")
 def generate(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
 ) -> dict[str, Any]:
-    result = ETF1430WorkbenchService(settings).generate_report(db)
+    result = ETF1430WorkbenchService(settings).generate_report(db, user_id=user.id if user is not None else None)
     db.commit()
     return result
 
@@ -40,8 +43,9 @@ def detail(
     ts_code: str,
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
 ) -> dict[str, Any]:
-    result = ETF1430WorkbenchService(settings).detail(db, ts_code)
+    result = ETF1430WorkbenchService(settings).detail(db, ts_code, user_id=user.id if user is not None else None)
     if result is None:
         raise HTTPException(status_code=404, detail="未找到ETF/LOF标的")
     return result

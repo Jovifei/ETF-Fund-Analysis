@@ -4,6 +4,8 @@ const qs = (selector, root = document) => root.querySelector(selector);
 const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
 const state = {
   sessionActive: false,
+  auth: {identifier: null, role: null},
+  adminUsers: [],
   data: null,
   settings: null,
   reports: [],
@@ -591,6 +593,134 @@ function newImportGeneration() {
   abortImportRequests();
   return state.importGeneration;
 }
+function isEnrolledAdmin() {
+  return state.sessionActive && state.auth.identifier !== null && state.auth.role === 'admin';
+}
+function setAdminAccountStatus(message = '', isError = false) {
+  const status = qs('#adminAccountStatus');
+  if (!status) return;
+  status.textContent = message;
+  status.classList.toggle('error-text', isError);
+}
+function renderAdminAccounts() {
+  const panel = qs('#adminAccountsPanel');
+  if (!panel) return;
+  const allowed = isEnrolledAdmin();
+  panel.hidden = !allowed;
+  panel.classList.toggle('hidden', !allowed);
+  if (!allowed) {
+    state.adminUsers = [];
+    qs('#adminUserList')?.replaceChildren();
+    qs('#adminResetPasswordForm')?.classList.add('hidden');
+    setAdminAccountStatus();
+    return;
+  }
+  const list = qs('#adminUserList');
+  if (!list) return;
+  const activeAdminCount = state.adminUsers.filter(user => user.role === 'admin' && user.status === 'active').length;
+  list.innerHTML = state.adminUsers.length ? state.adminUsers.map(user => {
+    const current = user.username === state.auth.identifier;
+    const lifecycle = user.status === 'active' ? '停用' : '重新启用';
+    const lifecycleAction = user.status === 'active' ? 'disable' : 'reactivate';
+    const canDisableCurrentAdmin = current && user.role === 'admin' && activeAdminCount > 1;
+    const lifecycleControl = current && lifecycleAction === 'disable' && !canDisableCurrentAdmin
+      ? '<span class="muted">当前账户（唯一启用管理员不可停用）</span>'
+      : `<button class="ghost" type="button" data-admin-action="${lifecycleAction}" data-user-id="${escapeHtml(user.id)}">${lifecycle}</button>`;
+    return `<article class="admin-user-row"><div class="admin-user-meta"><strong>${escapeHtml(user.username)}</strong><span>${escapeHtml(user.role === 'admin' ? '管理员' : '成员')} · ${escapeHtml(user.status === 'active' ? '启用' : '已停用')}${user.email ? ` · ${escapeHtml(user.email)}` : ''}</span></div><div class="admin-user-actions">${lifecycleControl}<button class="ghost" type="button" data-admin-action="reset" data-user-id="${escapeHtml(user.id)}">重置密码</button></div></article>`;
+  }).join('') : '<div class="loading-row">暂无账户</div>';
+}
+function renderAuthIdentity() {
+  const identity = qs('#accountIdentity');
+  if (identity) {
+    const visible = state.sessionActive && state.auth.identifier !== null && state.auth.role !== null;
+    identity.textContent = visible ? `${state.auth.identifier} · ${state.auth.role === 'admin' ? '管理员' : '成员'}` : '';
+    identity.classList.toggle('hidden', !visible);
+  }
+  renderAdminAccounts();
+}
+async function refreshAuthIdentity() {
+  const response = await fetch('/api/auth/me', {credentials:'same-origin'});
+  const auth = response.ok ? await response.json() : {authenticated:false};
+  state.sessionActive = Boolean(auth.authenticated);
+  state.auth = {
+    identifier: typeof auth.identifier === 'string' && auth.identifier ? auth.identifier : null,
+    role: auth.role === 'admin' || auth.role === 'member' ? auth.role : null,
+  };
+  renderAuthIdentity();
+  return auth;
+}
+async function loadAdminUsers() {
+  if (!isEnrolledAdmin()) return;
+  try {
+    state.adminUsers = await api('/api/admin/users');
+    renderAdminAccounts();
+  } catch (error) {
+    if (error.message !== 'unauthorized') setAdminAccountStatus(`读取账户失败：${error.message}`, true);
+  }
+}
+function openAdminPasswordReset(userId) {
+  if (!isEnrolledAdmin()) return;
+  const user = state.adminUsers.find(item => Number(item.id) === Number(userId));
+  if (!user) return;
+  setAdminAccountStatus();
+  qs('#adminResetUserId').value = String(user.id);
+  qs('#adminResetTarget').textContent = `重置 ${user.username} 的密码`;
+  const form = qs('#adminResetPasswordForm');
+  form.reset();
+  qs('#adminResetUserId').value = String(user.id);
+  form.classList.remove('hidden');
+  qs('input[name="password"]', form).focus();
+}
+async function submitAdminCreate(event) {
+  event.preventDefault();
+  if (!isEnrolledAdmin()) return;
+  setAdminAccountStatus();
+  const form = event.currentTarget;
+  const payload = Object.fromEntries(new FormData(form).entries());
+  if (!payload.email) payload.email = null;
+  try {
+    await api('/api/admin/users', {method:'POST', body:JSON.stringify(payload)});
+    form.reset();
+    setAdminAccountStatus('账户已创建。');
+    await loadAdminUsers();
+  } catch (error) { setAdminAccountStatus(`创建账户失败：${error.message}`, true); }
+}
+async function submitAdminPasswordReset(event) {
+  event.preventDefault();
+  if (!isEnrolledAdmin()) return;
+  setAdminAccountStatus();
+  const form = event.currentTarget;
+  const userId = Number(qs('#adminResetUserId').value);
+  const password = String(new FormData(form).get('password') || '');
+  if (!Number.isInteger(userId) || !password) return;
+  try {
+    await api(`/api/admin/users/${encodeURIComponent(userId)}/reset-password`, {method:'POST', body:JSON.stringify({password})});
+    form.reset(); form.classList.add('hidden');
+    setAdminAccountStatus('密码已重置；该账户需要重新登录。');
+    await loadAdminUsers();
+  } catch (error) { setAdminAccountStatus(`重置密码失败：${error.message}`, true); }
+}
+async function runAdminLifecycleAction(event) {
+  const control = event.target.closest('[data-admin-action]');
+  if (!control || !isEnrolledAdmin()) return;
+  const userId = Number(control.dataset.userId);
+  const action = control.dataset.adminAction;
+  if (!Number.isInteger(userId) || !['disable', 'reactivate'].includes(action)) return;
+  const selfDisable = action === 'disable' && state.adminUsers.some(user => Number(user.id) === userId && user.username === state.auth.identifier);
+  setAdminAccountStatus(); control.disabled = true;
+  try {
+    await api(`/api/admin/users/${encodeURIComponent(userId)}/${action}`, {method:'POST', body:JSON.stringify({})});
+    if (selfDisable) {
+      state.sessionActive = false;
+      advanceAuthRequestGeneration();
+      showAuth('当前账户已停用，登录会话已失效。');
+      return;
+    }
+    setAdminAccountStatus(action === 'disable' ? '账户已停用，现有会话已撤销。' : '账户已重新启用；需重新登录。');
+    await loadAdminUsers();
+  } catch (error) { setAdminAccountStatus(`账户操作失败：${error.message}`, true); }
+  finally { control.disabled = false; }
+}
 function parseImportDecimal(value, contract) {
   const text = value === null || value === undefined ? '' : String(value).trim();
   if (!text) return {valid:false, reason:'必填数值不能为空'};
@@ -662,6 +792,10 @@ function setImportInteractionDisabled(disabled) {
 }
 
 function showAuth(error = '') {
+  if (!state.sessionActive) {
+    state.auth = {identifier: null, role: null};
+    renderAuthIdentity();
+  }
   qs('#authOverlay').classList.remove('hidden');
   qs('#authError').textContent = error;
   qs('#passwordInput').value = '';
@@ -2147,11 +2281,20 @@ function bindEvents() {
     try {
       const response = await fetch('/api/auth/login', {method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify({identifier:qs('#identifierInput').value.trim(), password:qs('#passwordInput').value})});
       if (!response.ok) { error.textContent = '登录失败，请检查凭据后重试'; return; }
-      state.sessionActive=true; advanceAuthRequestGeneration(); await loadBootstrap(); if (state.sessionActive) { connectEvents(); loadSettings(); }
+      await refreshAuthIdentity(); advanceAuthRequestGeneration(); await loadBootstrap(); if (state.sessionActive) { connectEvents(); loadSettings(); loadAdminUsers(); }
     } catch (_) { error.textContent = '登录暂不可用，请稍后重试'; }
   });
   qs('#refreshButton').addEventListener('click', requestDecisionBoardRefresh);
   qs('#lockButton').addEventListener('click', async ()=>{ try { await api('/api/auth/logout',{method:'POST'}); } catch (_) {} state.sessionActive=false; advanceAuthRequestGeneration(); showAuth(); });
+  qs('#adminCreateForm')?.addEventListener('submit', submitAdminCreate);
+  qs('#adminResetPasswordForm')?.addEventListener('submit', submitAdminPasswordReset);
+  qs('#adminResetCancelButton')?.addEventListener('click', () => { qs('#adminResetPasswordForm').reset(); qs('#adminResetPasswordForm').classList.add('hidden'); setAdminAccountStatus(); });
+  qs('#adminUserList')?.addEventListener('click', event => {
+    const control = event.target.closest('[data-admin-action]');
+    if (!control) return;
+    if (control.dataset.adminAction === 'reset') openAdminPasswordReset(control.dataset.userId);
+    else runAdminLifecycleAction(event);
+  });
   qsa('#tabs button').forEach(button=>button.addEventListener('click',()=>switchTab(button.dataset.tab)));
   qs('#decisionModeGrouped')?.addEventListener('click', () => { state.decisionUi.mode = 'grouped'; renderDecisionBoard(); });
   qs('#decisionModeGlobal')?.addEventListener('click', () => { state.decisionUi.mode = 'global'; renderDecisionBoard(); });
@@ -2226,16 +2369,12 @@ function bindEvents() {
 
 async function start() {
   handleDecisionBoardRoute(); bindEvents(); renderTaskButtons();
-  try {
-    const response = await fetch('/api/auth/me', {credentials:'same-origin'});
-    const auth = response.ok ? await response.json() : {authenticated:false};
-    state.sessionActive = Boolean(auth.authenticated);
-  } catch (_) { state.sessionActive = false; }
+  try { await refreshAuthIdentity(); } catch (_) { state.sessionActive = false; state.auth = {identifier: null, role: null}; renderAuthIdentity(); }
   if (!state.sessionActive) { showAuth(); return; }
   await loadBootstrap();
   // Auth-disabled servers report an authenticated anonymous browser from
   // /api/auth/me, preserving the existing local demo/test experience.
-  if (state.data) { connectEvents(); loadSettings(); loadDecisionBoard(true); scheduleDecisionStatusPoll(); }
+  if (state.data) { connectEvents(); loadSettings(); loadDecisionBoard(true); scheduleDecisionStatusPoll(); loadAdminUsers(); }
 }
 
 // Kept deliberately small so the pure ordering/formatting/escaping contract can

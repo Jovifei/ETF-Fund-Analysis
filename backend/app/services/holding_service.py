@@ -21,8 +21,8 @@ class HoldingService:
             raise HoldingNotFoundError(f"未找到标的 {ts_code}")
         return instrument
 
-    def list(self, db: Session) -> list[dict]:
-        holdings = db.scalars(select(Holding).order_by(Holding.id)).all()
+    def list(self, db: Session, *, user_id: int | None = None) -> list[dict]:
+        holdings = db.scalars(select(Holding).where(Holding.user_id == user_id).order_by(Holding.id)).all()
         result: list[dict] = []
         for holding in holdings:
             instrument = db.get(Instrument, holding.instrument_id)
@@ -65,6 +65,7 @@ class HoldingService:
         self,
         db: Session,
         *,
+        user_id: int | None = None,
         ts_code: str,
         shares: float,
         cost_price: float,
@@ -72,24 +73,32 @@ class HoldingService:
         notes: str | None = None,
     ) -> Holding:
         instrument = self._instrument(db, ts_code)
-        holding = db.scalar(select(Holding).where(Holding.instrument_id == instrument.id))
+        holding = db.scalar(select(Holding).where(Holding.user_id == user_id, Holding.instrument_id == instrument.id))
         if holding is None:
-            holding = Holding(instrument_id=instrument.id)
+            holding = Holding(user_id=user_id, instrument_id=instrument.id)
             db.add(holding)
         holding.shares = Decimal(str(max(0.0, shares)))
         holding.cost_price = Decimal(str(max(0.0, cost_price)))
         holding.target_weight = target_weight
         holding.notes = notes
         db.flush()
-        emit_event(db, "holdings.updated", {"ts_code": instrument.ts_code, "action": "upsert"})
+        emit_event(
+            db,
+            "holdings.updated",
+            {"ts_code": instrument.ts_code, "action": "upsert", "user_id": user_id},
+        )
         return holding
 
-    def delete(self, db: Session, ts_code: str) -> bool:
+    def delete(self, db: Session, ts_code: str, *, user_id: int | None = None) -> bool:
         instrument = self._instrument(db, ts_code)
-        holding = db.scalar(select(Holding).where(Holding.instrument_id == instrument.id))
+        holding = db.scalar(select(Holding).where(Holding.user_id == user_id, Holding.instrument_id == instrument.id))
         if holding is None:
             return False
         db.delete(holding)
         db.flush()
-        emit_event(db, "holdings.updated", {"ts_code": instrument.ts_code, "action": "delete"})
+        emit_event(
+            db,
+            "holdings.updated",
+            {"ts_code": instrument.ts_code, "action": "delete", "user_id": user_id},
+        )
         return True

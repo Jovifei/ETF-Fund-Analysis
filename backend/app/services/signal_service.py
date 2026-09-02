@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from decimal import Decimal
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -13,7 +12,6 @@ from app.core.clock import MarketClock
 from app.core.config import Settings, get_settings
 from app.models import (
     ForecastSnapshot,
-    Holding,
     IndicatorSnapshot,
     Instrument,
     NewsItem,
@@ -33,7 +31,10 @@ class CandidateSignal:
     indicator: IndicatorSnapshot | None
     quote: QuoteSnapshot | None
     forecasts: dict[int, ForecastSnapshot]
-    holding: Holding | None
+    # Shared signal refresh is market-only.  A read-path overlay may enrich
+    # this transient shape for one authenticated owner, but it is never used
+    # while persisting SignalSnapshot.
+    holding: object | None
     current_weight: float
     score: float
     confidence: float
@@ -63,20 +64,6 @@ class SignalService:
         for row in rows:
             result.setdefault(row.horizon, row)
         return result
-
-    def _portfolio_weights(self, db: Session, quotes: dict[int, QuoteSnapshot]) -> dict[int, float]:
-        holdings = db.scalars(select(Holding)).all()
-        values: dict[int, float] = {}
-        total = 0.0
-        for holding in holdings:
-            quote = quotes.get(holding.instrument_id)
-            price = quote.price if quote else float(holding.cost_price or 0)
-            value = float(holding.shares or Decimal(0)) * float(price or 0)
-            values[holding.instrument_id] = value
-            total += value
-        if total <= 0:
-            return {key: 0.0 for key in values}
-        return {key: value / total for key, value in values.items()}
 
     def _news_theme_score(self, db: Session, instrument: Instrument, now: datetime) -> tuple[float, list[str]]:
         cutoff = now - timedelta(hours=72)
@@ -180,7 +167,7 @@ class SignalService:
         quote: QuoteSnapshot | None,
         indicator: IndicatorSnapshot | None,
         forecasts: dict[int, ForecastSnapshot],
-        holding: Holding | None,
+        holding: object | None,
         current_weight: float,
         now: datetime,
     ) -> CandidateSignal:
@@ -360,7 +347,6 @@ class SignalService:
         run_id = run_id or uuid4().hex
         now = datetime.now(self.settings.timezone)
         instruments = db.scalars(select(Instrument).where(Instrument.enabled.is_(True))).all()
-        holdings = {item.instrument_id: item for item in db.scalars(select(Holding)).all()}
 
         latest_quotes: dict[int, QuoteSnapshot] = {}
         latest_indicators: dict[int, IndicatorSnapshot] = {}
@@ -398,7 +384,6 @@ class SignalService:
             if previous:
                 previous_signals[instrument.id] = previous
 
-        weights = self._portfolio_weights(db, latest_quotes)
         candidates = [
             self._build_candidate(
                 db,
@@ -406,8 +391,8 @@ class SignalService:
                 latest_quotes.get(instrument.id),
                 latest_indicators.get(instrument.id),
                 latest_forecasts.get(instrument.id, {}),
-                holdings.get(instrument.id),
-                weights.get(instrument.id, 0.0),
+                None,
+                0.0,
                 now,
             )
             for instrument in instruments
@@ -430,18 +415,11 @@ class SignalService:
                 "indicator": item.indicator.input_hash if item.indicator else None,
                 "quote": item.quote.quality_hash if item.quote else None,
                 "forecasts": {key: value.input_hash for key, value in item.forecasts.items()},
-                "holding": {
-                    "shares": str(item.holding.shares),
-                    "cost": str(item.holding.cost_price),
-                }
-                if item.holding
-                else None,
                 "strategy": self.strategy,
             }
             evidence = {
                 "theme_score": item.theme_score,
                 "fund_quality_score": item.fund_quality_score,
-                "current_weight": round(item.current_weight, 4),
                 "market_regime": market_regime,
                 "portfolio_exposure_cap": exposure_cap,
                 "regime_evidence": regime_evidence,

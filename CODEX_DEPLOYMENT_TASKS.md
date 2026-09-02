@@ -30,23 +30,22 @@ sudo docker compose version
 cd /opt/china-fund-decision
 cp deploy/.env.production.example .env
 python3 scripts/generate_secrets.py
-python3 scripts/generate_password_hash.py
 chmod 600 .env
 ```
 
 人工写入：
 
 - [ ] `POSTGRES_PASSWORD`
-- [ ] `AUTH_USERNAME`
-- [ ] `AUTH_PASSWORD_HASH`（仅 Argon2id 哈希；不要保存明文密码）
-- [ ] `AUTH_SESSION_SECRET`
-- [ ] 可选 `AUTH_EMAIL`（仅同一账户登录别名；当前无 SMTP/OTP）
+- [ ] `AUTH_ENABLED=true`
+- [ ] 确认 Compose 注入 PostgreSQL `DATABASE_URL`，而非 SQLite 或主机公开端口。
+- [ ] `AUTO_CREATE_SCHEMA=false`
+- [ ] `AUTH_COOKIE_SECURE=true`（仅 HTTPS 生产入口）
 - [ ] `TUSHARE_TOKEN`
 - [ ] `MARKET_PROVIDER=composite`
 - [ ] `ALLOW_MOCK_FALLBACK=false`
 - [ ] LLM 配置（初次数据验证时先保持 `LLM_ENABLED=false`）
 - [ ] 可选 `NEWS_RSS_URLS`
-- [ ] 若旧 CLI/API 仍需要 Bearer，再单独配置非占位符 `PRIVATE_ACCESS_TOKEN`；它不能用于浏览器登录。
+- [ ] 迁移完成后只在服务器本地运行 `fund-decision auth-bootstrap-admin` 创建首个管理员；不要把密码、密码哈希或会话密钥写入 `.env`。
 
 禁止：
 
@@ -228,8 +227,8 @@ docker compose logs -f --tail=100 scheduler
 
 - [ ] 使用 `deploy/Caddyfile.example` 或 Nginx 示例。
 - [ ] 启用 HTTPS。
-- [ ] 浏览器使用账户密码登录；服务器仅保存 `AUTH_PASSWORD_HASH`（Argon2id）和 `AUTH_SESSION_SECRET`，HTTPS 下会话为 Secure HttpOnly SameSite cookie。
-- [ ] `PRIVATE_ACCESS_TOKEN` 仅在旧 CLI/API 明确需要时保留为 Bearer 兼容凭据，不能作为浏览器身份。
+- [ ] 浏览器使用迁移后由 `fund-decision auth-bootstrap-admin` 创建的数据库账户登录；生产保持 `AUTH_ENABLED=true`、PostgreSQL `DATABASE_URL`、`AUTO_CREATE_SCHEMA=false` 和 `AUTH_COOKIE_SECURE=true`，HTTPS 下会话为 Secure HttpOnly SameSite cookie。
+- [ ] 生产不配置 `AUTH_USERNAME`、`AUTH_EMAIL`、`AUTH_PASSWORD_HASH`、`AUTH_SESSION_SECRET` 或 `PRIVATE_ACCESS_TOKEN`；兼容 Bearer 不得作为浏览器身份，也不能读取私有报告/SSE 或执行写入。
 - [ ] 可额外使用反向代理 Basic Auth 或仅通过 VPN/SSH 隧道。
 - [ ] 检查浏览器 Network：SSE 与下载使用同源 cookie（无 URL Token、无 Authorization 会话令牌），非安全 cookie 请求包含 CSRF header。
 - [ ] 检查 CSP、HSTS、nosniff、frame 和 referrer headers。

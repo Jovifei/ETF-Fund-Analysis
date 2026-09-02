@@ -175,13 +175,13 @@ class HoldingImportService:
         db.commit()
 
     @staticmethod
-    def _read_detached(caller_db: Session, session_id: str) -> HoldingImportSession:
+    def _read_detached(caller_db: Session, session_id: str, *, user_id: int | None = None) -> HoldingImportSession:
         read_db = sessionmaker(bind=caller_db.get_bind(), autoflush=False, expire_on_commit=False, class_=Session)()
         try:
             session = read_db.scalar(
                 select(HoldingImportSession)
                 .options(selectinload(HoldingImportSession.candidates))
-                .where(HoldingImportSession.session_id == session_id)
+                .where(HoldingImportSession.session_id == session_id, HoldingImportSession.user_id == user_id)
             )
             if session is None:
                 raise HoldingImportNotFound()
@@ -516,16 +516,16 @@ class HoldingImportService:
             normalized_ocr_text_hash=hashlib.sha256(hash_text.encode("utf-8")).hexdigest(),
         )
 
-    def import_bytes(self, db: Session, payload: bytes, declared_mime: str | None) -> HoldingImportSession:
+    def import_bytes(self, db: Session, payload: bytes, declared_mime: str | None, *, user_id: int | None = None) -> HoldingImportSession:
         work_db = self._owned_db(db)
         try:
-            durable = self._import_bytes_owned(work_db, payload, declared_mime)
+            durable = self._import_bytes_owned(work_db, payload, declared_mime, user_id=user_id)
             session_id = durable.session_id
         finally:
             work_db.close()
-        return self._read_detached(db, session_id)
+        return self._read_detached(db, session_id, user_id=user_id)
 
-    def _import_bytes_owned(self, db: Session, payload: bytes, declared_mime: str | None) -> HoldingImportSession:
+    def _import_bytes_owned(self, db: Session, payload: bytes, declared_mime: str | None, *, user_id: int | None = None) -> HoldingImportSession:
         self.cleanup_expired(db)
         image = validate_image_artifact(
             payload,
@@ -541,6 +541,7 @@ class HoldingImportService:
         storage_key = secrets.token_hex(32)
         now = _aware(self.clock())
         session = HoldingImportSession(
+            user_id=user_id,
             session_id=session_id,
             status="processing",
             image_sha256=image.metadata.sha256,
@@ -597,7 +598,7 @@ class HoldingImportService:
             session.ocr_version = result.version
             existing_codes = {
                 item.ts_code.upper()
-                for item in db.scalars(select(Instrument).join(Holding, Holding.instrument_id == Instrument.id)).all()
+                for item in db.scalars(select(Instrument).join(Holding, Holding.instrument_id == Instrument.id).where(Holding.user_id == user_id)).all()
             }
             seen_codes: set[str] = set()
             # The maps are read-only during candidate resolution; build them
@@ -634,10 +635,10 @@ class HoldingImportService:
                     pass
             raise HoldingImportUnavailable() from None
 
-    def get(self, db: Session, session_id: str) -> HoldingImportSession:
+    def get(self, db: Session, session_id: str, *, user_id: int | None = None) -> HoldingImportSession:
         self.cleanup_expired(db)
         token = _safe_token(session_id)
-        return self._read_detached(db, token)
+        return self._read_detached(db, token, user_id=user_id)
 
     @contextmanager
     def _confirm_lock(self, session_id: str):
@@ -646,16 +647,16 @@ class HoldingImportService:
         # used, so independent workers exercise the same correctness path.
         yield
 
-    def edit_candidate(self, db: Session, session_id: str, candidate_id: int, changes: Any) -> HoldingImportCandidate:
+    def edit_candidate(self, db: Session, session_id: str, candidate_id: int, changes: Any, *, user_id: int | None = None) -> HoldingImportCandidate:
         work_db = self._owned_db(db)
         try:
-            self._edit_candidate_owned(work_db, session_id, candidate_id, changes)
+            self._edit_candidate_owned(work_db, session_id, candidate_id, changes, user_id=user_id)
             self._commit(work_db)
         finally:
             work_db.close()
         read_db = sessionmaker(bind=db.get_bind(), autoflush=False, expire_on_commit=False, class_=Session)()
         try:
-            candidate = read_db.get(HoldingImportCandidate, candidate_id)
+            candidate = read_db.scalar(select(HoldingImportCandidate).join(HoldingImportSession).where(HoldingImportCandidate.id == candidate_id, HoldingImportSession.user_id == user_id))
             if candidate is None:
                 raise HoldingImportNotFound()
             read_db.expunge(candidate)
@@ -663,7 +664,7 @@ class HoldingImportService:
         finally:
             read_db.close()
 
-    def _edit_candidate_owned(self, db: Session, session_id: str, candidate_id: int, changes: Any) -> HoldingImportCandidate:
+    def _edit_candidate_owned(self, db: Session, session_id: str, candidate_id: int, changes: Any, *, user_id: int | None = None) -> HoldingImportCandidate:
         token = _safe_token(session_id)
         claim_now = _aware(self.clock())
         changed = db.execute(
@@ -671,13 +672,14 @@ class HoldingImportService:
             .execution_options(synchronize_session=False)
             .where(
                 HoldingImportSession.session_id == token,
+                HoldingImportSession.user_id == user_id,
                 HoldingImportSession.status == "ready",
                 HoldingImportSession.expires_at >= claim_now,
             )
             .values(status="editing")
         ).rowcount
         if changed != 1:
-            current = db.scalar(select(HoldingImportSession).where(HoldingImportSession.session_id == token))
+            current = db.scalar(select(HoldingImportSession).where(HoldingImportSession.session_id == token, HoldingImportSession.user_id == user_id))
             if current is None:
                 raise HoldingImportNotFound()
             if current.status == "confirmed":
@@ -691,7 +693,7 @@ class HoldingImportService:
                 self._finalize_terminal_storage(db, current)
                 raise HoldingImportConflict("expired", "holding import session expired")
             raise HoldingImportConflict()
-        session = db.scalar(select(HoldingImportSession).where(HoldingImportSession.session_id == token))
+        session = db.scalar(select(HoldingImportSession).where(HoldingImportSession.session_id == token, HoldingImportSession.user_id == user_id))
         if session is None:
             raise HoldingImportNotFound()
         candidate = db.scalar(
@@ -758,18 +760,18 @@ class HoldingImportService:
         db.flush()
         return candidate
 
-    def confirm(self, db: Session, session_id: str) -> dict[str, Any]:
+    def confirm(self, db: Session, session_id: str, *, user_id: int | None = None) -> dict[str, Any]:
         work_db = self._owned_db(db)
         try:
-            return self._confirm_owned(work_db, session_id)
+            return self._confirm_owned(work_db, session_id, user_id=user_id)
         finally:
             work_db.close()
 
-    def _confirm_owned(self, db: Session, session_id: str) -> dict[str, Any]:
+    def _confirm_owned(self, db: Session, session_id: str, *, user_id: int | None = None) -> dict[str, Any]:
         with self._confirm_lock(session_id):
             self.cleanup_expired(db)
             token = _safe_token(session_id)
-            session = db.scalar(select(HoldingImportSession).where(HoldingImportSession.session_id == token))
+            session = db.scalar(select(HoldingImportSession).where(HoldingImportSession.session_id == token, HoldingImportSession.user_id == user_id))
             if session is None:
                 raise HoldingImportNotFound()
             if session.status == "confirmed":
@@ -809,6 +811,7 @@ class HoldingImportService:
                     .execution_options(synchronize_session=False)
                     .where(
                         HoldingImportSession.session_id == token,
+                        HoldingImportSession.user_id == user_id,
                         HoldingImportSession.status == "ready",
                         HoldingImportSession.expires_at >= claim_now,
                     )
@@ -816,7 +819,7 @@ class HoldingImportService:
                 ).rowcount
                 if changed != 1:
                     db.rollback()
-                    winner = db.scalar(select(HoldingImportSession).where(HoldingImportSession.session_id == token))
+                    winner = db.scalar(select(HoldingImportSession).where(HoldingImportSession.session_id == token, HoldingImportSession.user_id == user_id))
                     if winner is not None and winner.status == "confirmed":
                         self._finalize_terminal_storage(db, winner)
                         return {"status": "confirmed", "session_id": winner.session_id, "upserted": sum(c.status == "confirmed" for c in winner.candidates)}
@@ -830,17 +833,18 @@ class HoldingImportService:
                         raise HoldingImportConflict("expired", "holding import session expired")
                     raise HoldingImportConflict()
                 db.refresh(session)
-                before = {item.id for item in db.scalars(select(Holding)).all()}
+                before = {item.id for item in db.scalars(select(Holding).where(Holding.user_id == user_id)).all()}
                 for candidate in active:
                     self.holding_service.upsert(
                         db,
+                        user_id=user_id,
                         ts_code=candidate.selected_code,
                         shares=candidate.shares,
                         cost_price=candidate.cost_price,
                         target_weight=candidate.target_weight,
                         notes=candidate.user_note,
                     )
-                after = {item.id for item in db.scalars(select(Holding)).all()}
+                after = {item.id for item in db.scalars(select(Holding).where(Holding.user_id == user_id)).all()}
                 if not before.issubset(after):
                     raise HoldingImportConflict("atomicity", "holding import changed an unrelated holding")
                 for candidate in active:
@@ -856,14 +860,14 @@ class HoldingImportService:
             self._finalize_terminal_storage(db, session)
             return {"status": "confirmed", "session_id": session.session_id, "upserted": len(active)}
 
-    def cancel(self, db: Session, session_id: str) -> dict[str, Any]:
+    def cancel(self, db: Session, session_id: str, *, user_id: int | None = None) -> dict[str, Any]:
         work_db = self._owned_db(db)
         try:
-            return self._cancel_owned(work_db, session_id)
+            return self._cancel_owned(work_db, session_id, user_id=user_id)
         finally:
             work_db.close()
 
-    def _cancel_owned(self, db: Session, session_id: str) -> dict[str, Any]:
+    def _cancel_owned(self, db: Session, session_id: str, *, user_id: int | None = None) -> dict[str, Any]:
         self.cleanup_expired(db)
         token = _safe_token(session_id)
         claim_now = _aware(self.clock())
@@ -872,12 +876,13 @@ class HoldingImportService:
             .execution_options(synchronize_session=False)
             .where(
                 HoldingImportSession.session_id == token,
+                HoldingImportSession.user_id == user_id,
                 HoldingImportSession.status.in_(["ready", "editing"]),
                 HoldingImportSession.expires_at >= claim_now,
             )
             .values(status="cancelled", cancelled_at=claim_now)
         ).rowcount
-        session = db.scalar(select(HoldingImportSession).where(HoldingImportSession.session_id == token))
+        session = db.scalar(select(HoldingImportSession).where(HoldingImportSession.session_id == token, HoldingImportSession.user_id == user_id))
         if session is None:
             raise HoldingImportNotFound()
         if changed != 1:
@@ -903,18 +908,18 @@ class HoldingImportService:
         self._finalize_terminal_storage(db, session)
         return {"status": "cancelled", "session_id": session.session_id}
 
-    def set_cloud_consent(self, db: Session, session_id: str, consent: bool) -> HoldingImportSession:
+    def set_cloud_consent(self, db: Session, session_id: str, consent: bool, *, user_id: int | None = None) -> HoldingImportSession:
         work_db = self._owned_db(db)
         try:
-            self._set_cloud_consent_owned(work_db, session_id, consent)
+            self._set_cloud_consent_owned(work_db, session_id, consent, user_id=user_id)
             self._commit(work_db)
         finally:
             work_db.close()
-        return self._read_detached(db, session_id)
+        return self._read_detached(db, session_id, user_id=user_id)
 
-    def _set_cloud_consent_owned(self, db: Session, session_id: str, consent: bool) -> HoldingImportSession:
+    def _set_cloud_consent_owned(self, db: Session, session_id: str, consent: bool, *, user_id: int | None = None) -> HoldingImportSession:
         token = _safe_token(session_id)
-        session = db.scalar(select(HoldingImportSession).where(HoldingImportSession.session_id == token))
+        session = db.scalar(select(HoldingImportSession).where(HoldingImportSession.session_id == token, HoldingImportSession.user_id == user_id))
         if session is None:
             raise HoldingImportNotFound()
         if not self.settings.ocr_cloud_review_enabled:

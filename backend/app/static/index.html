@@ -34,6 +34,7 @@
       <button data-tab="system" role="tab" aria-selected="false">系统</button>
     </nav>
     <div class="top-actions">
+      <span id="accountIdentity" class="account-identity hidden" aria-live="polite"></span>
       <span id="sourceBadge" class="source-badge fallback" aria-live="polite">来源 —</span>
       <span id="connectionBadge" class="status-dot offline">离线</span>
       <button id="refreshButton" class="ghost">刷新</button>
@@ -148,6 +149,24 @@
           </form>
         </div>
       </div>
+      <section id="adminAccountsPanel" class="panel hidden" hidden aria-labelledby="adminAccountsHeading">
+        <div class="panel-head"><div><div class="eyebrow">ACCOUNT MANAGEMENT</div><h2 id="adminAccountsHeading">账户管理</h2></div></div>
+        <p class="muted admin-account-note">仅管理员可管理封闭注册账户。密码只会提交给服务端，不会显示、保存或回填。</p>
+        <form id="adminCreateForm" class="form-grid admin-account-form">
+          <label>用户名<input name="username" type="text" autocomplete="off" maxlength="128" required></label>
+          <label>邮箱（可选）<input name="email" type="email" autocomplete="off" maxlength="320"></label>
+          <label>角色<select name="role"><option value="member">成员</option><option value="admin">管理员</option></select></label>
+          <label>初始密码<input name="password" type="password" autocomplete="new-password" maxlength="1024" required></label>
+          <button class="primary" type="submit">创建账户</button>
+        </form>
+        <form id="adminResetPasswordForm" class="form-grid admin-account-form hidden" aria-label="重置账户密码">
+          <input id="adminResetUserId" name="user_id" type="hidden">
+          <label><span id="adminResetTarget">重置密码</span><input name="password" type="password" autocomplete="new-password" maxlength="1024" required></label>
+          <div class="source-actions"><button class="primary" type="submit">确认重置</button><button id="adminResetCancelButton" class="ghost" type="button">取消</button></div>
+        </form>
+        <div id="adminAccountStatus" class="muted admin-account-status" role="status" aria-live="polite"></div>
+        <div id="adminUserList" class="admin-user-list" aria-live="polite"></div>
+      </section>
       <div class="panel demo-control-panel"><div class="panel-head"><div><div class="eyebrow">SAFE DEMO</div><h2>隔离演示</h2></div><span id="demoStatus" class="status-badge status-muted">未进入演示</span></div><p class="muted">加载 420+ 天合成行情来验证指标、预测和分级。演示结果带 DEMO / Mock / research-only 标记，不能产生操作级信号。</p><div class="source-actions"><button id="demoLoadButton" class="primary" type="button">加载演示数据</button><button id="demoResetButton" class="ghost" type="button">重置演示数据</button><button id="demoExitButton" class="ghost" type="button" disabled>退出演示并恢复正式数据</button></div></div>
       <div class="panel"><div class="panel-head"><div><div class="eyebrow">MANUAL PIPELINE</div><h2>手动任务</h2></div></div><div id="taskButtons" class="task-buttons"></div><pre id="taskOutput" class="task-output">尚未运行任务</pre></div>
       <div class="panel"><div class="panel-head"><div><div class="eyebrow">PROVENANCE</div><h2>数据源健康</h2></div></div><div class="table-wrap"><table id="providerTable"><thead><tr><th>时间</th><th>操作</th><th>数据源</th><th>状态</th><th>耗时</th><th>记录</th><th>原因</th></tr></thead><tbody></tbody></table></div></div>

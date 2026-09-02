@@ -52,14 +52,13 @@ uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 
 ## 私有账户登录
 
-浏览器使用单一服务器账户登录：设置 `AUTH_USERNAME`、可选的 `AUTH_EMAIL`（仅用户名别名，不发送邮件）、
-`AUTH_PASSWORD_HASH` 与 `AUTH_SESSION_SECRET`。在服务器本地运行
-`python scripts/generate_password_hash.py`，把输出的 Argon2id 哈希填入 `.env`；不要保存或粘贴明文密码。
-会话只在 HttpOnly、SameSite cookie 中存在，浏览器不会把密码或会话写入 localStorage。生产 HTTPS 使用
-`AUTH_COOKIE_SECURE=true`；仅本机 HTTP Docker 可设为 `false`。
+浏览器使用数据库中的闭环账户登录。生产环境显式设置 `AUTH_ENABLED=true`、PostgreSQL
+`DATABASE_URL`、`AUTO_CREATE_SCHEMA=false` 与 `AUTH_COOKIE_SECURE=true`，迁移后在服务器本地运行
+`fund-decision auth-bootstrap-admin` 创建首个管理员。密码仅以 Argon2id 哈希保存在数据库，会话只在
+HttpOnly、SameSite cookie 中存在，浏览器不会把密码或会话写入 localStorage。
 
-`PRIVATE_ACCESS_TOKEN` 现在是可选的旧版 Bearer 凭据，仅供已有 CLI/API 调用迁移使用，不能作为浏览器身份。
-本版本没有 SMTP、邮件验证码或 OTP；`AUTH_EMAIL` 只用于识别同一个账户，邮件登录能力需单独设计和审查。
+生产数据库会话认证不接受 `AUTH_USERNAME`、`AUTH_EMAIL`、`AUTH_PASSWORD_HASH`、`AUTH_SESSION_SECRET` 或旧 Bearer
+凭据。本版本没有 SMTP、邮件验证码或 OTP；邮箱登录能力需单独设计和审查。
 认证依赖固定为已验证的 `pwdlib[argon2]==0.3.1`、`argon2-cffi==25.1.0` 与 `argon2-cffi-bindings==26.1.0`；更新时必须重新审查密码哈希与登录回归。
 
 ## 分析模型配置（单一主 provider）
@@ -118,7 +117,7 @@ sudo bash deploy/aliyun/deploy.sh
 
 Compose 只把应用映射到 `127.0.0.1:8080`，PostgreSQL 不映射宿主机端口。公网访问应经过 Caddy/Nginx HTTPS；ECS 安全组只开放 80/443，SSH 22 仅允许可信 IP。反向代理上传上限应保持 12MB：应用图像上限为 10MiB，额外空间仅用于 multipart 开销；示例已在 Caddy/Nginx 中对齐。
 
-`.env` 用 `chmod 0600`，OCR 临时根目录用 `0700`，模型根目录私有并只读。上线前先备份，再按 `158ca7025305` → `9f1c2b3a4d5e` → `a2b3c4d5e6f7` → `b3c4d5e6f7a8` → `c4d5e6f7a8b9` → `d5e6f7a8b9c0`（当前 head）执行 `alembic upgrade head`；回滚只允许在备份和隔离实例验证后使用 `alembic downgrade`，不能直接改生产库。隔离 SQLite 已完成 upgrade/current、完整 downgrade/re-upgrade 和 `alembic check`；该审计修复保留历史 review/analysis hash-check 名称、holding-import opaque-session 约束、nullable legacy calibration JSON 与唯一 `candidate_id` 查询契约。真实 PostgreSQL 的迁移/回滚/备份恢复仍是生产发布门槛。
+`.env` 用 `chmod 0600`，OCR 临时根目录用 `0700`，模型根目录私有并只读。上线前先备份，再按 `158ca7025305` → `9f1c2b3a4d5e` → `a2b3c4d5e6f7` → `b3c4d5e6f7a8` → `c4d5e6f7a8b9` → `d5e6f7a8b9c0` → `e6f7a8b9c0d1` → `f7a8b9c0d1e2` → `0a9b1c2d3e4f` → `1b2c3d4e5f6a` → `2c3d4e5f6a7b`（当前 head）执行 `alembic upgrade head`；回滚只允许在备份和隔离实例验证后使用 `alembic downgrade`，不能直接改生产库。隔离 SQLite 已完成 upgrade/current、完整 downgrade/re-upgrade 和 `alembic check`；该审计修复保留历史 review/analysis hash-check 名称、holding-import opaque-session 约束、nullable legacy calibration JSON 与唯一 `candidate_id` 查询契约。真实 PostgreSQL 的迁移/回滚/备份恢复仍是生产发布门槛。
 
 ## 命令
 

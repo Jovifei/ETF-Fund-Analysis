@@ -4,12 +4,12 @@
 
 ## 本地 Docker
 
-1. 按 `QUICKSTART.md` 准备 `.env`（从 `deploy/.env.local.docker.example` 复制，设置数据库密码、账户和会话密钥）。
+1. 按 `QUICKSTART.md` 准备 `.env`（从 `deploy/.env.local.docker.example` 复制，设置数据库密码）。
 2. `docker compose up -d db api`（资格完成前不要开 scheduler）。
 3. 打开 `http://127.0.0.1:8080/`。
-4. 账户登录：服务器本地设置 `AUTH_USERNAME`、`AUTH_PASSWORD_HASH` 和 `AUTH_SESSION_SECRET`；可选 `AUTH_EMAIL` 是同一账户的登录别名。浏览器输入用户名/邮箱和原始密码。密码只以 Argon2id 哈希保存在 `.env`，会话是 HttpOnly cookie，不会写入 localStorage。不要把密码、哈希或会话密钥发到聊天或截图。
+4. 账户登录：迁移后在服务器本地运行 `fund-decision auth-bootstrap-admin` 创建首个管理员。浏览器输入用户名和原始密码；密码只以 Argon2id 哈希保存在数据库，会话是 HttpOnly cookie，不会写入 localStorage。不要把密码发到聊天或截图。
 
-`PRIVATE_ACCESS_TOKEN` 是可选的旧 Bearer API/CLI 兼容凭据，不能用于浏览器登录。当前版本不发送 SMTP 邮件，也没有 OTP；邮箱字段只是识别同一账户的别名。
+生产环境不接受旧 Bearer 凭据或 `AUTH_USERNAME`、`AUTH_EMAIL`、`AUTH_PASSWORD_HASH`、`AUTH_SESSION_SECRET`。当前版本不发送 SMTP 邮件，也没有 OTP。
 
 ## 行情开关（先能用，再可选更完整）
 

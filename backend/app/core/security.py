@@ -13,8 +13,12 @@ from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from pwdlib import PasswordHash
+from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
+from app.db.session import get_db
+from app.models import AuthUser
+from app.services.auth_service import AuthService
 
 SESSION_COOKIE_NAME = "__Host-fund-session"
 CSRF_COOKIE_NAME = "__Host-fund-csrf"
@@ -155,26 +159,80 @@ def _extract_bearer(value: str | None) -> str | None:
 async def require_private_access(
     request: Request,
     settings: Annotated[Settings, Depends(get_settings)],
+    db: Annotated[Session, Depends(get_db)],
     authorization: Annotated[str | None, Header()] = None,
     csrf_token: Annotated[str | None, Header(alias=CSRF_HEADER_NAME)] = None,
 ) -> None:
     if not settings.auth_enabled:
+        request.state.auth_user = None
+        request.state.auth_via_session = False
         return
     supplied = _extract_bearer(authorization)
     if supplied and settings.legacy_bearer_configured and hmac.compare_digest(supplied, settings.private_access_token):
+        if request.method in _UNSAFE_METHODS:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="database user session required")
         request.state.auth_via_session = False
+        request.state.auth_user = None
         return
-    session_identifier = AuthSessionManager(settings).verify(request.cookies.get(session_cookie_name(settings))) if settings.password_auth_configured else None
-    if session_identifier:
+    session_token = request.cookies.get(session_cookie_name(settings))
+    user = AuthService().resolve_session(db, session_token)
+    if user is not None:
         if request.method in _UNSAFE_METHODS:
             csrf_cookie = request.cookies.get(csrf_cookie_name(settings), "")
-            if not csrf_token or not csrf_cookie or not hmac.compare_digest(csrf_token, csrf_cookie):
+            if not csrf_token or not csrf_cookie or not hmac.compare_digest(csrf_token, csrf_cookie) or not AuthService().verify_csrf(db, session_token, csrf_token):
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CSRF 校验失败")
         request.state.auth_via_session = True
-        request.state.auth_identifier = session_identifier
+        request.state.auth_identifier = user.username
+        request.state.auth_user = user
+        # Auth resolution and CSRF verification are read-only, but SQLAlchemy
+        # begins a transaction for them.  Some route services deliberately
+        # require a clean caller session so they can own their short mutation
+        # transaction.  Preserve the already-loaded identity without leaving
+        # that read transaction open for the route.
+        db.expunge(user)
+        db.rollback()
         return
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="缺少或无效的访问凭据",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def require_current_user(request: Request) -> AuthUser:
+    """Only a resolved database session can access portfolio-owned records."""
+    user = getattr(request.state, "auth_user", None)
+    if not isinstance(user, AuthUser):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="database user session required")
+    return user
+
+
+def require_admin(
+    request: Request, settings: Annotated[Settings, Depends(get_settings)]
+) -> AuthUser | None:
+    """Require an admin session when auth is enabled; preserve offline single-user mode."""
+
+    if not settings.auth_enabled:
+        return None
+
+    user = require_current_user(request)
+    if user.status != "active" or user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="administrator access required")
+    return user
+
+
+def require_enrolled_admin(request: Request) -> AuthUser:
+    """Lifecycle controls are never available while account auth is disabled."""
+
+    user = require_current_user(request)
+    if user.status != "active" or user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="administrator access required")
+    return user
+
+
+def optional_current_user(
+    request: Request, settings: Annotated[Settings, Depends(get_settings)]
+) -> AuthUser | None:
+    if not settings.auth_enabled:
+        return None
+    return require_current_user(request)

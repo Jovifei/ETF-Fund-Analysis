@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import secrets
+from datetime import timedelta
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -24,6 +24,9 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.api.schemas import (
+    AdminPasswordReset,
+    AdminUserCreate,
+    AdminUserResponse,
     AuthStatusResponse,
     BoardFundAdd,
     DemoLoadRequest,
@@ -43,18 +46,23 @@ from app.api.schemas import (
 )
 from app.core.config import Settings, get_settings
 from app.core.security import (
-    AuthSessionManager,
-    _extract_bearer,
     csrf_cookie_name,
     login_throttle,
-    password_matches,
+    optional_current_user,
+    require_admin,
+    require_enrolled_admin,
     require_private_access,
     session_cookie_name,
 )
 from app.db.session import SessionLocal, get_db
-from app.models import EventLog, ReportArtifact
+from app.models import AuthUser, EventLog, ReportArtifact
 from app.ocr.image_validation import ImageValidationError, read_limited_bytes
 from app.services.analysis_persistence_service import AnalysisStorageNotMigrated
+from app.services.auth_service import (
+    AuthService,
+    LastActiveAdminError,
+    UserNotFoundError,
+)
 from app.services.board_service import BoardService
 from app.services.dashboard_service import DashboardService
 from app.services.decision_board_service import DecisionBoardRefreshBusy, DecisionBoardService
@@ -77,6 +85,7 @@ from app.services.task_service import TaskBusyError, TaskExecutionError, TaskSer
 
 router = APIRouter(prefix="/api")
 private_router = APIRouter(dependencies=[Depends(require_private_access)])
+_USER_SCOPED_EVENT_TYPES = frozenset({"holdings.updated", "report.generated", "portfolio.optimization.completed"})
 
 
 def _review_response(candidate: Any) -> ReviewCandidateResponse:
@@ -94,6 +103,30 @@ def _review_response(candidate: Any) -> ReviewCandidateResponse:
         rejected_at=candidate.rejected_at,
         review_note=candidate.review_note,
     )
+
+
+def _admin_user_response(user: AuthUser) -> AdminUserResponse:
+    return AdminUserResponse(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        role=user.role,
+        status=user.status,
+        created_at=user.created_at,
+        last_login_at=user.last_login_at,
+    )
+
+
+def _event_is_visible_to_user(event: EventLog, user_id: int | None) -> bool:
+    """Expose market-wide events plus records explicitly owned by this session."""
+
+    payload = event.payload_json if isinstance(event.payload_json, dict) else {}
+    owner_id = payload.get("user_id")
+    if owner_id is None:
+        # A private event without an owner is malformed; fail closed instead of
+        # turning a persistence mistake into a cross-account disclosure.
+        return event.event_type not in _USER_SCOPED_EVENT_TYPES
+    return user_id is not None and isinstance(owner_id, int) and not isinstance(owner_id, bool) and owner_id == user_id
 
 
 @router.get("/health")
@@ -119,11 +152,11 @@ def _login_throttle_key(request: Request) -> str:
     return hashlib.sha256(client.encode()).hexdigest()
 
 
-def _set_auth_cookies(response: Response, settings: Settings, identifier: str) -> None:
+def _set_auth_cookies(response: Response, settings: Settings, session_token: str, csrf_token: str) -> None:
     max_age = settings.auth_session_ttl_minutes * 60
     response.set_cookie(
         key=session_cookie_name(settings),
-        value=AuthSessionManager(settings).issue(identifier),
+        value=session_token,
         max_age=max_age,
         httponly=True,
         secure=settings.auth_cookie_secure,
@@ -132,7 +165,7 @@ def _set_auth_cookies(response: Response, settings: Settings, identifier: str) -
     )
     response.set_cookie(
         key=csrf_cookie_name(settings),
-        value=secrets.token_urlsafe(32),
+        value=csrf_token,
         max_age=max_age,
         httponly=False,
         secure=settings.auth_cookie_secure,
@@ -151,50 +184,149 @@ def login(
     payload: LoginRequest,
     request: Request,
     response: Response,
+    db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AuthStatusResponse:
     failure = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="登录失败，请检查凭据后重试")
-    if not settings.auth_enabled or not settings.password_auth_configured:
+    if not settings.auth_enabled:
         raise failure
     key = _login_throttle_key(request)
     if login_throttle.is_limited(key):
         login_throttle.record_failure(key)
         raise failure
-    matches = password_matches(settings, payload.identifier, payload.password)
-    if not matches:
+    try:
+        user = AuthService().authenticate(db, identifier=payload.identifier, password=payload.password)
+    except ValueError:
+        user = None
+    if user is None:
         login_throttle.record_failure(key)
         raise failure
     login_throttle.record_success(key)
-    _set_auth_cookies(response, settings, settings.auth_username)
-    return AuthStatusResponse(authenticated=True, identifier=settings.auth_username)
+    issued = AuthService().create_session(db, user, ttl=timedelta(minutes=settings.auth_session_ttl_minutes), user_agent=request.headers.get("User-Agent"), client_ip=request.client.host if request.client else None)
+    db.commit()
+    _set_auth_cookies(response, settings, issued.session_token, issued.csrf_token)
+    return AuthStatusResponse(authenticated=True, identifier=user.username, role=user.role)
 
 
 @router.get("/auth/me", response_model=AuthStatusResponse)
-def auth_me(request: Request, settings: Annotated[Settings, Depends(get_settings)]) -> AuthStatusResponse:
+def auth_me(request: Request, db: Annotated[Session, Depends(get_db)], settings: Annotated[Settings, Depends(get_settings)]) -> AuthStatusResponse:
     if not settings.auth_enabled:
         return AuthStatusResponse(authenticated=True)
-    if settings.password_auth_configured:
-        identifier = AuthSessionManager(settings).verify(request.cookies.get(session_cookie_name(settings)))
-        if identifier:
-            return AuthStatusResponse(authenticated=True, identifier=identifier)
-    supplied = _extract_bearer(request.headers.get("Authorization"))
-    if supplied and settings.legacy_bearer_configured and secrets.compare_digest(supplied, settings.private_access_token):
-        return AuthStatusResponse(authenticated=True)
+    user = AuthService().resolve_session(db, request.cookies.get(session_cookie_name(settings)))
+    if user is not None:
+        return AuthStatusResponse(authenticated=True, identifier=user.username, role=user.role)
     return AuthStatusResponse(authenticated=False)
 
 
 @router.post("/auth/logout", response_model=AuthStatusResponse, dependencies=[Depends(require_private_access)])
-def logout(response: Response, settings: Annotated[Settings, Depends(get_settings)]) -> AuthStatusResponse:
+def logout(request: Request, response: Response, db: Annotated[Session, Depends(get_db)], settings: Annotated[Settings, Depends(get_settings)]) -> AuthStatusResponse:
+    AuthService().revoke_session(db, request.cookies.get(session_cookie_name(settings)))
+    db.commit()
     _clear_auth_cookies(response, settings)
     return AuthStatusResponse(authenticated=False)
+
+
+@private_router.get("/admin/users", response_model=list[AdminUserResponse], dependencies=[Depends(require_enrolled_admin)])
+def list_admin_users(db: Annotated[Session, Depends(get_db)]) -> list[AdminUserResponse]:
+    return [_admin_user_response(user) for user in AuthService().list_users(db)]
+
+
+@private_router.post(
+    "/admin/users",
+    response_model=AdminUserResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_enrolled_admin)],
+)
+def create_admin_user(payload: AdminUserCreate, db: Annotated[Session, Depends(get_db)]) -> AdminUserResponse:
+    try:
+        user = AuthService().create_user(
+            db,
+            username=payload.username,
+            email=payload.email,
+            password=payload.password,
+            role=payload.role,
+        )
+        db.commit()
+        return _admin_user_response(user)
+    except ValueError:
+        db.rollback()
+        raise HTTPException(status_code=422, detail="account creation rejected") from None
+    except Exception as exc:
+        # Username/email uniqueness is enforced by the database.  Keep its
+        # constraint details private while returning a deterministic conflict.
+        from sqlalchemy.exc import IntegrityError
+
+        if isinstance(exc, IntegrityError):
+            db.rollback()
+            raise HTTPException(status_code=409, detail="account already exists") from None
+        db.rollback()
+        raise
+
+
+@private_router.post(
+    "/admin/users/{user_id}/disable",
+    response_model=AdminUserResponse,
+    dependencies=[Depends(require_enrolled_admin)],
+)
+def disable_admin_user(
+    user_id: int,
+    db: Annotated[Session, Depends(get_db)],
+) -> AdminUserResponse:
+    try:
+        user = AuthService().disable_user(db, user_id)
+        db.commit()
+        return _admin_user_response(user)
+    except UserNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=404, detail="account not found") from None
+    except LastActiveAdminError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="the last active admin cannot be disabled") from None
+
+
+@private_router.post(
+    "/admin/users/{user_id}/reactivate",
+    response_model=AdminUserResponse,
+    dependencies=[Depends(require_enrolled_admin)],
+)
+def reactivate_admin_user(user_id: int, db: Annotated[Session, Depends(get_db)]) -> AdminUserResponse:
+    try:
+        user = AuthService().reactivate_user(db, user_id)
+        db.commit()
+        return _admin_user_response(user)
+    except UserNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=404, detail="account not found") from None
+
+
+@private_router.post(
+    "/admin/users/{user_id}/reset-password",
+    response_model=AdminUserResponse,
+    dependencies=[Depends(require_enrolled_admin)],
+)
+def reset_admin_user_password(
+    user_id: int, payload: AdminPasswordReset, db: Annotated[Session, Depends(get_db)]
+) -> AdminUserResponse:
+    try:
+        user = AuthService().reset_user_password(db, user_id, password=payload.password)
+        db.commit()
+        return _admin_user_response(user)
+    except UserNotFoundError:
+        db.rollback()
+        raise HTTPException(status_code=404, detail="account not found") from None
 
 
 @private_router.get("/bootstrap")
 def bootstrap(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
 ) -> dict:
-    return DashboardService(settings).bootstrap(db)
+    return DashboardService(settings).bootstrap(
+        db,
+        user_id=user.id if user is not None else None,
+        include_operational_details=user is None or user.role == "admin",
+    )
 
 
 @private_router.get("/decision-board")
@@ -232,7 +364,7 @@ def decision_board_detail(
     return row
 
 
-@private_router.post("/decision-board/refresh", status_code=status.HTTP_202_ACCEPTED)
+@private_router.post("/decision-board/refresh", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(require_admin)])
 def queue_decision_board_refresh(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -246,10 +378,10 @@ def queue_decision_board_refresh(
         raise HTTPException(status_code=409, detail="decision-board refresh already active") from None
 
 
-@private_router.post("/demo/load")
+@private_router.post("/demo/load", dependencies=[Depends(require_admin)])
 def load_demo(
     settings: Annotated[Settings, Depends(get_settings)],
-    _payload: DemoLoadRequest | None = Body(default=None),
+    _payload: Annotated[DemoLoadRequest | None, Body()] = None,
 ) -> dict[str, Any]:
     del settings
     return DemoService().load()
@@ -260,7 +392,7 @@ def demo_bootstrap() -> dict[str, Any]:
     return DemoService().bootstrap()
 
 
-@private_router.post("/demo/reset")
+@private_router.post("/demo/reset", dependencies=[Depends(require_admin)])
 def reset_demo() -> dict[str, Any]:
     return DemoService.reset()
 
@@ -269,8 +401,9 @@ def reset_demo() -> dict[str, Any]:
 def instruments(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
 ) -> list[dict]:
-    return DashboardService(settings).instrument_rows(db)
+    return DashboardService(settings).instrument_rows(db, user_id=user.id if user is not None else None)
 
 
 @private_router.get("/market-context")
@@ -304,8 +437,8 @@ def news(
 
 
 @private_router.get("/holdings")
-def holdings(db: Annotated[Session, Depends(get_db)]) -> list[dict]:
-    return HoldingService().list(db)
+def holdings(db: Annotated[Session, Depends(get_db)], user: Annotated[AuthUser | None, Depends(optional_current_user)]) -> list[dict]:
+    return HoldingService().list(db, user_id=user.id if user is not None else None)
 
 
 @private_router.put("/holdings/{ts_code}")
@@ -313,12 +446,14 @@ def upsert_holding(
     ts_code: str,
     payload: HoldingUpsert,
     db: Annotated[Session, Depends(get_db)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
 ) -> dict:
     if payload.ts_code != ts_code.upper():
         raise HTTPException(status_code=400, detail="路径代码与请求体 ts_code 不一致")
     try:
         HoldingService().upsert(
             db,
+            user_id=user.id if user is not None else None,
             ts_code=payload.ts_code,
             shares=payload.shares,
             cost_price=payload.cost_price,
@@ -328,13 +463,13 @@ def upsert_holding(
         db.commit()
     except HoldingNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return {"status": "ok", "holding": HoldingService().list(db)}
+    return {"status": "ok", "holding": HoldingService().list(db, user_id=user.id if user is not None else None)}
 
 
 @private_router.delete("/holdings/{ts_code}")
-def delete_holding(ts_code: str, db: Annotated[Session, Depends(get_db)]) -> dict:
+def delete_holding(ts_code: str, db: Annotated[Session, Depends(get_db)], user: Annotated[AuthUser | None, Depends(optional_current_user)]) -> dict:
     try:
-        deleted = HoldingService().delete(db, ts_code.upper())
+        deleted = HoldingService().delete(db, ts_code.upper(), user_id=user.id if user is not None else None)
         db.commit()
     except HoldingNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -409,10 +544,11 @@ async def create_holding_import(
     file: Annotated[UploadFile, File(...)],
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
 ) -> HoldingImportResponse:
     try:
         payload = read_limited_bytes(file.file, max_bytes=settings.ocr_max_bytes)
-        session = HoldingImportService(settings).import_bytes(db, payload, file.content_type)
+        session = HoldingImportService(settings).import_bytes(db, payload, file.content_type, user_id=user.id if user is not None else None)
         return _holding_import_response(session)
     except ImageValidationError as exc:
         if exc.code == "too_large":
@@ -433,9 +569,10 @@ def get_holding_import(
     session_id: str,
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
 ) -> HoldingImportResponse:
     try:
-        return _holding_import_response(HoldingImportService(settings).get(db, session_id))
+        return _holding_import_response(HoldingImportService(settings).get(db, session_id, user_id=user.id if user is not None else None))
     except HoldingImportError as exc:
         raise _import_http_error(exc) from None
 
@@ -450,9 +587,10 @@ def edit_holding_import_candidate(
     payload: HoldingImportCandidatePatch,
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
 ) -> HoldingImportCandidateResponse:
     try:
-        candidate = HoldingImportService(settings).edit_candidate(db, session_id, candidate_id, payload)
+        candidate = HoldingImportService(settings).edit_candidate(db, session_id, candidate_id, payload, user_id=user.id if user is not None else None)
         return _holding_import_candidate_response(candidate)
     except HoldingImportError as exc:
         raise _import_http_error(exc) from None
@@ -463,10 +601,11 @@ def confirm_holding_import(
     session_id: str,
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
 ) -> dict[str, Any]:
     service = HoldingImportService(settings)
     try:
-        result = service.confirm(db, session_id)
+        result = service.confirm(db, session_id, user_id=user.id if user is not None else None)
         return result
     except HoldingImportError as exc:
         raise _import_http_error(exc) from None
@@ -479,10 +618,11 @@ def cancel_holding_import(
     session_id: str,
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
 ) -> dict[str, Any]:
     service = HoldingImportService(settings)
     try:
-        result = service.cancel(db, session_id)
+        result = service.cancel(db, session_id, user_id=user.id if user is not None else None)
         return result
     except HoldingImportError as exc:
         raise _import_http_error(exc) from None
@@ -494,9 +634,10 @@ def set_holding_import_cloud_consent(
     payload: HoldingImportCloudConsent,
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
 ) -> HoldingImportResponse:
     try:
-        session = HoldingImportService(settings).set_cloud_consent(db, session_id, payload.consent)
+        session = HoldingImportService(settings).set_cloud_consent(db, session_id, payload.consent, user_id=user.id if user is not None else None)
         return _holding_import_response(session)
     except HoldingImportError as exc:
         raise _import_http_error(exc) from None
@@ -506,6 +647,7 @@ def set_holding_import_cloud_consent(
 def signal_center(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
     coefficient: float | None = Query(default=None, ge=0.5, le=1.5),
     days: int = Query(default=60, ge=5, le=250),
 ) -> dict:
@@ -513,7 +655,7 @@ def signal_center(
     effective = coefficient
     if effective is None and stored is not None:
         effective = float(stored)
-    payload = SignalCenterService(settings).build(db, coefficient=effective, days=days)
+    payload = SignalCenterService(settings).build(db, coefficient=effective, days=days, user_id=user.id if user is not None else None)
     db.commit()  # 持久化 ensure_defaults 写入的默认设置
     return payload
 
@@ -534,7 +676,7 @@ def signal_boards(
     return BoardService(settings).build(db)
 
 
-@private_router.post("/signals/boards/{board_id}/funds")
+@private_router.post("/signals/boards/{board_id}/funds", dependencies=[Depends(require_admin)])
 def add_board_fund(
     board_id: str,
     payload: BoardFundAdd,
@@ -553,7 +695,7 @@ def add_board_fund(
         raise HTTPException(status_code=422, detail="invalid fund code") from None
 
 
-@private_router.get("/settings")
+@private_router.get("/settings", dependencies=[Depends(require_admin)])
 def runtime_settings(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -564,7 +706,7 @@ def runtime_settings(
     return result
 
 
-@private_router.put("/settings")
+@private_router.put("/settings", dependencies=[Depends(require_admin)])
 def update_runtime_settings(
     payload: RuntimeUpdate,
     db: Annotated[Session, Depends(get_db)],
@@ -579,7 +721,7 @@ def update_runtime_settings(
     return result
 
 
-@private_router.post("/settings/market-probe")
+@private_router.post("/settings/market-probe", dependencies=[Depends(require_admin)])
 def probe_market_settings(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -596,7 +738,7 @@ def probe_market_settings(
     return result
 
 
-@private_router.get("/tasks")
+@private_router.get("/tasks", dependencies=[Depends(require_admin)])
 def task_history(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -609,6 +751,7 @@ def task_history(
     "/analysis/reviews",
     response_model=ReviewCandidateResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_admin)],
 )
 def enqueue_analysis_review(
     payload: ReviewEnqueueRequest,
@@ -632,7 +775,7 @@ def enqueue_analysis_review(
         raise HTTPException(status_code=422, detail="review request rejected") from None
 
 
-@private_router.get("/analysis/reviews", response_model=list[ReviewCandidateResponse])
+@private_router.get("/analysis/reviews", response_model=list[ReviewCandidateResponse], dependencies=[Depends(require_admin)])
 def list_analysis_reviews(
     db: Annotated[Session, Depends(get_db)],
     review_status: Annotated[Literal["pending", "accepted", "rejected"] | None, Query()] = None,
@@ -649,7 +792,7 @@ def list_analysis_reviews(
         raise HTTPException(status_code=422, detail="review query rejected") from None
 
 
-@private_router.get("/analysis/reviews/{candidate_id}", response_model=ReviewCandidateResponse)
+@private_router.get("/analysis/reviews/{candidate_id}", response_model=ReviewCandidateResponse, dependencies=[Depends(require_admin)])
 def get_analysis_review(
     candidate_id: str,
     db: Annotated[Session, Depends(get_db)],
@@ -665,6 +808,7 @@ def get_analysis_review(
 @private_router.post(
     "/analysis/reviews/{candidate_id}/accept",
     response_model=ReviewCandidateResponse,
+    dependencies=[Depends(require_admin)],
 )
 def accept_analysis_review(
     candidate_id: str,
@@ -689,6 +833,7 @@ def accept_analysis_review(
 @private_router.post(
     "/analysis/reviews/{candidate_id}/reject",
     response_model=ReviewCandidateResponse,
+    dependencies=[Depends(require_admin)],
 )
 def reject_analysis_review(
     candidate_id: str,
@@ -710,16 +855,20 @@ def reject_analysis_review(
         raise HTTPException(status_code=409, detail="review candidate cannot change state") from None
 
 
-@private_router.post("/tasks/{task_name}")
+@private_router.post("/tasks/{task_name}", dependencies=[Depends(require_admin)])
 def run_task(
     task_name: str,
     payload: TaskRequest,
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(require_admin)],
 ) -> dict:
     service = TaskService(settings)
     try:
-        result = service.run(db, task_name, **payload.compact())
+        arguments = payload.compact()
+        if task_name == "optimize_portfolio" and user is not None:
+            arguments["user_id"] = user.id
+        result = service.run(db, task_name, **arguments)
         db.commit()
         return result
     except UnknownTaskError as exc:
@@ -745,71 +894,134 @@ def run_task(
 def generate_report(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
 ) -> dict:
-    result = ReportService(settings).generate(db)
+    result = ReportService(settings).generate(db, user_id=user.id if user is not None else None)
     db.commit()
     return result
 
 
 @private_router.get("/reports")
 def list_reports(
+    request: Request,
     db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
     limit: int = Query(default=30, ge=1, le=200),
 ) -> list[dict]:
-    rows = db.scalars(
-        select(ReportArtifact).order_by(ReportArtifact.created_at.desc()).limit(limit)
-    ).all()
-    return [
-        {
-            "id": row.id,
-            "type": row.report_type,
-            "as_of_time": row.as_of_time,
-            "filename": Path(row.file_path).name,
-            "content_hash": row.content_hash,
-            "metadata": row.metadata_json,
-            "url": f"/api/reports/{Path(row.file_path).name}",
-        }
-        for row in rows
-    ]
+    del request
+    owner_filter = ReportArtifact.user_id == user.id if user is not None else ReportArtifact.user_id.is_(None)
+    rows = db.scalars(select(ReportArtifact).where(owner_filter).order_by(ReportArtifact.created_at.desc())).all()
+    reports_root = settings.reports_dir.resolve()
+    reports: list[dict] = []
+    for row in rows:
+        candidate = Path(row.file_path)
+        safe_name = candidate.name
+        allowed = safe_name.endswith(".html") or safe_name.endswith(".json")
+        if not (safe_name == candidate.name and allowed and candidate.is_file()):
+            continue
+        try:
+            candidate.resolve(strict=True).relative_to(reports_root)
+        except (OSError, ValueError):
+            continue
+        reports.append(
+            {
+                "id": row.id,
+                "type": row.report_type,
+                "as_of_time": row.as_of_time,
+                "filename": safe_name,
+                "content_hash": row.content_hash,
+                "metadata": row.metadata_json,
+                "url": f"/api/reports/{safe_name}",
+            }
+        )
+        if len(reports) >= limit:
+            break
+    return reports
 
 
 @private_router.get("/reports/{filename}")
 def download_report(
     filename: str,
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
 ) -> FileResponse:
     safe_name = Path(filename).name
     allowed = safe_name.endswith(".html") or safe_name.endswith(".json")
     if safe_name != filename or not allowed:
         raise HTTPException(status_code=400, detail="非法报告文件名")
-    path = settings.reports_dir / safe_name
-    if not path.is_file():
+    del request
+    owner_filter = ReportArtifact.user_id == user.id if user is not None else ReportArtifact.user_id.is_(None)
+    reports_root = settings.reports_dir.resolve()
+    path: Path | None = None
+    for artifact in db.scalars(select(ReportArtifact).where(owner_filter)):
+        candidate = Path(artifact.file_path)
+        if candidate.name != safe_name or not candidate.is_file():
+            continue
+        try:
+            resolved = candidate.resolve(strict=True)
+            resolved.relative_to(reports_root)
+        except (OSError, ValueError):
+            continue
+        path = resolved
+        break
+    if path is None:
         raise HTTPException(status_code=404, detail="报告不存在")
     media_type = "text/html; charset=utf-8" if safe_name.endswith(".html") else "application/json"
     return FileResponse(path, media_type=media_type, filename=safe_name)
 
 
+async def _event_stream(
+    *,
+    auth_enabled: bool,
+    session_token: str | None,
+    user_id: int | None,
+    after_id: int,
+    poll_interval_seconds: float = 2,
+):
+    """Yield visible events only while the original DB session remains valid."""
+
+    cursor = after_id
+    yield "retry: 3000\n\n"
+    while True:
+        with SessionLocal() as db:
+            if auth_enabled and not AuthService().session_is_current_for_user(db, session_token, user_id):
+                return
+            rows = db.scalars(
+                select(EventLog).where(EventLog.id > cursor).order_by(EventLog.id).limit(100)
+            ).all()
+        for row in rows:
+            cursor = row.id
+            if not _event_is_visible_to_user(row, user_id):
+                continue
+            # Do not retain a DB transaction across an await/yield.  A fresh
+            # read also closes an established stream immediately after logout,
+            # disable, password reset, expiry, or a user/session mismatch.
+            with SessionLocal() as db:
+                if auth_enabled and not AuthService().session_is_current_for_user(db, session_token, user_id):
+                    return
+            payload = json.dumps(row.payload_json if isinstance(row.payload_json, dict) else {}, ensure_ascii=False, default=str)
+            yield f"id: {row.id}\nevent: {row.event_type}\ndata: {payload}\n\n"
+        yield ": keepalive\n\n"
+        await asyncio.sleep(poll_interval_seconds)
+
+
 @private_router.get("/events")
 async def events(
+    request: Request,
+    settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
     after_id: int = Query(default=0, ge=0),
 ) -> StreamingResponse:
-    async def stream():
-        cursor = after_id
-        yield "retry: 3000\n\n"
-        while True:
-            with SessionLocal() as db:
-                rows = db.scalars(
-                    select(EventLog).where(EventLog.id > cursor).order_by(EventLog.id).limit(100)
-                ).all()
-                for row in rows:
-                    cursor = row.id
-                    payload = json.dumps(row.payload_json, ensure_ascii=False, default=str)
-                    yield f"id: {row.id}\nevent: {row.event_type}\ndata: {payload}\n\n"
-            yield ": keepalive\n\n"
-            await asyncio.sleep(2)
-
     return StreamingResponse(
-        stream(),
+        _event_stream(
+            auth_enabled=settings.auth_enabled,
+            session_token=request.cookies.get(session_cookie_name(settings)) if settings.auth_enabled else None,
+            user_id=user.id if user is not None else None,
+            after_id=after_id,
+        ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

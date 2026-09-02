@@ -10,8 +10,7 @@ from __future__ import annotations
 import json
 import math
 from collections import Counter
-from datetime import date, datetime, time, timedelta
-from pathlib import Path
+from datetime import datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -29,10 +28,13 @@ from app.models import (
     Instrument,
     NewsItem,
     QuoteSnapshot,
+    ReportArtifact,
     SignalSnapshot,
 )
+from app.services.event_service import emit_event
 from app.services.forecast_service import similarity_forecast
 from app.utils.feature_store import build_feature_frame, feature_columns_for_horizon
+from app.utils.hashing import stable_hash
 from app.utils.numbers import clamp
 from app.utils.support_resistance import build_support_resistance
 
@@ -468,12 +470,12 @@ class ETF1430WorkbenchService:
             previous_close = close_value
         return candles
 
-    def _row(self, db: Session, instrument: Instrument, *, include_chart: bool = False) -> dict[str, Any]:
+    def _row(self, db: Session, instrument: Instrument, *, include_chart: bool = False, user_id: int | None = None) -> dict[str, Any]:
         bars, frame = self._raw_and_feature_frame(db, instrument.id)
         quote = self._latest(db, QuoteSnapshot, instrument.id, QuoteSnapshot.quote_time)
         indicator = self._latest(db, IndicatorSnapshot, instrument.id, IndicatorSnapshot.generated_at)
         signal = self._latest(db, SignalSnapshot, instrument.id, SignalSnapshot.as_of_time)
-        holding = db.scalar(select(Holding).where(Holding.instrument_id == instrument.id))
+        holding = db.scalar(select(Holding).where(Holding.instrument_id == instrument.id, Holding.user_id == user_id))
         persisted = self._latest_forecasts(db, instrument.id)
         forecasts = self._dynamic_forecasts(frame, persisted)
         values = dict(indicator.values_json or {}) if indicator else {}
@@ -599,11 +601,11 @@ class ETF1430WorkbenchService:
             }
         return result
 
-    def summary(self, db: Session) -> dict[str, Any]:
+    def summary(self, db: Session, *, user_id: int | None = None) -> dict[str, Any]:
         instruments = db.scalars(
             select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code)
         ).all()
-        rows = [self._row(db, instrument, include_chart=False) for instrument in instruments]
+        rows = [self._row(db, instrument, include_chart=False, user_id=user_id) for instrument in instruments]
         rows.sort(key=lambda item: (float(item["score"]), item["ts_code"]), reverse=True)
         counts = Counter(item["action"] for item in rows)
         return {
@@ -623,20 +625,42 @@ class ETF1430WorkbenchService:
             ],
         }
 
-    def detail(self, db: Session, ts_code: str) -> dict[str, Any] | None:
+    def detail(self, db: Session, ts_code: str, *, user_id: int | None = None) -> dict[str, Any] | None:
         instrument = db.scalar(select(Instrument).where(Instrument.ts_code == ts_code.upper()))
-        return self._row(db, instrument, include_chart=True) if instrument is not None else None
+        return self._row(db, instrument, include_chart=True, user_id=user_id) if instrument is not None else None
 
-    def generate_report(self, db: Session) -> dict[str, Any]:
-        payload = self.summary(db)
-        stamp = datetime.now(self.timezone).strftime("%Y%m%d_%H%M%S")
+    def generate_report(self, db: Session, *, user_id: int | None = None) -> dict[str, Any]:
+        payload = self.summary(db, user_id=user_id)
+        now = datetime.now(self.timezone)
+        stamp = now.strftime("%Y%m%d_%H%M%S_%f")
         self.settings.reports_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"etf_1430_decision_{stamp}.json"
-        path = (self.settings.reports_dir / filename).resolve()
-        reports_root = self.settings.reports_dir.resolve()
+        filename = f"etf_1430_decision_{stamp}_{stable_hash(payload)[:10]}.json"
+        report_dir = self.settings.reports_dir / (f"user-{user_id}" if user_id is not None else "system")
+        report_dir.mkdir(parents=True, exist_ok=True)
+        path = (report_dir / filename).resolve()
+        reports_root = report_dir.resolve()
         if reports_root not in path.parents:
             raise RuntimeError("invalid report path")
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+        content_hash = stable_hash(payload)
+        db.add(
+            ReportArtifact(
+                user_id=user_id,
+                report_type="etf_1430",
+                as_of_time=now,
+                file_path=str(path),
+                content_hash=content_hash,
+                metadata_json={
+                    "scope": "private" if user_id is not None else "system",
+                    "filename": filename,
+                    "instrument_count": len(payload["rows"]),
+                    "generated_at": payload["generated_at"],
+                },
+            )
+        )
+        db.flush()
+        if user_id is not None:
+            emit_event(db, "report.generated", {"filename": filename, "user_id": user_id, "report_type": "etf_1430"})
         return {
             "status": "ok",
             "filename": filename,
@@ -645,4 +669,6 @@ class ETF1430WorkbenchService:
             "instrument_count": len(payload["rows"]),
             "research_only": True,
             "automatic_orders": False,
+            "url": f"/api/reports/{filename}" if user_id is not None else None,
+            "content_hash": content_hash,
         }

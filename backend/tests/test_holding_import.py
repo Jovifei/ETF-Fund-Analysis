@@ -279,7 +279,7 @@ def test_ocr_settings_default_cloud_off_and_bounds(tmp_path: Path) -> None:
         Settings(_env_file=None, OCR_MODE="cloud_review")
     cloud = Settings(_env_file=None, OCR_MODE="local_paddle", OCR_CLOUD_REVIEW_ENABLED=True)
     assert cloud.ocr_cloud_review_enabled is True
-    disabled = Settings(_env_file=None, APP_ENV="production", AUTH_ENABLED=False, OCR_MODE="disabled")
+    disabled = Settings(_env_file=None, APP_ENV="development", AUTH_ENABLED=False, OCR_MODE="disabled")
     assert disabled.ocr_mode == "disabled"
     for blocked in (settings.reports_dir, Path(__file__).parents[1] / "app" / "static", settings.ocr_local_model_dir):
         with pytest.raises(ValidationError):
@@ -299,7 +299,11 @@ def test_ocr_settings_rejects_transient_symlink_and_insecure_production_root(tmp
         Settings(
             _env_file=None,
             APP_ENV="production",
-            AUTH_ENABLED=False,
+            AUTH_ENABLED=True,
+            DATABASE_URL="postgresql+psycopg://fund_app@db/fund_decision",
+            AUTO_CREATE_SCHEMA=False,
+            AUTH_COOKIE_SECURE=True,
+            PRIVATE_ACCESS_TOKEN="",
             OCR_TRANSIENT_ROOT=target,
             OCR_LOCAL_MODEL_DIR=target,
         )

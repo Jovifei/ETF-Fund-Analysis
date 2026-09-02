@@ -4,7 +4,7 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from app.models import ForecastSnapshot, Holding, IndicatorSnapshot, Instrument, QuoteSnapshot
+from app.models import ForecastSnapshot, IndicatorSnapshot, Instrument, QuoteSnapshot
 from app.services.signal_service import CandidateSignal, SignalService
 from app.utils.numbers import clamp
 
@@ -51,7 +51,7 @@ class SignalV05Service(SignalService):
         quote: QuoteSnapshot | None,
         indicator: IndicatorSnapshot | None,
         forecasts: dict[int, ForecastSnapshot],
-        holding: Holding | None,
+        holding: object | None,
         current_weight: float,
         now: datetime,
     ) -> CandidateSignal:

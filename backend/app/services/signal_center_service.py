@@ -36,6 +36,7 @@ class SignalCenterService:
         db: Session,
         coefficient: float | None = None,
         days: int | None = None,
+        user_id: int | None = None,
     ) -> dict[str, Any]:
         minimum, maximum, default = self._coefficient_bounds()
         if coefficient is None:
@@ -49,9 +50,7 @@ class SignalCenterService:
         ).all()
         latest_signals = self._latest_signals(db)
         latest_indicators = self._latest_indicators(db)
-        holdings = {
-            row["ts_code"]: row for row in HoldingService().list(db) if row.get("ts_code")
-        }
+        holdings = {row["ts_code"]: row for row in HoldingService().list(db, user_id=user_id) if row.get("ts_code")}
 
         rows: list[dict[str, Any]] = []
         for instrument in instruments:

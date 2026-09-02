@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import re
 import unicodedata
 from datetime import date, datetime
@@ -44,6 +46,10 @@ from app.utils.canonical_json import (
 
 _SHA256_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 _IDENTIFIER_RE = re.compile(FAILURE_CLASS_PATTERN)
+_ARGON2ID_PHC_RE = re.compile(
+    r"\A\$argon2id\$v=19\$m=(?P<memory>[1-9][0-9]*),t=(?P<time>[1-9][0-9]*),p=(?P<parallelism>[1-9][0-9]*)"
+    r"\$(?P<salt>[A-Za-z0-9+/]+)\$(?P<digest>[A-Za-z0-9+/]+)\Z"
+)
 REVIEW_MEMO_MAX_SERIALIZED_CHARS = 12000
 REVIEW_NOTE_MAX_CHARS = 2000
 OCR_MAX_NOTE_CHARS = 2000
@@ -171,6 +177,37 @@ def _failure_class(value: str | None) -> str | None:
     return value
 
 
+def validate_argon2id_password_hash(value: str) -> str:
+    """Reject plaintext and malformed PHC values before credential persistence."""
+
+    if not isinstance(value, str) or len(value) > 512:
+        raise ValueError("password_hash must be a parseable Argon2id PHC hash")
+    matched = _ARGON2ID_PHC_RE.fullmatch(value)
+    if matched is None:
+        raise ValueError("password_hash must be a parseable Argon2id PHC hash")
+    memory_cost = int(matched["memory"])
+    time_cost = int(matched["time"])
+    parallelism = int(matched["parallelism"])
+    if (
+        not 3 <= time_cost <= 10
+        or not 65536 <= memory_cost <= 131072
+        or not 1 <= parallelism <= 8
+    ):
+        raise ValueError("password_hash has unsupported Argon2id parameters")
+    try:
+        salt = _decode_unpadded_base64(matched["salt"])
+        digest = _decode_unpadded_base64(matched["digest"])
+    except (ValueError, binascii.Error) as exc:
+        raise ValueError("password_hash must be a parseable Argon2id PHC hash") from exc
+    if not 16 <= len(salt) <= 64 or not 16 <= len(digest) <= 64:
+        raise ValueError("password_hash must use bounded non-empty Argon2id salt and digest")
+    return value
+
+
+def _decode_unpadded_base64(value: str) -> bytes:
+    return base64.b64decode(value + "=" * (-len(value) % 4), validate=True)
+
+
 def _canonical_object(value: str | None, field_name: str) -> Any | None:
     if value is None:
         return None
@@ -258,6 +295,99 @@ class TimestampMixin:
     )
 
 
+class AuthUser(Base, TimestampMixin):
+    """A closed-enrollment account; credentials never leave the database hash."""
+
+    __tablename__ = "auth_users"
+    __table_args__ = (
+        CheckConstraint("role IN ('admin', 'member')", name="ck_auth_users_role"),
+        CheckConstraint("status IN ('active', 'disabled')", name="ck_auth_users_status"),
+        CheckConstraint("length(username) BETWEEN 1 AND 128", name="ck_auth_users_username_length"),
+        CheckConstraint("password_hash LIKE '$argon2id$%'", name="ck_auth_users_password_hash"),
+        Index("ix_auth_users_username", "username"),
+        Index("ix_auth_users_email", "email"),
+        Index("ix_auth_users_status", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    username: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True, unique=True)
+    password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False, default="member")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    sessions: Mapped[list[AuthSession]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    holdings: Mapped[list[Holding]] = relationship(back_populates="user")
+    holding_imports: Mapped[list[HoldingImportSession]] = relationship(back_populates="user")
+    reports: Mapped[list[ReportArtifact]] = relationship(back_populates="user")
+
+    @validates("username")
+    def normalize_username(self, _: str, value: str) -> str:
+        normalized = unicodedata.normalize("NFKC", str(value)).strip().casefold()
+        if not normalized or len(normalized) > 128:
+            raise ValueError("username must be a non-empty normalized identifier")
+        return normalized
+
+    @validates("email")
+    def normalize_email(self, _: str, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = unicodedata.normalize("NFKC", str(value)).strip().casefold()
+        if not normalized:
+            return None
+        if len(normalized) > 320:
+            raise ValueError("email exceeds its bound")
+        return normalized
+
+    @validates("password_hash")
+    def validate_password_hash(self, _: str, value: str) -> str:
+        return validate_argon2id_password_hash(value)
+
+
+class AuthBootstrapGuard(Base, TimestampMixin):
+    """Singleton row used to serialize creation of the very first admin."""
+
+    __tablename__ = "auth_bootstrap_guard"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_auth_bootstrap_guard_singleton"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+
+
+class AuthSession(Base):
+    """Revocable opaque browser session material, stored only as SHA-256 hashes."""
+
+    __tablename__ = "auth_sessions"
+    __table_args__ = (
+        CheckConstraint(_portable_hex_check("session_hash"), name="ck_auth_sessions_session_hash"),
+        CheckConstraint(_portable_hex_check("csrf_hash"), name="ck_auth_sessions_csrf_hash"),
+        CheckConstraint(
+            "user_agent_hash IS NULL OR " + _portable_hex_check("user_agent_hash"),
+            name="ck_auth_sessions_user_agent_hash",
+        ),
+        CheckConstraint(
+            "ip_hash IS NULL OR " + _portable_hex_check("ip_hash"), name="ck_auth_sessions_ip_hash"
+        ),
+        CheckConstraint("expires_at > created_at", name="ck_auth_sessions_expiry"),
+        CheckConstraint(
+            "revoked_at IS NULL OR revoked_at >= created_at", name="ck_auth_sessions_revoked_at"
+        ),
+        Index("ix_auth_sessions_user_revocation_expiry", "user_id", "revoked_at", "expires_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    session_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    csrf_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("auth_users.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    user_agent_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    user: Mapped[AuthUser] = relationship(back_populates="sessions")
+
+
 class Instrument(Base, TimestampMixin):
     __tablename__ = "instruments"
 
@@ -273,7 +403,7 @@ class Instrument(Base, TimestampMixin):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
-    holding: Mapped[Holding | None] = relationship(back_populates="instrument", uselist=False)
+    holdings: Mapped[list[Holding]] = relationship(back_populates="instrument")
 
 
 class DailyBar(Base):
@@ -612,15 +742,30 @@ class SignalSnapshot(Base):
 
 class Holding(Base, TimestampMixin):
     __tablename__ = "holdings"
+    __table_args__ = (
+        UniqueConstraint("user_id", "instrument_id", name="uq_holdings_user_instrument"),
+        # SQL NULL values are distinct for a normal composite unique key.
+        # Retain one legacy/system row per instrument under concurrency without
+        # changing the enrolled-user uniqueness contract.
+        Index(
+            "uq_holdings_legacy_instrument",
+            "instrument_id",
+            unique=True,
+            sqlite_where=text("user_id IS NULL"),
+            postgresql_where=text("user_id IS NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id", ondelete="CASCADE"), unique=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("auth_users.id", ondelete="RESTRICT"), nullable=True, index=True)
+    instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id", ondelete="CASCADE"), index=True)
     shares: Mapped[Decimal] = mapped_column(Numeric(20, 4), default=0)
     cost_price: Mapped[Decimal] = mapped_column(Numeric(20, 6), default=0)
     target_weight: Mapped[float | None] = mapped_column(Float)
     notes: Mapped[str | None] = mapped_column(Text)
 
-    instrument: Mapped[Instrument] = relationship(back_populates="holding")
+    instrument: Mapped[Instrument] = relationship(back_populates="holdings")
+    user: Mapped[AuthUser | None] = relationship(back_populates="holdings")
 
 
 class HoldingImportSession(Base, TimestampMixin):
@@ -691,9 +836,11 @@ class HoldingImportSession(Base, TimestampMixin):
             name="ck_holding_import_sessions_storage_key_bounded",
         ),
         Index("ix_holding_import_sessions_status_expires", "status", "expires_at"),
+        Index("ix_holding_import_sessions_user_status_expires", "user_id", "status", "expires_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("auth_users.id", ondelete="RESTRICT"), nullable=True, index=True)
     session_id: Mapped[str] = mapped_column(String(96), unique=True)
     status: Mapped[str] = mapped_column(String(24), default="pending", index=True)
     image_sha256: Mapped[str] = mapped_column(String(64), index=True)
@@ -716,6 +863,7 @@ class HoldingImportSession(Base, TimestampMixin):
     candidates: Mapped[list[HoldingImportCandidate]] = relationship(
         back_populates="session", cascade="all, delete-orphan"
     )
+    user: Mapped[AuthUser | None] = relationship(back_populates="holding_imports")
 
     @validates("session_id", "storage_key")
     def validate_opaque_token(self, key: str, value: str | None) -> str | None:
@@ -1307,9 +1455,11 @@ class ReportArtifact(Base):
     __tablename__ = "report_artifacts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("auth_users.id", ondelete="RESTRICT"), nullable=True, index=True)
     report_type: Mapped[str] = mapped_column(String(32), index=True)
     as_of_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     file_path: Mapped[str] = mapped_column(Text)
     content_hash: Mapped[str] = mapped_column(String(64), index=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    user: Mapped[AuthUser | None] = relationship(back_populates="reports")

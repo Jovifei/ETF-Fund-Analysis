@@ -1,18 +1,19 @@
 from __future__ import annotations
 
+import os
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
-
 from app.core.config import get_settings
 from app.db.base import Base
 from app.models import entities  # noqa: F401
+from sqlalchemy import engine_from_config, pool
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+database_url = os.environ.get("ALEMBIC_DATABASE_URL") or get_settings().database_url
+config.set_main_option("sqlalchemy.url", database_url)
 target_metadata = Base.metadata
 
 

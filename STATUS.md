@@ -32,6 +32,15 @@
 - **当前卡点**：无 Token 时走免费档（AKShare/东财公开 ETF），不是只能 Mock。Mock 永远 `actionable=false`，预测保持 `not_calibrated`。系统页可保存 Tushare Token 并探测连通（接口不回显）。本地 Docker（`127.0.0.1:8080`）可看 UI。下一步：免费档跑通流水线 → 可选完整档 Token → Provider 矩阵 → 再谈 ECS。
 - v0.7.0 资格验证：Phase A/B 本地/Mock 已完成（commit `60da31c`）；真实 Provider、ETF 池、ECS 部署与 20 交易日影子运行待 `TUSHARE_TOKEN` 与目标环境。
 
+## 多用户账户与持仓隔离（本地完成，尚未部署）
+
+- 数据库账户使用 `AuthUser`/`AuthSession`：Argon2id 密码哈希、HttpOnly 会话 Cookie、CSRF、会话撤销和登录限流；浏览器不再使用 localStorage 令牌。
+- 采用封闭注册：管理员通过 `auth-bootstrap-admin` 创建首个管理员，再通过 `/api/admin/users` 或 CLI 创建/停用/重新启用/重置成员；普通成员只能读共享研究并维护自己的持仓/OCR。
+- 持仓、OCR 导入、报告、14:30 工作台、组合优化和 SSE 私有事件均按 `user_id` 隔离；共享信号快照不读取或持久化用户持仓。
+- 旧 Bearer 仅保留非生产迁移/测试的安全共享读取兼容，不是浏览器身份，也不能访问私有报告、SSE、持仓或执行写操作。
+- 生产启动强制 `AUTH_ENABLED=true`、PostgreSQL、`AUTO_CREATE_SCHEMA=false`、`AUTH_COOKIE_SECURE=true`，并拒绝旧单账户认证字段和 legacy Bearer；认证关闭仅可用于 development/test 演示。
+- 多用户迁移链当前 head 为 `2c3d4e5f6a7b`；旧 NULL owner 数据需在维护窗口由 active admin 使用审计回填命令归属，未知系统报告保持 NULL。真实 PostgreSQL 迁移/备份恢复仍是部署门槛。
+
 ## 部署前必须完成
 
 1. 在目标 Linux ECS 以真实 PostgreSQL 执行迁移、备份、隔离恢复和权限检查；生产 Windows 的 OCR 配置必须拒绝启动。
