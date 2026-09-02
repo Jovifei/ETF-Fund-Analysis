@@ -6,7 +6,7 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
 
 WORKDIR /build
 
-# chanlun currently ships a mixed Python/Rust extension.  Build its wheel in a
+# chanlun currently ships a mixed Python/Rust extension. Build its wheel in a
 # disposable stage so the production image does not retain compilers/linkers.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential ca-certificates curl \
@@ -40,9 +40,12 @@ COPY config /app/config
 COPY scripts /app/scripts
 COPY --from=builder /wheels /wheels
 
-# All native dependencies were built in the builder stage.  The runtime stage
-# installs only from the wheelhouse and therefore requires no compiler toolchain.
-RUN pip install --no-cache-dir --no-index --find-links=/wheels ".[market]" \
+# Install the already-built project wheel plus its market extras from the
+# builder wheelhouse. Do not rebuild the local source tree in the runtime
+# stage: that would re-enter PEP-517 build isolation and require setuptools,
+# Rust/C toolchains and other build-only dependencies in the production image.
+RUN pip install --no-cache-dir --no-index --find-links=/wheels \
+        "china-fund-decision[market]==0.7.0" \
     && rm -rf /wheels
 
 RUN useradd --create-home --uid 10001 appuser \
