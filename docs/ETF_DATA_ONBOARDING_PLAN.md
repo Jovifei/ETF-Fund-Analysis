@@ -85,14 +85,21 @@
 
 实测 6 指数全部真实落库（is_mock=false）。
 
+### 可交易代理（tradable_proxy）接入
+- akshare `fetch_market_context` 增加 `TRADABLE_PROXY` 分支，用 `fetch_spot_quotes` 拉 ETF 实时价。
+- 启用 `china-semiconductor-etf`：source_symbol=512480（半导体ETF国联安），display_code=512480.SH。
+- ⚠️ 契约约束：`source_timestamp <= fetched_at`；ETF quote_time 由 fetch_spot_quotes 内部 now 生成，
+  可能晚于外层 fetched_at，需取两者较晚者作 fetched_at。
+
 ### 关键约束备忘
 - 非 mock 的 `MarketContextObservation` 必须 `verification_status=VERIFIED`，否则 `_validate_observations` 抛错。
 - 前端 `DEFAULT_MARKET_CONTEXT` 是兜底默认，后端新增卡片经 `mergeMarketContext` 的 extras 分支自动显示，无需改前端。
-- 最终数据量：行业 90 / 概念 175 / 全市场 1 / 大盘指数 6 / K线 20691。
+- 最终数据量：行业 90 / 概念 175 / 全市场 1 / 大盘指数 6 / 可交易代理 1 / K线 20691。
 
 ## 七、仍待补齐
 
-1. **概念板块涨跌家数**：免费层仍未根治（新浪/同花顺无涨跌家数，东财有但被反爬）。可选：解析东财行情中心概念列表接口、或用同花顺概念成分股 + 个股行情聚合涨跌家数。
-2. **tradable_proxy 卡片**：`china-semiconductor-etf` 等可交易代理卡片仍未接数据源。
+1. **概念板块涨跌家数（免费层客观无法根治，已穷尽探测）**：东财所有概念接口（name_em/concept_em/hist_em/cons_em）全被反爬断连；同花顺概念 summary 无涨跌家数且无成分股函数；新浪概念仅有板块涨跌幅+公司家数；富途概念 JSON 解析失败。免费层只能提供「概念名 + 成分股数量 + 板块涨跌幅」，涨跌家数需 Tushare token（切 composite，tushare 优先）或东财反爬缓解后补。不绕反爬（违反"不在业务层硬编码网页接口"原则）、不做成分股聚合（175 概念 × 成分股逐只拉行情成本过高）。
+2. **韩国半导体可交易代理**：`korea-semiconductor-etf` 卡片尚未接数据源（国内免费源对韩国 ETF 覆盖差）。
 3. **Tushare 增强**：注册 token 后切 `composite`（tushare 优先）可提升板块涨跌家数与复权精度。
+
 
