@@ -407,33 +407,80 @@ class AKShareProvider(MarketProvider):
     def fetch_market_context(
         self, requests: list[MarketContextItem]
     ) -> list[MarketContextObservation]:
-        """为 enabled 的大盘指数 context 卡片拉取真实行情（免费新浪源）。
+        """为 enabled 的大盘指数 / 可交易代理 context 卡片拉取真实行情（免费源）。
 
         source_symbol 约定：
-          - A股指数：新浪代码，如 "sh000001"(上证)、"sh000300"(沪深300)、"sh000985"(中证全指)，
-            走 stock_zh_index_daily；
-          - 美股指数：新浪代码，如 ".INX"(标普500)、".IXIC"(纳指综合)、".NDX"(纳指100)，
-            走 index_us_stock_sina。
+          - A股指数（context_kind=index）：新浪代码，如 "sh000001"(上证)、"sh000300"(沪深300)、
+            "sh000985"(中证全指)，走 stock_zh_index_daily；
+          - 美股指数（context_kind=index）：新浪代码，如 ".INX"(标普500)、".IXIC"(纳指综合)、
+            ".NDX"(纳指100)，走 index_us_stock_sina；
+          - 可交易代理（context_kind=tradable_proxy）：ETF 代码，如 "512480"(半导体ETF)，
+            走 fund_etf_spot_em 实时行情。
 
-        仅处理 context_kind == index；tradable_proxy / sector_breadth 暂不支持，
-        返回时跳过（调用方按缺失处理）。
+        仅处理 index 与 tradable_proxy；sector_breadth 暂不支持，返回时跳过（调用方按缺失处理）。
         """
         fetched_at = datetime.now(self.tz)
         observations: list[MarketContextObservation] = []
         for request in requests:
-            if request.context_kind is not ContextKind.INDEX:
-                continue
-            symbol = (request.source_symbol or "").strip()
-            if not symbol:
-                continue
-            try:
-                obs = self._fetch_index_observation(request, symbol, fetched_at)
-            except Exception as exc:
-                logger.warning("market context index %s (%s) failed: %s", request.context_id, symbol, exc)
-                continue
-            if obs is not None:
-                observations.append(obs)
+            if request.context_kind is ContextKind.INDEX:
+                symbol = (request.source_symbol or "").strip()
+                if not symbol:
+                    continue
+                try:
+                    obs = self._fetch_index_observation(request, symbol, fetched_at)
+                except Exception as exc:
+                    logger.warning("market context index %s (%s) failed: %s", request.context_id, symbol, exc)
+                    continue
+                if obs is not None:
+                    observations.append(obs)
+            elif request.context_kind is ContextKind.TRADABLE_PROXY:
+                symbol = (request.source_symbol or "").strip()
+                if not symbol:
+                    continue
+                try:
+                    obs = self._fetch_proxy_observation(request, symbol, fetched_at)
+                except Exception as exc:
+                    logger.warning("market context proxy %s (%s) failed: %s", request.context_id, symbol, exc)
+                    continue
+                if obs is not None:
+                    observations.append(obs)
         return observations
+
+    def _fetch_proxy_observation(
+        self, request: MarketContextItem, symbol: str, fetched_at: datetime
+    ) -> MarketContextObservation | None:
+        """为可交易代理卡片拉取 ETF 实时行情并构造 observation。
+
+        source_symbol 为 6 位 ETF 代码（如 "512480"）；无 .SH/.SZ 后缀时按沪市补全
+        以复用 fetch_spot_quotes 的匹配逻辑。
+        """
+        ts_code = symbol if "." in symbol else (symbol + (".SH" if symbol.startswith(("5", "6")) else ".SZ"))
+        try:
+            quotes = self.fetch_spot_quotes([ts_code])
+        except Exception:
+            return None
+        if not quotes:
+            return None
+        q = quotes[0]
+        if q.price is None:
+            return None
+        source_ts = q.quote_time if q.quote_time is not None else fetched_at.replace(second=0, microsecond=0)
+        # fetched_at 必须不早于 source_timestamp（契约校验）；ETF 行情 quote_time
+        # 由 fetch_spot_quotes 内部取 now，可能晚于传入的 fetched_at，故以两者较晚者为准。
+        effective_fetched = fetched_at if fetched_at >= source_ts else source_ts
+        return MarketContextObservation(
+            context_id=request.context_id,
+            source_symbol=symbol,
+            observed_value=q.price,
+            today_pct_change=q.pct_change if q.pct_change is not None else 0.0,
+            price=q.price,
+            source=self.name,
+            source_timestamp=source_ts,
+            fetched_at=effective_fetched,
+            freshness=FreshnessStatus.FRESH,
+            verification_status=VerificationStatus.VERIFIED,
+            is_mock=False,
+        )
 
     def _fetch_index_observation(
         self, request: MarketContextItem, symbol: str, fetched_at: datetime

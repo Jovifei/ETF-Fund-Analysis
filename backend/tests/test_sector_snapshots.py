@@ -614,3 +614,40 @@ def test_akshare_fetch_market_context_index():
     assert by_id["us-sp500"].is_mock is False
 
 
+def test_akshare_fetch_market_context_tradable_proxy():
+    """tradable_proxy 卡片应走 ETF 实时行情拉价格，并正确补全交易所后缀。"""
+    from unittest.mock import MagicMock
+    from datetime import datetime as dt
+    from zoneinfo import ZoneInfo
+
+    from app.market_context.contracts import ContextKind, MarketContextItem
+
+    fake_ak = MagicMock()
+    fake_ak.fund_etf_spot_em.return_value = _frame(
+        [{"代码": "512480", "最新价": 1.01, "涨跌幅": -1.94, "昨收": 1.03}]
+    )
+    prov = _provider_no_init(fake_ak)
+
+    proxy_item = MarketContextItem(
+        context_id="china-semiconductor-etf",
+        label="中国半导体可交易 ETF 代理",
+        region="China",
+        context_kind=ContextKind.TRADABLE_PROXY,
+        source_symbol="512480",
+        display_code="512480.SH",
+        is_tradable_proxy=True,
+        enabled=True,
+        display_order=8,
+        verification_status="verified",
+    )
+
+    obs = prov.fetch_market_context([proxy_item])
+    assert len(obs) == 1
+    o = obs[0]
+    assert o.context_id == "china-semiconductor-etf"
+    assert o.observed_value == 1.01
+    assert o.today_pct_change == -1.94
+    assert o.is_mock is False
+    assert o.freshness.value == "fresh"
+
+
