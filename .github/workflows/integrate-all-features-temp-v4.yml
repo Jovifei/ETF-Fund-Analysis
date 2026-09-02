@@ -1,0 +1,212 @@
+name: integrate-all-features-temp-v4
+
+on:
+  push:
+    branches:
+      - integration/all-features-20260902-v4
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: ${{ !contains(github.event.head_commit.message, '[integrated-v4]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: integration/all-features-20260902-v4
+      - name: Configure git
+        run: |
+          git config user.name "integration-bot"
+          git config user.email "integration-bot@users.noreply.github.com"
+          git fetch origin main codex/multi-user-auth feat/etf-1430-workbench-complete-local feat/workbuddy-decision-board-replica-v2
+      - name: Merge ETF sector and K-line branch
+        run: |
+          set +e
+          git merge --no-commit --no-ff origin/feat/etf-1430-workbench-complete-local
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            conflicts="$(git diff --name-only --diff-filter=U)"
+            echo "1430 conflicts:"; echo "$conflicts"
+            for p in $conflicts; do
+              case "$p" in
+                backend/app/main.py|backend/app/services/task_service.py)
+                  git checkout --ours -- "$p" ;;
+                backend/app/services/signal_grade_service.py|backend/tests/test_signal_grade.py)
+                  git checkout --theirs -- "$p" ;;
+                *) echo "unexpected 1430 conflict: $p"; exit 1 ;;
+              esac
+              git add "$p"
+            done
+          fi
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('backend/app/services/task_service.py')
+          text = path.read_text()
+          if '"refresh_sector_snapshots"' not in text:
+              text = text.replace('            "refresh_signals",\n', '            "refresh_signals",\n            "refresh_sector_snapshots",\n', 1)
+              text = text.replace(
+                  '        if task_name == "refresh_signals":\n            return self.signals.refresh_all(db, run_id=run_id)\n',
+                  '        if task_name == "refresh_signals":\n            return self.signals.refresh_all(db, run_id=run_id)\n        if task_name == "refresh_sector_snapshots":\n            return self.market.refresh_sector_snapshots(db, run_id=run_id)\n',
+                  1,
+              )
+              anchor = '            results["refresh_signals"] = self.signals.refresh_all(db, run_id=run_id)\n'
+              addition = anchor + '            try:\n                results["refresh_sector_snapshots"] = self.market.refresh_sector_snapshots(db, run_id=run_id)\n            except Exception as exc:\n                failed_steps.append("refresh_sector_snapshots")\n                results["refresh_sector_snapshots"] = {"status": "failed", "failure_class": _failure_class(exc)}\n'
+              text = text.replace(anchor, addition, 1)
+          text = text.replace('return self.portfolio.run(db, run_id=run_id)\n', 'return self.portfolio.run(db, run_id=run_id, user_id=kwargs.get("user_id"))\n')
+          path.write_text(text)
+
+          mig = Path('backend/alembic/versions/e7f8a9b0c1d2_sector_snapshots.py')
+          text = mig.read_text().replace('Revises: d5e6f7a8b9c0', 'Revises: 2c3d4e5f6a7b').replace('down_revision: str | None = "d5e6f7a8b9c0"', 'down_revision: str | None = "2c3d4e5f6a7b"')
+          mig.write_text(text)
+
+          main = Path('backend/app/main.py')
+          text = main.read_text()
+          if 'from app.api.workbench_kline import router as workbench_kline_router' not in text:
+              text = text.replace('from app.api.workbench_1430 import router as workbench_1430_router\n', 'from app.api.workbench_1430 import router as workbench_1430_router\nfrom app.api.workbench_kline import router as workbench_kline_router\n')
+          if 'app.include_router(workbench_kline_router)' not in text:
+              text = text.replace('app.include_router(workbench_1430_router)\n', 'app.include_router(workbench_1430_router)\napp.include_router(workbench_kline_router)\n')
+          if 'def kline_stabilization()' not in text:
+              text += '\n\n@app.get("/workbench/kline", include_in_schema=False)\ndef kline_stabilization() -> FileResponse:\n    return FileResponse(STATIC_DIR / "kline_stabilization.html", media_type="text/html; charset=utf-8")\n'
+          main.write_text(text)
+
+          entities = Path('backend/app/models/entities.py').read_text()
+          init = Path('backend/app/models/__init__.py').read_text()
+          if 'class SectorSnapshot(Base):' not in entities or 'SectorSnapshot' not in init:
+              raise SystemExit('SectorSnapshot model/export missing after merge')
+
+          pg = Path('scripts/qualify_postgres.sh')
+          text = pg.read_text()
+          text = text.replace('script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"\n', '')
+          text = text.replace('EXPECTED_HEAD="d5e6f7a8b9c0"', 'EXPECTED_HEAD="f1a2b3c4d5e6"')
+          text = text.replace('DOWNGRADE_REV="c4d5e6f7a8b9"', 'DOWNGRADE_REV="e7f8a9b0c1d2"')
+          text = text.replace('for i in $(seq 1 "$READY_TIMEOUT_SECONDS"); do', 'for _ in $(seq 1 "$READY_TIMEOUT_SECONDS"); do')
+          text = text.replace('[ "$SEED_RS_BEFORE" -ge 1 ] && [ "$SEED_EL_BEFORE" -ge 1 ] \\\n        || { log "ERROR: seed rows missing (runtime_settings=$SEED_RS_BEFORE, event_log=$SEED_EL_BEFORE)"; return 1; }', 'if ! { [ "$SEED_RS_BEFORE" -ge 1 ] && [ "$SEED_EL_BEFORE" -ge 1 ]; }; then\n        log "ERROR: seed rows missing (runtime_settings=$SEED_RS_BEFORE, event_log=$SEED_EL_BEFORE)"\n        return 1\n    fi')
+          text = text.replace('[ "$SEED_RS_AFTER" = "$SEED_RS_BEFORE" ] && [ "$SEED_EL_AFTER" = "$SEED_EL_BEFORE" ] \\\n        || { log "ERROR: seeded rows did not survive restore (runtime_settings=$SEED_RS_AFTER/$SEED_RS_BEFORE, event_log=$SEED_EL_AFTER/$SEED_EL_BEFORE)"; return 1; }', 'if ! { [ "$SEED_RS_AFTER" = "$SEED_RS_BEFORE" ] && [ "$SEED_EL_AFTER" = "$SEED_EL_BEFORE" ]; }; then\n        log "ERROR: seeded rows did not survive restore (runtime_settings=$SEED_RS_AFTER/$SEED_RS_BEFORE, event_log=$SEED_EL_AFTER/$SEED_EL_BEFORE)"\n        return 1\n    fi')
+          for fn in ('write_json()', 'print_summary()', 'on_exit()'):
+              text = text.replace(fn, '# shellcheck disable=SC2317 # invoked through report/EXIT paths\n' + fn, 1)
+          pg.write_text(text)
+
+          status = Path('STATUS.md')
+          s = status.read_text()
+          if '## 集成：板块数据与 K 线企稳看板' not in s:
+              s += '''\n\n## 集成：板块数据与 K 线企稳看板\n\n- 已合入行业/概念/全市场三类 `SectorSnapshot`、AKShare 真实宽度优先、K 线企稳看板与 `refresh_sector_snapshots`。\n- 多用户认证与持仓隔离继续作为基础安全边界；板块数据属于共享市场数据。\n- Alembic 单链：`... -> f7a8b9c0d1e2 -> 0a9b1c2d3e4f -> 1b2c3d4e5f6a -> 2c3d4e5f6a7b -> e7f8a9b0c1d2 -> f1a2b3c4d5e6`。\n'''
+              status.write_text(s)
+          PY
+          git add -A
+          git commit -m "merge: integrate multi-user auth with ETF sector and kline data"
+      - name: Merge WorkBuddy-style scoring board
+        run: |
+          set +e
+          git merge --no-commit --no-ff origin/feat/workbuddy-decision-board-replica-v2
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            conflicts="$(git diff --name-only --diff-filter=U)"
+            echo "workbuddy conflicts:"; echo "$conflicts"
+            for p in $conflicts; do
+              case "$p" in
+                backend/app/main.py|.github/workflows/ci.yml)
+                  git checkout --ours -- "$p" ;;
+                *) echo "unexpected workbuddy conflict: $p"; exit 1 ;;
+              esac
+              git add "$p"
+            done
+          fi
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          main = Path('backend/app/main.py')
+          text = main.read_text()
+          if 'RedirectResponse' not in text:
+              text = text.replace('from fastapi.responses import FileResponse\n', 'from fastapi.responses import FileResponse, RedirectResponse\n')
+          start = text.index('@app.get("/", include_in_schema=False)')
+          prefix = text[:start]
+          routes = '''@app.get("/", include_in_schema=False)\ndef index() -> FileResponse:\n    return FileResponse(STATIC_DIR / "decision_board_workbuddy.html", media_type="text/html; charset=utf-8")\n\n\n@app.get("/legacy", include_in_schema=False)\ndef legacy() -> FileResponse:\n    return FileResponse(STATIC_DIR / "index.html", media_type="text/html; charset=utf-8")\n\n\n@app.get("/workbench/1430", include_in_schema=False)\ndef etf_1430_workbench() -> RedirectResponse:\n    return RedirectResponse(url="/", status_code=307)\n\n\n@app.get("/workbench/kline", include_in_schema=False)\ndef kline_stabilization() -> FileResponse:\n    return FileResponse(STATIC_DIR / "kline_stabilization.html", media_type="text/html; charset=utf-8")\n'''
+          main.write_text(prefix + routes)
+
+          html_path = Path('backend/app/static/decision_board_workbuddy.html')
+          html = html_path.read_text()
+          html = re.sub(r'<form id="authForm" class="auth-card">.*?</form>', '''<form id="authForm" class="auth-card">\n      <div class="eyebrow">PRIVATE RESEARCH</div>\n      <h2>账户登录</h2>\n      <p>使用服务器中已创建的私有账户。会话使用 HttpOnly Cookie，页面不保存密码或令牌。</p>\n      <label for="identifierInput">用户名或邮箱</label><input id="identifierInput" type="text" autocomplete="username" maxlength="320" required>\n      <label for="passwordInput">密码</label><input id="passwordInput" type="password" autocomplete="current-password" maxlength="1024" required>\n      <button type="submit" class="primary">进入决策台</button>\n      <div id="authError" class="error"></div>\n    </form>''', html, flags=re.S)
+          html = html.replace('<div class="top-actions"><a class="ghost-link" href="/legacy">完整系统</a><span id="connectionBadge"', '<div class="top-actions"><a class="ghost-link" href="/legacy">完整系统</a><span id="accountBadge" class="source-chip muted">未登录</span><button id="logoutButton" type="button" class="ghost hidden">退出</button><span id="connectionBadge"')
+          html = html.replace('令牌仅保存在当前浏览器 localStorage。', '账户会话由服务器管理。')
+          html_path.write_text(html)
+
+          js_path = Path('backend/app/static/decision_board_workbuddy.js')
+          js = js_path.read_text()
+          js = re.sub(r"const state = \{token:.*?\};", "const state = {sessionActive:false,auth:{identifier:null,role:null},board:null,mode:'grouped',horizon:1,filter:'',activeCode:null,refreshTask:null,poll:null};", js, count=1)
+          old = re.search(r"async function api\(path,options=\{\}\).*?function hideAuth\(\)\{.*?\}\n", js, re.S)
+          if not old:
+              raise SystemExit('old WorkBuddy auth helper block not found')
+          new = '''function csrfToken(){const item=String(document.cookie||'').split('; ').find(v=>v.startsWith('__Host-fund-csrf=')||v.startsWith('fund-csrf='));return item?decodeURIComponent(item.split('=').slice(1).join('=')):'';}\nasync function api(path,options={}){const method=String(options.method||'GET').toUpperCase(),headers=new Headers(options.headers||{});if(method!=='GET'&&method!=='HEAD'&&!headers.has('X-CSRF-Token')){const csrf=csrfToken();if(csrf)headers.set('X-CSRF-Token',csrf);}if(options.body&&!headers.has('Content-Type'))headers.set('Content-Type','application/json');const response=await fetch(path,{...options,headers,credentials:'same-origin'});if(response.status===401){state.sessionActive=false;showAuth('会话已失效，请重新登录');throw new Error('unauthorized');}if(!response.ok){let msg=`${response.status} ${response.statusText}`;try{const p=await response.json();msg=p.detail||msg;}catch(_){}throw new Error(msg);}return response.headers.get('content-type')?.includes('json')?response.json():response.text();}\nfunction showAuth(message=''){$('#authOverlay').classList.remove('hidden');$('#authError').textContent=message;}\nfunction hideAuth(){$('#authOverlay').classList.add('hidden');$('#authError').textContent='';}\nfunction renderAccount(){const badge=$('#accountBadge'),logout=$('#logoutButton');if(state.auth.identifier){badge.textContent=`${state.auth.identifier}${state.auth.role?` · ${state.auth.role}`:''}`;logout.classList.remove('hidden');}else{badge.textContent=state.sessionActive?'免登录模式':'未登录';logout.classList.toggle('hidden',!state.auth.identifier);}}\nasync function ensureSession(){const response=await fetch('/api/auth/me',{credentials:'same-origin'});if(!response.ok)return false;const payload=await response.json();state.sessionActive=Boolean(payload.authenticated);state.auth={identifier:payload.identifier||null,role:payload.role||null};renderAccount();return state.sessionActive;}\nasync function loginAccount(){const identifier=$('#identifierInput').value.trim(),password=$('#passwordInput').value;const response=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({identifier,password})});if(!response.ok){let msg='登录失败，请检查凭据后重试';try{const p=await response.json();msg=p.detail||msg;}catch(_){}throw new Error(msg);}const payload=await response.json();state.sessionActive=true;state.auth={identifier:payload.identifier||identifier,role:payload.role||null};$('#passwordInput').value='';renderAccount();hideAuth();}\nasync function logoutAccount(){try{await api('/api/auth/logout',{method:'POST',body:'{}'});}finally{state.sessionActive=false;state.auth={identifier:null,role:null};state.board=null;clearInterval(state.poll);state.poll=null;renderAccount();showAuth('已退出');}}\n'''
+          js = js[:old.start()] + new + js[old.end():]
+          bind_old = re.search(r"function bind\(\)\{.*?\}\nasync function start\(\)\{.*?\}\n", js, re.S)
+          if not bind_old:
+              raise SystemExit('WorkBuddy bind/start block not found')
+          bind_new = '''function bind(){renderLegend();$('#authForm').addEventListener('submit',async e=>{e.preventDefault();$('#authError').textContent='';try{await loginAccount();await loadBoard();if(!state.poll)state.poll=setInterval(()=>loadBoard(true),30000);}catch(err){showAuth(err.message);}});$('#logoutButton').addEventListener('click',logoutAccount);$('#refreshButton').addEventListener('click',requestRefresh);$('#detailClose').addEventListener('click',()=>{$('#detailOverlay').classList.add('hidden');state.activeCode=null;});$('#detailOverlay').addEventListener('click',e=>{if(e.target.id==='detailOverlay'){$('#detailOverlay').classList.add('hidden');state.activeCode=null;}});$('#horizonSelect').addEventListener('change',e=>{state.horizon=Number(e.target.value);loadBoard();});$('#searchInput').addEventListener('input',e=>{state.filter=e.target.value;renderBoard();});$$('#modeSwitch button').forEach(btn=>btn.addEventListener('click',()=>{$$('#modeSwitch button').forEach(x=>x.classList.remove('active'));btn.classList.add('active');state.mode=btn.dataset.mode;renderBoard();}));}\nasync function start(){bind();try{if(await ensureSession()){hideAuth();await loadBoard();state.poll=setInterval(()=>loadBoard(true),30000);}else showAuth();}catch(_){showAuth('无法确认登录状态');}}\n'''
+          js = js[:bind_old.start()] + bind_new + js[bind_old.end():]
+          js = js.replace('globalThis.WorkBuddyDecisionBoard=Object.freeze({scoreRow', 'globalThis.WorkBuddyDecisionBoard=Object.freeze({api,ensureSession,loginAccount,logoutAccount,scoreRow')
+          if 'fundDecisionToken' in js or 'localStorage' in js:
+              raise SystemExit('legacy browser token storage still present in WorkBuddy page')
+          js_path.write_text(js)
+
+          test_path = Path('backend/tests/test_workbuddy_decision_board.py')
+          if test_path.exists():
+              test = test_path.read_text()
+              if 'from pathlib import Path' not in test:
+                  test = 'from pathlib import Path\n' + test
+              if 'test_workbuddy_board_uses_multi_user_session_auth' not in test:
+                  test += '''\n\ndef test_workbuddy_board_uses_multi_user_session_auth():\n    root = Path(__file__).parents[1] / "app" / "static"\n    html = (root / "decision_board_workbuddy.html").read_text(encoding="utf-8")\n    js = (root / "decision_board_workbuddy.js").read_text(encoding="utf-8")\n    assert "identifierInput" in html and "passwordInput" in html and "logoutButton" in html\n    assert "PRIVATE_ACCESS_TOKEN" not in html and "tokenInput" not in html\n    assert "/api/auth/login" in js and "/api/auth/me" in js and "/api/auth/logout" in js\n    assert "credentials:'same-origin'" in js and "X-CSRF-Token" in js\n    assert "fundDecisionToken" not in js and "localStorage" not in js\n'''
+              test_path.write_text(test)
+
+          ci = Path('.github/workflows/ci.yml')
+          text = ci.read_text().replace("pip install -e '.[dev]'", "pip install -e '.[dev,market]'")
+          old = '      - name: Validate browser JavaScript\n        run: node --check backend/app/static/app.js\n'
+          new = '''      - name: Validate browser JavaScript\n        run: |\n          node --check backend/app/static/app.js\n          node --check backend/app/static/decision_board_workbuddy.js\n          node --check backend/app/static/kline_stabilization.js\n      - name: Decision board JavaScript tests\n        run: node --test backend/app/static/decision_board_workbuddy.test.js\n'''
+          if 'Decision board JavaScript tests' not in text:
+              text = text.replace(old, new)
+          ci.write_text(text)
+
+          status = Path('STATUS.md')
+          s = status.read_text()
+          if '## 集成：多用户 + 统一评分首页' not in s:
+              s += '''\n\n## 集成：多用户 + 统一评分首页\n\n- `/` 使用 WorkBuddy 风格 ETF 评分首页；`/legacy` 保留完整多页签系统；`/workbench/kline` 保留 K 线企稳分析。\n- 新评分首页使用数据库多用户 Session Cookie 登录与 CSRF，不再使用 localStorage Bearer Token。\n- 行情、行业/概念/全市场宽度是共享市场数据；持仓、OCR、报告和私有事件继续按 `user_id` 隔离。\n'''
+              status.write_text(s)
+          PY
+          git add -A
+          git commit -m "merge: integrate scoring board with multi-user session auth"
+      - name: Validate integrated source
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev,market]'
+          pytest -q
+          python -m compileall -q backend/app scripts
+          node --check backend/app/static/app.js
+          node --check backend/app/static/decision_board_workbuddy.js
+          node --check backend/app/static/kline_stabilization.js
+          node --test backend/app/static/decision_board_workbuddy.test.js
+          python codex/skills/fund-research/scripts/check_no_secrets.py .
+          rm -f /tmp/integration-all.sqlite3
+          APP_ENV=test AUTH_ENABLED=false PRIVATE_ACCESS_TOKEN=CHANGE_ME_INTEGRATION_TOKEN MARKET_PROVIDER=mock AUTO_CREATE_SCHEMA=false DATABASE_URL=sqlite:////tmp/integration-all.sqlite3 alembic upgrade head
+          test "$(APP_ENV=test AUTH_ENABLED=false PRIVATE_ACCESS_TOKEN=CHANGE_ME_INTEGRATION_TOKEN MARKET_PROVIDER=mock AUTO_CREATE_SCHEMA=false DATABASE_URL=sqlite:////tmp/integration-all.sqlite3 alembic heads | wc -l)" -eq 1
+          APP_ENV=test AUTH_ENABLED=false PRIVATE_ACCESS_TOKEN=CHANGE_ME_INTEGRATION_TOKEN MARKET_PROVIDER=mock AUTO_CREATE_SCHEMA=false DATABASE_URL=sqlite:////tmp/integration-all.sqlite3 alembic check
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y shellcheck >/dev/null
+          shellcheck deploy/aliyun/*.sh scripts/*.sh
+          cp deploy/.env.production.example .env
+          sed -i 's/CHANGE_ME_LONG_RANDOM_DB_PASSWORD/CHANGE_ME_INTEGRATION_DATABASE_PASSWORD/' .env
+          sed -i 's/CHANGE_ME_AT_LEAST_32_RANDOM_CHARS/CHANGE_ME_INTEGRATION_PRIVATE_TOKEN_LONG_ENOUGH/' .env
+          docker compose config >/dev/null
+          docker build -f backend/Dockerfile -t china-fund-decision:integration .
+      - name: Push integrated branch
+        run: |
+          rm -f .github/workflows/integrate-all-features-temp-v4.yml
+          git add -A
+          git commit -m "chore: finalize integrated feature branch [integrated-v4]"
+          git push origin HEAD:integration/all-features-20260902-v4
