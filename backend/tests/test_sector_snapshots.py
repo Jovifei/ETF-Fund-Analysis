@@ -599,9 +599,9 @@ def test_akshare_fetch_market_context_index():
         region="China",
         context_kind=ContextKind.SECTOR_BREADTH,
         source_symbol=None,
-        enabled=True,
+        enabled=False,
         display_order=3,
-        verification_status="verified",
+        verification_status="unverified",
     )
 
     obs = prov.fetch_market_context([index_item, us_item, non_index])

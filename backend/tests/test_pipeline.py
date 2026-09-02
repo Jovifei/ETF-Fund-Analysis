@@ -31,16 +31,18 @@ def test_mock_pipeline_builds_research_layers(bootstrapped):
     assert all(item.state not in {"加仓", "小幅加仓", "减仓"} for item in signals)
 
 
-def test_bootstrap_includes_market_context_step_with_truthful_default_unavailability(bootstrapped):
+def test_bootstrap_includes_market_context_step_generating_mock_observations(bootstrapped):
     context = bootstrapped["steps"]["refresh_market_context"]
     assert context["status"] == "succeeded"
-    assert context["configured"] == 6
-    assert context["eligible"] == 0
-    assert context["observed"] == 0
+    # 默认 registry 含 9 张卡片，其中 7 张启用（A股/美股大盘指数 + 半导体代理）；
+    # mock 环境下会为启用卡片生成 degraded mock 观测（demo 隔离，非真实数据）。
+    assert context["configured"] == 9
+    assert context["eligible"] == 7
+    assert context["observed"] == 7
     assert context["missing"] == 0
-    assert context["provider_calls"] == 0
-    assert context["mock"] == 0
-    assert context["degraded"] == 0
+    assert context["provider_calls"] == 1
+    assert context["mock"] == 7
+    assert context["degraded"] == 7
     assert context["unsupported"] == 0
 
 

@@ -23,8 +23,8 @@ def test_dashboard_api_and_static_assets(bootstrapped):
         assert payload["summary"]["instrument_count"] >= 9
         assert payload["instruments"]
         assert payload["instruments"][0]["quote"]["is_mock"] is True
-        assert len(payload["market_context"]) == 6
-        assert [row["display_order"] for row in payload["market_context"]] == list(range(1, 7))
+        assert len(payload["market_context"]) == 9
+        assert [row["display_order"] for row in payload["market_context"]] == list(range(1, 10))
         context = client.get("/api/market-context")
         assert context.status_code == 200
         assert context.json()["latest_view"] == payload["market_context"]
@@ -187,9 +187,12 @@ def test_report_service_generation_wires_bootstrap_market_context(bootstrapped, 
     try:
         result = ReportService().generate(db_session)
         html = Path(result["path"]).read_text(encoding="utf-8")
-        assert html.count('<article class="context-card">') == 6
+        assert html.count('<article class="context-card">') == 9
         for label in (
             "中国行业/板块广度与轮动",
+            "上证指数",
+            "沪深300",
+            "中证全指",
             "S&amp;P 500",
             "Nasdaq Composite",
             "Nasdaq-100",
@@ -201,7 +204,7 @@ def test_report_service_generation_wires_bootstrap_market_context(bootstrapped, 
         assert "+1.23%" in html
         assert "registry verified" in html
         # The remaining disabled cards keep their stable disabled rendering.
-        assert html.count("unavailable · disabled") == 5
+        assert html.count("unavailable · disabled") == 2
     finally:
         db_session.rollback()
 
@@ -218,7 +221,7 @@ def test_market_context_endpoint_requires_private_auth_when_enabled(bootstrapped
                 "/api/market-context", headers={"Authorization": "Bearer legacy-market-context-test-token-valid-1234567890"}
             )
             assert response.status_code == 200
-            assert len(response.json()["latest_view"]) == 6
+            assert len(response.json()["latest_view"]) == 9
     finally:
         settings.auth_enabled, settings.private_access_token = old_enabled, old_token
 

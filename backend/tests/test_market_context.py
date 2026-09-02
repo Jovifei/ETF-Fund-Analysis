@@ -120,19 +120,24 @@ def _insert_sqlite_snapshot(engine, **updates: object) -> None:
 def test_default_registry_has_exact_six_renderable_items_and_distinct_index_ids() -> None:
     registry = Settings(_env_file=None).load_market_context()
 
-    assert len(registry.items) == 6
+    assert len(registry.items) == 9
     assert {item.context_id for item in registry.items} == {
         "china-sector-breadth",
+        "cn-shanghai-composite",
+        "cn-csi300",
+        "cn-csi-all",
         "us-sp500",
         "us-nasdaq-composite",
         "us-nasdaq-100",
         "china-semiconductor-etf",
         "korea-semiconductor-etf",
     }
-    assert [item.display_order for item in registry.items] == list(range(1, 7))
-    assert len({item.display_order for item in registry.items}) == 6
+    assert [item.display_order for item in registry.items] == list(range(1, 10))
+    assert len({item.display_order for item in registry.items}) == 9
     assert registry.item_by_id("us-sp500").context_id != registry.item_by_id("us-nasdaq-composite").context_id
     assert all(item.label for item in registry.items)
+    # A股/美股大盘指数与可交易代理默认启用（真实数据源场景），板块广度与韩代保持禁用
+    assert all(item.enabled for item in registry.items if item.context_id != "china-sector-breadth" and item.context_id != "korea-semiconductor-etf")
 
 
 def test_registry_rejects_duplicate_context_ids_orders_and_unknown_fields() -> None:
@@ -259,16 +264,22 @@ def test_market_context_checks_use_portable_boolean_semantics() -> None:
 
 def test_default_china_and_korea_proxies_are_disabled_unverified_and_null() -> None:
     raw = json.loads(DEFAULT_CONFIG_PATH.read_text(encoding="utf-8"))
-    proxies = [item for item in raw["items"] if item["is_tradable_proxy"]]
-    assert {item["context_id"] for item in proxies} == {
+    proxies = {item["context_id"]: item for item in raw["items"] if item["is_tradable_proxy"]}
+    assert set(proxies) == {
         "china-semiconductor-etf",
         "korea-semiconductor-etf",
     }
-    for item in proxies:
-        assert item["enabled"] is False
-        assert item["verification_status"] == "unverified"
-        assert item["source_symbol"] is None
-        assert item["display_code"] is None
+    # China proxy 已启用并配置真实可交易 ETF（512480 半导体ETF）；Korea proxy 无数据源故保持禁用。
+    china = proxies["china-semiconductor-etf"]
+    assert china["enabled"] is True
+    assert china["verification_status"] == "verified"
+    assert china["source_symbol"] == "512480"
+    assert china["display_code"] == "512480.SH"
+    korea = proxies["korea-semiconductor-etf"]
+    assert korea["enabled"] is False
+    assert korea["verification_status"] == "unverified"
+    assert korea["source_symbol"] is None
+    assert korea["display_code"] is None
 
 
 def test_settings_market_context_loader_returns_immutable_typed_registry_and_rejects_bad_json(tmp_path: Path) -> None:
@@ -879,19 +890,41 @@ def test_source_priority_fails_closed_when_provider_order_cannot_honor_it() -> N
     engine.dispose()
 
 
-def test_market_context_refresh_keeps_default_registry_visible_without_provider_call() -> None:
+def test_market_context_refresh_keeps_disabled_registry_visible_without_provider_call() -> None:
     from app.services.market_context_service import MarketContextService
 
     engine, db = _context_session()
     provider = _ContextCountingProvider()
     service = MarketContextService(provider)
-    result = service.refresh(db)
+    disabled = RegistryConfig(
+        items=(
+            MarketContextItem(
+                context_id="china-sector-breadth",
+                label="板块广度",
+                region="China",
+                context_kind=ContextKind.SECTOR_BREADTH,
+                enabled=False,
+                display_order=1,
+                verification_status=VerificationStatus.UNVERIFIED,
+            ),
+            MarketContextItem(
+                context_id="us-sp500-disabled",
+                label="S&P 500 (disabled)",
+                region="United States",
+                context_kind=ContextKind.INDEX,
+                enabled=False,
+                display_order=2,
+                verification_status=VerificationStatus.UNVERIFIED,
+            ),
+        )
+    )
+    result = service.refresh(db, config=disabled)
     view = service.latest_view(db)
 
     assert result["requested"] == 0
     assert result["provider_calls"] == 0
     assert provider.calls == 0
-    assert len(view) == 6
+    assert len(view) == 2
     assert all(
         row["observation"] is None
         and row["status"] == FreshnessStatus.UNAVAILABLE.value
@@ -902,19 +935,54 @@ def test_market_context_refresh_keeps_default_registry_visible_without_provider_
     engine.dispose()
 
 
-def test_refresh_market_context_task_reports_bounded_counts_and_same_run_event() -> None:
+def test_refresh_market_context_task_reports_bounded_counts_and_same_run_event(tmp_path: Path) -> None:
     from app.services.market_context_service import MarketContextService
     from app.services.task_service import TaskService
 
     engine, db = _context_session()
-    settings = Settings(_env_file=None)
+    config_path = tmp_path / "market-context.json"
+    # 用一个全禁用的显式 registry，验证"无 eligible 卡片 → 不调用 provider、无观测"的语义
+    config_path.write_text(
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "context_id": "china-sector-breadth",
+                        "label": "板块广度",
+                        "region": "China",
+                        "context_kind": "sector_breadth",
+                        "source_symbol": None,
+                        "enabled": False,
+                        "display_order": 1,
+                        "source_priority": [],
+                        "freshness_rule": "provider_defined",
+                        "verification_status": "unverified",
+                    },
+                    {
+                        "context_id": "us-sp500-disabled",
+                        "label": "S&P 500 (disabled)",
+                        "region": "United States",
+                        "context_kind": "index",
+                        "source_symbol": None,
+                        "enabled": False,
+                        "display_order": 2,
+                        "source_priority": [],
+                        "freshness_rule": "provider_defined",
+                        "verification_status": "unverified",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    settings = Settings(_env_file=None, market_context_path=config_path)
     provider = _ContextCountingProvider()
     tasks = TaskService(settings)
     tasks.market_context = MarketContextService(provider, settings)
     result = tasks.run(db, "refresh_market_context", run_id="market-context-task")
 
     assert result["status"] == "succeeded"
-    assert result["configured"] == 6
+    assert result["configured"] == 2
     assert result["eligible"] == 0
     assert result["observed"] == 0
     assert result["inserted"] == 0
