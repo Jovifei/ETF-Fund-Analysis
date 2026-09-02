@@ -66,3 +66,33 @@
 - `ALLOW_MOCK_FALLBACK=false`（Mock 结果阻断 actionable，安全）
 
 首次跑通后的数据量：instruments 36 只、spot_quotes 35 条；K线/板块快照待 scheduler 后续周期补满。
+
+## 六、第二批接入（已完成，2026-09-02 续）
+
+### 概念板块新浪降级
+降级链扩展为 **东财 → 新浪 → 同花顺**：
+- 新浪 `stock_sector_spot(indicator='概念')` 返回 175 个概念，含板块涨跌幅 + 公司家数。
+  ⚠️ 参数必须是 `"概念"`（传 `"新浪概念"` 会触发 akshare 内部 `UnboundLocalError` bug）。
+- 比同花顺（50 个、无涨跌幅）多 125 个概念，且多了 pct_change。
+- 仍无「涨跌家数」字段（新浪/同花顺都不提供，仅东财有但被反爬），up/down 置空显示 "—"。
+
+### A股 / 美股大盘指数接入
+给 akshare 实现 `fetch_market_context`（index kind）：
+- A股：`stock_zh_index_daily` → 上证 `sh000001`、沪深300 `sh000300`、中证全指 `sh000985`
+- 美股：`index_us_stock_sina` → 标普500 `.INX`、纳指综合 `.IXIC`、纳指100 `.NDX`
+- 新浪日线无涨跌幅字段，用最后两根 close 推算 pct_change
+- 配置 `market_context.json` 新增 3 个 A股指数卡片 + 开启 3 个美股指数（enabled + source_symbol + verified）
+
+实测 6 指数全部真实落库（is_mock=false）。
+
+### 关键约束备忘
+- 非 mock 的 `MarketContextObservation` 必须 `verification_status=VERIFIED`，否则 `_validate_observations` 抛错。
+- 前端 `DEFAULT_MARKET_CONTEXT` 是兜底默认，后端新增卡片经 `mergeMarketContext` 的 extras 分支自动显示，无需改前端。
+- 最终数据量：行业 90 / 概念 175 / 全市场 1 / 大盘指数 6 / K线 20691。
+
+## 七、仍待补齐
+
+1. **概念板块涨跌家数**：免费层仍未根治（新浪/同花顺无涨跌家数，东财有但被反爬）。可选：解析东财行情中心概念列表接口、或用同花顺概念成分股 + 个股行情聚合涨跌家数。
+2. **tradable_proxy 卡片**：`china-semiconductor-etf` 等可交易代理卡片仍未接数据源。
+3. **Tushare 增强**：注册 token 后切 `composite`（tushare 优先）可提升板块涨跌家数与复权精度。
+
