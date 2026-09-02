@@ -1,0 +1,35 @@
+name: fix-sector-shellcheck-temp
+
+on:
+  push:
+    branches:
+      - feat/etf-1430-workbench-complete-local
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: ${{ !contains(github.event.head_commit.message, '[sector-shellcheck-fixed]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/etf-1430-workbench-complete-local
+      - name: Remove stale local declaration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/qualify_postgres.sh')
+          text = path.read_text()
+          old = '    local ready=0 i\n'
+          new = '    local ready=0\n'
+          if old not in text:
+              raise SystemExit('expected sector-branch declaration not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          git config user.name "integration-bot"
+          git config user.email "integration-bot@users.noreply.github.com"
+          git add scripts/qualify_postgres.sh
+          git commit -m "fix: remove stale postgres readiness variable [sector-shellcheck-fixed]"
+          git push origin HEAD:feat/etf-1430-workbench-complete-local
