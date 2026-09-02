@@ -7,6 +7,13 @@ import urllib.request
 from zoneinfo import ZoneInfo
 
 from app.core.config import Settings, get_settings
+from app.market_context.contracts import (
+    ContextKind,
+    FreshnessStatus,
+    MarketContextItem,
+    MarketContextObservation,
+    VerificationStatus,
+)
 from app.providers.base import MarketProvider, ProviderError
 from app.providers.types import BarRecord, InstrumentRecord, QuoteRecord, SectorRecord
 from app.utils.numbers import finite_or_none
@@ -306,11 +313,13 @@ class AKShareProvider(MarketProvider):
     def fetch_concept_snapshots(self, trade_date: date | None = None) -> list[SectorRecord]:
         """获取概念板块快照（K线企稳看板用）。
 
-        主源为 AKShare 东财概念板块（stock_board_concept_name_em），含 上涨家数/下跌家数；
-        东财不可达（部分网络被反爬断连）时降级到同花顺概念汇总
-        （stock_board_concept_summary_ths），该源仅提供 概念名称/驱动事件/龙头股/成分股数量，
-        无涨跌家数，故 up/down 置空（消费侧显示 "—"），total_count 用成分股数量填充。
-        两者都失败返回空列表（优雅降级，不抛异常）。
+        降级链：东财概念（stock_board_concept_name_em，含涨跌家数）→
+        新浪概念（stock_sector_spot(indicator='概念')，含板块涨跌幅 + 成分股数量，
+        无涨跌家数）→ 同花顺概念汇总（stock_board_concept_summary_ths，仅名称/驱动/
+        龙头/成分股数量）。三者都失败返回空列表（优雅降级，不抛异常）。
+
+        新浪/同花顺源均无涨跌家数，故 up/down 置空（消费侧显示 "—"），
+        total_count 用成分股数量（公司家数）填充，pct_change 用板块涨跌幅（新浪源有）。
 
         Returns:
             SectorRecord 列表，board_type="concept"；无数据返回 []。
@@ -325,8 +334,19 @@ class AKShareProvider(MarketProvider):
                     logger.info("concept snapshots: %d rows (em)", len(result))
                     return result
             except Exception as exc:
-                logger.warning("concept snapshots em failed, falling back to ths: %s", exc)
-        # 同花顺概念汇总降级（无涨跌家数）
+                logger.warning("concept snapshots em failed, falling back: %s", exc)
+        # 新浪概念降级（含板块涨跌幅 + 公司家数，无涨跌家数）
+        sina = getattr(self.ak, "stock_sector_spot", None)
+        if sina is not None:
+            try:
+                frame = sina(indicator="概念")
+                parsed = self._parse_sina_concept_frame(frame, target)
+                if parsed:
+                    logger.info("concept snapshots: %d rows (sina)", len(parsed))
+                    return parsed
+            except Exception as exc:
+                logger.warning("concept snapshots sina failed, falling back to ths: %s", exc)
+        # 同花顺概念汇总降级（无涨跌家数、无涨跌幅）
         ths = getattr(self.ak, "stock_board_concept_summary_ths", None)
         if ths is None:
             logger.info("concept source unavailable (akshare version too old)")
@@ -357,6 +377,109 @@ class AKShareProvider(MarketProvider):
             )
         logger.info("concept snapshots: %d rows (ths)", len(result))
         return result
+
+    def _parse_sina_concept_frame(self, frame: Any, target: date) -> list[SectorRecord]:
+        """解析新浪概念板块 frame（stock_sector_spot indicator='概念'）。
+
+        列：板块/公司家数/涨跌幅/...（板块涨跌幅为百分比数值，非涨跌家数）。
+        """
+        result: list[SectorRecord] = []
+        for row in self._records(frame):
+            name = str(row.get("板块") or row.get("概念名称") or "").strip()
+            if not name:
+                continue
+            total = finite_or_none(row.get("公司家数") or row.get("成分股数量")) or 0
+            result.append(
+                SectorRecord(
+                    sector_name=name,
+                    trade_date=target,
+                    up_count=0,
+                    down_count=0,
+                    flat_count=0,
+                    total_count=int(total),
+                    pct_change=finite_or_none(row.get("涨跌幅")),
+                    source=self.name,
+                    board_type="concept",
+                )
+            )
+        return result
+
+    def fetch_market_context(
+        self, requests: list[MarketContextItem]
+    ) -> list[MarketContextObservation]:
+        """为 enabled 的大盘指数 context 卡片拉取真实行情（免费新浪源）。
+
+        source_symbol 约定：
+          - A股指数：新浪代码，如 "sh000001"(上证)、"sh000300"(沪深300)、"sh000985"(中证全指)，
+            走 stock_zh_index_daily；
+          - 美股指数：新浪代码，如 ".INX"(标普500)、".IXIC"(纳指综合)、".NDX"(纳指100)，
+            走 index_us_stock_sina。
+
+        仅处理 context_kind == index；tradable_proxy / sector_breadth 暂不支持，
+        返回时跳过（调用方按缺失处理）。
+        """
+        fetched_at = datetime.now(self.tz)
+        observations: list[MarketContextObservation] = []
+        for request in requests:
+            if request.context_kind is not ContextKind.INDEX:
+                continue
+            symbol = (request.source_symbol or "").strip()
+            if not symbol:
+                continue
+            try:
+                obs = self._fetch_index_observation(request, symbol, fetched_at)
+            except Exception as exc:
+                logger.warning("market context index %s (%s) failed: %s", request.context_id, symbol, exc)
+                continue
+            if obs is not None:
+                observations.append(obs)
+        return observations
+
+    def _fetch_index_observation(
+        self, request: MarketContextItem, symbol: str, fetched_at: datetime
+    ) -> MarketContextObservation | None:
+        """拉取单个指数最新收盘并构造 observation。"""
+        if symbol.startswith("."):
+            function = getattr(self.ak, "index_us_stock_sina", None)
+            frame = function(symbol=symbol) if function is not None else None
+        else:
+            function = getattr(self.ak, "stock_zh_index_daily", None)
+            frame = function(symbol=symbol) if function is not None else None
+        if frame is None or len(frame) == 0:
+            return None
+        records = self._records(frame)
+        last = records[-1]
+        close = finite_or_none(last.get("close") or last.get("收盘"))
+        if close is None:
+            return None
+        pct = finite_or_none(last.get("pct_change") or last.get("涨跌幅"))
+        if pct is None and len(records) >= 2:
+            prev_close = finite_or_none(records[-2].get("close") or records[-2].get("收盘"))
+            if prev_close:
+                pct = round((close - prev_close) / prev_close * 100, 4)
+        source_date = last.get("date") or last.get("日期")
+        try:
+            if hasattr(source_date, "date"):
+                source_ts = datetime.combine(source_date.date(), datetime.min.time(), tzinfo=self.tz)
+            else:
+                source_ts = datetime.strptime(str(source_date)[:10], "%Y-%m-%d").replace(tzinfo=self.tz)
+        except Exception:
+            source_ts = fetched_at.replace(second=0, microsecond=0)
+        # 指数最新收盘即为观察值（点位），today_pct_change 缺省为 None 时用 0 占位
+        # （新浪指数日线接口通常不含当日涨跌幅，消费侧 level 用 observed_value）。
+        return MarketContextObservation(
+            context_id=request.context_id,
+            source_symbol=symbol,
+            observed_value=close,
+            today_pct_change=pct if pct is not None else 0.0,
+            price=close,
+            source=self.name,
+            source_timestamp=source_ts,
+            fetched_at=fetched_at,
+            freshness=FreshnessStatus.STALE,
+            verification_status=VerificationStatus.VERIFIED,
+            is_mock=False,
+        )
 
     def fetch_market_breadth(self, trade_date: date | None = None) -> SectorRecord | None:
         """获取全市场涨跌家数（宽度），作为指数 ETF 的广度参考。

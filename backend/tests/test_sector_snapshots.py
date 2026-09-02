@@ -387,9 +387,12 @@ def _tencent_payload(pct: float) -> str:
 
 def _provider_no_init(fake_ak):
     """绕过 __init__ 构造 AKShareProvider 实例（单元测试用，不触发真实网络/watchlist）。"""
+    from zoneinfo import ZoneInfo
+
     prov = AKShareProvider.__new__(AKShareProvider)
     prov.name = "akshare"
     prov.ak = fake_ak
+    prov.tz = ZoneInfo("Asia/Shanghai")
     return prov
 
 
@@ -469,12 +472,32 @@ def test_akshare_concept_uses_eastmoney_when_available():
     assert (rows[0].up_count, rows[0].down_count) == (300, 80)
 
 
-def test_akshare_concept_falls_back_to_ths_without_breadth():
-    """东财概念被断时降级同花顺：有成分股数量但无涨跌家数，up/down 记 0。"""
+def test_akshare_concept_falls_back_to_sina_with_pct_change():
+    """东财概念被断时降级新浪概念：含公司家数 + 板块涨跌幅，无涨跌家数。"""
     from unittest.mock import MagicMock
 
     fake_ak = MagicMock()
     fake_ak.stock_board_concept_name_em.side_effect = RuntimeError("em-down")
+    fake_ak.stock_sector_spot.return_value = _frame(
+        [{"板块": "华为汽车", "公司家数": 97, "涨跌幅": -0.529}]
+    )
+    prov = _provider_no_init(fake_ak)
+    rows = prov.fetch_concept_snapshots(trade_date=date(2026, 8, 31))
+    assert len(rows) == 1
+    assert rows[0].sector_name == "华为汽车"
+    assert rows[0].board_type == "concept"
+    assert rows[0].total_count == 97
+    assert rows[0].pct_change == -0.529
+    assert (rows[0].up_count, rows[0].down_count) == (0, 0)
+
+
+def test_akshare_concept_falls_back_to_ths_without_breadth():
+    """东财与新浪概念都失败时降级同花顺：有成分股数量但无涨跌家数/涨跌幅。"""
+    from unittest.mock import MagicMock
+
+    fake_ak = MagicMock()
+    fake_ak.stock_board_concept_name_em.side_effect = RuntimeError("em-down")
+    fake_ak.stock_sector_spot.side_effect = RuntimeError("sina-down")
     fake_ak.stock_board_concept_summary_ths.return_value = _frame(
         [{"概念名称": "MLCC概念", "成分股数量": 37, "驱动事件": "x", "龙头股": "y"}]
     )
@@ -488,11 +511,12 @@ def test_akshare_concept_falls_back_to_ths_without_breadth():
 
 
 def test_akshare_concept_returns_empty_when_all_fail():
-    """概念两源都失败时返回空列表（优雅降级，不抛异常）。"""
+    """概念三源都失败时返回空列表（优雅降级，不抛异常）。"""
     from unittest.mock import MagicMock
 
     fake_ak = MagicMock()
     fake_ak.stock_board_concept_name_em.side_effect = RuntimeError("em-down")
+    fake_ak.stock_sector_spot.side_effect = RuntimeError("sina-down")
     fake_ak.stock_board_concept_summary_ths.side_effect = RuntimeError("ths-down")
     prov = _provider_no_init(fake_ak)
     assert prov.fetch_concept_snapshots(trade_date=date(2026, 8, 31)) == []
@@ -522,4 +546,71 @@ def test_akshare_daily_bars_falls_back_to_sina():
     assert rows[0].close == 3.91
     # 新浪源无涨跌幅字段，pct_change 记 None，但 pre_close 由前一日 close 回填
     assert rows[1].pre_close == 3.91
+
+
+# --------------------------------------------------------------------------
+# AKShare provider：大盘指数 market_context 拉取
+# --------------------------------------------------------------------------
+
+def test_akshare_fetch_market_context_index():
+    """index 卡片应返回真实点位观测，且跳过非 index 卡片。"""
+    from unittest.mock import MagicMock
+
+    from app.market_context.contracts import ContextKind, MarketContextItem
+
+    fake_ak = MagicMock()
+    fake_ak.stock_zh_index_daily.return_value = _frame(
+        [
+            {"date": "2026-08-29", "close": 3900.0},
+            {"date": "2026-09-01", "close": 3941.39},
+        ]
+    )
+    fake_ak.index_us_stock_sina.return_value = _frame(
+        [
+            {"date": "2026-08-29", "close": 7600.0},
+            {"date": "2026-09-01", "close": 7631.47},
+        ]
+    )
+    prov = _provider_no_init(fake_ak)
+
+    index_item = MarketContextItem(
+        context_id="cn-shanghai-composite",
+        label="上证指数",
+        region="China",
+        context_kind=ContextKind.INDEX,
+        source_symbol="sh000001",
+        enabled=True,
+        display_order=1,
+        verification_status="verified",
+    )
+    us_item = MarketContextItem(
+        context_id="us-sp500",
+        label="S&P 500",
+        region="United States",
+        context_kind=ContextKind.INDEX,
+        source_symbol=".INX",
+        enabled=True,
+        display_order=2,
+        verification_status="verified",
+    )
+    non_index = MarketContextItem(
+        context_id="china-sector-breadth",
+        label="板块广度",
+        region="China",
+        context_kind=ContextKind.SECTOR_BREADTH,
+        source_symbol=None,
+        enabled=True,
+        display_order=3,
+        verification_status="verified",
+    )
+
+    obs = prov.fetch_market_context([index_item, us_item, non_index])
+    assert len(obs) == 2  # 跳过 sector_breadth
+    by_id = {o.context_id: o for o in obs}
+    assert by_id["cn-shanghai-composite"].observed_value == 3941.39
+    # 新浪日线无涨跌幅字段，用最后两根 close 推算：3941.39/3900 - 1 ≈ 1.06%
+    assert round(by_id["cn-shanghai-composite"].today_pct_change, 2) == 1.06
+    assert by_id["us-sp500"].observed_value == 7631.47
+    assert by_id["us-sp500"].is_mock is False
+
 
