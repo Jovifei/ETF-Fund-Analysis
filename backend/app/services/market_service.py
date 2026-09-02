@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, timedelta
 from uuid import uuid4
 
@@ -7,11 +8,13 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.models import DailyBar, Instrument, QuoteSnapshot
-from app.providers.base import MarketProvider
+from app.models import DailyBar, Instrument, QuoteSnapshot, SectorSnapshot
+from app.providers.base import MarketProvider, ProviderError
 from app.services.audit_service import AuditTimer, record_provider_audit
 from app.services.event_service import emit_event
 from app.utils.hashing import stable_hash
+
+logger = logging.getLogger(__name__)
 
 
 class MarketService:
@@ -274,3 +277,101 @@ class MarketService:
         cutoff = datetime.now(self.settings.timezone) - timedelta(days=keep_days)
         result = db.execute(delete(QuoteSnapshot).where(QuoteSnapshot.quote_time < cutoff))
         return int(result.rowcount or 0)
+
+    def refresh_sector_snapshots(self, db: Session, run_id: str | None = None) -> dict:
+        """回填行业 / 概念板块涨跌家数与全市场宽度快照（K线企稳看板用）。
+
+        三类数据分别取自 provider 的：
+          - fetch_sector_snapshots   → board_type="industry"（行业板块）
+          - fetch_concept_snapshots  → board_type="concept"（概念板块）
+          - fetch_market_breadth     → board_type="market"（全市场宽度，单条）
+
+        任一类接口不可达（如网络受限）时仅该类别降级为空并告警，不抛出阻断主流程；
+        由调用方在消费侧决定对应列显示 "—"。
+        """
+        run_id = run_id or uuid4().hex
+        timer = AuditTimer()
+
+        # (method_name, board_type, is_single) —— is_single: market_breadth 返回单条而非列表
+        board_specs = [
+            ("fetch_sector_snapshots", "industry", False),
+            ("fetch_concept_snapshots", "concept", False),
+            ("fetch_market_breadth", "market", True),
+        ]
+
+        per_board: dict[str, dict[str, int | str | None]] = {}
+        inserted = 0
+        errors: list[str] = []
+        for method_name, board_type, is_single in board_specs:
+            try:
+                if not hasattr(self.provider, method_name):
+                    raise ProviderError(f"provider 不支持 {method_name}")
+                result = getattr(self.provider, method_name)()
+                records = [result] if is_single else (result or [])
+            except Exception as exc:
+                errors.append(f"{board_type}:{type(exc).__name__}")
+                logger.warning("sector snapshot refresh [%s] failed (degraded to empty): %s", board_type, exc)
+                per_board[board_type] = {"inserted": 0, "error": type(exc).__name__}
+                continue
+
+            board_inserted = 0
+            for item in records:
+                existing = db.scalar(
+                    select(SectorSnapshot).where(
+                        SectorSnapshot.sector_name == item.sector_name,
+                        SectorSnapshot.trade_date == item.trade_date,
+                        SectorSnapshot.source == item.source,
+                        SectorSnapshot.board_type == item.board_type,
+                    )
+                )
+                if existing:
+                    existing.up_count = item.up_count
+                    existing.down_count = item.down_count
+                    existing.flat_count = item.flat_count
+                    existing.total_count = item.total_count
+                    existing.pct_change = item.pct_change
+                    existing.board_type = item.board_type
+                    existing.fetched_at = datetime.now(self.settings.timezone)
+                    existing.quality_hash = stable_hash(item.to_dict())
+                else:
+                    db.add(
+                        SectorSnapshot(
+                            sector_name=item.sector_name,
+                            trade_date=item.trade_date,
+                            up_count=item.up_count,
+                            down_count=item.down_count,
+                            flat_count=item.flat_count,
+                            total_count=item.total_count,
+                            pct_change=item.pct_change,
+                            source=item.source,
+                            board_type=item.board_type,
+                            fetched_at=datetime.now(self.settings.timezone),
+                            quality_hash=stable_hash(item.to_dict()),
+                        )
+                    )
+                board_inserted += 1
+            inserted += board_inserted
+            per_board[board_type] = {"inserted": board_inserted, "error": None}
+
+        db.flush()
+        emit_event(
+            db,
+            "sector_snapshots.updated",
+            {"inserted": inserted, "run_id": run_id, "boards": per_board},
+        )
+        if self.persist_provider_audits:
+            record_provider_audit(
+                db,
+                run_id=run_id,
+                operation="refresh_sector_snapshots",
+                provider=self.provider,
+                result={"inserted": inserted, "boards": per_board},
+                error=(errors[0] if errors else None),
+                latency_ms=timer.elapsed_ms,
+            )
+        return {
+            "run_id": run_id,
+            "inserted": inserted,
+            "boards": per_board,
+            "error": (errors[0] if errors else None),
+        }

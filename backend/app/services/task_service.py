@@ -152,6 +152,7 @@ class TaskService:
             "refresh_news",
             "analyze_news",
             "refresh_signals",
+            "refresh_sector_snapshots",
             "refresh_decision_board",
             "generate_report",
             "validate_forecasts",
@@ -262,6 +263,8 @@ class TaskService:
             )
         if task_name == "refresh_signals":
             return self.signals.refresh_all(db, run_id=run_id)
+        if task_name == "refresh_sector_snapshots":
+            return self.market.refresh_sector_snapshots(db, run_id=run_id)
         if task_name == "refresh_decision_board":
             input_result = None
             if bool(kwargs.get("refresh_input", False)):
@@ -341,6 +344,11 @@ class TaskService:
                     "failure_class": _failure_class(exc),
                 }
             results["refresh_signals"] = self.signals.refresh_all(db, run_id=run_id)
+            try:
+                results["refresh_sector_snapshots"] = self.market.refresh_sector_snapshots(db, run_id=run_id)
+            except Exception as exc:
+                failed_steps.append("refresh_sector_snapshots")
+                results["refresh_sector_snapshots"] = {"status": "failed", "failure_class": _failure_class(exc)}
             if task_name == "full_pipeline" or bool(kwargs.get("report", True)):
                 results["generate_report"] = self.reports.generate(db, run_id=run_id)
             return {

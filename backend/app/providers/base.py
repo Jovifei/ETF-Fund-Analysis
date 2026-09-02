@@ -4,7 +4,13 @@ from abc import ABC, abstractmethod
 from datetime import date
 
 from app.market_context.contracts import MarketContextItem, MarketContextObservation
-from app.providers.types import BarRecord, InstrumentRecord, NewsRecord, QuoteRecord
+from app.providers.types import (
+    BarRecord,
+    InstrumentRecord,
+    NewsRecord,
+    QuoteRecord,
+    SectorRecord,
+)
 
 
 class ProviderError(RuntimeError):
@@ -62,3 +68,19 @@ class MarketProvider(ABC):
 
     def is_trade_day(self, day: date) -> bool:
         return day.weekday() < 5
+
+    # ---- 板块涨跌家数（K线企稳看板）----
+    # 行业/概念板块与全市场宽度分三个能力，各自可独立降级：
+    # 不支持的 provider 默认抛 CapabilityUnavailable，由调用方决定是否跳过。
+
+    def fetch_sector_snapshots(self, trade_date: date | None = None) -> list[SectorRecord]:
+        """行业板块涨跌家数快照。"""
+        raise CapabilityUnavailable("sector snapshots unavailable for this provider")
+
+    def fetch_concept_snapshots(self, trade_date: date | None = None) -> list[SectorRecord]:
+        """概念板块涨跌家数快照。"""
+        raise CapabilityUnavailable("concept snapshots unavailable for this provider")
+
+    def fetch_market_breadth(self, trade_date: date | None = None) -> SectorRecord | None:
+        """全市场涨跌家数（宽度）。返回单条 board_type='market' 的快照，无数据返回 None。"""
+        raise CapabilityUnavailable("market breadth unavailable for this provider")

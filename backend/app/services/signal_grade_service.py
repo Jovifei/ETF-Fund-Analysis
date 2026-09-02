@@ -6,14 +6,14 @@ Does not mutate production signal thresholds, holdings, or orders.
 
 from __future__ import annotations
 
-from collections import defaultdict
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import Settings, get_settings
+from app.core.config import PROJECT_ROOT, Settings, get_settings
 from app.models import ForecastSnapshot, IndicatorSnapshot, Instrument, QuoteSnapshot
+from app.services.kline_stabilization_service import KlineStabilizationService
 from app.utils.numbers import finite_or_none
 
 GRADE_ORDER = ("可加仓", "可入场", "可试探", "观望", "减仓")
@@ -25,12 +25,6 @@ GRADE_REASONS = {
     "减仓": "KDJ死叉 · MACD将死叉 · 多重看空共振",
     "数据异常": "核心指标缺失，停止分级",
 }
-
-
-def percent_points_to_ratio(value: object) -> float | None:
-    """QuoteSnapshot persists provider percentage points; grade logic uses ratios."""
-    number = finite_or_none(value)
-    return round(number / 100.0, 12) if number is not None else None
 
 
 def _f(values: dict[str, Any], key: str) -> float | None:
@@ -250,6 +244,109 @@ class SignalGradeService:
         self.strategy = self.settings.load_strategy()
         self.config = dict(self.strategy.get("signal_grade", {}))
         self.version = str(self.strategy.get("signal_grade_version", "signal-grade-v0.1.0"))
+        # 行业/概念/全市场板块口径与「K线企稳分析看板」共用同一份配置，
+        # 保证两个只读研究视图的板块数据完全一致。
+        self.workbench_config = self._load_workbench_config()
+
+    # ---------- 板块配置与查询 ----------
+
+    @staticmethod
+    def _load_workbench_config() -> dict[str, Any]:
+        """加载 config/etf_1430_workbench.json（与 K线企稳分析看板同一份）。
+
+        文件缺失或非法时返回空字典，调用方按"无板块数据"处理，不抛异常。
+        """
+        import json
+
+        path = PROJECT_ROOT / "config" / "etf_1430_workbench.json"
+        if not path.is_file():
+            return {}
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return raw if isinstance(raw, dict) else {}
+
+    def _alias(self, key: str) -> dict[str, str]:
+        """读取主题→板块名 的显式映射表（去掉下划线开头的注释键）。"""
+        raw = self.workbench_config.get(key) or {}
+        if not isinstance(raw, dict):
+            return {}
+        return {k: str(v) for k, v in raw.items() if not k.startswith("_") and isinstance(v, str)}
+
+    def _broad_market_themes(self) -> set[str]:
+        """需要展示全市场宽度的宽基/指数主题（同时匹配 theme_l1 与 theme_l2）。"""
+        raw = self.workbench_config.get("broad_market_themes") or []
+        if not isinstance(raw, list):
+            return set()
+        return {str(t) for t in raw if isinstance(t, str)}
+
+    def _sector_for(self, db: Session, instrument: Instrument) -> dict[str, Any]:
+        """按标的主题解析板块涨跌家数，口径与 K线企稳分析看板一致。
+
+        优先级：
+        1. 宽基/指数主题（config.broad_market_themes）→ 全市场涨跌家数（board_type='market'）；
+        2. 行业板块（board_type='industry'，theme 经 sector_alias 映射后精确命中）；
+        3. 概念板块（board_type='concept'，theme 经 concept_alias 映射后精确命中）；
+        4. 都没有 → up/down 为 None，note 明确说明缺少哪类数据。
+
+        匹配一律精确，不用无关板块兜底（避免误导判断）。
+        """
+        broad_themes = self._broad_market_themes()
+        if instrument.theme_l1 in broad_themes or instrument.theme_l2 in broad_themes:
+            breadth = KlineStabilizationService._market_breadth(db)
+            if breadth is not None:
+                return {
+                    "label": f"全市场 {breadth['up']}涨 {breadth['down']}跌",
+                    "up": breadth["up"],
+                    "down": breadth["down"],
+                    "note": f"全市场涨跌家数 · {breadth['trade_date']} · 源 {breadth.get('source')}",
+                    "sector_name": breadth.get("sector_name"),
+                    "board_type": "market",
+                }
+            return {
+                "label": "未验证 / 不可用",
+                "up": None,
+                "down": None,
+                "note": "无全市场涨跌家数",
+                "sector_name": None,
+                "board_type": "market",
+            }
+
+        industry = KlineStabilizationService._sector_state(
+            db, instrument, self._alias("sector_alias"), board_type="industry"
+        )
+        if industry.get("up") is not None:
+            return {
+                "label": f"{industry['sector_name']} {industry['up']}涨 {industry['down']}跌",
+                "up": industry["up"],
+                "down": industry["down"],
+                "note": f"行业板块 · {industry['trade_date']}",
+                "sector_name": industry.get("sector_name"),
+                "board_type": "industry",
+            }
+
+        concept = KlineStabilizationService._sector_state(
+            db, instrument, self._alias("concept_alias"), board_type="concept"
+        )
+        if concept.get("up") is not None:
+            return {
+                "label": f"{concept['sector_name']} {concept['up']}涨 {concept['down']}跌",
+                "up": concept["up"],
+                "down": concept["down"],
+                "note": f"概念板块 · {concept['trade_date']}",
+                "sector_name": concept.get("sector_name"),
+                "board_type": "concept",
+            }
+
+        return {
+            "label": "未验证 / 不可用",
+            "up": None,
+            "down": None,
+            "note": "无对应行业/概念板块数据",
+            "sector_name": None,
+            "board_type": None,
+        }
 
     def build(self, db: Session) -> dict[str, Any]:
         instruments = db.scalars(
@@ -260,15 +357,12 @@ class SignalGradeService:
         latest_quotes = self._latest_quotes(db)
         latest_forecasts = self._latest_horizon_forecasts(db, 1)
 
-        theme_moves: dict[str, list[float]] = defaultdict(list)
         classified: list[dict[str, Any]] = []
         for instrument in instruments:
             indicator = latest_indicators.get(instrument.id)
             values = dict(indicator.values_json) if indicator and indicator.values_json else {}
             quote = latest_quotes.get(instrument.id)
-            pct = percent_points_to_ratio(quote.pct_change) if quote else _f(values, "return_1d")
-            if pct is not None:
-                theme_moves[instrument.theme_l2 or instrument.theme_l1 or "未分类"].append(pct)
+            pct = finite_or_none(quote.pct_change) if quote else _f(values, "return_1d")
             previous = previous_indicators.get(instrument.id)
             row = classify_row(values, pct_change=pct, previous=previous, cfg=self.config)
             forecast = latest_forecasts.get(instrument.id)
@@ -288,26 +382,14 @@ class SignalGradeService:
                 "quote_is_mock": self.settings.market_provider == "mock",
                 "research_only": True,
                 "actionable": False,
+                # 板块涨跌家数：复用 K线企稳分析看板的真实板块口径
+                # （全市场宽度 / 行业板块 / 概念板块）。
+                # 旧实现是"池内同主题 ETF 互比"，因每主题仅 1 只 ETF 而恒为不可用。
+                "sector": self._sector_for(db, instrument),
             })
-
-        for row in classified:
-            theme = row["theme_l2"] or row["theme_l1"] or "未分类"
-            moves = theme_moves.get(theme) or []
-            if len(moves) < 2:
-                row["sector"] = {"label": "未验证 / 不可用", "up": None, "down": None, "note": "无全市场涨跌家数"}
-            else:
-                up = sum(1 for item in moves if item > 0)
-                down = sum(1 for item in moves if item < 0)
-                row["sector"] = {
-                    "label": f"池内同主题 {up}涨 {down}跌",
-                    "up": up,
-                    "down": down,
-                    "note": "仅统计本池同主题 ETF，非全市场板块",
-                }
 
         groups = {key: [row for row in classified if row["grade"] == key] for key in GRADE_ORDER}
         anomaly = [row for row in classified if row["grade"] == "数据异常"]
-        groups["数据异常"] = anomaly
         counts = {key: len(items) for key, items in groups.items()}
         counts["数据异常"] = len(anomaly)
         up_count = sum(1 for row in classified if (row["pct_change"] or 0) > 0)

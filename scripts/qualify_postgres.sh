@@ -51,7 +51,6 @@
 #     only ever point it at a disposable instance.
 set -euo pipefail
 umask 077   # dumps may contain real data in --db-url mode; artifacts stay 0600
-script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 cd "$(dirname "$0")/.."
 
 # --------------------------------------------------------------------------
@@ -62,8 +61,8 @@ PG_IMAGE="postgres:16-alpine"
 HOST_PORT="15432"
 PG_USER="qualify"
 PG_DB="fund_qualify"
-EXPECTED_HEAD="d5e6f7a8b9c0"
-DOWNGRADE_REV="c4d5e6f7a8b9"
+EXPECTED_HEAD="f1a2b3c4d5e6"
+DOWNGRADE_REV="e7f8a9b0c1d2"
 PROD_DB_NAME="fund_decision"   # docker-compose.yml POSTGRES_DB default
 REPORT_DIR="deployment_reports"
 READY_TIMEOUT_SECONDS=60
@@ -394,7 +393,7 @@ start_isolated_pg_step() {
     [ -n "$cid" ] || { log "ERROR: docker run failed"; return 1; }
 
     local ready=0
-    for i in $(seq 1 "$READY_TIMEOUT_SECONDS"); do
+    for _ in $(seq 1 "$READY_TIMEOUT_SECONDS"); do
         if docker exec "$CONTAINER" pg_isready -U "$PG_USER" -d "$PG_DB" >/dev/null 2>&1; then
             ready=1
             break
@@ -453,8 +452,10 @@ SQL
     require_number "$SEED_RS_BEFORE" || return 1
     SEED_EL_BEFORE="$(psql_scalar "SELECT count(*) FROM event_log WHERE event_type = 'qualify.seed'")"
     require_number "$SEED_EL_BEFORE" || return 1
-    [ "$SEED_RS_BEFORE" -ge 1 ] && [ "$SEED_EL_BEFORE" -ge 1 ] \
-        || { log "ERROR: seed rows missing (runtime_settings=$SEED_RS_BEFORE, event_log=$SEED_EL_BEFORE)"; return 1; }
+    if ! { [ "$SEED_RS_BEFORE" -ge 1 ] && [ "$SEED_EL_BEFORE" -ge 1 ]; }; then
+        log "ERROR: seed rows missing (runtime_settings=$SEED_RS_BEFORE, event_log=$SEED_EL_BEFORE)"
+        return 1
+    fi
     log "seeded runtime_settings=$SEED_RS_BEFORE, event_log=$SEED_EL_BEFORE"
     end_step
 }
@@ -540,8 +541,10 @@ verify_integrity_step() {
     require_number "$SEED_RS_AFTER" || return 1
     SEED_EL_AFTER="$(psql_scalar "SELECT count(*) FROM event_log WHERE event_type = 'qualify.seed'")"
     require_number "$SEED_EL_AFTER" || return 1
-    [ "$SEED_RS_AFTER" = "$SEED_RS_BEFORE" ] && [ "$SEED_EL_AFTER" = "$SEED_EL_BEFORE" ] \
-        || { log "ERROR: seeded rows did not survive restore (runtime_settings=$SEED_RS_AFTER/$SEED_RS_BEFORE, event_log=$SEED_EL_AFTER/$SEED_EL_BEFORE)"; return 1; }
+    if ! { [ "$SEED_RS_AFTER" = "$SEED_RS_BEFORE" ] && [ "$SEED_EL_AFTER" = "$SEED_EL_BEFORE" ]; }; then
+        log "ERROR: seeded rows did not survive restore (runtime_settings=$SEED_RS_AFTER/$SEED_RS_BEFORE, event_log=$SEED_EL_AFTER/$SEED_EL_BEFORE)"
+        return 1
+    fi
     log "seed rows survived restore: runtime_settings=$SEED_RS_AFTER, event_log=$SEED_EL_AFTER"
     log "integrity verification: PASSED"
     end_step
@@ -550,6 +553,7 @@ verify_integrity_step() {
 # --------------------------------------------------------------------------
 # Reporting
 # --------------------------------------------------------------------------
+# shellcheck disable=SC2317 # invoked through report/EXIT paths
 write_json() {
     local total_ms result
     total_ms=$(( $(now_ms) - RUN_START ))
@@ -572,6 +576,7 @@ write_json() {
     log "json report written: $JSON_OUT"
 }
 
+# shellcheck disable=SC2317 # invoked through report/EXIT paths
 print_summary() {
     local total_ms
     total_ms=$(( $(now_ms) - RUN_START ))
@@ -596,6 +601,7 @@ print_summary() {
     log "================================================================"
 }
 
+# shellcheck disable=SC2317 # invoked through report/EXIT paths
 on_exit() {
     FINAL_RC=$?
     trap - EXIT

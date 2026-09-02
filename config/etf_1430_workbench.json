@@ -1,5 +1,5 @@
 {
-  "version": "etf-1430-workbench-v0.1.0",
+  "version": "etf-1430-workbench-v0.1.3",
   "decision_timezone": "Asia/Shanghai",
   "decision_window": {
     "start": "14:20",
@@ -11,6 +11,31 @@
   "historical_candles": 160,
   "scenario_candles": 10,
   "news_lookback_hours": 72,
+  "sector_alias": {
+    "_comment": "主题标签 → 行业板块名 的显式映射表，用于把自选标的的 theme_l1/theme_l2 对应到板块涨跌家数快照。只登记人工确认过的映射，不做模糊匹配；未登记的主题（宽基、创业板、科创50 等跨行业指数）没有对应行业板块，看板显示 —。",
+    "国防军工": "军工装备",
+    "军工": "军工装备",
+    "医疗": "医疗器械",
+    "医药": "医疗器械",
+    "半导体": "半导体",
+    "原油": "油气开采及服务",
+    "新能源车": "电池",
+    "黄金": "贵金属"
+  },
+  "concept_alias": {
+    "_comment": "主题标签 → 概念板块名 的显式映射表（与 sector_alias 平行）。生产环境应使用 AKShare stock_board_concept_name_em 返回的概念板块名；此处示例值对应 mock 与东财常见命名。未登记的主题不显示概念板块（前端 —）。",
+    "半导体": "芯片",
+    "人工智能": "人工智能",
+    "新能源车": "新能源汽车",
+    "机器人": "机器人",
+    "国防军工": "军工",
+    "军工": "军工",
+    "医药": "医药",
+    "医疗": "医药",
+    "创新药": "医药",
+    "黄金": "黄金概念"
+  },
+  "broad_market_themes": ["宽基", "创业板", "科创50"],
   "weights": {
     "trend": 0.22,
     "momentum": 0.20,

@@ -23,3 +23,6 @@ vendor/src/
 coverage.xml
 htmlcov/
 backend/*.egg-info/
+
+# WorkBuddy workspace memory (local only)
+.workbuddy/

@@ -454,6 +454,40 @@ class QuoteSnapshot(Base):
     quality_hash: Mapped[str] = mapped_column(String(64), index=True)
 
 
+class SectorSnapshot(Base):
+    """板块涨跌家数快照（K线企稳看板用）。
+
+    由 AKShare 板块接口（行业 stock_board_industry_* / 概念 stock_board_concept_*）与
+    全市场行情回填，记录某个板块在某交易日的上涨/下跌成分股家数，用于看板
+    "390涨/142跌/跌比27%"展示。board_type 区分数据类别：
+      - "industry" 行业板块（如 半导体、贵金属）
+      - "concept"  概念板块（如 芯片概念、人工智能）
+      - "market"    全市场宽度（沪深京A 涨跌家数，单条 sector_name="全市场"）
+    """
+
+    __tablename__ = "sector_snapshots"
+    __table_args__ = (
+        Index("ix_sector_board_date", "board_type", "sector_name", "trade_date"),
+        UniqueConstraint(
+            "sector_name", "trade_date", "source", "board_type",
+            name="uq_sector_name_date_source",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    board_type: Mapped[str] = mapped_column(String(16), default="industry")
+    sector_name: Mapped[str] = mapped_column(String(64), index=True)
+    trade_date: Mapped[date] = mapped_column(Date, index=True)
+    up_count: Mapped[int] = mapped_column(Integer, default=0)
+    down_count: Mapped[int] = mapped_column(Integer, default=0)
+    flat_count: Mapped[int] = mapped_column(Integer, default=0)
+    total_count: Mapped[int] = mapped_column(Integer, default=0)
+    pct_change: Mapped[float | None] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String(32), default="akshare")
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    quality_hash: Mapped[str] = mapped_column(String(64), index=True)
+
+
 class MarketContextRegistry(Base, TimestampMixin):
     """Configuration-backed context item kept independent from ETF instruments."""
 
