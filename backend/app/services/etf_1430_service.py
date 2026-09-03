@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.core.config import PROJECT_ROOT, Settings, get_settings
 from app.models import (
     DailyBar,
+    DecisionBoardSnapshot,
     ForecastSnapshot,
     Holding,
     IndicatorSnapshot,
@@ -32,8 +33,9 @@ from app.models import (
     SignalSnapshot,
 )
 from app.services.event_service import emit_event
-from app.services.forecast_service import similarity_forecast
-from app.utils.feature_store import build_feature_frame, feature_columns_for_horizon
+from app.services.signal_grade_service import SignalGradeService
+from app.utils.current_decision import resolve_current_decision
+from app.utils.feature_store import build_feature_frame
 from app.utils.hashing import stable_hash
 from app.utils.numbers import clamp
 from app.utils.support_resistance import build_support_resistance
@@ -109,110 +111,86 @@ class ETF1430WorkbenchService:
             feature = pd.DataFrame()
         return list(rows), feature
 
-    def _dynamic_forecasts(
-        self,
-        frame: pd.DataFrame,
-        persisted: dict[int, ForecastSnapshot],
-    ) -> dict[int, dict[str, Any]]:
+    def _persisted_forecasts(self, persisted: dict[int, ForecastSnapshot]) -> dict[int, dict[str, Any]]:
+        """Read the same persisted forecasts used by the canonical decision board."""
         result: dict[int, dict[str, Any]] = {}
-        cfg = self.strategy.get("forecast", {})
         for horizon_value in self.config.get("forecast_horizons", [1, 3, 5, 10]):
             horizon = int(horizon_value)
-            dynamic = None
-            if not frame.empty:
-                dynamic = similarity_forecast(
-                    frame,
-                    horizon=horizon,
-                    neighbors=int(cfg.get("neighbors", 80)),
-                    minimum_neighbors=int(cfg.get("minimum_neighbors", 25)),
-                    maximum_confidence=float(cfg.get("maximum_confidence_uncalibrated", 55)),
-                    feature_columns=feature_columns_for_horizon(horizon, frame.columns),
-                    conformal_alpha=float(cfg.get("conformal_alpha", 0.20)),
-                )
             stored = persisted.get(horizon)
-            if dynamic is not None and dynamic.p_up is not None:
-                corridor = dynamic.corridor
+            if stored is None:
                 result[horizon] = {
-                    "horizon": horizon,
-                    "source": "dynamic_similarity_research",
-                    "model_version": f"etf-1430-similarity-v0.1-h{horizon}",
-                    "p_up": dynamic.p_up,
-                    "expected_return": dynamic.expected_return,
-                    "q10": dynamic.q10,
-                    "q50": dynamic.q50,
-                    "q90": dynamic.q90,
-                    "terminal_price_q10": corridor.get("terminal_price_q10"),
-                    "terminal_price_q50": corridor.get("terminal_price_q50"),
-                    "terminal_price_q90": corridor.get("terminal_price_q90"),
-                    "path_low_price_q10": corridor.get("path_low_price_q10"),
-                    "path_low_price_q50": corridor.get("path_low_price_q50"),
-                    "path_low_price_q90": corridor.get("path_low_price_q90"),
-                    "path_high_price_q10": corridor.get("path_high_price_q10"),
-                    "path_high_price_q50": corridor.get("path_high_price_q50"),
-                    "path_high_price_q90": corridor.get("path_high_price_q90"),
-                    "support_touch_probability": corridor.get("support_touch_probability"),
-                    "resistance_touch_probability": corridor.get("resistance_touch_probability"),
-                    "sample_count": dynamic.sample_count,
-                    "confidence": dynamic.confidence,
-                    "similarity_distance": dynamic.similarity_distance,
+                    "horizon": horizon, "source": "unavailable", "model_version": None,
+                    "p_up": None, "historical_up_frequency": None, "up_probability": None,
+                    "p_up_semantics": "unavailable", "probability_calibrated": False,
+                    "expected_return": None, "q10": None, "q50": None, "q90": None,
+                    "terminal_price_q10": None, "terminal_price_q50": None, "terminal_price_q90": None,
+                    "path_low_price_q10": None, "path_low_price_q50": None, "path_low_price_q90": None,
+                    "path_high_price_q10": None, "path_high_price_q50": None, "path_high_price_q90": None,
+                    "support_touch_probability": None, "resistance_touch_probability": None,
+                    "sample_count": 0, "confidence": 0.0, "similarity_distance": None,
                     "calibration_status": "not_calibrated",
-                    "diagnostics": dynamic.diagnostics,
+                    "diagnostics": {"reason": "persisted_forecast_missing"},
                 }
-            elif stored is not None:
-                result[horizon] = {
-                    "horizon": horizon,
-                    "source": "persisted_forecast_snapshot",
-                    "model_version": stored.model_version,
-                    "p_up": stored.p_up,
-                    "expected_return": stored.expected_return,
-                    "q10": stored.q10,
-                    "q50": stored.q50,
-                    "q90": stored.q90,
-                    "terminal_price_q10": stored.terminal_price_q10,
-                    "terminal_price_q50": stored.terminal_price_q50,
-                    "terminal_price_q90": stored.terminal_price_q90,
-                    "path_low_price_q10": stored.path_low_price_q10,
-                    "path_low_price_q50": stored.path_low_price_q50,
-                    "path_low_price_q90": stored.path_low_price_q90,
-                    "path_high_price_q10": stored.path_high_price_q10,
-                    "path_high_price_q50": stored.path_high_price_q50,
-                    "path_high_price_q90": stored.path_high_price_q90,
-                    "support_touch_probability": stored.support_touch_probability,
-                    "resistance_touch_probability": stored.resistance_touch_probability,
-                    "sample_count": stored.sample_count,
-                    "confidence": stored.confidence,
-                    "similarity_distance": stored.similarity_distance,
-                    "calibration_status": stored.calibration_status,
-                    "diagnostics": stored.diagnostics_json or {},
-                }
-            else:
-                result[horizon] = {
-                    "horizon": horizon,
-                    "source": "unavailable",
-                    "model_version": f"etf-1430-similarity-v0.1-h{horizon}",
-                    "p_up": None,
-                    "expected_return": None,
-                    "q10": None,
-                    "q50": None,
-                    "q90": None,
-                    "terminal_price_q10": None,
-                    "terminal_price_q50": None,
-                    "terminal_price_q90": None,
-                    "path_low_price_q10": None,
-                    "path_low_price_q50": None,
-                    "path_low_price_q90": None,
-                    "path_high_price_q10": None,
-                    "path_high_price_q50": None,
-                    "path_high_price_q90": None,
-                    "support_touch_probability": None,
-                    "resistance_touch_probability": None,
-                    "sample_count": 0,
-                    "confidence": 0.0,
-                    "similarity_distance": None,
-                    "calibration_status": "not_calibrated",
-                    "diagnostics": {"reason": "history_or_feature_shortage"},
-                }
+                continue
+            status = str(stored.calibration_status or "not_calibrated")
+            calibrated = status == "calibrated"
+            result[horizon] = {
+                "horizon": horizon, "source": "persisted_forecast_snapshot",
+                "model_version": stored.model_version, "p_up": stored.p_up,
+                "historical_up_frequency": None if calibrated else stored.p_up,
+                "up_probability": stored.p_up if calibrated else None,
+                "p_up_semantics": "calibrated_up_probability" if calibrated else "weighted_historical_neighbor_up_frequency",
+                "probability_calibrated": calibrated, "expected_return": stored.expected_return,
+                "q10": stored.q10, "q50": stored.q50, "q90": stored.q90,
+                "terminal_price_q10": stored.terminal_price_q10, "terminal_price_q50": stored.terminal_price_q50, "terminal_price_q90": stored.terminal_price_q90,
+                "path_low_price_q10": stored.path_low_price_q10, "path_low_price_q50": stored.path_low_price_q50, "path_low_price_q90": stored.path_low_price_q90,
+                "path_high_price_q10": stored.path_high_price_q10, "path_high_price_q50": stored.path_high_price_q50, "path_high_price_q90": stored.path_high_price_q90,
+                "support_touch_probability": stored.support_touch_probability, "resistance_touch_probability": stored.resistance_touch_probability,
+                "sample_count": stored.sample_count, "confidence": stored.confidence,
+                "similarity_distance": stored.similarity_distance, "calibration_status": status,
+                "diagnostics": stored.diagnostics_json or {},
+            }
         return result
+
+    @staticmethod
+    def _latest_decision_rows(db: Session) -> tuple[str | None, dict[str, dict[str, Any]]]:
+        snapshot = db.scalar(select(DecisionBoardSnapshot).order_by(DecisionBoardSnapshot.generated_at.desc(), DecisionBoardSnapshot.id.desc()).limit(1))
+        if snapshot is None:
+            return None, {}
+        payload = snapshot.payload_json if isinstance(snapshot.payload_json, dict) else {}
+        mapped: dict[str, dict[str, Any]] = {}
+        for row in payload.get("rows", []) or []:
+            if isinstance(row, dict):
+                code = str(row.get("ts_code") or "").strip().upper()
+                if code:
+                    mapped[code] = row
+        return snapshot.snapshot_id, mapped
+
+    def _canonical_decisions(self, db: Session, instruments: list[Instrument]) -> tuple[str | None, dict[str, dict[str, Any]]]:
+        snapshot_id, board_rows = self._latest_decision_rows(db)
+        codes = {str(item.ts_code).strip().upper() for item in instruments}
+        missing = {code for code in codes if not (board_rows.get(code) or {}).get("grade")}
+        grade_payload = SignalGradeService(self.settings).build(db) if missing else {}
+        grade_rows = {str(row.get("ts_code") or "").strip().upper(): row for row in grade_payload.get("rows", []) if str(row.get("ts_code") or "").strip().upper() in missing}
+        latest_signals: dict[int, SignalSnapshot] = {}
+        for snapshot in db.scalars(select(SignalSnapshot).order_by(SignalSnapshot.as_of_time.asc())).all():
+            latest_signals[snapshot.instrument_id] = snapshot
+        result: dict[str, dict[str, Any]] = {}
+        for instrument in instruments:
+            code = str(instrument.ts_code).strip().upper()
+            board = board_rows.get(code); fallback = grade_rows.get(code); production = latest_signals.get(instrument.id)
+            resolved = resolve_current_decision(
+                decision_board_grade=(board or {}).get("grade"), signal_grade_fallback=(fallback or {}).get("grade"),
+                production_signal_state=production.state if production is not None else None,
+            )
+            result[code] = {
+                "state": resolved.state if resolved is not None else "数据异常",
+                "source": resolved.source if resolved is not None else "unavailable",
+                "canonical": resolved.canonical if resolved is not None else False,
+                "decision_board_grade": (board or {}).get("grade"), "signal_grade_fallback": (fallback or {}).get("grade"),
+                "production_signal_state": production.state if production is not None else None,
+            }
+        return snapshot_id, result
 
     def _news(self, db: Session, instrument: Instrument) -> list[dict[str, Any]]:
         now = datetime.now(self.timezone)
@@ -315,21 +293,25 @@ class ETF1430WorkbenchService:
     @staticmethod
     def _score_forecast(forecasts: dict[int, dict[str, Any]]) -> float:
         weights = {1: 0.35, 3: 0.25, 5: 0.23, 10: 0.17}
-        total = 0.0
-        used = 0.0
+        total = 0.0; used = 0.0
         for horizon, weight in weights.items():
-            item = forecasts.get(horizon, {})
-            p_up = _finite(item.get("p_up"))
-            expected = _finite(item.get("expected_return"))
+            item = forecasts.get(horizon, {}); p_up = _finite(item.get("p_up")); expected = _finite(item.get("expected_return")); confidence = _finite(item.get("confidence"))
+            if confidence is not None and confidence <= 1:
+                confidence *= 100
             if p_up is None and expected is None:
                 continue
-            value = 50.0
+            raw = 50.0
             if p_up is not None:
-                value += (p_up - 0.5) * 70
+                raw += (p_up - 0.5) * 70
             if expected is not None:
-                value += clamp(expected * 450, -20, 20)
-            total += clamp(value, 0, 100) * weight
-            used += weight
+                raw += clamp(expected * 450, -20, 20)
+            if confidence is None or confidence < 40:
+                value = 50.0
+            else:
+                evidence = clamp((confidence - 40) / 40, 0, 1)
+                if item.get("calibration_status") != "calibrated": evidence *= 0.65
+                value = 50.0 + (clamp(raw, 0, 100) - 50.0) * evidence
+            total += clamp(value, 0, 100) * weight; used += weight
         return round(total / used, 2) if used else 50.0
 
     @staticmethod
@@ -402,24 +384,6 @@ class ETF1430WorkbenchService:
             "historical_1430_backtest": "not_qualified",
         }
 
-    def _action(self, score: float, rr: float | None, holding: Holding | None, values: dict[str, Any]) -> str:
-        thresholds = self.config["thresholds"]
-        j = _finite(values.get("kdj_j"))
-        rsi = _finite(values.get("rsi14"))
-        bearish = (_finite(values.get("macd_hist")) or 0) < 0
-        if (j is not None and j >= 100) or (rsi is not None and rsi >= 75):
-            if bearish or score < float(thresholds["hold"]):
-                return "减仓候选" if holding and float(holding.shares or 0) > 0 else "回避"
-        if score >= float(thresholds["buy_candidate"]) and (rr is None or rr >= float(thresholds["minimum_risk_reward"])):
-            return "买入候选"
-        if score >= float(thresholds["probe"]):
-            return "可试探"
-        if score >= float(thresholds["hold"]):
-            return "持有/观察"
-        if holding and float(holding.shares or 0) > 0:
-            return "减仓候选"
-        return "回避"
-
     def _scenario_candles(self, frame: pd.DataFrame, forecasts: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
         if frame.empty:
             return []
@@ -470,14 +434,17 @@ class ETF1430WorkbenchService:
             previous_close = close_value
         return candles
 
-    def _row(self, db: Session, instrument: Instrument, *, include_chart: bool = False, user_id: int | None = None) -> dict[str, Any]:
+    def _row(self, db: Session, instrument: Instrument, *, include_chart: bool = False, user_id: int | None = None, current_decision: dict[str, Any] | None = None, decision_snapshot_id: str | None = None) -> dict[str, Any]:
         bars, frame = self._raw_and_feature_frame(db, instrument.id)
         quote = self._latest(db, QuoteSnapshot, instrument.id, QuoteSnapshot.quote_time)
         indicator = self._latest(db, IndicatorSnapshot, instrument.id, IndicatorSnapshot.generated_at)
         signal = self._latest(db, SignalSnapshot, instrument.id, SignalSnapshot.as_of_time)
         holding = db.scalar(select(Holding).where(Holding.instrument_id == instrument.id, Holding.user_id == user_id))
         persisted = self._latest_forecasts(db, instrument.id)
-        forecasts = self._dynamic_forecasts(frame, persisted)
+        forecasts = self._persisted_forecasts(persisted)
+        if current_decision is None:
+            decision_snapshot_id, decision_map = self._canonical_decisions(db, [instrument])
+            current_decision = decision_map.get(str(instrument.ts_code).strip().upper())
         values = dict(indicator.values_json or {}) if indicator else {}
         if not frame.empty:
             for key, value in frame.iloc[-1].to_dict().items():
@@ -501,7 +468,7 @@ class ETF1430WorkbenchService:
         }
         score = sum(component_scores[name] * float(weight) for name, weight in self.config["weights"].items())
         rr = _finite(structure_metrics.get("risk_reward"))
-        action = self._action(score, rr, holding, values)
+        action = str((current_decision or {}).get("state") or "数据异常")
         now = datetime.now(self.timezone)
         qualification = self._qualification(quote, now)
         current_price = _finite(quote.price if quote else None) or (_finite(frame.iloc[-1]["close"]) if not frame.empty else None)
@@ -546,7 +513,13 @@ class ETF1430WorkbenchService:
             "current_price": current_price,
             "today_pct_change": _finite(quote.pct_change if quote else None),
             "score": round(score, 2),
+            "research_score": round(score, 2),
+            "score_semantics": "explanatory_ranking_only_not_current_decision",
             "action": action,
+            "action_source": (current_decision or {}).get("source", "unavailable"),
+            "action_canonical": bool((current_decision or {}).get("canonical", False)),
+            "decision_snapshot_id": decision_snapshot_id,
+            "current_decision": current_decision or {"state": action, "source": "unavailable", "canonical": False},
             "actionable": bool(qualification["actionable"]),
             "qualification": qualification,
             "component_scores": component_scores,
@@ -605,8 +578,9 @@ class ETF1430WorkbenchService:
         instruments = db.scalars(
             select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code)
         ).all()
-        rows = [self._row(db, instrument, include_chart=False, user_id=user_id) for instrument in instruments]
-        rows.sort(key=lambda item: (float(item["score"]), item["ts_code"]), reverse=True)
+        decision_snapshot_id, decisions = self._canonical_decisions(db, instruments)
+        rows = [self._row(db, instrument, include_chart=False, user_id=user_id, current_decision=decisions.get(str(instrument.ts_code).strip().upper()), decision_snapshot_id=decision_snapshot_id) for instrument in instruments]
+        rows.sort(key=lambda item: (float(item["research_score"]), item["ts_code"]), reverse=True)
         counts = Counter(item["action"] for item in rows)
         return {
             "version": self.config["version"],
@@ -616,10 +590,14 @@ class ETF1430WorkbenchService:
             "research_only": True,
             "automatic_orders": False,
             "historical_1430_backtest": "not_qualified",
+            "current_decision_contract": "decision_board_snapshot_then_signal_grade_then_signal_snapshot_last_resort",
+            "decision_snapshot_id": decision_snapshot_id,
+            "score_semantics": "explanatory_ranking_only_not_current_decision",
             "counts": dict(counts),
             "rows": rows,
             "disclaimers": [
-                "本页只生成研究候选，不连接券商、不创建订单。",
+                "兼容API的 action 与主页共用唯一 current decision；research_score 只解释和排序，不生成第二套买卖结论。",
+                "本页只生成研究结果，不连接券商、不创建订单。",
                 "未来蜡烛是条件化情景可视化，不是实际未来OHLC。",
                 "真实14:30策略结论必须使用截至14:30的5/15分钟point-in-time数据验证。",
             ],
@@ -627,7 +605,10 @@ class ETF1430WorkbenchService:
 
     def detail(self, db: Session, ts_code: str, *, user_id: int | None = None) -> dict[str, Any] | None:
         instrument = db.scalar(select(Instrument).where(Instrument.ts_code == ts_code.upper()))
-        return self._row(db, instrument, include_chart=True, user_id=user_id) if instrument is not None else None
+        if instrument is None:
+            return None
+        decision_snapshot_id, decisions = self._canonical_decisions(db, [instrument])
+        return self._row(db, instrument, include_chart=True, user_id=user_id, current_decision=decisions.get(str(instrument.ts_code).strip().upper()), decision_snapshot_id=decision_snapshot_id)
 
     def generate_report(self, db: Session, *, user_id: int | None = None) -> dict[str, Any]:
         payload = self.summary(db, user_id=user_id)

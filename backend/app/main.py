@@ -98,8 +98,8 @@ def index() -> FileResponse:
 
 
 @app.get("/legacy", include_in_schema=False)
-def legacy() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html", media_type="text/html; charset=utf-8")
+def legacy() -> RedirectResponse:
+    return RedirectResponse(url="/", status_code=307)
 
 
 @app.get("/workbench/1430", include_in_schema=False)
@@ -108,5 +108,5 @@ def etf_1430_workbench() -> RedirectResponse:
 
 
 @app.get("/workbench/kline", include_in_schema=False)
-def kline_stabilization() -> FileResponse:
-    return FileResponse(STATIC_DIR / "kline_stabilization.html", media_type="text/html; charset=utf-8")
+def kline_stabilization() -> RedirectResponse:
+    return RedirectResponse(url="/", status_code=307)

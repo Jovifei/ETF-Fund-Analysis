@@ -15,11 +15,17 @@ def test_etf_1430_summary_and_detail_contract(bootstrapped, db_session):
     assert summary["historical_1430_backtest"] == "not_qualified"
     assert summary["rows"]
     row = summary["rows"][0]
-    assert row["action"] in {"买入候选", "可试探", "持有/观察", "减仓候选", "回避"}
+    assert row["action"] in {"可加仓", "可入场", "可试探", "观望", "减仓", "数据异常"}
+    assert row["action_source"] in {"decision_board_snapshot", "signal_grade_fallback", "signal_snapshot_last_resort", "unavailable"}
+    assert row["score_semantics"] == "explanatory_ranking_only_not_current_decision"
     assert row["actionable"] is False  # mock provider must fail closed
     assert set(row["component_scores"]) == {"trend", "momentum", "volume_flow", "structure", "forecast", "news"}
     assert set(row["forecasts"]) == {"1", "3", "5", "10"}
-    assert all(item["calibration_status"] == "not_calibrated" for item in row["forecasts"].values())
+    assert all(item["source"] in {"persisted_forecast_snapshot", "unavailable"} for item in row["forecasts"].values())
+    assert not any(item["source"] == "dynamic_similarity_research" for item in row["forecasts"].values())
+    for item in row["forecasts"].values():
+        if item["source"] == "persisted_forecast_snapshot":
+            assert item["p_up_semantics"] in {"weighted_historical_neighbor_up_frequency", "calibrated_up_probability"}
 
     detail = service.detail(db_session, row["ts_code"])
     assert detail is not None
@@ -34,9 +40,14 @@ def test_etf_1430_summary_and_detail_contract(bootstrapped, db_session):
 
 def test_etf_1430_http_and_static_contract(bootstrapped):
     with TestClient(app) as client:
-        page = client.get("/workbench/1430", follow_redirects=False)
-        assert page.status_code in {307, 308}
-        assert page.headers["location"] == "/"
+        for route in ("/workbench/1430", "/workbench/kline", "/legacy"):
+            page = client.get(route, follow_redirects=False)
+            assert page.status_code in {307, 308}
+            assert page.headers["location"] == "/"
+        home = client.get("/")
+        assert home.status_code == 200
+        assert 'href="/legacy"' not in home.text
+        assert "统一决策台" in home.text
         script = client.get("/assets/etf_1430_workbench.js")
         assert script.status_code == 200
         assert "预测情景 · 非实际结果" in script.text
