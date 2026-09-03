@@ -17,7 +17,8 @@ def test_kline_stabilization_summary_contract(bootstrapped, db_session):
     assert rows
     row = rows[0]
     # 核心字段契约
-    assert row["action"] in {"可加仓", "可入场", "可试探", "观望", "减仓"}
+    assert row["action"] in {"可加仓", "可入场", "可试探", "观望", "减仓", "数据异常"}
+    assert row["action_source"] in {"decision_board_snapshot", "signal_grade_fallback", "signal_snapshot_last_resort", "unavailable"}
     assert row["actionable"] is False  # 研究态必须 fail closed
     assert "td" in row and row["td"]["setup_length"] == 9
     assert "ma" in row and "label" in row["ma"]
@@ -25,9 +26,11 @@ def test_kline_stabilization_summary_contract(bootstrapped, db_session):
     assert "kdj" in row and "label" in row["kdj"]
     assert "rsi" in row and "val" in row["rsi"]
     assert "volume" in row and "text" in row["volume"]
-    # 形态预测必须未校准
+    # K-line compatibility API reads the same persisted forecast contract as the main board.
     forecast = row["forecast"]
-    assert forecast["calibration_status"] == "not_calibrated"
+    assert forecast["source"] in {"persisted_forecast_snapshot", "unavailable"}
+    if forecast["source"] == "persisted_forecast_snapshot":
+        assert forecast["p_up_semantics"] in {"weighted_historical_neighbor_up_frequency", "calibrated_up_probability"}
     # 缠论字段存在（可用或不可用都必须有明确结构）
     assert "available" in row["chanlun"]
     # 研究态 no-orders
@@ -50,6 +53,7 @@ def test_kline_stabilization_disclaimers(bootstrapped, db_session):
     summary = service.summary(db_session)
     assert any("研究视图" in item for item in summary["disclaimers"])
     assert any("不构成投资建议" in item for item in summary["disclaimers"])
+    assert any("唯一 current decision" in item for item in summary["disclaimers"])
 
 
 def test_pct_change_unit_is_percent_not_ratio():

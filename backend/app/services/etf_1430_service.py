@@ -22,7 +22,6 @@ from sqlalchemy.orm import Session
 from app.core.config import PROJECT_ROOT, Settings, get_settings
 from app.models import (
     DailyBar,
-    DecisionBoardSnapshot,
     ForecastSnapshot,
     Holding,
     IndicatorSnapshot,
@@ -33,8 +32,7 @@ from app.models import (
     SignalSnapshot,
 )
 from app.services.event_service import emit_event
-from app.services.signal_grade_service import SignalGradeService
-from app.utils.current_decision import resolve_current_decision
+from app.services.current_decision_service import CurrentDecisionService
 from app.utils.feature_store import build_feature_frame
 from app.utils.hashing import stable_hash
 from app.utils.numbers import clamp
@@ -151,46 +149,6 @@ class ETF1430WorkbenchService:
                 "diagnostics": stored.diagnostics_json or {},
             }
         return result
-
-    @staticmethod
-    def _latest_decision_rows(db: Session) -> tuple[str | None, dict[str, dict[str, Any]]]:
-        snapshot = db.scalar(select(DecisionBoardSnapshot).order_by(DecisionBoardSnapshot.generated_at.desc(), DecisionBoardSnapshot.id.desc()).limit(1))
-        if snapshot is None:
-            return None, {}
-        payload = snapshot.payload_json if isinstance(snapshot.payload_json, dict) else {}
-        mapped: dict[str, dict[str, Any]] = {}
-        for row in payload.get("rows", []) or []:
-            if isinstance(row, dict):
-                code = str(row.get("ts_code") or "").strip().upper()
-                if code:
-                    mapped[code] = row
-        return snapshot.snapshot_id, mapped
-
-    def _canonical_decisions(self, db: Session, instruments: list[Instrument]) -> tuple[str | None, dict[str, dict[str, Any]]]:
-        snapshot_id, board_rows = self._latest_decision_rows(db)
-        codes = {str(item.ts_code).strip().upper() for item in instruments}
-        missing = {code for code in codes if not (board_rows.get(code) or {}).get("grade")}
-        grade_payload = SignalGradeService(self.settings).build(db) if missing else {}
-        grade_rows = {str(row.get("ts_code") or "").strip().upper(): row for row in grade_payload.get("rows", []) if str(row.get("ts_code") or "").strip().upper() in missing}
-        latest_signals: dict[int, SignalSnapshot] = {}
-        for snapshot in db.scalars(select(SignalSnapshot).order_by(SignalSnapshot.as_of_time.asc())).all():
-            latest_signals[snapshot.instrument_id] = snapshot
-        result: dict[str, dict[str, Any]] = {}
-        for instrument in instruments:
-            code = str(instrument.ts_code).strip().upper()
-            board = board_rows.get(code); fallback = grade_rows.get(code); production = latest_signals.get(instrument.id)
-            resolved = resolve_current_decision(
-                decision_board_grade=(board or {}).get("grade"), signal_grade_fallback=(fallback or {}).get("grade"),
-                production_signal_state=production.state if production is not None else None,
-            )
-            result[code] = {
-                "state": resolved.state if resolved is not None else "数据异常",
-                "source": resolved.source if resolved is not None else "unavailable",
-                "canonical": resolved.canonical if resolved is not None else False,
-                "decision_board_grade": (board or {}).get("grade"), "signal_grade_fallback": (fallback or {}).get("grade"),
-                "production_signal_state": production.state if production is not None else None,
-            }
-        return snapshot_id, result
 
     def _news(self, db: Session, instrument: Instrument) -> list[dict[str, Any]]:
         now = datetime.now(self.timezone)
@@ -443,7 +401,7 @@ class ETF1430WorkbenchService:
         persisted = self._latest_forecasts(db, instrument.id)
         forecasts = self._persisted_forecasts(persisted)
         if current_decision is None:
-            decision_snapshot_id, decision_map = self._canonical_decisions(db, [instrument])
+            decision_snapshot_id, decision_map = CurrentDecisionService(self.settings).resolve_many(db, [instrument])
             current_decision = decision_map.get(str(instrument.ts_code).strip().upper())
         values = dict(indicator.values_json or {}) if indicator else {}
         if not frame.empty:
@@ -578,7 +536,7 @@ class ETF1430WorkbenchService:
         instruments = db.scalars(
             select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code)
         ).all()
-        decision_snapshot_id, decisions = self._canonical_decisions(db, instruments)
+        decision_snapshot_id, decisions = CurrentDecisionService(self.settings).resolve_many(db, instruments)
         rows = [self._row(db, instrument, include_chart=False, user_id=user_id, current_decision=decisions.get(str(instrument.ts_code).strip().upper()), decision_snapshot_id=decision_snapshot_id) for instrument in instruments]
         rows.sort(key=lambda item: (float(item["research_score"]), item["ts_code"]), reverse=True)
         counts = Counter(item["action"] for item in rows)
@@ -607,7 +565,7 @@ class ETF1430WorkbenchService:
         instrument = db.scalar(select(Instrument).where(Instrument.ts_code == ts_code.upper()))
         if instrument is None:
             return None
-        decision_snapshot_id, decisions = self._canonical_decisions(db, [instrument])
+        decision_snapshot_id, decisions = CurrentDecisionService(self.settings).resolve_many(db, [instrument])
         return self._row(db, instrument, include_chart=True, user_id=user_id, current_decision=decisions.get(str(instrument.ts_code).strip().upper()), decision_snapshot_id=decision_snapshot_id)
 
     def generate_report(self, db: Session, *, user_id: int | None = None) -> dict[str, Any]:
