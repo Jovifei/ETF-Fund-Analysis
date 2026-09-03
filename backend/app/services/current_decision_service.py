@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.models import DecisionBoardSnapshot, Instrument, SignalSnapshot
-from app.services.signal_grade_service import SignalGradeService
 from app.utils.current_decision import resolve_current_decision
 
 
@@ -50,7 +49,16 @@ class CurrentDecisionService:
         codes = {str(item.ts_code).strip().upper() for item in instruments}
         missing = {code for code in codes if not (board_rows.get(code) or {}).get("grade")}
 
-        grade_payload = SignalGradeService(self.settings).build(db) if missing else {}
+        # SignalGradeService imports KlineStabilizationService for indicator helpers.
+        # Kline compatibility also imports this resolver. Keep the dependency lazy
+        # so module initialization remains acyclic while the runtime precedence is
+        # still exactly DecisionBoard -> SignalGrade -> SignalSnapshot.
+        if missing:
+            from app.services.signal_grade_service import SignalGradeService
+
+            grade_payload = SignalGradeService(self.settings).build(db)
+        else:
+            grade_payload = {}
         grade_rows = {
             str(row.get("ts_code") or "").strip().upper(): row
             for row in grade_payload.get("rows", [])
