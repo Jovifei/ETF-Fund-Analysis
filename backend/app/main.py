@@ -89,7 +89,6 @@ async def request_id(request: Request, call_next):
 app.include_router(api_router)
 app.include_router(workbench_1430_router)
 app.include_router(workbench_kline_router)
-app.mount("/assets", StaticFiles(directory=STATIC_DIR), name="assets")
 
 
 @app.get("/", include_in_schema=False)
@@ -110,3 +109,15 @@ def etf_1430_workbench() -> RedirectResponse:
 @app.get("/workbench/kline", include_in_schema=False)
 def kline_stabilization() -> RedirectResponse:
     return RedirectResponse(url="/", status_code=307)
+
+
+@app.get("/assets/index.html", include_in_schema=False)
+@app.get("/assets/etf_1430_workbench.html", include_in_schema=False)
+@app.get("/assets/kline_stabilization.html", include_in_schema=False)
+def legacy_static_surface() -> RedirectResponse:
+    return RedirectResponse(url="/", status_code=307)
+
+
+# Mount static resources after exact legacy-HTML redirects so old bookmarks cannot
+# bypass the single user-facing ETF board while CSS/JS/assets remain available.
+app.mount("/assets", StaticFiles(directory=STATIC_DIR), name="assets")
