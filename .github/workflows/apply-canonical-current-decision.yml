@@ -25,6 +25,25 @@ jobs:
           fetch-depth: 0
       - name: Apply deterministic patch
         run: python .automation/canonical_current_decision/apply.py
+      - name: Keep focused membership test independent of front truncation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('backend/tests/test_signal_center.py')
+          text = path.read_text(encoding='utf-8')
+          marker = 'def test_current_fronts_follow_latest_decision_board_grade'
+          start = text.index(marker)
+          target = '    payload = SignalCenterService().build(db_session, coefficient=1.5)\n'
+          pos = text.index(target, start)
+          replacement = (
+              '    service = SignalCenterService()\n'
+              '    service.config["front_size"] = 1000\n'
+              '    payload = service.build(db_session, coefficient=1.5)\n'
+          )
+          text = text[:pos] + replacement + text[pos + len(target):]
+          path.write_text(text, encoding='utf-8', newline='\n')
+          PY
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
