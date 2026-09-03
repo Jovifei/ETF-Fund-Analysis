@@ -1,4 +1,4 @@
-"""Read-only ETF signal grading view (signal-grade-v0.1.0).
+"""Read-only ETF signal grading view (company-reference grading).
 
 Derives colourful research labels from stored indicator/quote/forecast snapshots.
 Does not mutate production signal thresholds, holdings, or orders.
@@ -124,11 +124,11 @@ def classify_kdj(values: dict[str, Any], previous: dict[str, Any] | None, cfg: d
     death = k < d and (prev_k is None or prev_d is None or prev_k >= prev_d)
     if death:
         kind, label, note = "death", "死叉", "空头信号 · 短线谨慎"
-    elif j >= float(cfg["j_overbought"]):
+    elif j > float(cfg["j_overbought"]):
         kind, label, note = "overbought", "超买", "短期过热 · 回调风险"
     elif j >= float(cfg["j_high"]):
         kind, label, note = "high", "偏高", "动能偏弱 · 谨慎追高"
-    elif j <= float(cfg["j_low"]):
+    elif j < float(cfg["j_low"]):
         kind, label, note = "low", "低位", "超卖 · 反弹概率升高"
     else:
         kind, label, note = "healthy", "健康", "趋势可观察 · 非指令"
@@ -207,7 +207,7 @@ def classify_row(
     cfg: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     cfg = cfg or {}
-    volume = classify_volume(_f(values, "volume_ratio"), float(cfg.get("volume_expand", 1.35)), float(cfg.get("volume_contract", 0.85)))
+    volume = classify_volume(_f(values, "volume_ratio"), float(cfg.get("volume_expand", 1.15)), float(cfg.get("volume_contract", 0.90)))
     ma = classify_ma(values, previous)
     macd = classify_macd(values, previous, float(cfg.get("macd_approach_hist", 0.0008)))
     kdj = classify_kdj(values, previous, {

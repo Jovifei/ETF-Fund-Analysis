@@ -224,3 +224,16 @@ def test_reference_macd_bear_cont_is_reduce_risk():
         cfg={"j_add_cap": 90, "stall_return": 0.002},
     )
     assert grade == "减仓"
+
+
+def test_company_reference_kdj_boundaries_are_exact():
+    from app.services.signal_grade_service import classify_kdj
+    cfg = {"j_overbought": 100, "j_high": 90, "j_low": 20}
+    def item(j):
+        return classify_kdj({"kdj_j": j, "kdj_k": 60, "kdj_d": 50}, None, cfg)
+    assert item(19.9)["kind"] == "low"
+    assert item(20)["kind"] == "healthy"
+    assert item(89.9)["kind"] == "healthy"
+    assert item(90)["kind"] == "high"
+    assert item(100)["kind"] == "high"
+    assert item(100.1)["kind"] == "overbought"
