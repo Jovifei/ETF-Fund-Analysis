@@ -1,0 +1,70 @@
+name: apply-runtime-truth-ui
+
+on:
+  push:
+    branches: [fix/runtime-truth-ops-hardening-20260903]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/runtime-truth-ops-hardening-20260903
+      - name: Patch decision board runtime truth semantics
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('backend/app/static/decision_board_workbuddy.js')
+          text = path.read_text(encoding='utf-8')
+
+          replacements = [
+              (
+                  "const state = {sessionActive:false, auth:{identifier:null, role:null}, board:null, horizon:1, filter:'', activeCode:null, poll:null};",
+                  "const state = {sessionActive:false, auth:{identifier:null, role:null}, board:null, horizon:1, filter:'', activeCode:null, poll:null, connectionError:false};",
+              ),
+              (
+                  "function forecastScore(row={},horizon=1){const item=forecastItem(row,horizon),expected=Number(item?.expected_return),pup=Number(item?.p_up);if(!Number.isFinite(expected)&&!Number.isFinite(pup))return 50;const exp=Number.isFinite(expected)?clamp(50+expected*1200,10,90):50,prob=Number.isFinite(pup)?clamp(pup*100,10,90):50;let score=exp*.62+prob*.38;if(item?.calibration_status!=='calibrated')score=Math.min(score,75);return Math.round(score);}",
+                  "function forecastScore(row={},horizon=1){const item=forecastItem(row,horizon),conf=confidenceNumber(item),expected=Number(item?.expected_return),pup=Number(item?.p_up);if(conf!==null&&conf<40)return 50;if(!Number.isFinite(expected)&&!Number.isFinite(pup))return 50;const exp=Number.isFinite(expected)?clamp(50+expected*1200,10,90):50,prob=Number.isFinite(pup)?clamp(pup*100,10,90):50;let score=exp*.62+prob*.38;if(item?.calibration_status!=='calibrated')score=Math.min(score,75);return Math.round(score);}",
+              ),
+              (
+                  "function sourceText(row){const quote=row?.quote||{},provisional=row?.provisional||{};return {source:quote.source||provisional.source||'未记录',time:quote.source_time||provisional.observed_at||'—',verified:Boolean(quote.timestamp_verified||provisional.timestamp_verified),realtime:Boolean(quote.is_realtime)};}",
+                  "function sourceText(row){const quote=row?.quote||{},provisional=row?.provisional||{};return {source:quote.source||provisional.source||'未记录',time:quote.source_time||provisional.observed_at||'—',verified:Boolean(quote.timestamp_verified||provisional.timestamp_verified),realtime:Boolean(quote.is_realtime)};}\nconst SNAPSHOT_MAX_AGE_MS=8*60*1000;\nfunction snapshotConnectionState(board={},nowMs=Date.now(),connectionError=false){if(connectionError)return {label:'连接异常 · 显示最后快照',cls:'warn',live:false};if(!board?.generated_at)return {label:'等待快照',cls:'muted',live:false};const generated=Date.parse(board.generated_at);if(!Number.isFinite(generated))return {label:'快照时间异常',cls:'warn',live:false};const age=Number(nowMs)-generated;if(age<-(5*60*1000))return {label:'快照时间异常',cls:'warn',live:false};if(board.freshness!=='fresh')return {label:`快照 ${board.freshness||'unknown'}`,cls:'warn',live:false};if(age>SNAPSHOT_MAX_AGE_MS)return {label:'快照已过期',cls:'warn',live:false};return {label:'实时快照',cls:'ok',live:true};",
+              ),
+              (
+                  "$('#connectionBadge').textContent=b.freshness==='fresh'?'实时快照':'快照 '+(b.freshness||'unknown');$('#connectionBadge').className=`source-chip ${b.freshness==='fresh'?'ok':'warn'}`;",
+                  "const connection=snapshotConnectionState(b,Date.now(),state.connectionError);$('#connectionBadge').textContent=connection.label;$('#connectionBadge').className=`source-chip ${connection.cls}`;",
+              ),
+              (
+                  "async function loadBoard(silent=false){try{state.board=await api(`/api/decision-board?horizon=${state.horizon}`);renderAll();}catch(err){if(!silent&&err.message!=='unauthorized')toast(`读取失败：${err.message}`,5000);}}",
+                  "async function loadBoard(silent=false){try{state.board=await api(`/api/decision-board?horizon=${state.horizon}`);state.connectionError=false;renderAll();}catch(err){state.connectionError=true;if(state.board)renderMeta();if(!silent&&err.message!=='unauthorized')toast(`读取失败：${err.message}`,5000);}}",
+              ),
+              (
+                  "globalThis.WorkBuddyDecisionBoard=Object.freeze({api,ensureSession,loginAccount,logoutAccount,scoreRow,kdjInterpret,maScore,macdScore,rsiScore,tdScore,volumeScore,structureScore,forecastScore,dataScore,scoreClass,scoreLabel,pct,deltaArrow,confidenceBand});",
+                  "globalThis.WorkBuddyDecisionBoard=Object.freeze({api,ensureSession,loginAccount,logoutAccount,scoreRow,kdjInterpret,maScore,macdScore,rsiScore,tdScore,volumeScore,structureScore,forecastScore,dataScore,scoreClass,scoreLabel,pct,deltaArrow,confidenceBand,snapshotConnectionState});",
+              ),
+          ]
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected one UI patch target, got {count}: {old[:80]}')
+              text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+          node --check backend/app/static/decision_board_workbuddy.js
+      - name: Commit patched UI
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add backend/app/static/decision_board_workbuddy.js
+          if ! git diff --cached --quiet; then
+            git commit -m 'fix(ui): expire stale snapshots and neutralize ignored forecasts'
+            git push origin HEAD:fix/runtime-truth-ops-hardening-20260903
+          fi
