@@ -4,6 +4,7 @@ import logging
 import signal
 import time
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 
@@ -13,13 +14,17 @@ from app.core.logging import configure_logging
 from app.db.session import init_db, session_scope
 from app.models import DecisionBoardSlotRun, TaskRun
 from app.providers.factory import create_provider
-from app.services.decision_board_service import decision_board_due_slot
+from app.services.decision_board_service import SLOT_TIMES, decision_board_due_slot
 from app.services.runtime_service import RuntimeService
 from app.services.task_service import TaskBusyError, TaskExecutionError, TaskService
 from app.services.trading_calendar_service import TradingCalendarService
 
 logger = logging.getLogger(__name__)
 STOP = False
+SHANGHAI = ZoneInfo("Asia/Shanghai")
+# APScheduler-style misfire grace: if the daemon is delayed by a provider call,
+# coalesce all recently missed board slots to the latest one and run it once.
+DECISION_BOARD_MISFIRE_GRACE_SECONDS = 180
 
 
 def _stop(*_: object) -> None:
@@ -58,6 +63,40 @@ def _due(last: datetime | None, now: datetime, minutes: int) -> bool:
     return now - last >= timedelta(minutes=minutes)
 
 
+def decision_board_due_slot_with_grace(
+    now: datetime,
+    *,
+    is_trade_day: bool,
+    grace_seconds: int = DECISION_BOARD_MISFIRE_GRACE_SECONDS,
+) -> str | None:
+    """Return the latest exact/recent board slot, coalescing short scheduler delays.
+
+    The persisted slot key is the scheduled Shanghai wall-clock time, not the
+    delayed execution time.  This preserves idempotence and makes a delayed
+    14:31 execution auditable as the 14:30 decision slot.
+    """
+
+    exact = decision_board_due_slot(now, is_trade_day=is_trade_day)
+    if exact is not None or not is_trade_day or grace_seconds <= 0:
+        return exact
+
+    local = now.astimezone(SHANGHAI) if now.tzinfo is not None else now.replace(tzinfo=SHANGHAI)
+    if local.weekday() >= 5:
+        return None
+
+    candidates: list[datetime] = []
+    for slot_text in SLOT_TIMES:
+        hour, minute = (int(value) for value in slot_text.split(":", 1))
+        candidate = local.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        lag_seconds = (local - candidate).total_seconds()
+        if 0 <= lag_seconds <= grace_seconds:
+            candidates.append(candidate)
+    if not candidates:
+        return None
+    selected = max(candidates)
+    return f"{selected:%Y%m%d-%H%M}"
+
+
 def claim_decision_board_slot(db, slot_key: str, now: datetime) -> bool:
     """Durably claim one Shanghai decision-board slot; safe across restarts."""
     if db.get(DecisionBoardSlotRun, slot_key) is not None:
@@ -71,6 +110,37 @@ def claim_decision_board_slot(db, slot_key: str, now: datetime) -> bool:
         # A concurrent claimant sees the unique key; do not turn scheduler
         # deduplication into a provider/network retry.
         return False
+
+
+def _release_decision_board_slot(db, slot_key: str) -> None:
+    """Release a failed claim so the same slot can retry inside its grace window."""
+
+    claim = db.get(DecisionBoardSlotRun, slot_key)
+    if claim is not None:
+        db.delete(claim)
+        db.flush()
+
+
+def _run_guarded(
+    tasks: TaskService,
+    db,
+    task_name: str,
+    *,
+    executed: list[str],
+    failures: list[dict[str, str]],
+    **kwargs,
+) -> bool:
+    """Run one scheduler task without letting a durable task failure kill the tick."""
+
+    try:
+        tasks.run(db, task_name, **kwargs)
+    except (TaskExecutionError, TaskBusyError) as exc:
+        failure_class = str(getattr(exc, "failure_class", type(exc).__name__))[:128]
+        failures.append({"task": task_name, "failure_class": failure_class})
+        logger.warning("scheduler task %s failed: %s", task_name, failure_class)
+        return False
+    executed.append(task_name)
+    return True
 
 
 def tick() -> dict:
@@ -98,6 +168,7 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
     is_trade_day = calendar_decision.is_trade_day
     phase = clock.phase(now, is_trade_day)
     executed: list[str] = []
+    failures: list[dict[str, str]] = []
 
     with session_scope() as db:
         runtime = RuntimeService(settings)
@@ -107,99 +178,142 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
         tasks = TaskService(settings, provider=provider)
         task_holder[0] = tasks
 
-        # The first scheduler tick builds the minimum research dataset. On a real
-        # provider this may take time, so production operators can run bootstrap
-        # manually before starting the scheduler container.
+        # The first scheduler tick builds the minimum research dataset. A
+        # provider failure is durable in TaskRun and must not permanently stop
+        # the daemon from reaching later independent work.
         if _last_success(db, "sync_instruments") is None:
-            tasks.run(db, "sync_instruments")
-            executed.append("sync_instruments")
-
-        # Market context has its own bounded cadence. It is intentionally an
-        # explicit task rather than a side effect of quotes or the full pipeline.
-        market_context_minutes = int(settings.market_context_refresh_minutes)
-        if _due(
-            _last_terminal_attempt(db, "refresh_market_context"), now, market_context_minutes
-        ):
-            try:
-                tasks.run(db, "refresh_market_context")
-            except (TaskExecutionError, TaskBusyError) as exc:
-                # A context provider is optional; preserve the rest of this tick
-                # while the durable failed TaskRun remains the retry marker.
-                # TaskBusyError (advisory lock held by another process) must not
-                # abort the remaining quotes/signals steps of this tick.
-                failure_class = getattr(exc, "failure_class", type(exc).__name__)
-                logger.warning("market context refresh failed: %s", failure_class)
-            executed.append("refresh_market_context")
+            _run_guarded(
+                tasks,
+                db,
+                "sync_instruments",
+                executed=executed,
+                failures=failures,
+            )
 
         signal_minutes = int(intervals["signal_refresh_minutes"])
+        quote_minutes = int(intervals["quote_refresh_minutes"])
         news_minutes = int(
             intervals["lunch_news_refresh_minutes"]
             if phase == MarketPhase.LUNCH
             else intervals["news_refresh_minutes"]
         )
 
-        if clock.signals_allowed(now, is_trade_day) and _due(
-            _last_success(db, "refresh_signals"), now, signal_minutes
-        ):
-            # Intraday indicators still use the most recently settled daily bars;
-            # the live quote is used separately in the state machine.
-            tasks.run(db, "refresh_signals")
-            executed.append("refresh_signals")
-
-        slot_key = decision_board_due_slot(now, is_trade_day=is_trade_day)
+        # Critical path first.  Coalesce a short scheduler delay to the latest
+        # unclaimed decision slot before optional market-context/news work.
+        slot_key = decision_board_due_slot_with_grace(now, is_trade_day=is_trade_day)
         queued = db.scalar(
             select(TaskRun.run_id)
             .where(TaskRun.task_name == "refresh_decision_board", TaskRun.status == "queued")
             .order_by(TaskRun.started_at)
             .limit(1)
         )
+        board_refresh_window = slot_key is not None or queued is not None
         if slot_key is not None and claim_decision_board_slot(db, slot_key, now):
-            try:
-                tasks.run(
-                    db,
-                    "refresh_decision_board",
-                    refresh_input=True,
-                    **({"run_id": queued} if queued else {}),
-                )
-                executed.append("refresh_decision_board")
-            except (TaskExecutionError, TaskBusyError) as exc:
-                if isinstance(exc, TaskBusyError):
-                    claim = db.get(DecisionBoardSlotRun, slot_key)
-                    if claim is not None:
-                        db.delete(claim)
-                        db.flush()
-                logger.warning("decision-board refresh failed: %s", getattr(exc, "failure_class", type(exc).__name__))
+            succeeded = _run_guarded(
+                tasks,
+                db,
+                "refresh_decision_board",
+                executed=executed,
+                failures=failures,
+                refresh_input=True,
+                **({"run_id": queued} if queued else {}),
+            )
+            if not succeeded:
+                # Dagster/APScheduler-style recent-tick retry: a failed execution
+                # must not consume the wall-clock slot permanently.
+                _release_decision_board_slot(db, slot_key)
         elif queued is not None:
             # Manual refreshes use the same quote → provisional → snapshot path.
-            try:
-                tasks.run(db, "refresh_decision_board", run_id=queued, refresh_input=True)
-                executed.append("refresh_decision_board")
-            except (TaskExecutionError, TaskBusyError) as exc:
-                logger.warning("queued decision-board refresh failed: %s", getattr(exc, "failure_class", type(exc).__name__))
-
-        if _due(_last_success(db, "refresh_news"), now, news_minutes):
-            tasks.run(db, "refresh_news", since_hours=72)
-            executed.append("refresh_news")
-
-        # Refresh official daily bars and all derived layers once after market close.
-        # The date check is represented by a 12-hour gate so a restart remains safe.
-        if phase == MarketPhase.AFTER_CLOSE and _due(
-            _last_success(db, "refresh_bars"), now, 12 * 60
-        ):
-            tasks.run(db, "refresh_bars", lookback_days=120)
-            tasks.run(db, "refresh_indicators")
-            tasks.run(db, "refresh_forecasts")
-            tasks.run(db, "refresh_signals")
-            tasks.run(db, "generate_report")
-            executed.extend(
-                [
-                    "refresh_bars",
-                    "refresh_indicators",
-                    "refresh_forecasts",
-                    "refresh_signals",
-                    "generate_report",
-                ]
+            _run_guarded(
+                tasks,
+                db,
+                "refresh_decision_board",
+                executed=executed,
+                failures=failures,
+                run_id=queued,
+                refresh_input=True,
             )
+
+        # Honor the existing runtime quote cadence between board slots.  A board
+        # refresh already fetches quotes itself, so avoid a duplicate provider
+        # call while an exact/recent slot or queued manual refresh is active.
+        if (
+            clock.price_session_open(now, is_trade_day)
+            and not board_refresh_window
+            and _due(_last_terminal_attempt(db, "refresh_quotes"), now, quote_minutes)
+        ):
+            _run_guarded(
+                tasks,
+                db,
+                "refresh_quotes",
+                executed=executed,
+                failures=failures,
+            )
+
+        # Market context is optional and cannot block the quote/decision path.
+        market_context_minutes = int(settings.market_context_refresh_minutes)
+        if _due(
+            _last_terminal_attempt(db, "refresh_market_context"), now, market_context_minutes
+        ):
+            _run_guarded(
+                tasks,
+                db,
+                "refresh_market_context",
+                executed=executed,
+                failures=failures,
+            )
+
+        after_close_due = phase == MarketPhase.AFTER_CLOSE and _due(
+            _last_success(db, "refresh_bars"), now, 12 * 60
+        )
+
+        if (
+            not after_close_due
+            and clock.signals_allowed(now, is_trade_day)
+            and _due(_last_success(db, "refresh_signals"), now, signal_minutes)
+        ):
+            # Intraday indicators still use the most recently settled daily bars;
+            # live quotes are a separate state-machine input.
+            _run_guarded(
+                tasks,
+                db,
+                "refresh_signals",
+                executed=executed,
+                failures=failures,
+            )
+
+        # Refresh official daily bars and derived layers once after market close.
+        # Each task owns a durable failure record; one failed layer no longer
+        # prevents all remaining independent cleanup/report work in this tick.
+        if after_close_due:
+            for task_name, kwargs in (
+                ("refresh_bars", {"lookback_days": 120}),
+                ("refresh_indicators", {}),
+                ("refresh_forecasts", {}),
+                ("refresh_signals", {}),
+                ("generate_report", {}),
+            ):
+                _run_guarded(
+                    tasks,
+                    db,
+                    task_name,
+                    executed=executed,
+                    failures=failures,
+                    **kwargs,
+                )
+
+        # News is additive/optional. Gate by terminal attempts so an upstream
+        # outage is retried at the configured cadence instead of every 30 sec.
+        if _due(_last_terminal_attempt(db, "refresh_news"), now, news_minutes):
+            _run_guarded(
+                tasks,
+                db,
+                "refresh_news",
+                executed=executed,
+                failures=failures,
+                since_hours=72,
+            )
+
     return {
         "now": now.isoformat(),
         "trade_day": is_trade_day,
@@ -207,6 +321,7 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
         "calendar_source": calendar_decision.source,
         "phase": phase.value,
         "executed": executed,
+        "failures": failures,
     }
 
 
@@ -228,7 +343,7 @@ def main() -> None:
     while not STOP:
         try:
             result = tick()
-            if result["executed"]:
+            if result["executed"] or result["failures"]:
                 logger.info("scheduler tick: %s", result)
         except Exception:
             logger.exception("scheduler tick failed")
