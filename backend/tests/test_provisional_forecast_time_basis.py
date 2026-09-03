@@ -12,6 +12,24 @@ from app.services.etf_1430_service import ETF1430WorkbenchService
 from app.services.kline_stabilization_service import KlineStabilizationService
 
 
+FORECAST_PROVENANCE_FIELDS = {
+    "source",
+    "feature_basis",
+    "as_of_date",
+    "intraday_provisional_used",
+}
+
+
+def _assert_settled_daily_forecasts(items: list[dict]) -> None:
+    assert items
+    for item in items:
+        assert FORECAST_PROVENANCE_FIELDS <= set(item)
+        assert item["source"] == "persisted_forecast_snapshot"
+        assert item["feature_basis"] == "settled_daily_bars"
+        assert item["intraday_provisional_used"] is False
+        assert item["as_of_date"]
+
+
 def test_provisional_ohlcv_can_update_research_indicators_but_not_eod_neighbor_forecast(
     db_session, bootstrapped
 ) -> None:
@@ -28,7 +46,11 @@ def test_provisional_ohlcv_can_update_research_indicators_but_not_eod_neighbor_f
         select(func.max(DailyBar.trade_date)).where(DailyBar.instrument_id == instrument.id)
     )
     assert latest_bar_date is not None
-    observed_at = datetime.combine(latest_bar_date + timedelta(days=1), time(14, 30), tzinfo=DecisionBoardService().settings.timezone)
+    observed_at = datetime.combine(
+        latest_bar_date + timedelta(days=1),
+        time(14, 30),
+        tzinfo=DecisionBoardService().settings.timezone,
+    )
 
     service = DecisionBoardService()
     service.record_provisional_input(
@@ -54,9 +76,7 @@ def test_provisional_ohlcv_can_update_research_indicators_but_not_eod_neighbor_f
     assert "forecasts" not in row["provisional"]["derived"]
 
     forecast = row["forecasts"]["1"]
-    assert forecast["source"] == "persisted_forecast_snapshot"
-    assert forecast["feature_basis"] == "settled_daily_bars"
-    assert forecast["intraday_provisional_used"] is False
+    _assert_settled_daily_forecasts([forecast])
     assert forecast["as_of_date"] == stored.as_of_date.isoformat()
     assert forecast["expected_return"] == stored.expected_return
     assert forecast["p_up"] == stored.p_up
@@ -78,10 +98,7 @@ def test_all_forecast_surfaces_expose_settled_daily_basis(db_session, bootstrapp
         for forecast in row["forecasts"].values()
         if forecast["source"] == "persisted_forecast_snapshot"
     ]
-    assert board_forecasts
-    assert all(item["feature_basis"] == "settled_daily_bars" for item in board_forecasts)
-    assert all(item["intraday_provisional_used"] is False for item in board_forecasts)
-    assert all(item["as_of_date"] for item in board_forecasts)
+    _assert_settled_daily_forecasts(board_forecasts)
 
     etf_rows = ETF1430WorkbenchService().summary(db_session)["rows"]
     etf_forecasts = [
@@ -90,19 +107,15 @@ def test_all_forecast_surfaces_expose_settled_daily_basis(db_session, bootstrapp
         for forecast in row["forecasts"].values()
         if forecast["source"] == "persisted_forecast_snapshot"
     ]
-    assert etf_forecasts
-    assert all(item["feature_basis"] == "settled_daily_bars" for item in etf_forecasts)
-    assert all(item["intraday_provisional_used"] is False for item in etf_forecasts)
-    assert all(item["as_of_date"] for item in etf_forecasts)
+    _assert_settled_daily_forecasts(etf_forecasts)
 
     kline_rows = KlineStabilizationService().summary(db_session)["rows"]
     kline_forecasts = [
-        row["forecast"] for row in kline_rows if row["forecast"]["source"] == "persisted_forecast_snapshot"
+        row["forecast"]
+        for row in kline_rows
+        if row["forecast"]["source"] == "persisted_forecast_snapshot"
     ]
-    assert kline_forecasts
-    assert all(item["feature_basis"] == "settled_daily_bars" for item in kline_forecasts)
-    assert all(item["intraday_provisional_used"] is False for item in kline_forecasts)
-    assert all(item["as_of_date"] for item in kline_forecasts)
+    _assert_settled_daily_forecasts(kline_forecasts)
 
 
 def test_unified_page_and_readme_explain_forecast_time_basis() -> None:
