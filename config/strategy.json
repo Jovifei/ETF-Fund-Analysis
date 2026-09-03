@@ -227,7 +227,11 @@
     }
   },
   "global_model_research": {
-    "embargo_sessions": 0
+    "version": "global-model-research-v0.2.0-purged-walk-forward",
+    "embargo_sessions": 0,
+    "walk_forward_folds": 4,
+    "walk_forward_test_sessions": 20,
+    "walk_forward_min_train_sessions": 150
   },
   "factor_analysis": {
     "version": "factor-analysis-v0.2.0-horizon-aligned",
