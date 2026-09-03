@@ -1,0 +1,42 @@
+name: patch-horizon-fallback-contract
+on:
+  push:
+    branches: [fix/horizon-fallback-contract-20260903]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/horizon-fallback-contract-20260903
+          fetch-depth: 0
+      - name: Use shared 1-3-5-10 fallback
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('backend/app/services/forecast_service.py')
+          text = path.read_text(encoding='utf-8')
+          anchor = 'from app.utils.hashing import stable_hash\n'
+          import_line = 'from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS\n'
+          if import_line not in text:
+              if text.count(anchor) != 1:
+                  raise SystemExit('hashing import anchor not unique')
+              text = text.replace(anchor, anchor + import_line)
+          old = 'for horizon in [int(value) for value in forecast_cfg.get("horizons", [1, 5, 20])]:'
+          new = 'for horizon in [int(value) for value in forecast_cfg.get("horizons", DEFAULT_RESEARCH_HORIZONS)]:'
+          if text.count(old) != 1:
+              raise SystemExit(f'old horizon fallback count={text.count(old)}')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+          python -m compileall -q backend/app/services/forecast_service.py
+      - name: Commit patch and remove temporary workflow
+        run: |
+          rm .github/workflows/patch-horizon-fallback-contract.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/app/services/forecast_service.py .github/workflows/patch-horizon-fallback-contract.yml
+          git commit -m 'fix: use shared research horizon fallback in forecasts'
+          git push origin HEAD:fix/horizon-fallback-contract-20260903
