@@ -1,0 +1,36 @@
+name: patch-forecast-confidence-boundary
+on:
+  push:
+    branches: [fix/single-etf-decision-surface-20260903]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/single-etf-decision-surface-20260903
+          fetch-depth: 0
+      - name: Preserve conf 40 as weak signal
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('backend/app/static/decision_board_workbuddy.js')
+          text = path.read_text(encoding='utf-8')
+          old = "let evidence=clamp((conf-40)/40,0,1);"
+          new = "let evidence=clamp((conf-39)/41,0,1);"
+          if text.count(old) != 1:
+              raise SystemExit(f'expected exactly one forecast evidence boundary, found {text.count(old)}')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+          node --test backend/app/static/decision_board_workbuddy.test.js
+      - name: Commit boundary fix and remove temporary workflow
+        run: |
+          rm .github/workflows/patch-forecast-confidence-boundary.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/app/static/decision_board_workbuddy.js .github/workflows/patch-forecast-confidence-boundary.yml
+          git commit -m 'fix: preserve confidence 40 as weak forecast evidence'
+          git push origin HEAD:fix/single-etf-decision-surface-20260903
