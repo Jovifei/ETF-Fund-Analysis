@@ -51,3 +51,13 @@ def test_forecast_generation_and_validation_do_not_keep_legacy_1_5_20_fallbacks(
     assert "DEFAULT_RESEARCH_HORIZONS" in validation_source
     assert "[1, 5, 20]" not in generation_source
     assert "[1, 5, 20]" not in validation_source
+
+
+def test_readme_matches_current_horizon_and_migration_contracts():
+    readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "1/3/5/10 交易日" in readme
+    assert "1/5/20 日终点收益" not in readme
+    assert "alembic upgrade head" in readme
+    assert "alembic current" in readme
+    assert "alembic check" in readme
