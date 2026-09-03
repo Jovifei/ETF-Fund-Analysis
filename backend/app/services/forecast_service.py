@@ -21,6 +21,7 @@ from app.utils.feature_store import (
     feature_columns_for_horizon,
 )
 from app.utils.hashing import stable_hash
+from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS
 from app.utils.numbers import clamp
 from app.utils.reproducibility import reproducibility_payload
 
@@ -357,7 +358,7 @@ class ForecastService:
             input_hash = stable_hash(
                 [{"date": row.trade_date, "hash": row.quality_hash} for row in reversed(rows)]
             )
-            for horizon in [int(value) for value in forecast_cfg.get("horizons", [1, 5, 20])]:
+            for horizon in [int(value) for value in forecast_cfg.get("horizons", DEFAULT_RESEARCH_HORIZONS)]:
                 selected = feature_columns_for_horizon(horizon, frame.columns)
                 result = similarity_forecast(
                     frame,
