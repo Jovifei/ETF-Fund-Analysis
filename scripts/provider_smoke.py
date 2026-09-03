@@ -4,10 +4,11 @@ from __future__ import annotations
 import json
 import os
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from app.core.config import get_settings
 from app.providers.factory import create_provider
+from app.services.market_service import MarketService
 
 
 def main() -> int:
@@ -38,10 +39,29 @@ def main() -> int:
         result["checks"]["daily_bars"] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
     try:
         quotes = provider.fetch_spot_quotes(codes[:3])
+        qualified_at = datetime.now(settings.timezone)
+        qualification = [MarketService._qualify_quote_timestamp(item, qualified_at) for item in quotes]
+        provider_realtime = sum(int(item.is_realtime and not item.degraded_reason) for item in quotes)
+        verified_realtime = sum(
+            int(verified and item.is_realtime and not item.degraded_reason)
+            for item, (verified, _reason) in zip(quotes, qualification, strict=True)
+        )
+        reasons = sorted(
+            {
+                reason
+                for _item, (verified, reason) in zip(quotes, qualification, strict=True)
+                if not verified and reason
+            }
+        )
         result["checks"]["quotes"] = {
             "ok": bool(quotes),
             "count": len(quotes),
-            "realtime": sum(int(item.is_realtime and not item.degraded_reason) for item in quotes),
+            # `realtime` now means the same execution-grade qualification used
+            # when QuoteSnapshot rows are persisted, not merely a provider flag.
+            "realtime": verified_realtime,
+            "verified_realtime": verified_realtime,
+            "provider_realtime": provider_realtime,
+            "qualification_reasons": reasons,
             "degraded": [item.degraded_reason for item in quotes if item.degraded_reason],
             "sources": sorted({item.source for item in quotes}),
         }
@@ -61,8 +81,8 @@ def main() -> int:
     core_ok = bool(result["checks"].get("instruments", {}).get("ok")) and bool(
         result["checks"].get("daily_bars", {}).get("ok")
     )
-    if settings.market_provider != "mock" and result["checks"].get("quotes", {}).get("realtime", 0) == 0:
-        print("WARNING: no execution-grade real-time quote was verified.", file=sys.stderr)
+    if settings.market_provider != "mock" and result["checks"].get("quotes", {}).get("verified_realtime", 0) == 0:
+        print("WARNING: no application-qualified execution-grade real-time quote was verified.", file=sys.stderr)
     return 0 if core_ok else 2
 
 

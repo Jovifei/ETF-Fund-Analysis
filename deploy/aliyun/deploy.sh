@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 ROOT="${1:-/opt/china-fund-decision}"
 cd "$ROOT"
 [[ -f .env ]] || { echo "Missing $ROOT/.env; copy deploy/.env.production.example and fill secrets." >&2; exit 2; }
@@ -9,6 +10,7 @@ source .env
 set +a
 mkdir -p reports backups
 chmod 600 .env
+chmod 700 reports backups
 chown -R 10001:10001 reports backups
 
 docker compose config >/dev/null

@@ -1,5 +1,5 @@
 # Replace the domain and email, then install this file as /etc/caddy/Caddyfile.
-# The application uses the server-local account password configuration. Keep
+# Production authentication is database-backed. Keep AUTH_ENABLED=true and
 # AUTH_COOKIE_SECURE=true behind this HTTPS reverse proxy.
 {
   email admin@example.com
