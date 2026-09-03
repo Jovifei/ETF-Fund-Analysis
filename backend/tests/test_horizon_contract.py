@@ -61,3 +61,4 @@ def test_readme_matches_current_horizon_and_migration_contracts():
     assert "alembic upgrade head" in readme
     assert "alembic current" in readme
     assert "alembic check" in readme
+    assert "158ca7025305` →" not in readme
