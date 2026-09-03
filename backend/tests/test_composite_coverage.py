@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
+from sqlalchemy import select
+
+from app.models import Instrument
 from app.providers.base import MarketProvider, ProviderError
 from app.providers.composite import CompositeProvider
 from app.providers.types import BarRecord, InstrumentRecord, QuoteRecord
+from app.services.market_service import MarketService
 
 
 class _Provider(MarketProvider):
@@ -150,3 +154,26 @@ def test_instrument_lookup_fills_missing_symbol_alias_without_overwriting_primar
     assert [row.ts_code for row in rows] == ["510300.SH", "159915.SZ"]
     assert primary.instrument_calls == [["510300", "159915"]]
     assert fallback.instrument_calls == [["159915"]]
+
+
+def test_market_service_reports_requested_received_and_missing_codes(bootstrapped, db_session) -> None:
+    instruments = db_session.scalars(
+        select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code).limit(2)
+    ).all()
+    assert len(instruments) == 2
+    first, second = instruments
+    provider = _Provider(
+        "partial",
+        quotes={first.ts_code: _quote(first.ts_code, "akshare", 1.23)},
+    )
+
+    result = MarketService(provider, persist_provider_audits=False).refresh_quotes(
+        db_session,
+        codes=[first.ts_code, second.ts_code],
+        run_id="coverage-audit-test",
+    )
+
+    assert result["requested"] == 2
+    assert result["received"] == 1
+    assert result["missing"] == 1
+    assert result["missing_codes"] == [second.ts_code]
