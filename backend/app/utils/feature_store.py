@@ -8,7 +8,7 @@ import pandas as pd
 
 from app.utils.indicators_v05 import calculate_indicators
 
-FEATURE_SCHEMA_VERSION = "feature-store-v0.7.0"
+FEATURE_SCHEMA_VERSION = "feature-store-v0.7.1-horizon-aligned"
 
 LEGACY_FEATURES = (
     "return_1d",
@@ -25,71 +25,78 @@ LEGACY_FEATURES = (
     "drawdown_60d",
 )
 
+SHORT_HORIZON_FEATURES = LEGACY_FEATURES + (
+    "amount_ratio",
+    "volume_zscore20",
+    "obv_slope_5",
+    "mfi14",
+    "cmf20",
+    "adx14",
+    "plus_di14",
+    "minus_di14",
+    "cci20",
+    "wr14",
+    "roc12",
+    "rsrs_zscore",
+    "rps20",
+    "volume_breakout",
+    "false_breakout_risk",
+)
+
+SWING_HORIZON_FEATURES = LEGACY_FEATURES + (
+    "return_60d",
+    "amount_ratio",
+    "obv_slope_5",
+    "mfi14",
+    "cmf20",
+    "adx14",
+    "cci20",
+    "roc12",
+    "rsrs_zscore",
+    "box_position_20",
+    "box_range_20",
+    "box_position_55",
+    "turtle_entry_20",
+    "turtle_entry_55",
+    "pullback_ready",
+    "second_launch",
+    "rps20",
+    "rps60",
+    "vp_peak_distance",
+    "cost50_distance",
+)
+
+MEDIUM_HORIZON_FEATURES = LEGACY_FEATURES + (
+    "return_60d",
+    "return_120d",
+    "mfi14",
+    "cmf20",
+    "adx14",
+    "rsrs_zscore",
+    "rsrs_right_skew",
+    "box_position_55",
+    "box_range_55",
+    "box_position_120",
+    "box_range_120",
+    "pullback_ready",
+    "second_launch",
+    "rps20",
+    "rps60",
+    "rps120",
+    "vp_peak_distance",
+    "cost50_distance",
+    "profit_ratio_est",
+    "chip_concentration",
+)
+
 HORIZON_FEATURES: dict[int, tuple[str, ...]] = {
-    1: LEGACY_FEATURES
-    + (
-        "amount_ratio",
-        "volume_zscore20",
-        "obv_slope_5",
-        "mfi14",
-        "cmf20",
-        "adx14",
-        "plus_di14",
-        "minus_di14",
-        "cci20",
-        "wr14",
-        "roc12",
-        "rsrs_zscore",
-        "rps20",
-        "volume_breakout",
-        "false_breakout_risk",
-    ),
-    5: LEGACY_FEATURES
-    + (
-        "return_60d",
-        "amount_ratio",
-        "obv_slope_5",
-        "mfi14",
-        "cmf20",
-        "adx14",
-        "cci20",
-        "roc12",
-        "rsrs_zscore",
-        "box_position_20",
-        "box_range_20",
-        "box_position_55",
-        "turtle_entry_20",
-        "turtle_entry_55",
-        "pullback_ready",
-        "second_launch",
-        "rps20",
-        "rps60",
-        "vp_peak_distance",
-        "cost50_distance",
-    ),
-    20: LEGACY_FEATURES
-    + (
-        "return_60d",
-        "return_120d",
-        "mfi14",
-        "cmf20",
-        "adx14",
-        "rsrs_zscore",
-        "rsrs_right_skew",
-        "box_position_55",
-        "box_range_55",
-        "box_position_120",
-        "box_range_120",
-        "pullback_ready",
-        "second_launch",
-        "rps20",
-        "rps60",
-        "rps120",
-        "vp_peak_distance",
-        "cost50_distance",
-        "profit_ratio_est",
-        "chip_concentration",
-    ),
+    1: SHORT_HORIZON_FEATURES,
+    3: SWING_HORIZON_FEATURES,
+    5: SWING_HORIZON_FEATURES,
+    10: MEDIUM_HORIZON_FEATURES,
+    # Kept for reproduction of already-persisted v0.7 research artifacts.
+    # New configured research/forecast runs use 1/3/5/10.
+    20: MEDIUM_HORIZON_FEATURES,
 }
 
 BOOLEAN_FEATURES = (
