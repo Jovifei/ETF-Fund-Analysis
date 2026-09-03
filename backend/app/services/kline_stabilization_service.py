@@ -457,6 +457,7 @@ class KlineStabilizationService:
                 "expected_return": None, "p_up": None, "confidence": 0, "sample_count": 0,
                 "calibration_status": "not_calibrated", "note": "persisted forecast unavailable",
                 "source": "unavailable", "p_up_semantics": "unavailable",
+                "as_of_date": None, "feature_basis": "unavailable", "intraday_provisional_used": False,
             }
         else:
             status = str(stored_forecast.calibration_status or "not_calibrated")
@@ -468,6 +469,9 @@ class KlineStabilizationService:
                 "calibration_status": status,
                 "note": _forecast_note(stored_forecast.diagnostics_json),
                 "source": "persisted_forecast_snapshot",
+                "as_of_date": stored_forecast.as_of_date.isoformat(),
+                "feature_basis": "settled_daily_bars",
+                "intraday_provisional_used": False,
                 "p_up_semantics": (
                     "calibrated_up_probability"
                     if status == "calibrated"
@@ -538,6 +542,9 @@ class KlineStabilizationService:
                 "source": pattern.get("source"),
                 "p_up": pattern.get("p_up"),
                 "p_up_semantics": pattern.get("p_up_semantics"),
+                "as_of_date": pattern.get("as_of_date"),
+                "feature_basis": pattern.get("feature_basis"),
+                "intraday_provisional_used": pattern.get("intraday_provisional_used", False),
             },
             "chanlun": chan,
             "action": action,

@@ -13,6 +13,7 @@
 - 新闻去重、主题映射、提示注入隔离和 provider-neutral 多模型分析网关。
 - 暗色网页看板、市场上下文卡片、K 线/MACD Canvas 图、持仓录入、SSE 增量更新、HTML 报告。
 - 1/3/5/10 交易日终点收益、终点收盘区间、未来路径支撑/压力区和触及频率；未完成前向校准时继续标记 `not_calibrated`。
+- 14:30 盘中 quote/OHLCV 仅在隔离的 provisional 研究层更新当前分级、指标解释、图表与支撑压力；1/3/5/10 forecast 在具备同一时点历史盘中样本前始终读取最近已结算日线 `ForecastSnapshot`，页面显示其 `as_of_date`。禁止用当前 14:30 状态直接匹配历史收盘状态冒充盘中预测。
 - Alphalens 风格因子 IC/Rank IC/ICIR/分位收益/换手/市场状态诊断，以及可选全局 LightGBM/CatBoost 研究任务。
 - XSHG 统一交易日历；实时行情必须拥有可验证的上游时间戳才能成为操作级数据。
 - 信号中心研究视图：信号行情曲线（机会/风险/止盈逐日计数）、三张前排推荐、板块强度排名和可调信号系数（0.50–1.50）；命中持仓的条目带账户提醒，仅为研究提示。
@@ -118,36 +119,3 @@ sudo bash deploy/aliyun/deploy.sh
 Compose 只把应用映射到 `127.0.0.1:8080`，PostgreSQL 不映射宿主机端口。公网访问应经过 Caddy/Nginx HTTPS；ECS 安全组只开放 80/443，SSH 22 仅允许可信 IP。反向代理上传上限应保持 12MB：应用图像上限为 10MiB，额外空间仅用于 multipart 开销；示例已在 Caddy/Nginx 中对齐。
 
 `.env` 用 `chmod 0600`，OCR 临时根目录用 `0700`，模型根目录私有并只读。上线前先备份，并执行 `alembic upgrade head`；随后用 `alembic current` 与 `alembic check` 验证数据库处于仓库当前唯一 head 且没有待生成迁移；回滚只允许在备份和隔离实例验证后使用 `alembic downgrade`，不能直接改生产库。隔离 SQLite 已完成 upgrade/current、完整 downgrade/re-upgrade 和 `alembic check`；该审计修复保留历史 review/analysis hash-check 名称、holding-import opaque-session 约束、nullable legacy calibration JSON 与唯一 `candidate_id` 查询契约。真实 PostgreSQL 的迁移/回滚/备份恢复仍是生产发布门槛。
-
-## 命令
-
-```bash
-fund-decision run-task sync_instruments
-fund-decision run-task refresh_bars --lookback-days 900
-fund-decision run-task refresh_quotes
-fund-decision run-task refresh_market_context
-fund-decision run-task refresh_news
-fund-decision run-task refresh_indicators
-fund-decision run-task refresh_forecasts
-fund-decision run-task refresh_signals
-fund-decision run-task validate_forecasts
-fund-decision run-task backtest_rotation
-fund-decision run-task backtest_ablation
-fund-decision run-task analyze_factors
-fund-decision run-task research_global_models
-fund-decision run-task research_capabilities
-fund-decision run-task generate_report
-fund-decision bootstrap --lookback-days 900
-```
-
-## 版本与验证边界
-
-应用/发行包版本为 `0.7.0`。策略、指标和预测版本仍由 `config/strategy.json` 管理（当前为 `signal-v0.7.0-research` / `similarity-corridor-v0.7.0` 等），本版本没有在生产环境自动升级公式或阈值。完整回归、迁移、Mock HTTP 和浏览器烟测只证明本地/Mock 行为；真实 PostgreSQL、Tushare/AKShare/OpenAI 端点、真实 Paddle Python 3.12 wheel/model、ECS、域名 HTTPS 与预测校准仍是部署门槛。详见 [`STATUS.md`](STATUS.md)、[`HANDOFF.md`](HANDOFF.md)、[`docs/USER_GUIDE.md`](docs/USER_GUIDE.md) 和 [`docs/IMPLEMENTATION_MATRIX.md`](docs/IMPLEMENTATION_MATRIX.md)。
-
-## 安全与许可证
-
-个人私用并不会自动取消第三方许可证、署名要求、保密义务或服务条款。参考源码采用隔离方式；生产应用不从 `vendor/src` 导入代码。严禁把 GitHub 中发现的 Token、内网地址、账户 ID 或历史数据复制到本项目。第三方说明见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
-
-## ETF 14:30 决策工作台（本地覆盖包新增）
-
-新增 `/workbench/1430`：提供 1/3/5/10 日研究预测、历史蜡烛与未来情景蜡烛、MACD/KDJ/RSI 确认的价格拐点、均线/箱体/ATR/Fibonacci/成交密集成本支撑压力，以及 `chan_zone_approx`。新增 API、定时脚本和 point-in-time 数据集构建器。详见 [`docs/ETF_1430_DECISION_WORKBENCH.md`](docs/ETF_1430_DECISION_WORKBENCH.md)。该模块仍为研究态，真实分钟数据验证前保持 `historical_1430_backtest=not_qualified`。
