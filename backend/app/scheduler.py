@@ -55,6 +55,13 @@ def _last_terminal_attempt(db, task_name: str) -> datetime | None:
     )
 
 
+def _last_attempt_or_success(db, task_name: str) -> datetime | None:
+    """Prefer terminal attempts while preserving older success-based test/caller contracts."""
+
+    terminal = _last_terminal_attempt(db, task_name)
+    return terminal if terminal is not None else _last_success(db, task_name)
+
+
 def _due(last: datetime | None, now: datetime, minutes: int) -> bool:
     if last is None:
         return True
@@ -130,24 +137,23 @@ def _run_guarded(
     failures: list[dict[str, str]],
     **kwargs,
 ) -> bool:
-    """Run and durably finish one scheduler task without killing the whole tick.
+    """Attempt and durably finish one task without killing the whole scheduler tick.
 
-    `TaskService.run()` deliberately rolls its caller session back after a task
-    failure. Committing each success here makes the scheduler task boundary a
-    real transaction boundary too, so a later independent failure cannot erase
-    earlier successful quote/snapshot/after-close work from the same tick.
+    `executed` keeps the historical meaning "attempted this tick"; `failures` is
+    the failed subset. TaskService owns caller rollback and durable failure audit
+    recovery. The scheduler commits each success so a later independent task
+    failure cannot erase earlier quote/snapshot/after-close work from this tick.
     """
 
+    executed.append(task_name)
     try:
         tasks.run(db, task_name, **kwargs)
         db.commit()
     except (TaskExecutionError, TaskBusyError) as exc:
-        db.rollback()
         failure_class = str(getattr(exc, "failure_class", type(exc).__name__))[:128]
         failures.append({"task": task_name, "failure_class": failure_class})
         logger.warning("scheduler task %s failed: %s", task_name, failure_class)
         return False
-    executed.append(task_name)
     return True
 
 
@@ -230,9 +236,9 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
                 **({"run_id": queued} if queued else {}),
             )
             if not succeeded:
-                # TaskService has already rolled back a failed task, which also
-                # removes an uncommitted claim. Keep this explicit release for
-                # TaskBusy paths and future claim implementations.
+                # TaskService rolls back a failed task, which normally removes an
+                # uncommitted claim. Keep this explicit release for TaskBusy and
+                # future claim implementations, then persist the release boundary.
                 _release_decision_board_slot(db, slot_key)
                 db.commit()
         elif queued is not None:
@@ -253,7 +259,7 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
         if (
             clock.price_session_open(now, is_trade_day)
             and not board_refresh_window
-            and _due(_last_terminal_attempt(db, "refresh_quotes"), now, quote_minutes)
+            and _due(_last_attempt_or_success(db, "refresh_quotes"), now, quote_minutes)
         ):
             _run_guarded(
                 tasks,
@@ -266,7 +272,7 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
         # Market context is optional and cannot block the quote/decision path.
         market_context_minutes = int(settings.market_context_refresh_minutes)
         if _due(
-            _last_terminal_attempt(db, "refresh_market_context"), now, market_context_minutes
+            _last_attempt_or_success(db, "refresh_market_context"), now, market_context_minutes
         ):
             _run_guarded(
                 tasks,
@@ -315,9 +321,10 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
                     **kwargs,
                 )
 
-        # News is additive/optional. Gate by terminal attempts so an upstream
-        # outage is retried at the configured cadence instead of every 30 sec.
-        if _due(_last_terminal_attempt(db, "refresh_news"), now, news_minutes):
+        # News is additive/optional. Gate by the latest terminal attempt so an
+        # upstream outage is retried at the configured cadence instead of every
+        # 30 seconds; the success fallback preserves existing scheduler callers.
+        if _due(_last_attempt_or_success(db, "refresh_news"), now, news_minutes):
             _run_guarded(
                 tasks,
                 db,
