@@ -15,6 +15,7 @@ from app.services.event_service import emit_event
 from app.services.factor_analysis_service import FactorAnalysisService
 from app.utils.feature_store import HORIZON_FEATURES
 from app.utils.hashing import stable_hash
+from app.utils.time_split import purged_holdout_bounds
 
 
 def _pinball(actual: np.ndarray, predicted: np.ndarray, quantile: float) -> float:
@@ -93,15 +94,22 @@ class GlobalModelResearchService:
             if len(dates) < 240:
                 raise ValueError("global model research requires at least 240 distinct trading dates")
             split_date = dates[int(len(dates) * 0.80)]
+            research_cfg = self.strategy.get("global_model_research", {})
+            embargo_sessions = max(0, int(research_cfg.get("embargo_sessions", 0)))
             payload = {
                 "run_id": run_id,
                 "generated_at": now.isoformat(),
                 "status": "completed",
                 "backend": backend,
                 "split": {
-                    "method": "chronological_80_20_holdout",
+                    "method": "chronological_80_20_holdout_with_horizon_purge",
                     "split_date": str(split_date),
                     "random_shuffle": False,
+                    "embargo_sessions": embargo_sessions,
+                    "label_leakage_policy": (
+                        "for horizon h, exclude the h sessions immediately before the test boundary "
+                        "from training so every training forward label ends before the first test session"
+                    ),
                 },
                 "feature_schema_version": self.strategy.get("feature_schema_version"),
                 "production_promotion": False,
@@ -111,14 +119,21 @@ class GlobalModelResearchService:
                 target = f"forward_return_{horizon}"
                 features = [name for name in HORIZON_FEATURES[horizon] if name in panel.columns]
                 work = panel[["trade_date", target, *features]].replace([np.inf, -np.inf], np.nan).dropna()
-                train = work.loc[work["trade_date"] < split_date]
-                test = work.loc[work["trade_date"] >= split_date]
+                guard = purged_holdout_bounds(
+                    dates,
+                    test_start=split_date,
+                    label_horizon=horizon,
+                    embargo_sessions=embargo_sessions,
+                )
+                train = work.loc[work["trade_date"] < guard.train_before]
+                test = work.loc[work["trade_date"] >= guard.test_start]
                 if len(train) < 500 or len(test) < 100:
                     payload["horizons"][str(horizon)] = {
                         "status": "skipped",
                         "reason": "sample_shortage",
                         "train": len(train),
                         "test": len(test),
+                        "leakage_guard": guard.model_dump(),
                     }
                     continue
                 train_x = train[features].astype(float)
@@ -137,6 +152,11 @@ class GlobalModelResearchService:
                     "features": features,
                     "train_samples": len(train),
                     "holdout_samples": len(test),
+                    "train_first_date": str(train["trade_date"].min()),
+                    "train_last_date": str(train["trade_date"].max()),
+                    "test_first_date": str(test["trade_date"].min()),
+                    "test_last_date": str(test["trade_date"].max()),
+                    "leakage_guard": guard.model_dump(),
                     "mae_q50": round(float(np.mean(np.abs(actual - q50))), 6),
                     "pinball_q10": round(_pinball(actual, q10, 0.10), 6),
                     "pinball_q50": round(_pinball(actual, q50, 0.50), 6),
