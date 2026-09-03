@@ -12,7 +12,13 @@
 - 观望
 - 减仓
 
-`DecisionBoardSnapshot.rows[].grade` 是当前展示的 canonical conclusion。
+当前结论按**每只 ETF**解析，优先级固定为：
+
+1. 最新 `DecisionBoardSnapshot.rows[].grade`；
+2. 该 ETF 在决策快照中缺失时，回退 `SignalGradeService` 当前五档；
+3. 两者均无时才使用 `SignalSnapshot.state`，且只作为最后审计兼容值。
+
+前两者属于 canonical conclusion；第三层不是。部分快照会显式标记 `mixed_per_instrument`，不能假装所有标的来自同一来源。
 
 `SignalCenterService` 的机会/风险/止盈前排只是排序和解释视图：
 
@@ -23,10 +29,12 @@
 
 API 同时暴露：
 
-- `state`: 当前 canonical grade；
+- `state`: 当前解析后的状态；
+- `state_source` / `state_canonical`: 单 ETF 的来源与 canonical 标记；
 - `production_signal_state`: 原 SignalSnapshot 状态；
 - `decision_board_grade`: 决策看板 grade；
-- `current_state_source`: `decision_board_snapshot` 或无快照时的 `signal_snapshot_fallback`。
+- `signal_grade_fallback`: 缺失快照行时的确定性五档；
+- `current_state_source`: 全部同源时返回具体来源；部分标的来源不同则为 `mixed_per_instrument`。
 
 这样可以解释历史差异，同时保证用户在同一时点看到的当前方向一致。
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.main import app
 from app.models import DecisionBoardSnapshot, IndicatorSnapshot, Instrument, NewsItem, SignalSnapshot
@@ -13,6 +13,7 @@ from app.services.signal_center_service import (
     RISK_STATES,
     SignalCenterService,
 )
+from app.utils.current_decision import DECISION_BOARD_SOURCE, MIXED_SOURCE, SIGNAL_GRADE_SOURCE
 
 STRATEGY_VERSION = "signal-v0.4.0"
 INDICATOR_VERSION = "indicator-v0.2.0"
@@ -127,9 +128,10 @@ def test_summary_fronts_and_research_only_flag(bootstrapped, db_session):
     assert payload["coefficient"] == 1.0
     assert payload["research_only"] is True  # 测试环境为 mock 数据源
 
-    total = len({row.instrument_id for row in db_session.scalars(select(SignalSnapshot)).all()})
+    signal_total = len({row.instrument_id for row in db_session.scalars(select(SignalSnapshot)).all()})
     summary = payload["summary"]
-    assert summary["total"] == total
+    assert summary["total"] == len(payload["current_states"])
+    assert summary["total"] >= signal_total
     assert summary["opportunity"] == len(payload["fronts"]["opportunity"])
     assert summary["risk"] >= len(payload["fronts"]["risk"])  # 前排只取前 N
     assert summary["take_profit"] >= len(payload["fronts"]["take_profit"])
@@ -362,12 +364,35 @@ def test_current_fronts_follow_latest_decision_board_grade(bootstrapped, db_sess
     )
     db_session.flush()
 
-    payload = SignalCenterService().build(db_session, coefficient=1.5)
-    assert payload["current_state_source"] == "decision_board_snapshot"
+    service = SignalCenterService()
+    service.config["front_size"] = 1000
+    payload = service.build(db_session, coefficient=1.5)
+    assert payload["current_state_source"] == MIXED_SOURCE
     assert payload["decision_snapshot_id"] == snapshot_id
+    assert payload["current_states"][instrument.ts_code]["source"] == DECISION_BOARD_SOURCE
+    assert payload["current_states"][instrument.ts_code]["canonical"] is True
     risk = [item for item in payload["fronts"]["risk"] if item["ts_code"] == instrument.ts_code]
     opportunity = [item for item in payload["fronts"]["opportunity"] if item["ts_code"] == instrument.ts_code]
     assert risk and risk[0]["state"] == "减仓"
     assert risk[0]["production_signal_state"] == "可入场"
     assert risk[0]["decision_board_grade"] == "减仓"
     assert not opportunity
+
+
+def test_signal_grade_fallback_is_canonical_without_decision_snapshot(bootstrapped, db_session):
+    db_session.execute(delete(DecisionBoardSnapshot))
+    db_session.flush()
+
+    payload = SignalCenterService().build(db_session, coefficient=1.5)
+
+    assert payload["current_state_source"] == SIGNAL_GRADE_SOURCE
+    assert payload["current_state_source_counts"][SIGNAL_GRADE_SOURCE] == payload["summary"]["total"]
+    assert payload["signal_grade_fallback_version"].startswith("signal-grade-")
+    assert payload["current_states"]
+    assert all(item["source"] == SIGNAL_GRADE_SOURCE for item in payload["current_states"].values())
+    assert all(item["canonical"] is True for item in payload["current_states"].values())
+
+    low = SignalCenterService().build(db_session, coefficient=0.5)
+    high = SignalCenterService().build(db_session, coefficient=1.5)
+    assert low["summary"]["opportunity"] == high["summary"]["opportunity"]
+    assert low["summary"]["risk"] == high["summary"]["risk"]
