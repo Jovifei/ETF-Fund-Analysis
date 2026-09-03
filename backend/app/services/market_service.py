@@ -197,6 +197,7 @@ class MarketService:
             wanted = {code.upper() for code in codes}
             instruments = [item for item in instruments if item.ts_code.upper() in wanted or item.symbol in wanted]
         by_code = {item.ts_code: item for item in instruments}
+        requested_codes = list(by_code)
         timer = AuditTimer()
         error: Exception | None = None
         records = []
@@ -216,6 +217,8 @@ class MarketService:
                     error=error,
                     latency_ms=timer.elapsed_ms,
                 )
+        received_codes = {item.ts_code for item in records if item.ts_code in by_code}
+        missing_codes = [code for code in requested_codes if code not in received_codes]
         inserted = 0
         realtime = 0
         raw_realtime = 0
@@ -262,6 +265,10 @@ class MarketService:
                 "realtime": realtime,
                 "raw_realtime": raw_realtime,
                 "degraded": degraded,
+                "requested": len(requested_codes),
+                "received": len(received_codes),
+                "missing": len(missing_codes),
+                "missing_codes": missing_codes,
                 "run_id": run_id,
             },
         )
@@ -271,6 +278,10 @@ class MarketService:
             "realtime": realtime,
             "raw_realtime": raw_realtime,
             "degraded": degraded,
+            "requested": len(requested_codes),
+            "received": len(received_codes),
+            "missing": len(missing_codes),
+            "missing_codes": missing_codes,
         }
 
     def purge_old_quotes(self, db: Session, keep_days: int = 45) -> int:
