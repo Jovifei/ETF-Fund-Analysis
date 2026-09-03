@@ -105,9 +105,12 @@ def test_all_forecast_surfaces_expose_settled_daily_basis(db_session, bootstrapp
     assert all(item["as_of_date"] for item in kline_forecasts)
 
 
-def test_unified_page_displays_forecast_basis_date() -> None:
+def test_unified_page_and_readme_explain_forecast_time_basis() -> None:
     source = (PROJECT_ROOT / "backend" / "app" / "static" / "decision_board_workbuddy.js").read_text(
         encoding="utf-8"
     )
+    readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
     assert "日线基准至" in source
     assert "feature_basis==='settled_daily_bars'" in source
+    assert "14:30 盘中 quote/OHLCV" in readme
+    assert "禁止用当前 14:30 状态直接匹配历史收盘状态冒充盘中预测" in readme
