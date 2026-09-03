@@ -29,7 +29,7 @@ function toneFromScore(score){if(score>=70)return 'good';if(score<40)return 'hot
 function todayReturn(row){return row?.returns?.today??row?.return_1d??null;}
 function forecastItem(row,h){return row?.forecasts?.[String(h)]||row?.forecasts?.[h]||(h===state.horizon?row?.forecast:{})||{};}
 function confidenceNumber(item={}){const raw=Number(item?.confidence);if(!Number.isFinite(raw))return null;return raw<=1?raw*100:raw;}
-function confidenceBand(value){if(!numeric(value))return '未验证';const n=Number(value);return n>=60?'可参考':n>=40?'弱信号':'低参考';}
+function confidenceBand(value){if(!numeric(value))return '未验证';const n=Number(value);return n>=60?'可参考':n>=40?'弱信号':'忽略';}
 
 function kdjInterpret(kdj={}){
   const j=Number(kdj?.j),k=Number(kdj?.k),d=Number(kdj?.d);

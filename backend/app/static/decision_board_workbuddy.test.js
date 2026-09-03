@@ -20,3 +20,5 @@ test('relative direction arrows follow company screenshot semantics',()=>{const 
 test('confidence interpretation matches reference bands',()=>{const ui=load();assert.equal(ui.confidenceBand(66),'可参考');assert.equal(ui.confidenceBand(48),'弱信号');assert.equal(ui.confidenceBand(28),'低参考');});
 test('main source contains the exact thirteen company-reference columns',()=>{for(const label of ['标的','今日涨幅','较昨日','量能','均线多空','MACD','KDJ','九转','RSI','板块涨跌','近1周','操作建议'])assert.match(source,new RegExp(label));assert.match(source,/明日预测/);});
 test('main table keeps score inside instrument cell instead of a separate score column',()=>{assert.match(source,/score-mini/);assert.doesNotMatch(source,/<th>综合分<\/th>/);});
+
+test('confidence reference bands use ignore below 40',()=>{const ui=load();assert.equal(ui.confidenceBand(60),'可参考');assert.equal(ui.confidenceBand(40),'弱信号');assert.equal(ui.confidenceBand(39),'忽略');});

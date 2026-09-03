@@ -89,7 +89,7 @@ def test_grade_view_does_not_write_holdings(db_session):
     after = HoldingService().list(db_session)
     assert payload["writes_holdings"] is False
     assert payload["research_only"] is True
-    assert payload["version"] == "signal-grade-v0.3.0"
+    assert payload["version"] == "signal-grade-v0.4.0-reference-parity"
     assert before == after
     assert all(not row["actionable"] for row in payload["rows"])
     assert set(payload["groups"]) == set(GRADE_ORDER)
@@ -204,3 +204,27 @@ def test_reference_volume_thresholds_match_company_board():
     service = SignalGradeService()
     assert float(service.config["volume_expand"]) == 1.15
     assert float(service.config["volume_contract"]) == 0.9
+
+
+def test_company_reference_exact_boundaries_and_quote_contract():
+    from app.services.signal_grade_service import classify_kdj, classify_rsi, classify_volume, quote_percent_points_to_ratio
+    assert classify_volume(1.15, 1.15, 0.90)["kind"] == "expand"
+    assert classify_volume(0.90, 1.15, 0.90)["kind"] == "flat"
+    assert classify_volume(0.89, 1.15, 0.90)["kind"] == "contract"
+    cfg = {"j_overbought":100,"j_high":90,"j_low":20}
+    item=lambda j: classify_kdj({"kdj_j":j,"kdj_k":60,"kdj_d":50},None,cfg)
+    assert item(19.9)["kind"] == "low"
+    assert item(20)["kind"] == "healthy"
+    assert item(90)["kind"] == "high"
+    assert item(100)["kind"] == "high"
+    assert item(100.1)["kind"] == "overbought"
+    rsi_cfg={"rsi_overbought":70,"rsi_strong":50,"rsi_oversold":30}
+    assert classify_rsi(70,rsi_cfg)["label"].startswith("超买")
+    assert classify_rsi(50,rsi_cfg)["label"].startswith("正常偏强")
+    assert classify_rsi(30,rsi_cfg)["label"].startswith("偏弱")
+    assert classify_rsi(29.9,rsi_cfg)["label"].startswith("超卖")
+    assert quote_percent_points_to_ratio(3.8) == 0.038
+
+def test_bear_cont_display_and_grade_are_consistent():
+    grade = assign_grade(pct_change=-.01,volume={"kind":"flat"},ma={"kind":"mixed"},macd={"kind":"bear_cont"},kdj={"j":55,"kind":"healthy","death":False},cfg={"j_add_cap":90,"stall_return":.002})
+    assert grade == "减仓"
