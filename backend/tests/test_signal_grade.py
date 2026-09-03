@@ -89,7 +89,7 @@ def test_grade_view_does_not_write_holdings(db_session):
     after = HoldingService().list(db_session)
     assert payload["writes_holdings"] is False
     assert payload["research_only"] is True
-    assert payload["version"] == "signal-grade-v0.2.0"
+    assert payload["version"] == "signal-grade-v0.3.0-reference"
     assert before == after
     assert all(not row["actionable"] for row in payload["rows"])
     assert set(payload["groups"]) == set(GRADE_ORDER)
@@ -198,3 +198,16 @@ def test_signal_grade_sector_note_is_accurate_when_no_board(db_session):
     assert sector["down"] is None
     assert sector["board_type"] is None
     assert sector["note"] == "无对应行业/概念板块数据"
+
+
+def test_company_reference_thresholds_and_quote_unit_contract():
+    from app.services.signal_grade_service import classify_rsi, classify_volume, quote_percent_points_to_ratio
+    assert classify_volume(1.15, 1.15, 0.90)["kind"] == "expand"
+    assert classify_volume(0.90, 1.15, 0.90)["kind"] == "flat"
+    assert classify_volume(0.89, 1.15, 0.90)["kind"] == "contract"
+    rsi_cfg = {"rsi_overbought": 70, "rsi_strong": 50, "rsi_oversold": 30}
+    assert classify_rsi(70, rsi_cfg)["label"].startswith("超买")
+    assert classify_rsi(50, rsi_cfg)["label"].startswith("正常偏强")
+    assert classify_rsi(30, rsi_cfg)["label"].startswith("偏弱")
+    assert classify_rsi(29.9, rsi_cfg)["label"].startswith("超卖")
+    assert quote_percent_points_to_ratio(3.8) == 0.038

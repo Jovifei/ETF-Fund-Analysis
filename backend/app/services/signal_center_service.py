@@ -8,19 +8,23 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.models import IndicatorSnapshot, Instrument, NewsItem, SignalSnapshot
+from app.services.decision_board_service import DecisionBoardService
 from app.services.holding_service import HoldingService
+from app.services.signal_grade_service import SignalGradeService
 from app.utils.numbers import clamp, finite_or_none, percentile_rank
 
-OPPORTUNITY_STATES = frozenset({"可入场", "可试探", "加仓", "小幅加仓"})
-RISK_STATES = frozenset({"减仓", "风险观察", "数据异常"})
+OPPORTUNITY_STATES = frozenset({"可加仓", "可入场", "可试探"})
+RISK_STATES = frozenset({"观望", "减仓", "数据异常"})
+LEGACY_OPPORTUNITY_STATES = frozenset({"可入场", "可试探", "加仓", "小幅加仓"})
+LEGACY_RISK_STATES = frozenset({"减仓", "风险观察", "数据异常"})
 
 
 class SignalCenterService:
     """信号中心读取层研究视图。
 
-    只消费已落库的 SignalSnapshot / IndicatorSnapshot / 新闻与持仓数据，
-    不改写生产信号引擎（signal-v0.4.x）的状态机与阈值；信号系数仅作用于
-    本视图的前排分类与曲线口径，属于研究展示而非操作级信号。
+    当前五档结论直接读取最新 DecisionBoardSnapshot；若尚无决策快照才回退
+    SignalGradeService，因此与主决策看板使用同一当前结论。SignalSnapshot 仅
+    保留生产分数/置信度审计，系数只影响前排排序和止盈热度，不改变当前五档。
     """
 
     def __init__(self, settings: Settings | None = None) -> None:
@@ -51,15 +55,23 @@ class SignalCenterService:
         latest_signals = self._latest_signals(db)
         latest_indicators = self._latest_indicators(db)
         holdings = {row["ts_code"]: row for row in HoldingService().list(db, user_id=user_id) if row.get("ts_code")}
+        decision_payload = DecisionBoardService(self.settings).read_latest(db, horizon=1) or {}
+        decision_by_code = {row["ts_code"]: row for row in decision_payload.get("rows", [])}
+        grade_payload = SignalGradeService(self.settings).build(db) if not decision_by_code else {}
+        fallback_by_code = {row["ts_code"]: row for row in grade_payload.get("rows", [])}
+        current_source = "decision_board_snapshot" if decision_by_code else "signal_grade_fallback"
 
         rows: list[dict[str, Any]] = []
         for instrument in instruments:
-            signal = latest_signals.get(instrument.id)
-            if signal is None:
+            state_row = decision_by_code.get(instrument.ts_code) or fallback_by_code.get(instrument.ts_code)
+            if state_row is None:
                 continue
+            signal = latest_signals.get(instrument.id)
             indicator = latest_indicators.get(instrument.id)
             values = indicator.values_json if indicator else {}
-            effective = round(float(signal.score or 0) * coefficient, 2)
+            raw_score = float(signal.score or 0) if signal is not None else 0.0
+            effective = round(raw_score * coefficient, 2)
+            board_grade = str(state_row.get("grade") or "数据异常")
             rows.append(
                 {
                     "instrument": instrument,
@@ -67,7 +79,9 @@ class SignalCenterService:
                     "indicator": indicator,
                     "values": values,
                     "effective": effective,
-                    "categories": self._categories(signal.state, effective, values, coefficient),
+                    "board_grade": board_grade,
+                    "board_grade_reason": state_row.get("grade_reason"),
+                    "categories": self._categories(board_grade, values, coefficient),
                     "heat": self._heat(values),
                     "holding": holdings.get(instrument.ts_code),
                 }
@@ -79,10 +93,23 @@ class SignalCenterService:
             "risk": sum(1 for row in rows if "risk" in row["categories"]),
             "take_profit": sum(1 for row in rows if "take_profit" in row["categories"]),
         }
+        current_states = {
+            row["instrument"].ts_code: {
+                "state": row["board_grade"],
+                "reason": row.get("board_grade_reason"),
+                "production_state": row["signal"].state if row.get("signal") is not None else None,
+            }
+            for row in rows
+        }
         return {
             "generated_at": datetime.now(self.settings.timezone),
             "version": self.version,
             "strategy_version": self.strategy.get("version"),
+            "current_state_source": current_source,
+            "current_state_snapshot_id": decision_payload.get("snapshot_id") if decision_by_code else None,
+            "current_state_version": grade_payload.get("version") if not decision_by_code else "decision-board-snapshot",
+            "current_states": current_states,
+            "coefficient_semantics": "ranking_and_take_profit_only",
             "coefficient": coefficient,
             "coefficient_bounds": {"min": minimum, "max": maximum},
             "research_only": self.settings.market_provider == "mock",
@@ -93,6 +120,7 @@ class SignalCenterService:
                 "take_profit": self._front(rows, "take_profit", front_size, self._heat_key),
             },
             "curve": self._curve(db, coefficient, days_limit),
+            "curve_source": "production_signal_history_legacy",
             "sectors": self._sectors(db),
         }
 
@@ -111,7 +139,8 @@ class SignalCenterService:
 
     @staticmethod
     def _opportunity_key(row: dict[str, Any]) -> tuple[float, float]:
-        return (-row["effective"], -float(row["signal"].score or 0))
+        signal_score = float(row["signal"].score or 0) if row.get("signal") is not None else 0.0
+        return (-row["effective"], -signal_score)
 
     @staticmethod
     def _risk_key(row: dict[str, Any]) -> tuple[float, float]:
@@ -125,7 +154,7 @@ class SignalCenterService:
 
     def _front_item(self, row: dict[str, Any], category: str) -> dict[str, Any]:
         instrument: Instrument = row["instrument"]
-        signal: SignalSnapshot = row["signal"]
+        signal: SignalSnapshot | None = row["signal"]
         indicator: IndicatorSnapshot | None = row["indicator"]
         values = row["values"]
         holding: dict[str, Any] | None = row["holding"]
@@ -135,11 +164,14 @@ class SignalCenterService:
             "theme_l1": instrument.theme_l1,
             "theme_l2": instrument.theme_l2,
             "category": category,
-            "state": signal.state,
-            "score": round(float(signal.score or 0), 2),
+            "state": row["board_grade"],
+            "board_grade": row["board_grade"],
+            "board_grade_reason": row.get("board_grade_reason"),
+            "production_state": signal.state if signal is not None else None,
+            "score": round(float(signal.score or 0), 2) if signal is not None else 0.0,
             "effective_score": row["effective"],
-            "confidence": round(float(signal.confidence or 0), 2),
-            "is_actionable": bool(signal.is_actionable),
+            "confidence": round(float(signal.confidence or 0), 2) if signal is not None else 0.0,
+            "is_actionable": bool(signal.is_actionable) if signal is not None else False,
             "technical_score": round(float(indicator.technical_score), 2) if indicator else None,
             "risk_score": round(float(indicator.risk_score), 2) if indicator else None,
             "trend_label": indicator.trend_label if indicator else None,
@@ -147,8 +179,8 @@ class SignalCenterService:
             "return_20d": finite_or_none(values.get("return_20d")),
             "rsi14": finite_or_none(values.get("rsi14")),
             "heat": row["heat"],
-            "signal_time": signal.as_of_time,
-            "expires_at": signal.expires_at,
+            "signal_time": signal.as_of_time if signal is not None else None,
+            "expires_at": signal.expires_at if signal is not None else None,
             "in_account": holding is not None,
             "holding": self._holding_view(holding) if holding else None,
         }
@@ -176,15 +208,27 @@ class SignalCenterService:
         )
 
     def _categories(
+        self, board_grade: str, values: dict[str, Any], coefficient: float
+    ) -> set[str]:
+        categories: set[str] = set()
+        if board_grade in OPPORTUNITY_STATES:
+            categories.add("opportunity")
+        if board_grade in RISK_STATES:
+            categories.add("risk")
+        if self._is_overheated(values, coefficient):
+            categories.add("take_profit")
+        return categories
+
+    def _legacy_categories(
         self, state: str, effective: float, values: dict[str, Any], coefficient: float
     ) -> set[str]:
         signal_config = self.strategy.get("signal", {})
         entry = float(signal_config.get("entry_score", 68))
         reduce_line = float(signal_config.get("reduce_score", 38))
         categories: set[str] = set()
-        if state in OPPORTUNITY_STATES or effective >= entry:
+        if state in LEGACY_OPPORTUNITY_STATES or effective >= entry:
             categories.add("opportunity")
-        if state in RISK_STATES or effective < reduce_line:
+        if state in LEGACY_RISK_STATES or effective < reduce_line:
             categories.add("risk")
         if self._is_overheated(values, coefficient):
             categories.add("take_profit")
@@ -245,7 +289,7 @@ class SignalCenterService:
                 counts["total"] += 1
                 values = values_by_key.get((instrument_id, day), {})
                 effective = float(snapshot.score or 0) * coefficient
-                for category in self._categories(snapshot.state, effective, values, coefficient):
+                for category in self._legacy_categories(snapshot.state, effective, values, coefficient):
                     counts[category] += 1
             curve.append({"date": day.isoformat(), **counts})
         return curve

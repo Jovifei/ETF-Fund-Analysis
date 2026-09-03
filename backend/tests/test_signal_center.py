@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from app.main import app
 from app.models import IndicatorSnapshot, Instrument, NewsItem, SignalSnapshot
+from app.services.decision_board_service import DecisionBoardService
 from app.services.holding_service import HoldingService
 from app.services.signal_center_service import (
     OPPORTUNITY_STATES,
@@ -117,8 +118,8 @@ def _instrument(db, ts_code: str) -> Instrument:
 
 
 def test_constants_and_states_are_exposed():
-    assert "可入场" in OPPORTUNITY_STATES and "可试探" in OPPORTUNITY_STATES
-    assert "减仓" in RISK_STATES and "风险观察" in RISK_STATES
+    assert "可加仓" in OPPORTUNITY_STATES and "可试探" in OPPORTUNITY_STATES
+    assert "减仓" in RISK_STATES and "观望" in RISK_STATES
 
 
 def test_summary_fronts_and_research_only_flag(bootstrapped, db_session):
@@ -137,21 +138,22 @@ def test_summary_fronts_and_research_only_flag(bootstrapped, db_session):
     entry, reduce_line = 68.0, 38.0
     for item in payload["fronts"]["opportunity"]:
         assert item["category"] == "opportunity"
-        assert item["state"] in OPPORTUNITY_STATES or item["effective_score"] >= entry
+        assert item["state"] in OPPORTUNITY_STATES
     for item in payload["fronts"]["risk"]:
         assert item["category"] == "risk"
-        assert item["state"] in RISK_STATES or item["effective_score"] < reduce_line
+        assert item["state"] in RISK_STATES
     for item in payload["fronts"]["take_profit"]:
         assert item["category"] == "take_profit"
         assert (item["return_20d"] or 0) > 0
 
 
-def test_coefficient_is_monotonic_for_opportunity(bootstrapped, db_session):
-    counts = []
-    for coefficient in (0.5, 1.0, 1.5):
-        payload = SignalCenterService().build(db_session, coefficient=coefficient)
-        counts.append(payload["summary"]["opportunity"])
-    assert counts[0] <= counts[1] <= counts[2]
+def test_coefficient_does_not_change_current_opportunity_or_risk_membership(bootstrapped, db_session):
+    DecisionBoardService().refresh(db_session)
+    db_session.flush()
+    payloads = [SignalCenterService().build(db_session, coefficient=value) for value in (0.5, 1.0, 1.5)]
+    assert len({payload["summary"]["opportunity"] for payload in payloads}) == 1
+    assert len({payload["summary"]["risk"] for payload in payloads}) == 1
+    assert all(payload["current_state_source"] == "decision_board_snapshot" for payload in payloads)
 
 
 def test_curve_uses_latest_snapshot_per_instrument_per_day(bootstrapped, db_session):
@@ -333,3 +335,15 @@ def test_signal_center_api_and_settings(bootstrapped):
 
         persisted = client.get("/api/signals/center")
         assert persisted.json()["coefficient"] == 1.2
+
+
+def test_signal_center_current_states_match_latest_decision_board_snapshot(bootstrapped, db_session):
+    build = DecisionBoardService().refresh(db_session)
+    db_session.flush()
+    board = build.payload
+    center = SignalCenterService().build(db_session)
+    expected = {row["ts_code"]: row["grade"] for row in board["rows"]}
+    actual = {code: item["state"] for code, item in center["current_states"].items()}
+    assert center["current_state_source"] == "decision_board_snapshot"
+    assert center["current_state_snapshot_id"] == board["snapshot_id"]
+    assert actual == expected

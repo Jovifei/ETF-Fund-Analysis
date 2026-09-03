@@ -31,12 +31,18 @@ def _f(values: dict[str, Any], key: str) -> float | None:
     return finite_or_none(values.get(key))
 
 
+def quote_percent_points_to_ratio(value: object) -> float | None:
+    """Normalize QuoteSnapshot.pct_change percentage points to decimal ratio."""
+    number = finite_or_none(value)
+    return round(number / 100.0, 12) if number is not None else None
+
+
 def classify_volume(volume_ratio: float | None, expand: float, contract: float) -> dict[str, Any]:
     if volume_ratio is None:
         return {"label": "量能未知", "kind": "unknown", "ratio": None}
     if volume_ratio >= expand:
         return {"label": "放量", "kind": "expand", "ratio": round(volume_ratio, 2)}
-    if volume_ratio <= contract:
+    if volume_ratio < contract:
         return {"label": "缩量", "kind": "contract", "ratio": round(volume_ratio, 2)}
     return {"label": "平量", "kind": "flat", "ratio": round(volume_ratio, 2)}
 
@@ -95,15 +101,15 @@ def classify_macd(values: dict[str, Any], previous: dict[str, Any] | None, appro
     if crossed_down or (hist < 0 and dif < dea and prev_hist is not None and prev_hist >= 0):
         kind, label = "death", "死叉"
     elif crossed_up or (hist > 0 and dif > dea and prev_hist is not None and prev_hist <= 0):
-        kind, label = "gold", "金叉"
+        kind, label = "gold", "强势金叉" if dif > 0 else "弱势金叉"
     elif hist > 0 and (shrinking or (0 < hist <= approach and dif > dea)):
         kind, label = "approach_death", "将死叉"
     elif hist < 0 and (expanding or (abs(hist) <= approach and dif < dea)):
-        kind, label = "approach_gold", "将金叉"
+        kind, label = "approach_gold", "将叉"
     elif hist > 0:
-        kind, label = "bull_cont", "多头延续"
+        kind, label = "bull_cont", "多头延续" if dif > 0 else "修复延续"
     else:
-        kind, label = "bear_cont", "空头延续"
+        kind, label = "bear_cont", "死叉"
     return {"label": label, "kind": kind, "dif": round(dif, 4), "dea": round(dea, 4)}
 
 
@@ -140,14 +146,17 @@ def classify_kdj(values: dict[str, Any], previous: dict[str, Any] | None, cfg: d
 def classify_rsi(rsi: float | None, cfg: dict[str, Any]) -> dict[str, Any]:
     if rsi is None:
         return {"value": None, "label": "RSI不足"}
-    if rsi >= float(cfg["rsi_overbought"]):
-        label = "超买 · 回调风险高"
-    elif rsi >= float(cfg["rsi_strong"]):
+    overbought = float(cfg.get("rsi_overbought", 70))
+    strong = float(cfg.get("rsi_strong", 50))
+    oversold = float(cfg.get("rsi_oversold", 30))
+    if rsi >= overbought:
+        label = "超买 · 短期回调风险高"
+    elif rsi >= strong:
         label = "正常偏强 · 趋势中段"
-    elif rsi <= float(cfg["rsi_weak"]):
+    elif rsi >= oversold:
         label = "偏弱 · 动能不足"
     else:
-        label = "正常整理 · 趋势中段"
+        label = "超卖 · 反弹概率升高"
     return {"value": round(rsi, 1), "label": label}
 
 
@@ -208,8 +217,8 @@ def classify_row(
     })
     rsi = classify_rsi(_f(values, "rsi14"), {
         "rsi_overbought": cfg.get("rsi_overbought", 70),
-        "rsi_strong": cfg.get("rsi_strong", 60),
-        "rsi_weak": cfg.get("rsi_weak", 40),
+        "rsi_strong": cfg.get("rsi_strong", 50),
+        "rsi_oversold": cfg.get("rsi_oversold", 30),
     })
     td = classify_td(values)
     vs_yesterday = None
@@ -362,7 +371,7 @@ class SignalGradeService:
             indicator = latest_indicators.get(instrument.id)
             values = dict(indicator.values_json) if indicator and indicator.values_json else {}
             quote = latest_quotes.get(instrument.id)
-            pct = finite_or_none(quote.pct_change) if quote else _f(values, "return_1d")
+            pct = quote_percent_points_to_ratio(quote.pct_change) if quote else _f(values, "return_1d")
             previous = previous_indicators.get(instrument.id)
             row = classify_row(values, pct_change=pct, previous=previous, cfg=self.config)
             forecast = latest_forecasts.get(instrument.id)

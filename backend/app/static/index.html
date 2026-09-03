@@ -74,7 +74,7 @@
           <span class="legend-item"><i class="dot" style="background:var(--blue)"></i>风险</span>
           <span class="legend-item"><i class="dot" style="background:var(--down)"></i>止盈</span>
         </div>
-        <p class="muted small curve-note">曲线按交易日统计各类信号数量，随系统运行逐日累积；系数变化会以当前口径重算历史分类。</p>
+        <p class="muted small curve-note">历史曲线保留生产 SignalSnapshot 历史口径，仅用于趋势回看；当前机会/风险成员以决策看板五档为准。</p>
       </div>
       <div class="panel">
         <div class="panel-head"><div><div class="eyebrow">SECTOR STRENGTH</div><h2>板块强度</h2></div><div id="sectorMeta" class="muted"></div></div>
@@ -90,11 +90,11 @@
           </div>
         </div>
         <div class="coefficient-row">
-          <div class="coefficient-label"><span class="eyebrow">SENSITIVITY</span><strong>信号系数</strong><span id="coefficientValue" class="coefficient-value">—</span></div>
+          <div class="coefficient-label"><span class="eyebrow">RANKING SENSITIVITY</span><strong>排序 / 止盈敏感系数</strong><span id="coefficientValue" class="coefficient-value">—</span></div>
           <input id="coefficientSlider" type="range" min="0.5" max="1.5" step="0.05" value="1">
           <button id="coefficientSave" class="primary">保存系数</button>
         </div>
-        <p class="muted small coefficient-note">有效分 = 信号分 × 系数：&gt;1 更敏感（机会/止盈更容易入列），&lt;1 更保守。仅作用于本页研究视图，不改变生产信号引擎与阈值。</p>
+        <p class="muted small coefficient-note">有效分 = 生产信号分 × 系数，仅用于同类前排排序；系数只影响止盈热度阈值，不改变机会/风险成员归属。当前成员状态与决策看板五档一致。</p>
         <div id="frontCount" class="muted front-count"></div>
         <div id="frontList" class="front-list"><div class="loading-row">等待信号中心数据...</div></div>
       </div>
