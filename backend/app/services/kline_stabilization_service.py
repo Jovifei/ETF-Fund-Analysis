@@ -22,8 +22,8 @@ from sqlalchemy import case, select
 from sqlalchemy.orm import Session
 
 from app.core.config import PROJECT_ROOT, Settings, get_settings
-from app.models import DailyBar, Instrument, QuoteSnapshot, SectorSnapshot
-from app.utils.pattern_forecast import pattern_forecast_snapshot
+from app.models import DailyBar, ForecastSnapshot, Instrument, QuoteSnapshot, SectorSnapshot
+from app.services.current_decision_service import CurrentDecisionService
 from app.utils.td_sequential import td_setup_snapshot
 
 logger = logging.getLogger(__name__)
@@ -46,6 +46,15 @@ def _pct(value: float | None) -> float | None:
     不可能数值。单位口径一旦存疑应停止信号，而不是猜测性换算。
     """
     return round(value, 2) if value is not None else None
+
+
+def _forecast_note(diagnostics: Any) -> str:
+    """Read an optional note without assuming legacy diagnostics JSON shape."""
+    if isinstance(diagnostics, dict):
+        note = diagnostics.get("note")
+        if isinstance(note, str) and note.strip():
+            return note.strip()
+    return "persisted ForecastSnapshot"
 
 
 class KlineStabilizationService:
@@ -94,6 +103,15 @@ class KlineStabilizationService:
             select(QuoteSnapshot)
             .where(QuoteSnapshot.instrument_id == instrument_id)
             .order_by(QuoteSnapshot.quote_time.desc())
+            .limit(1)
+        )
+
+    @staticmethod
+    def _latest_forecast(db: Session, instrument_id: int, horizon: int = 1) -> ForecastSnapshot | None:
+        return db.scalar(
+            select(ForecastSnapshot)
+            .where(ForecastSnapshot.instrument_id == instrument_id, ForecastSnapshot.horizon == horizon)
+            .order_by(ForecastSnapshot.as_of_date.desc(), ForecastSnapshot.generated_at.desc())
             .limit(1)
         )
 
@@ -410,7 +428,14 @@ class KlineStabilizationService:
 
     # ---------- 行构建 ----------
 
-    def _row(self, db: Session, instrument: Instrument) -> dict[str, Any]:
+    def _row(
+        self,
+        db: Session,
+        instrument: Instrument,
+        *,
+        current_decision: dict[str, Any] | None = None,
+        decision_snapshot_id: str | None = None,
+    ) -> dict[str, Any]:
         frame = self._bars_frame(db, instrument.id)
         quote = self._latest_quote(db, instrument.id)
 
@@ -426,8 +451,33 @@ class KlineStabilizationService:
                 vs_yesterday = "↑" if change > 0.001 else ("↓" if change < -0.001 else "→")
 
         td = td_setup_snapshot(frame) if not frame.empty else {"label": "—", "direction": "none", "sub_label": "", "desc": "", "countdown": 0, "setup_length": 9}
-        pattern = pattern_forecast_snapshot(frame) if not frame.empty else {"expected_return": None, "p_up": None, "confidence": 0, "sample_count": 0, "calibration_status": "not_calibrated", "note": "数据不足"}
+        stored_forecast = self._latest_forecast(db, instrument.id, 1)
+        if stored_forecast is None:
+            pattern = {
+                "expected_return": None, "p_up": None, "confidence": 0, "sample_count": 0,
+                "calibration_status": "not_calibrated", "note": "persisted forecast unavailable",
+                "source": "unavailable", "p_up_semantics": "unavailable",
+            }
+        else:
+            status = str(stored_forecast.calibration_status or "not_calibrated")
+            pattern = {
+                "expected_return": stored_forecast.expected_return,
+                "p_up": stored_forecast.p_up,
+                "confidence": stored_forecast.confidence,
+                "sample_count": stored_forecast.sample_count,
+                "calibration_status": status,
+                "note": _forecast_note(stored_forecast.diagnostics_json),
+                "source": "persisted_forecast_snapshot",
+                "p_up_semantics": (
+                    "calibrated_up_probability"
+                    if status == "calibrated"
+                    else "weighted_historical_neighbor_up_frequency"
+                ),
+            }
         chan = self._chanlun_state(frame)
+        if current_decision is None:
+            decision_snapshot_id, decisions = CurrentDecisionService(self.settings).resolve_many(db, [instrument])
+            current_decision = decisions.get(str(instrument.ts_code).strip().upper())
 
         # 板块涨跌家数：行业板块（theme 直接命中 → 再试 config.sector_alias 显式映射）；
         # 概念板块（config.concept_alias）；都没命中就是没数据，占位 null（前端显示 "—"），
@@ -457,8 +507,8 @@ class KlineStabilizationService:
         # 量能
         volume = self._volume_state(frame)
 
-        # 操作建议（研究态启发式，不构成交易指令）
-        action = self._research_action(td, pattern, volume, current_price)
+        # Current action is projected from the single canonical decision contract.
+        action = str((current_decision or {}).get("state") or "数据异常")
 
         return {
             "name": instrument.name,
@@ -485,55 +535,52 @@ class KlineStabilizationService:
                 "sample_count": pattern.get("sample_count"),
                 "calibration_status": pattern.get("calibration_status"),
                 "note": pattern.get("note"),
+                "source": pattern.get("source"),
+                "p_up": pattern.get("p_up"),
+                "p_up_semantics": pattern.get("p_up_semantics"),
             },
             "chanlun": chan,
             "action": action,
+            "action_source": (current_decision or {}).get("source", "unavailable"),
+            "action_canonical": bool((current_decision or {}).get("canonical", False)),
+            "decision_snapshot_id": decision_snapshot_id,
             "actionable": False,  # 研究态：永不 actionable
             "as_of": datetime.now(self.timezone).isoformat(timespec="seconds"),
         }
 
-    @staticmethod
-    def _research_action(td: dict[str, Any], pattern: dict[str, Any], volume: dict[str, Any], price: float | None) -> str:
-        """研究态操作建议（启发式，非交易指令）。
-
-        目标看板分档：可加仓 / 可入场 / 可试探 / 观望 / 减仓
-        """
-        direction = td.get("direction")
-        td_label = td.get("label", "—")
-        # TD9 顶 -> 减仓
-        if direction == "top" and td_label.startswith("TD"):
-            return "减仓"
-        # TD9 底 + 超卖 -> 可加仓（保守起见给可试探）
-        if direction == "bottom" and td_label.startswith("TD"):
-            return "可试探"
-        # 超买（KDJ 由 _kdj_state 给出，这里用 RSI 兜底）
-        confidence = float(pattern.get("confidence") or 0)
-        if confidence >= 60:
-            return "可入场"
-        if confidence >= 40:
-            return "可试探"
-        return "观望"
-
-    # ---------- 汇总 ----------
+    # ---------- 汇总 ----------    # ---------- 汇总 ----------
 
     def summary(self, db: Session) -> dict[str, Any]:
         instruments = self._instruments(db)
-        rows = [self._row(db, instrument) for instrument in instruments]
+        decision_snapshot_id, decisions = CurrentDecisionService(self.settings).resolve_many(db, instruments)
+        rows = [
+            self._row(
+                db,
+                instrument,
+                current_decision=decisions.get(str(instrument.ts_code).strip().upper()),
+                decision_snapshot_id=decision_snapshot_id,
+            )
+            for instrument in instruments
+        ]
         counts = {
             "可加仓": sum(1 for row in rows if row["action"] == "可加仓"),
             "可入场": sum(1 for row in rows if row["action"] == "可入场"),
             "可试探": sum(1 for row in rows if row["action"] == "可试探"),
             "观望": sum(1 for row in rows if row["action"] == "观望"),
             "减仓": sum(1 for row in rows if row["action"] == "减仓"),
+            "数据异常": sum(1 for row in rows if row["action"] == "数据异常"),
         }
         return {
             "generated_at": datetime.now(self.timezone).isoformat(timespec="seconds"),
             "automatic_orders": False,
+            "current_decision_contract": "decision_board_snapshot_then_signal_grade_then_signal_snapshot_last_resort",
+            "decision_snapshot_id": decision_snapshot_id,
             "counts": counts,
             "rows": rows,
             "disclaimers": [
                 "本看板为研究视图，不构成投资建议，不生成自动订单。",
-                "TD 九转为确定性指标；明日预测为形态匹配（horizon=1）且未完成 walk-forward 校准，仅供研究参考。",
+                "action 与主页共用唯一 current decision；TD/MA/MACD/KDJ/RSI/缠论只作解释，不生成第二套动作。",
+                "明日预测读取与主页相同的持久化 ForecastSnapshot；未校准 p_up 仅表示历史相似样本上涨占比。",
                 "缠论指标基于 chanlun 框架计算，仅作研究视图。",
             ],
         }

@@ -27,7 +27,7 @@
       <div><strong>ETF / LOF 决策</strong><small>ETF / LOF 决策台 · 私有研究系统</small></div>
     </div>
     <div class="top-actions">
-      <a class="ghost-link" href="/legacy">完整系统</a>
+      <span class="source-chip muted">统一决策台</span>
       <span id="accountBadge" class="source-chip muted">未登录</span>
       <span id="connectionBadge" class="source-chip muted">等待数据</span>
       <button id="refreshButton" type="button" class="ghost">刷新</button>
@@ -96,7 +96,7 @@
     <footer class="report-footer">
       <div id="sourceFooter">数据来源：—</div>
       <div>技术指标：MACD(12,26,9) · KDJ(9,3,3) · RSI(14) · MA5/10/20/30/60 · TD9 · 量能</div>
-      <div>预测：历史相似形态研究基线 · conf 为样本一致度/支持度，不等于未来准确率；not_calibrated 时必须视为研究结果。</div>
+      <div>预测：p_up 在未校准时表示历史相似样本加权上涨占比，不等同未来概率；只有 calibration_status=calibrated 才显示为上涨概率。</div>
     </footer>
   </main>
 
