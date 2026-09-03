@@ -31,6 +31,12 @@ def _f(values: dict[str, Any], key: str) -> float | None:
     return finite_or_none(values.get(key))
 
 
+def quote_percent_points_to_ratio(value: object) -> float | None:
+    """Normalize QuoteSnapshot.pct_change percentage points to decimal ratio."""
+    number = finite_or_none(value)
+    return round(number / 100.0, 12) if number is not None else None
+
+
 def classify_volume(volume_ratio: float | None, expand: float, contract: float) -> dict[str, Any]:
     if volume_ratio is None:
         return {"label": "量能未知", "kind": "unknown", "ratio": None}
@@ -362,7 +368,7 @@ class SignalGradeService:
             indicator = latest_indicators.get(instrument.id)
             values = dict(indicator.values_json) if indicator and indicator.values_json else {}
             quote = latest_quotes.get(instrument.id)
-            pct = finite_or_none(quote.pct_change) if quote else _f(values, "return_1d")
+            pct = quote_percent_points_to_ratio(quote.pct_change) if quote else _f(values, "return_1d")
             previous = previous_indicators.get(instrument.id)
             row = classify_row(values, pct_change=pct, previous=previous, cfg=self.config)
             forecast = latest_forecasts.get(instrument.id)
