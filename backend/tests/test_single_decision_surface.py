@@ -1,8 +1,26 @@
 from __future__ import annotations
 
+from fastapi.testclient import TestClient
+
+from app.main import app
 from app.services.etf_1430_service import ETF1430WorkbenchService
 from app.services.kline_stabilization_service import KlineStabilizationService
 from app.services.signal_center_service import SignalCenterService
+
+
+def test_all_legacy_html_entrypoints_redirect_to_the_unified_board() -> None:
+    client = TestClient(app)
+    for path in (
+        "/legacy",
+        "/workbench/1430",
+        "/workbench/kline",
+        "/assets/index.html",
+        "/assets/etf_1430_workbench.html",
+        "/assets/kline_stabilization.html",
+    ):
+        response = client.get(path, follow_redirects=False)
+        assert response.status_code == 307, path
+        assert response.headers["location"] == "/", path
 
 
 def test_all_current_research_surfaces_share_the_same_action(bootstrapped, db_session) -> None:
