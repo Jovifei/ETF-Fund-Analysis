@@ -1,0 +1,80 @@
+name: apply-canonical-kline-api
+
+on:
+  push:
+    branches: [fix/single-etf-decision-surface-20260903]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/single-etf-decision-surface-20260903
+      - name: Unify compatibility K-line action and forecast
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def one(text, old, new, label):
+              n = text.count(old)
+              if n != 1:
+                  raise SystemExit(f'{label}: expected one match, found {n}')
+              return text.replace(old, new, 1)
+
+          def between(text, start, end, replacement, label):
+              i = text.find(start)
+              j = text.find(end, i + 1) if i >= 0 else -1
+              if i < 0 or j < 0:
+                  raise SystemExit(f'{label}: markers missing start={i} end={j}')
+              return text[:i] + replacement + text[j:]
+
+          # ETF1430 uses the shared DB-backed canonical resolver.
+          p = Path('backend/app/services/etf_1430_service.py'); t = p.read_text(encoding='utf-8')
+          t = one(t, '    DecisionBoardSnapshot,\n', '', 'remove decision snapshot model import')
+          t = one(t, 'from app.services.signal_grade_service import SignalGradeService\nfrom app.utils.current_decision import resolve_current_decision\n', 'from app.services.current_decision_service import CurrentDecisionService\n', 'shared decision import')
+          t = between(t, '    @staticmethod\n    def _latest_decision_rows(', '    def _news(', '', 'remove duplicated decision resolver')
+          t = t.replace('self._canonical_decisions(db, [instrument])', 'CurrentDecisionService(self.settings).resolve_many(db, [instrument])')
+          t = t.replace('self._canonical_decisions(db, instruments)', 'CurrentDecisionService(self.settings).resolve_many(db, instruments)')
+          p.write_text(t, encoding='utf-8')
+
+          # K-line compatibility service keeps indicators/chanlun, but action and forecast are canonical projections.
+          p = Path('backend/app/services/kline_stabilization_service.py'); t = p.read_text(encoding='utf-8')
+          t = one(t, 'from app.models import DailyBar, Instrument, QuoteSnapshot, SectorSnapshot\nfrom app.utils.pattern_forecast import pattern_forecast_snapshot\n', 'from app.models import DailyBar, ForecastSnapshot, Instrument, QuoteSnapshot, SectorSnapshot\nfrom app.services.current_decision_service import CurrentDecisionService\n', 'kline imports')
+          quote_method = '''    def _latest_quote(self, db: Session, instrument_id: int) -> QuoteSnapshot | None:\n        return db.scalar(\n            select(QuoteSnapshot)\n            .where(QuoteSnapshot.instrument_id == instrument_id)\n            .order_by(QuoteSnapshot.quote_time.desc())\n            .limit(1)\n        )\n'''
+          quote_plus = quote_method + '''\n    @staticmethod\n    def _latest_forecast(db: Session, instrument_id: int, horizon: int = 1) -> ForecastSnapshot | None:\n        return db.scalar(\n            select(ForecastSnapshot)\n            .where(ForecastSnapshot.instrument_id == instrument_id, ForecastSnapshot.horizon == horizon)\n            .order_by(ForecastSnapshot.as_of_date.desc(), ForecastSnapshot.generated_at.desc())\n            .limit(1)\n        )\n'''
+          t = one(t, quote_method, quote_plus, 'latest forecast method')
+          t = one(t, '    def _row(self, db: Session, instrument: Instrument) -> dict[str, Any]:', '    def _row(self, db: Session, instrument: Instrument, *, current_decision: dict[str, Any] | None = None, decision_snapshot_id: str | None = None) -> dict[str, Any]:', 'kline row signature')
+          old_pattern = '        td = td_setup_snapshot(frame) if not frame.empty else {"label": "—", "direction": "none", "sub_label": "", "desc": "", "countdown": 0, "setup_length": 9}\n        pattern = pattern_forecast_snapshot(frame) if not frame.empty else {"expected_return": None, "p_up": None, "confidence": 0, "sample_count": 0, "calibration_status": "not_calibrated", "note": "数据不足"}\n        chan = self._chanlun_state(frame)\n'
+          new_pattern = '''        td = td_setup_snapshot(frame) if not frame.empty else {"label": "—", "direction": "none", "sub_label": "", "desc": "", "countdown": 0, "setup_length": 9}\n        stored_forecast = self._latest_forecast(db, instrument.id, 1)\n        if stored_forecast is None:\n            pattern = {"expected_return": None, "p_up": None, "confidence": 0, "sample_count": 0, "calibration_status": "not_calibrated", "note": "persisted forecast unavailable", "source": "unavailable", "p_up_semantics": "unavailable"}\n        else:\n            status = str(stored_forecast.calibration_status or "not_calibrated")\n            pattern = {\n                "expected_return": stored_forecast.expected_return,\n                "p_up": stored_forecast.p_up,\n                "confidence": stored_forecast.confidence,\n                "sample_count": stored_forecast.sample_count,\n                "calibration_status": status,\n                "note": (stored_forecast.diagnostics_json or {}).get("note") or "persisted ForecastSnapshot",\n                "source": "persisted_forecast_snapshot",\n                "p_up_semantics": "calibrated_up_probability" if status == "calibrated" else "weighted_historical_neighbor_up_frequency",\n            }\n        chan = self._chanlun_state(frame)\n        if current_decision is None:\n            decision_snapshot_id, decisions = CurrentDecisionService(self.settings).resolve_many(db, [instrument])\n            current_decision = decisions.get(str(instrument.ts_code).strip().upper())\n'''
+          t = one(t, old_pattern, new_pattern, 'persisted kline forecast')
+          t = one(t, '        # 操作建议（研究态启发式，不构成交易指令）\n        action = self._research_action(td, pattern, volume, current_price)\n', '        # Current action is projected from the single canonical decision contract.\n        action = str((current_decision or {}).get("state") or "数据异常")\n', 'canonical kline action')
+          t = one(t, '                "note": pattern.get("note"),\n            },\n            "chanlun": chan,\n            "action": action,\n', '                "note": pattern.get("note"),\n                "source": pattern.get("source"),\n                "p_up": pattern.get("p_up"),\n                "p_up_semantics": pattern.get("p_up_semantics"),\n            },\n            "chanlun": chan,\n            "action": action,\n            "action_source": (current_decision or {}).get("source", "unavailable"),\n            "action_canonical": bool((current_decision or {}).get("canonical", False)),\n            "decision_snapshot_id": decision_snapshot_id,\n', 'kline action metadata')
+          t = between(t, '    @staticmethod\n    def _research_action(', '    # ---------- 汇总 ----------', '    # ---------- 汇总 ----------', 'remove kline action engine')
+          old_summary = '        instruments = self._instruments(db)\n        rows = [self._row(db, instrument) for instrument in instruments]\n'
+          new_summary = '        instruments = self._instruments(db)\n        decision_snapshot_id, decisions = CurrentDecisionService(self.settings).resolve_many(db, instruments)\n        rows = [self._row(db, instrument, current_decision=decisions.get(str(instrument.ts_code).strip().upper()), decision_snapshot_id=decision_snapshot_id) for instrument in instruments]\n'
+          t = one(t, old_summary, new_summary, 'kline summary resolver')
+          t = one(t, '            "减仓": sum(1 for row in rows if row["action"] == "减仓"),\n        }\n', '            "减仓": sum(1 for row in rows if row["action"] == "减仓"),\n            "数据异常": sum(1 for row in rows if row["action"] == "数据异常"),\n        }\n', 'kline anomaly count')
+          t = one(t, '            "automatic_orders": False,\n            "counts": counts,\n', '            "automatic_orders": False,\n            "current_decision_contract": "decision_board_snapshot_then_signal_grade_then_signal_snapshot_last_resort",\n            "decision_snapshot_id": decision_snapshot_id,\n            "counts": counts,\n', 'kline summary metadata')
+          t = one(t, '                "TD 九转为确定性指标；明日预测为形态匹配（horizon=1）且未完成 walk-forward 校准，仅供研究参考。",\n', '                "action 与主页共用唯一 current decision；TD/MA/MACD/KDJ/RSI/缠论只作解释，不生成第二套动作。",\n                "明日预测读取与主页相同的持久化 ForecastSnapshot；未校准 p_up 仅表示历史相似样本上涨占比。",\n', 'kline disclaimers')
+          p.write_text(t, encoding='utf-8')
+
+          # Contracts: K-line API can no longer disagree with canonical action or dynamic forecast source.
+          p = Path('backend/tests/test_kline_stabilization_service.py'); t = p.read_text(encoding='utf-8')
+          t = one(t, '    assert row["action"] in {"可加仓", "可入场", "可试探", "观望", "减仓"}\n', '    assert row["action"] in {"可加仓", "可入场", "可试探", "观望", "减仓", "数据异常"}\n    assert row["action_source"] in {"decision_board_snapshot", "signal_grade_fallback", "signal_snapshot_last_resort", "unavailable"}\n', 'kline action test')
+          t = one(t, '    # 形态预测必须未校准\n    forecast = row["forecast"]\n    assert forecast["calibration_status"] == "not_calibrated"\n', '    # K-line compatibility API reads the same persisted forecast contract as the main board.\n    forecast = row["forecast"]\n    assert forecast["source"] in {"persisted_forecast_snapshot", "unavailable"}\n    if forecast["source"] == "persisted_forecast_snapshot":\n        assert forecast["p_up_semantics"] in {"weighted_historical_neighbor_up_frequency", "calibrated_up_probability"}\n', 'kline forecast test')
+          t = one(t, '    assert any("研究视图" in item for item in summary["disclaimers"])\n    assert any("不构成投资建议" in item for item in summary["disclaimers"])\n', '    assert any("研究视图" in item for item in summary["disclaimers"])\n    assert any("不构成投资建议" in item for item in summary["disclaimers"])\n    assert any("唯一 current decision" in item for item in summary["disclaimers"])\n', 'kline disclaimer test')
+          p.write_text(t, encoding='utf-8')
+          PY
+          git rm .github/workflows/apply-canonical-kline-api.yml
+      - name: Commit patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add backend/app/services/current_decision_service.py backend/app/services/etf_1430_service.py backend/app/services/kline_stabilization_service.py backend/tests/test_kline_stabilization_service.py
+          git commit -m 'fix: project K-line compatibility API from canonical decision data'
+          git push origin HEAD:fix/single-etf-decision-surface-20260903
