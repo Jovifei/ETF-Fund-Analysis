@@ -84,7 +84,7 @@ def test_global_model_research_uses_purged_expanding_walk_forward(
             220 - horizon,
             240 - horizon,
         ]
-        for previous, current in zip(folds, folds[1:], strict=True):
+        for previous, current in zip(folds, folds[1:]):
             assert previous["test_end"] < current["test_start"]
             assert previous["test_samples"] == current["test_samples"] == 120
         assert 0.0 <= item["interval_80_coverage"] <= 1.0
