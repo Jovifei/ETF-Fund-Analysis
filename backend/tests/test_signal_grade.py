@@ -57,12 +57,12 @@ def test_grade_add_entry_probe_watch_reduce_are_mutually_exclusive():
             ma10=2.20,
             ma20=2.15,
             ma30=2.12,
-            macd_hist=-0.02,
-            macd_dif=-0.02,
-            macd_dea=-0.01,
+            macd_hist=-0.0005,
+            macd_dif=-0.0200,
+            macd_dea=-0.0195,
         ),
         pct_change=-0.01,
-        previous={"macd_hist": -0.01, "macd_dif": -0.01, "macd_dea": -0.005, "kdj_k": 44, "kdj_d": 39},
+        previous={"macd_hist": -0.0010, "macd_dif": -0.0210, "macd_dea": -0.0200, "kdj_k": 44, "kdj_d": 39},
         cfg=cfg,
     )
     watch = classify_row(_base_values(kdj_j=96, kdj_k=80, kdj_d=70, volume_ratio=1.5), pct_change=0.0, previous={"kdj_k": 70, "kdj_d": 72}, cfg=cfg)
@@ -228,3 +228,19 @@ def test_company_reference_exact_boundaries_and_quote_contract():
 def test_bear_cont_display_and_grade_are_consistent():
     grade = assign_grade(pct_change=-.01,volume={"kind":"flat"},ma={"kind":"mixed"},macd={"kind":"bear_cont"},kdj={"j":55,"kind":"healthy","death":False},cfg={"j_add_cap":90,"stall_return":.002})
     assert grade == "减仓"
+
+
+def test_approach_gold_is_probe_when_ma_not_bull():
+    values = _base_values(
+        volume_ratio=1.0, kdj_j=45, kdj_k=50, kdj_d=45,
+        ma5=2.10, ma10=2.20, ma20=2.15, ma30=2.12,
+        macd_hist=-0.0005, macd_dif=-0.0200, macd_dea=-0.0195,
+    )
+    row = classify_row(
+        values, pct_change=-0.005,
+        previous={"macd_hist": -0.0010, "macd_dif": -0.0210, "macd_dea": -0.0200, "kdj_k": 48, "kdj_d": 44},
+        cfg={"j_add_cap":90,"j_overbought":100,"j_high":90,"j_low":20,"volume_expand":1.15,"volume_contract":0.90,"stall_return":0.002,"macd_approach_hist":0.0008},
+    )
+    assert row["macd"]["kind"] == "approach_gold"
+    assert row["macd"]["label"] == "将叉"
+    assert row["grade"] == "可试探"

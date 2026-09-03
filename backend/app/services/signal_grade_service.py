@@ -191,7 +191,7 @@ def assign_grade(
         return "观望"
     if j < float(cfg["j_add_cap"]) and rising_expand and ma["kind"] == "bull":
         return "可加仓"
-    structure_ok = ma["kind"] == "bull" or macd["kind"] in {"gold", "approach_gold", "bull_cont"}
+    structure_ok = ma["kind"] == "bull" or macd["kind"] in {"gold", "bull_cont"}
     if j < float(cfg["j_add_cap"]) and not kdj.get("death") and kdj["kind"] != "overbought" and structure_ok:
         return "可入场"
     if j < float(cfg["j_add_cap"]):
