@@ -33,14 +33,21 @@ A decision-board refresh already performs quote refresh + provisional capture, s
 The existing runtime setting `quote_refresh_minutes` is now consumed by the scheduler during an open price session between decision-board slots.
 
 - Default production value remains 3 minutes.
-- The cadence is based on the last **terminal attempt** (success/failure/partial) to avoid hammering an unavailable upstream every 30 seconds.
+- The cadence prefers the last **terminal attempt** (success/failure/partial) to avoid hammering an unavailable upstream every 30 seconds, with the historical last-success value as a compatibility fallback when no terminal attempt exists.
 - Board-slot refresh remains the authoritative quote -> provisional -> snapshot path for decision snapshots.
 
-## Failure isolation
+## Failure and transaction isolation
 
 Every scheduler task continues to create its normal durable `TaskRun` audit record through `TaskService`.
 
 `TaskExecutionError` and `TaskBusyError` are caught at the scheduler orchestration boundary so one task cannot kill the remainder of the tick.
+
+The tick result deliberately preserves the existing field meaning:
+
+- `executed`: tasks **attempted** during this tick, including failed attempts;
+- `failures`: the failed subset with sanitized failure classes.
+
+`TaskService.run()` owns rollback and durable failure-audit recovery for task failures. The scheduler does not perform a second rollback. Instead, every successful task is committed immediately at the scheduler boundary. Therefore a later independent failure cannot erase an earlier successful quote refresh, decision snapshot, or after-close layer from the same tick.
 
 In particular:
 
