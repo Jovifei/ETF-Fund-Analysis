@@ -1,0 +1,55 @@
+name: patch-reference-bearish-temp
+
+on:
+  push:
+    branches: [fix/reference-board-signal-consistency-v2]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[bearish-consistency-fixed]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/reference-board-signal-consistency-v2
+      - name: Patch bearish MACD and grade provenance
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p=Path('backend/app/services/signal_grade_service.py')
+          s=p.read_text(encoding='utf-8')
+          old='    bearish_macd = macd["kind"] in {"death", "approach_death"}'
+          new='    bearish_macd = macd["kind"] in {"death", "approach_death", "bear_cont"}'
+          if old not in s: raise SystemExit('missing bearish anchor')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+
+          p=Path('backend/app/services/decision_board_service.py')
+          s=p.read_text(encoding='utf-8')
+          old='            "indicator_basis": {\n'
+          new='            "grade_source": "signal_grade",\n            "grade_version": grade_payload.get("version"),\n            "indicator_basis": {\n'
+          if old not in s: raise SystemExit('missing decision grade provenance anchor')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+
+          p=Path('backend/app/services/signal_center_service.py')
+          s=p.read_text(encoding='utf-8')
+          old='            "current_state_version": grade_payload.get("version") if not decision_by_code else "decision-board-snapshot",'
+          new='            "current_state_version": grade_payload.get("version") if not decision_by_code else decision_payload.get("grade_version"),'
+          if old not in s: raise SystemExit('missing center version anchor')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+
+          p=Path('backend/tests/test_signal_grade.py')
+          s=p.read_text(encoding='utf-8')
+          s += '''\n\ndef test_reference_macd_bear_cont_is_reduce_risk():\n    from app.services.signal_grade_service import assign_grade\n    grade = assign_grade(\n        pct_change=-0.01,\n        volume={"kind": "flat"},\n        ma={"kind": "mixed"},\n        macd={"kind": "bear_cont"},\n        kdj={"kind": "healthy", "j": 55.0, "death": False},\n        cfg={"j_add_cap": 90, "stall_return": 0.002},\n    )\n    assert grade == "减仓"\n'''
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "integration-bot"
+          git config user.email "integration-bot@users.noreply.github.com"
+          git add backend/app/services/signal_grade_service.py backend/app/services/decision_board_service.py backend/app/services/signal_center_service.py backend/tests/test_signal_grade.py
+          git commit -m "fix: align bearish MACD and decision grade provenance [bearish-consistency-fixed]"
+          git push origin HEAD:fix/reference-board-signal-consistency-v2
