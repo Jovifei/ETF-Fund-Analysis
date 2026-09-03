@@ -33,6 +33,20 @@ def _safe_failure_label(error: BaseException) -> str:
     return name if name in _SAFE_FAILURE_CLASSES else "ProviderError"
 
 
+def _normalized_codes(codes: list[str]) -> list[str]:
+    """Normalize requested symbols once while preserving caller order."""
+
+    result: list[str] = []
+    seen: set[str] = set()
+    for raw in codes:
+        code = str(raw or "").strip().upper()
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        result.append(code)
+    return result
+
+
 @dataclass(slots=True)
 class ProviderTrace:
     operation: str
@@ -136,8 +150,123 @@ class CompositeProvider(MarketProvider):
             raise CapabilityUnavailable(f"all providers unsupported: {operation}") from None
         raise ProviderError(f"所有数据源均失败：{operation}; {'; '.join(errors)}")
 
+    def _invoke_by_requested_code(
+        self,
+        operation: str,
+        codes: list[str],
+        call: Callable[[MarketProvider, list[str]], list[T]],
+        aliases: Callable[[T], set[str]],
+    ) -> list[T]:
+        """Fill a requested code set provider-by-provider without overwriting priority.
+
+        Generic `_invoke` is correct for capabilities where one provider owns the
+        complete response. It is not correct for quote/instrument batches: a
+        non-empty primary response can still omit individual ETFs. This method
+        keeps the earliest provider's record for each requested code and asks
+        later providers only for the codes that are still missing.
+        """
+
+        requested = _normalized_codes(codes)
+        self.last_trace = []
+        if not requested:
+            return []
+
+        selected: dict[str, T] = {}
+        errors: list[str] = []
+        unsupported = 0
+        successful_calls = 0
+
+        for index, provider in enumerate(self.providers):
+            missing = [code for code in requested if code not in selected]
+            if not missing:
+                break
+            started = time.perf_counter()
+            try:
+                rows = list(call(provider, missing) or [])
+                successful_calls += 1
+                accepted = 0
+                for row in rows:
+                    row_aliases = {
+                        str(value or "").strip().upper()
+                        for value in aliases(row)
+                        if str(value or "").strip()
+                    }
+                    key = next((code for code in missing if code in row_aliases), None)
+                    if key is None or key in selected:
+                        # Unexpected/extraneous provider rows never widen the
+                        # caller's requested universe and never overwrite an
+                        # earlier provider's record.
+                        continue
+                    selected[key] = row
+                    accepted += 1
+
+                remaining = len(requested) - len(selected)
+                if not rows:
+                    status = "empty"
+                    reason = f"missing={remaining}"
+                elif remaining:
+                    status = "partial" if index == 0 else "fallback_partial"
+                    reason = f"missing={remaining}"
+                else:
+                    status = "ok" if index == 0 else "fallback_used"
+                    reason = None
+                self.last_trace.append(
+                    ProviderTrace(
+                        operation=operation,
+                        provider=provider.name,
+                        status=status,
+                        latency_ms=(time.perf_counter() - started) * 1000,
+                        record_count=accepted,
+                        reason=reason,
+                        quality_hash=stable_hash(rows),
+                    )
+                )
+            except CapabilityUnavailable as exc:
+                unsupported += 1
+                label = _safe_failure_label(exc)
+                self.last_trace.append(
+                    ProviderTrace(
+                        operation=operation,
+                        provider=provider.name,
+                        status="unsupported",
+                        latency_ms=(time.perf_counter() - started) * 1000,
+                        record_count=0,
+                        reason=label,
+                    )
+                )
+                logger.warning("Provider %s operation %s unsupported: %s", provider.name, operation, label)
+            except Exception as exc:
+                label = _safe_failure_label(exc)
+                errors.append(f"{provider.name}={label}")
+                self.last_trace.append(
+                    ProviderTrace(
+                        operation=operation,
+                        provider=provider.name,
+                        status="failed",
+                        latency_ms=(time.perf_counter() - started) * 1000,
+                        record_count=0,
+                        reason=label,
+                    )
+                )
+                logger.warning("Provider %s operation %s failed: %s", provider.name, operation, label)
+
+        if selected:
+            return [selected[code] for code in requested if code in selected]
+        if unsupported == len(self.providers):
+            raise CapabilityUnavailable(f"all providers unsupported: {operation}") from None
+        if not successful_calls and errors:
+            raise ProviderError(f"所有数据源均失败：{operation}; {'; '.join(errors)}") from None
+        raise ProviderError(f"所有数据源均未返回请求代码：{operation}") from None
+
     def list_instruments(self, codes: list[str] | None = None) -> list[InstrumentRecord]:
-        return self._invoke("list_instruments", lambda provider: provider.list_instruments(codes))
+        if codes is None:
+            return self._invoke("list_instruments", lambda provider: provider.list_instruments(codes))
+        return self._invoke_by_requested_code(
+            "list_instruments",
+            codes,
+            lambda provider, missing: provider.list_instruments(missing),
+            lambda item: {item.ts_code, item.symbol},
+        )
 
     def fetch_daily_bars(self, ts_code: str, start_date: date, end_date: date) -> list[BarRecord]:
         return self._invoke(
@@ -146,7 +275,12 @@ class CompositeProvider(MarketProvider):
         )
 
     def fetch_spot_quotes(self, codes: list[str]) -> list[QuoteRecord]:
-        return self._invoke("fetch_spot_quotes", lambda provider: provider.fetch_spot_quotes(codes))
+        return self._invoke_by_requested_code(
+            "fetch_spot_quotes",
+            codes,
+            lambda provider, missing: provider.fetch_spot_quotes(missing),
+            lambda item: {item.ts_code},
+        )
 
     def fetch_sector_snapshots(self, trade_date: date | None = None) -> list[SectorRecord]:
         return self._invoke(
@@ -166,7 +300,6 @@ class CompositeProvider(MarketProvider):
             lambda provider: provider.fetch_market_breadth(trade_date),
             allow_empty=True,
         )
-
 
     def fetch_news(self, since_hours: int = 24) -> list[NewsRecord]:
         # News is additive rather than a strict primary/fallback capability. Pull
