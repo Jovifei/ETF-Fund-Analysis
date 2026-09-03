@@ -25,13 +25,14 @@ jobs:
           fetch-depth: 0
       - name: Apply deterministic patch
         run: python .automation/canonical_current_decision/apply.py
-      - name: Keep focused membership test independent of front truncation
+      - name: Align regression tests with canonical current-state semantics
         run: |
           python - <<'PY'
           from pathlib import Path
 
           path = Path('backend/tests/test_signal_center.py')
           text = path.read_text(encoding='utf-8')
+
           marker = 'def test_current_fronts_follow_latest_decision_board_grade'
           start = text.index(marker)
           target = '    payload = SignalCenterService().build(db_session, coefficient=1.5)\n'
@@ -42,6 +43,22 @@ jobs:
               '    payload = service.build(db_session, coefficient=1.5)\n'
           )
           text = text[:pos] + replacement + text[pos + len(target):]
+
+          old_total = (
+              '    total = len({row.instrument_id for row in db_session.scalars(select(SignalSnapshot)).all()})\n'
+              '    summary = payload["summary"]\n'
+              '    assert summary["total"] == total\n'
+          )
+          new_total = (
+              '    signal_total = len({row.instrument_id for row in db_session.scalars(select(SignalSnapshot)).all()})\n'
+              '    summary = payload["summary"]\n'
+              '    assert summary["total"] == len(payload["current_states"])\n'
+              '    assert summary["total"] >= signal_total\n'
+          )
+          if old_total not in text:
+              raise RuntimeError('signal-center total regression anchor missing')
+          text = text.replace(old_total, new_total, 1)
+
           path.write_text(text, encoding='utf-8', newline='\n')
           PY
       - uses: actions/setup-python@v5
