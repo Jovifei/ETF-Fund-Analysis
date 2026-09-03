@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import inspect
 import json
 
 import pytest
 
 from app.core.config import PROJECT_ROOT, get_settings
+from app.services.forecast_service import ForecastService
+from app.services.validation_service import ForecastValidationService
 from app.utils.feature_store import FEATURE_SCHEMA_VERSION, HORIZON_FEATURES, feature_columns_for_horizon
 from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS, aligned_research_horizons
 
@@ -38,3 +41,13 @@ def test_research_horizon_config_drift_fails_closed():
     }
     with pytest.raises(ValueError, match="must match"):
         aligned_research_horizons(strategy)
+
+
+def test_forecast_generation_and_validation_do_not_keep_legacy_1_5_20_fallbacks():
+    generation_source = inspect.getsource(ForecastService.refresh_all)
+    validation_source = inspect.getsource(ForecastValidationService._validate_instrument)
+
+    assert "DEFAULT_RESEARCH_HORIZONS" in generation_source
+    assert "DEFAULT_RESEARCH_HORIZONS" in validation_source
+    assert "[1, 5, 20]" not in generation_source
+    assert "[1, 5, 20]" not in validation_source
