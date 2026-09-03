@@ -147,6 +147,8 @@ class ETF1430WorkbenchService:
                 "support_touch_probability": stored.support_touch_probability, "resistance_touch_probability": stored.resistance_touch_probability,
                 "sample_count": stored.sample_count, "confidence": stored.confidence,
                 "similarity_distance": stored.similarity_distance, "calibration_status": status,
+                "as_of_date": stored.as_of_date.isoformat(), "feature_basis": "settled_daily_bars",
+                "intraday_provisional_used": False,
                 "diagnostics": stored.diagnostics_json or {},
             }
         return result
