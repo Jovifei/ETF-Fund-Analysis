@@ -16,6 +16,7 @@ from app.services.event_service import emit_event
 from app.services.forecast_service import ForecastResult, similarity_forecast
 from app.utils.feature_store import add_cross_sectional_features, build_feature_frame, feature_columns_for_horizon
 from app.utils.hashing import stable_hash
+from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS
 
 
 def _safe_mean(values: list[float]) -> float | None:
@@ -159,13 +160,13 @@ class ForecastValidationService:
     def _validate_instrument(self, instrument: Instrument, frame: pd.DataFrame) -> dict:
         cfg = self.strategy["forecast"]
         minimum = int(cfg.get("min_history", 180))
-        maximum_horizon = max(int(value) for value in cfg.get("horizons", [1, 5, 20]))
+        maximum_horizon = max(int(value) for value in cfg.get("horizons", DEFAULT_RESEARCH_HORIZONS))
         if len(frame) < minimum + maximum_horizon + 10:
             return {"ts_code": instrument.ts_code, "status": "skipped", "reason": "history_too_short"}
         horizons: dict[str, dict] = {}
         step = max(1, int(cfg.get("validation_step", 5)))
         max_points = max(20, int(cfg.get("validation_max_points", 120)))
-        for horizon in [int(value) for value in cfg.get("horizons", [1, 5, 20])]:
+        for horizon in [int(value) for value in cfg.get("horizons", DEFAULT_RESEARCH_HORIZONS)]:
             eligible = list(range(minimum - 1, len(frame) - horizon, step))
             if len(eligible) > max_points:
                 positions = np.linspace(0, len(eligible) - 1, max_points, dtype=int)

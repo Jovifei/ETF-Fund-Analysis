@@ -12,7 +12,7 @@
 - ETF/LOF 自选池、日线、盘中快照、数据源审计和退化标记；技术指标、预测基线、事件驱动轮动回测和信号状态机。
 - 新闻去重、主题映射、提示注入隔离和 provider-neutral 多模型分析网关。
 - 暗色网页看板、市场上下文卡片、K 线/MACD Canvas 图、持仓录入、SSE 增量更新、HTML 报告。
-- 1/5/20 日终点收益、终点收盘区间、未来路径支撑/压力区和触及概率；继续标记 `not_calibrated`。
+- 1/3/5/10 交易日终点收益、终点收盘区间、未来路径支撑/压力区和触及频率；未完成前向校准时继续标记 `not_calibrated`。
 - Alphalens 风格因子 IC/Rank IC/ICIR/分位收益/换手/市场状态诊断，以及可选全局 LightGBM/CatBoost 研究任务。
 - XSHG 统一交易日历；实时行情必须拥有可验证的上游时间戳才能成为操作级数据。
 - 信号中心研究视图：信号行情曲线（机会/风险/止盈逐日计数）、三张前排推荐、板块强度排名和可调信号系数（0.50–1.50）；命中持仓的条目带账户提醒，仅为研究提示。
@@ -117,7 +117,7 @@ sudo bash deploy/aliyun/deploy.sh
 
 Compose 只把应用映射到 `127.0.0.1:8080`，PostgreSQL 不映射宿主机端口。公网访问应经过 Caddy/Nginx HTTPS；ECS 安全组只开放 80/443，SSH 22 仅允许可信 IP。反向代理上传上限应保持 12MB：应用图像上限为 10MiB，额外空间仅用于 multipart 开销；示例已在 Caddy/Nginx 中对齐。
 
-`.env` 用 `chmod 0600`，OCR 临时根目录用 `0700`，模型根目录私有并只读。上线前先备份，再按 `158ca7025305` → `9f1c2b3a4d5e` → `a2b3c4d5e6f7` → `b3c4d5e6f7a8` → `c4d5e6f7a8b9` → `d5e6f7a8b9c0` → `e6f7a8b9c0d1` → `f7a8b9c0d1e2` → `0a9b1c2d3e4f` → `1b2c3d4e5f6a` → `2c3d4e5f6a7b`（当前 head）执行 `alembic upgrade head`；回滚只允许在备份和隔离实例验证后使用 `alembic downgrade`，不能直接改生产库。隔离 SQLite 已完成 upgrade/current、完整 downgrade/re-upgrade 和 `alembic check`；该审计修复保留历史 review/analysis hash-check 名称、holding-import opaque-session 约束、nullable legacy calibration JSON 与唯一 `candidate_id` 查询契约。真实 PostgreSQL 的迁移/回滚/备份恢复仍是生产发布门槛。
+`.env` 用 `chmod 0600`，OCR 临时根目录用 `0700`，模型根目录私有并只读。上线前先备份，并执行 `alembic upgrade head`；随后用 `alembic current` 与 `alembic check` 验证数据库处于仓库当前唯一 head 且没有待生成迁移；回滚只允许在备份和隔离实例验证后使用 `alembic downgrade`，不能直接改生产库。隔离 SQLite 已完成 upgrade/current、完整 downgrade/re-upgrade 和 `alembic check`；该审计修复保留历史 review/analysis hash-check 名称、holding-import opaque-session 约束、nullable legacy calibration JSON 与唯一 `candidate_id` 查询契约。真实 PostgreSQL 的迁移/回滚/备份恢复仍是生产发布门槛。
 
 ## 命令
 
