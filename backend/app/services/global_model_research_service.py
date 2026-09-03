@@ -127,6 +127,7 @@ class GlobalModelResearchService:
                 "generated_at": now.isoformat(),
                 "status": "completed",
                 "backend": backend,
+                "research_version": research_cfg.get("version", "global-model-research-v0.2.0-purged-walk-forward"),
                 "split": {
                     "method": "purged_expanding_walk_forward",
                     "folds": walk_forward_folds,
