@@ -2,7 +2,7 @@
   "version": "signal-v0.7.1-research",
   "indicator_version": "indicator-v0.5.1",
   "forecast_version": "similarity-corridor-v0.7.1-horizon-aligned",
-  "signal_center_version": "signal-center-v0.2.0",
+  "signal_center_version": "signal-center-v0.3.0-canonical-fallback",
   "signal_grade_version": "signal-grade-v0.3.0",
   "signal_grade": {
     "j_add_cap": 90,
