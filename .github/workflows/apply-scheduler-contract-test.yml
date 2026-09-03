@@ -1,0 +1,48 @@
+name: apply-scheduler-contract-test
+
+on:
+  push:
+    branches: [fix/scheduler-production-resilience-20260903]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/scheduler-production-resilience-20260903
+      - name: Update intentional quote-cadence scheduler contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('backend/tests/test_market_context.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''    assert [name for name in calls[:4]] == [
+              "sync_instruments",
+              "refresh_market_context",
+              "refresh_signals",
+              "refresh_news",
+          ]'''
+          new = '''    assert [name for name in calls[:5]] == [
+              "sync_instruments",
+              "refresh_quotes",
+              "refresh_market_context",
+              "refresh_signals",
+              "refresh_news",
+          ]'''
+          if text.count(old) != 1:
+              raise SystemExit(f'expected exactly one scheduler call-order contract, found {text.count(old)}')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          git rm .github/workflows/apply-scheduler-contract-test.yml
+      - name: Commit contract update
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add backend/tests/test_market_context.py
+          git commit -m 'test: expect intraday quote refresh before optional context'
+          git push origin HEAD:fix/scheduler-production-resilience-20260903
