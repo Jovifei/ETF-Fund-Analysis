@@ -43,18 +43,31 @@ def test_guarded_task_failure_does_not_prevent_later_independent_task() -> None:
                 raise TaskExecutionError("news-run", "ProviderError")
             return {"status": "succeeded"}
 
+    class Txn:
+        commits = 0
+        rollbacks = 0
+
+        def commit(self):
+            self.commits += 1
+
+        def rollback(self):
+            self.rollbacks += 1
+
     executed: list[str] = []
     failures: list[dict[str, str]] = []
     tasks = Tasks()
+    txn = Txn()
     assert scheduler._run_guarded(
-        tasks, None, "refresh_news", executed=executed, failures=failures
+        tasks, txn, "refresh_news", executed=executed, failures=failures
     ) is False
     assert scheduler._run_guarded(
-        tasks, None, "refresh_quotes", executed=executed, failures=failures
+        tasks, txn, "refresh_quotes", executed=executed, failures=failures
     ) is True
     assert calls == ["refresh_news", "refresh_quotes"]
     assert executed == ["refresh_quotes"]
     assert failures == [{"task": "refresh_news", "failure_class": "ProviderError"}]
+    assert txn.rollbacks == 1
+    assert txn.commits == 1
 
 
 def _run_fake_tick(monkeypatch, db_session, *, now: datetime, fail_tasks: set[str] | None = None):
