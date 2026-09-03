@@ -72,7 +72,7 @@ def decision_board_due_slot_with_grace(
     """Return the latest exact/recent board slot, coalescing short scheduler delays.
 
     The persisted slot key is the scheduled Shanghai wall-clock time, not the
-    delayed execution time.  This preserves idempotence and makes a delayed
+    delayed execution time. This preserves idempotence and makes a delayed
     14:31 execution auditable as the 14:30 decision slot.
     """
 
@@ -130,11 +130,19 @@ def _run_guarded(
     failures: list[dict[str, str]],
     **kwargs,
 ) -> bool:
-    """Run one scheduler task without letting a durable task failure kill the tick."""
+    """Run and durably finish one scheduler task without killing the whole tick.
+
+    `TaskService.run()` deliberately rolls its caller session back after a task
+    failure. Committing each success here makes the scheduler task boundary a
+    real transaction boundary too, so a later independent failure cannot erase
+    earlier successful quote/snapshot/after-close work from the same tick.
+    """
 
     try:
         tasks.run(db, task_name, **kwargs)
+        db.commit()
     except (TaskExecutionError, TaskBusyError) as exc:
+        db.rollback()
         failure_class = str(getattr(exc, "failure_class", type(exc).__name__))[:128]
         failures.append({"task": task_name, "failure_class": failure_class})
         logger.warning("scheduler task %s failed: %s", task_name, failure_class)
@@ -173,6 +181,9 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
     with session_scope() as db:
         runtime = RuntimeService(settings)
         intervals = runtime.get_all(db)
+        # Persist runtime defaults before any later TaskService failure can reset
+        # the caller transaction.
+        db.commit()
         # Share the already-created provider with the task service; tick owns
         # this provider and closes it at the request boundary below.
         tasks = TaskService(settings, provider=provider)
@@ -198,7 +209,7 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
             else intervals["news_refresh_minutes"]
         )
 
-        # Critical path first.  Coalesce a short scheduler delay to the latest
+        # Critical path first. Coalesce a short scheduler delay to the latest
         # unclaimed decision slot before optional market-context/news work.
         slot_key = decision_board_due_slot_with_grace(now, is_trade_day=is_trade_day)
         queued = db.scalar(
@@ -219,9 +230,11 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
                 **({"run_id": queued} if queued else {}),
             )
             if not succeeded:
-                # Dagster/APScheduler-style recent-tick retry: a failed execution
-                # must not consume the wall-clock slot permanently.
+                # TaskService has already rolled back a failed task, which also
+                # removes an uncommitted claim. Keep this explicit release for
+                # TaskBusy paths and future claim implementations.
                 _release_decision_board_slot(db, slot_key)
+                db.commit()
         elif queued is not None:
             # Manual refreshes use the same quote → provisional → snapshot path.
             _run_guarded(
@@ -234,7 +247,7 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
                 refresh_input=True,
             )
 
-        # Honor the existing runtime quote cadence between board slots.  A board
+        # Honor the existing runtime quote cadence between board slots. A board
         # refresh already fetches quotes itself, so avoid a duplicate provider
         # call while an exact/recent slot or queued manual refresh is active.
         if (
