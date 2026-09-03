@@ -107,7 +107,7 @@ class SignalCenterService:
             "strategy_version": self.strategy.get("version"),
             "current_state_source": current_source,
             "current_state_snapshot_id": decision_payload.get("snapshot_id") if decision_by_code else None,
-            "current_state_version": grade_payload.get("version") if not decision_by_code else "decision-board-snapshot",
+            "current_state_version": grade_payload.get("version") if not decision_by_code else decision_payload.get("grade_version"),
             "current_states": current_states,
             "coefficient_semantics": "ranking_and_take_profit_only",
             "coefficient": coefficient,

@@ -184,7 +184,7 @@ def assign_grade(
         return "数据异常"
     rising_expand = pct_change is not None and pct_change > 0 and volume["kind"] == "expand"
     stall = volume["kind"] == "expand" and (pct_change is None or pct_change <= float(cfg["stall_return"]))
-    bearish_macd = macd["kind"] in {"death", "approach_death"}
+    bearish_macd = macd["kind"] in {"death", "approach_death", "bear_cont"}
     if kdj.get("death") or bearish_macd:
         return "减仓"
     if kdj["kind"] in {"overbought", "high"} or stall:

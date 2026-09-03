@@ -376,6 +376,8 @@ class DecisionBoardService:
                 "research_only": True,
                 "source_time_verified": False,
             },
+            "grade_source": "signal_grade",
+            "grade_version": grade_payload.get("version"),
             "indicator_basis": {
                 "daily_history": "confirmed_daily_bars_only",
                 "td": "TD9 setup only; TD13 not implemented",

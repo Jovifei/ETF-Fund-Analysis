@@ -211,3 +211,16 @@ def test_company_reference_thresholds_and_quote_unit_contract():
     assert classify_rsi(30, rsi_cfg)["label"].startswith("偏弱")
     assert classify_rsi(29.9, rsi_cfg)["label"].startswith("超卖")
     assert quote_percent_points_to_ratio(3.8) == 0.038
+
+
+def test_reference_macd_bear_cont_is_reduce_risk():
+    from app.services.signal_grade_service import assign_grade
+    grade = assign_grade(
+        pct_change=-0.01,
+        volume={"kind": "flat"},
+        ma={"kind": "mixed"},
+        macd={"kind": "bear_cont"},
+        kdj={"kind": "healthy", "j": 55.0, "death": False},
+        cfg={"j_add_cap": 90, "stall_return": 0.002},
+    )
+    assert grade == "减仓"
