@@ -18,6 +18,19 @@ from app.utils.feature_store import add_cross_sectional_features, build_feature_
 from app.utils.hashing import stable_hash
 from app.utils.horizons import aligned_research_horizons
 
+OSS_RESEARCH_FACTORS = (
+    "linear_slope_20",
+    "trend_r2_20",
+    "trend_residual_20",
+    "time_since_high_20",
+    "time_since_low_20",
+    "up_day_fraction_20",
+    "down_day_fraction_20",
+    "return_volume_corr_20",
+    "benchmark_beta_60",
+    "benchmark_corr_60",
+)
+
 DEFAULT_FACTORS = (
     "return_5d",
     "return_20d",
@@ -49,6 +62,7 @@ DEFAULT_FACTORS = (
     "cost50_distance",
     "profit_ratio_est",
     "chip_concentration",
+    *OSS_RESEARCH_FACTORS,
 )
 
 
@@ -116,6 +130,138 @@ def _safe_corr(left: np.ndarray, right: np.ndarray) -> float | None:
         return None
     value = float(np.dot(left_centered, right_centered) / denominator)
     return value if math.isfinite(value) else None
+
+
+def _rolling_linear_window(values: np.ndarray) -> tuple[float, float, float]:
+    """Return normalized log-price slope, R² and current residual for one past-only window."""
+    values = np.asarray(values, dtype=float)
+    if len(values) < 4 or not np.isfinite(values).all() or np.any(values <= 0):
+        return np.nan, np.nan, np.nan
+    y = np.log(values)
+    x = np.arange(len(y), dtype=float)
+    x_centered = x - x.mean()
+    y_centered = y - y.mean()
+    denominator = float(np.dot(x_centered, x_centered))
+    if denominator <= 0:
+        return np.nan, np.nan, np.nan
+    slope = float(np.dot(x_centered, y_centered) / denominator)
+    intercept = float(y.mean() - slope * x.mean())
+    fitted = intercept + slope * x
+    ss_tot = float(np.dot(y_centered, y_centered))
+    ss_res = float(np.dot(y - fitted, y - fitted))
+    r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else np.nan
+    residual = float(y[-1] - fitted[-1])
+    return slope, r2, residual
+
+
+def _add_instrument_research_factors(group: pd.DataFrame) -> pd.DataFrame:
+    result = group.sort_values("trade_date").copy()
+    close = result["close"].astype(float)
+    volume = result["volume"].astype(float).replace(0, np.nan)
+    daily_return = close.pct_change()
+    volume_change = np.log(volume).diff()
+
+    slopes = np.full(len(result), np.nan)
+    r2s = np.full(len(result), np.nan)
+    residuals = np.full(len(result), np.nan)
+    close_values = close.to_numpy(dtype=float)
+    for end in range(19, len(result)):
+        slope, r2, residual = _rolling_linear_window(close_values[end - 19 : end + 1])
+        slopes[end] = slope
+        r2s[end] = r2
+        residuals[end] = residual
+    result["linear_slope_20"] = slopes
+    result["trend_r2_20"] = r2s
+    result["trend_residual_20"] = residuals
+
+    def since_high(values: pd.Series) -> float:
+        array = values.to_numpy(dtype=float)
+        if not np.isfinite(array).any():
+            return np.nan
+        return float(len(array) - 1 - int(np.nanargmax(array)))
+
+    def since_low(values: pd.Series) -> float:
+        array = values.to_numpy(dtype=float)
+        if not np.isfinite(array).any():
+            return np.nan
+        return float(len(array) - 1 - int(np.nanargmin(array)))
+
+    result["time_since_high_20"] = close.rolling(20, min_periods=20).apply(since_high, raw=False)
+    result["time_since_low_20"] = close.rolling(20, min_periods=20).apply(since_low, raw=False)
+    result["up_day_fraction_20"] = (
+        daily_return.gt(0).astype(float).where(daily_return.notna()).rolling(20, min_periods=20).mean()
+    )
+    result["down_day_fraction_20"] = (
+        daily_return.lt(0).astype(float).where(daily_return.notna()).rolling(20, min_periods=20).mean()
+    )
+    result["return_volume_corr_20"] = daily_return.rolling(20, min_periods=20).corr(volume_change)
+    return result
+
+
+def add_oss_research_factor_diagnostics(panel: pd.DataFrame, benchmark_code: str) -> pd.DataFrame:
+    """Add point-in-time research-only factors inspired by Qlib/ETF literature.
+
+    These columns are deliberately added only inside factor analysis. They are
+    not part of `feature_columns_for_horizon()` and therefore cannot change the
+    production similarity forecast or the canonical five-grade action.
+    """
+    if panel.empty:
+        return panel.copy()
+    result = (
+        panel.groupby("ts_code", observed=True, group_keys=False)
+        .apply(_add_instrument_research_factors, include_groups=False)
+        .reset_index(drop=True)
+    )
+    # groupby.apply with include_groups=False removes the grouping column; restore
+    # identity deterministically from the original per-code groups when needed.
+    if "ts_code" not in result.columns:
+        rebuilt: list[pd.DataFrame] = []
+        for code, group in panel.groupby("ts_code", observed=True, sort=False):
+            enriched = _add_instrument_research_factors(group)
+            enriched["ts_code"] = str(code)
+            rebuilt.append(enriched)
+        result = pd.concat(rebuilt, ignore_index=True)
+
+    benchmark = result.loc[
+        result["ts_code"] == benchmark_code, ["trade_date", "return_1d"]
+    ].rename(columns={"return_1d": "benchmark_return_1d"})
+    result = result.merge(benchmark, on="trade_date", how="left", validate="many_to_one")
+
+    def add_beta_corr(group: pd.DataFrame) -> pd.DataFrame:
+        group = group.sort_values("trade_date").copy()
+        left = group["return_1d"].astype(float)
+        right = group["benchmark_return_1d"].astype(float)
+        covariance = left.rolling(60, min_periods=40).cov(right)
+        variance = right.rolling(60, min_periods=40).var()
+        group["benchmark_beta_60"] = covariance / variance.replace(0, np.nan)
+        group["benchmark_corr_60"] = left.rolling(60, min_periods=40).corr(right)
+        return group
+
+    result = (
+        result.groupby("ts_code", observed=True, group_keys=False)
+        .apply(add_beta_corr, include_groups=False)
+        .reset_index(drop=True)
+    )
+    if "ts_code" not in result.columns:
+        # Pandas may omit grouping columns when include_groups=False. Rebuild once
+        # with explicit identity instead of relying on a version-specific apply detail.
+        rebuilt = []
+        for code, group in panel.groupby("ts_code", observed=True, sort=False):
+            enriched = _add_instrument_research_factors(group)
+            enriched["ts_code"] = str(code)
+            rebuilt.append(enriched)
+        result = pd.concat(rebuilt, ignore_index=True)
+        benchmark = result.loc[
+            result["ts_code"] == benchmark_code, ["trade_date", "return_1d"]
+        ].rename(columns={"return_1d": "benchmark_return_1d"})
+        result = result.merge(benchmark, on="trade_date", how="left", validate="many_to_one")
+        rebuilt = []
+        for code, group in result.groupby("ts_code", observed=True, sort=False):
+            enriched = add_beta_corr(group)
+            enriched["ts_code"] = str(code)
+            rebuilt.append(enriched)
+        result = pd.concat(rebuilt, ignore_index=True)
+    return result
 
 
 def _daily_correlations(
@@ -270,11 +416,13 @@ class FactorAnalysisService:
         if not frames:
             return pd.DataFrame()
         panel = add_cross_sectional_features(pd.concat(frames, ignore_index=True))
+        benchmark_code = str(self.strategy["signal"].get("regime_benchmark", "510300.SH"))
+        panel = add_oss_research_factor_diagnostics(panel, benchmark_code)
         for horizon in aligned_research_horizons(self.strategy):
             panel[f"forward_return_{horizon}"] = (
                 panel.groupby("ts_code", observed=True)["close"].shift(-horizon) / panel["close"] - 1.0
             )
-        regimes = _regime_labels(panel, str(self.strategy["signal"].get("regime_benchmark", "510300.SH")))
+        regimes = _regime_labels(panel, benchmark_code)
         panel["regime"] = panel["trade_date"].map(regimes).fillna("unknown")
         return panel
 
@@ -346,6 +494,9 @@ class FactorAnalysisService:
                 "quantiles": "up to five date-local quantiles",
                 "turnover": "Jaccard turnover of top quantile membership",
                 "horizon_contract": list(horizons),
+                "oss_research_factors": list(OSS_RESEARCH_FACTORS),
+                "oss_factor_scope": "factor-analysis-only; excluded from production forecast feature templates",
+                "benchmark_exposure": f"rolling 60-session beta/correlation versus {benchmark_code}",
                 "promotion_policy": "manual review plus walk-forward/holdout/ablation required",
             },
         }
