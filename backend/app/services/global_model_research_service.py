@@ -15,6 +15,7 @@ from app.services.event_service import emit_event
 from app.services.factor_analysis_service import FactorAnalysisService
 from app.utils.feature_store import HORIZON_FEATURES
 from app.utils.hashing import stable_hash
+from app.utils.horizons import aligned_research_horizons
 from app.utils.time_split import purged_holdout_bounds
 
 
@@ -94,6 +95,7 @@ class GlobalModelResearchService:
             if len(dates) < 240:
                 raise ValueError("global model research requires at least 240 distinct trading dates")
             split_date = dates[int(len(dates) * 0.80)]
+            horizons = aligned_research_horizons(self.strategy)
             research_cfg = self.strategy.get("global_model_research", {})
             embargo_sessions = max(0, int(research_cfg.get("embargo_sessions", 0)))
             payload = {
@@ -111,11 +113,12 @@ class GlobalModelResearchService:
                         "from training so every training forward label ends before the first test session"
                     ),
                 },
+                "configured_horizons": list(horizons),
                 "feature_schema_version": self.strategy.get("feature_schema_version"),
                 "production_promotion": False,
                 "horizons": {},
             }
-            for horizon in (1, 5, 20):
+            for horizon in horizons:
                 target = f"forward_return_{horizon}"
                 features = [name for name in HORIZON_FEATURES[horizon] if name in panel.columns]
                 work = panel[["trade_date", target, *features]].replace([np.inf, -np.inf], np.nan).dropna()

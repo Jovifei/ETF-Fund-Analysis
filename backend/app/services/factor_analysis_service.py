@@ -16,6 +16,7 @@ from app.models import DailyBar, Instrument, ReportArtifact
 from app.services.event_service import emit_event
 from app.utils.feature_store import add_cross_sectional_features, build_feature_frame
 from app.utils.hashing import stable_hash
+from app.utils.horizons import aligned_research_horizons
 
 DEFAULT_FACTORS = (
     "return_5d",
@@ -211,6 +212,7 @@ def _regime_labels(panel: pd.DataFrame, benchmark_code: str) -> pd.Series:
     benchmark = panel.loc[panel["ts_code"] == benchmark_code, ["trade_date", "return_20d", "volatility_20d"]]
     if benchmark.empty:
         return pd.Series(dtype="object")
+
     def classify(row: pd.Series) -> str:
         momentum = float(row.get("return_20d") or 0.0)
         volatility = float(row.get("volatility_20d") or 0.0)
@@ -221,6 +223,7 @@ def _regime_labels(panel: pd.DataFrame, benchmark_code: str) -> pd.Series:
         if momentum <= -0.05:
             return "bear"
         return "sideways"
+
     return benchmark.set_index("trade_date").apply(classify, axis=1)
 
 
@@ -267,8 +270,10 @@ class FactorAnalysisService:
         if not frames:
             return pd.DataFrame()
         panel = add_cross_sectional_features(pd.concat(frames, ignore_index=True))
-        for horizon in (1, 5, 20):
-            panel[f"forward_return_{horizon}"] = panel.groupby("ts_code", observed=True)["close"].shift(-horizon) / panel["close"] - 1.0
+        for horizon in aligned_research_horizons(self.strategy):
+            panel[f"forward_return_{horizon}"] = (
+                panel.groupby("ts_code", observed=True)["close"].shift(-horizon) / panel["close"] - 1.0
+            )
         regimes = _regime_labels(panel, str(self.strategy["signal"].get("regime_benchmark", "510300.SH")))
         panel["regime"] = panel["trade_date"].map(regimes).fillna("unknown")
         return panel
@@ -278,28 +283,32 @@ class FactorAnalysisService:
         panel = self._panel(db)
         if panel.empty:
             raise ValueError("factor analysis requires at least one instrument with sufficient history")
+        horizons = aligned_research_horizons(self.strategy)
         configured = self.strategy.get("factor_analysis", {}).get("factors", DEFAULT_FACTORS)
         factors = [name for name in configured if name in panel.columns]
         metrics = [
             factor_metric(panel, factor, horizon).model_dump()
             for factor in factors
-            for horizon in (1, 5, 20)
+            for horizon in horizons
         ]
+        regime_horizons = tuple(horizon for horizon in horizons if horizon >= 3)
         by_regime: dict[str, list[dict]] = {}
         for regime, subset in panel.groupby("regime", observed=True):
             by_regime[str(regime)] = [
                 factor_metric(subset, factor, horizon).model_dump()
                 for factor in factors
-                for horizon in (5, 20)
+                for horizon in regime_horizons
             ]
+        theme_horizon = 5 if 5 in horizons else horizons[0]
         by_theme: dict[str, dict] = {}
         for theme, subset in panel.groupby("theme_l1", observed=True):
             if subset["ts_code"].nunique() < 3:
                 continue
             by_theme[str(theme)] = {
                 "instrument_count": int(subset["ts_code"].nunique()),
+                "horizon": theme_horizon,
                 "metrics": [
-                    factor_metric(subset, factor, 5).model_dump()
+                    factor_metric(subset, factor, theme_horizon).model_dump()
                     for factor in factors
                 ],
             }
@@ -319,6 +328,7 @@ class FactorAnalysisService:
             "feature_schema_version": self.strategy.get("feature_schema_version"),
             "strategy_version": self.strategy.get("version"),
             "research_status": "diagnostic_only_not_strategy_promotion",
+            "horizons": list(horizons),
             "panel": {
                 "rows": int(len(panel)),
                 "instruments": int(panel["ts_code"].nunique()),
@@ -335,6 +345,7 @@ class FactorAnalysisService:
                 "icir": "mean rank IC divided by sample standard deviation",
                 "quantiles": "up to five date-local quantiles",
                 "turnover": "Jaccard turnover of top quantile membership",
+                "horizon_contract": list(horizons),
                 "promotion_policy": "manual review plus walk-forward/holdout/ablation required",
             },
         }

@@ -1,7 +1,7 @@
 {
-  "version": "signal-v0.7.0-research",
+  "version": "signal-v0.7.1-research",
   "indicator_version": "indicator-v0.5.1",
-  "forecast_version": "similarity-corridor-v0.7.0",
+  "forecast_version": "similarity-corridor-v0.7.1-horizon-aligned",
   "signal_center_version": "signal-center-v0.2.0",
   "signal_grade_version": "signal-grade-v0.3.0",
   "signal_grade": {
@@ -130,8 +130,9 @@
   "forecast": {
     "horizons": [
       1,
+      3,
       5,
-      20
+      10
     ],
     "min_history": 180,
     "neighbors": 80,
@@ -139,7 +140,7 @@
     "maximum_confidence_uncalibrated": 55,
     "validation_step": 5,
     "validation_max_points": 120,
-    "feature_schema_version": "feature-store-v0.7.0",
+    "feature_schema_version": "feature-store-v0.7.1-horizon-aligned",
     "conformal_alpha": 0.2,
     "interval_method": "local_conformal_research_v1",
     "path_extremes": true,
@@ -211,7 +212,7 @@
     "single_fund_target_cap": 0.25
   },
   "backtest_version": "rotation-v0.5.1",
-  "feature_schema_version": "feature-store-v0.7.0",
+  "feature_schema_version": "feature-store-v0.7.1-horizon-aligned",
   "strategy_engine": {
     "version": "strategy-family-v0.5.1",
     "family_weights": {
@@ -225,13 +226,17 @@
       "reversal": 0.05
     }
   },
+  "global_model_research": {
+    "embargo_sessions": 0
+  },
   "factor_analysis": {
-    "version": "factor-analysis-v0.1.0",
+    "version": "factor-analysis-v0.2.0-horizon-aligned",
     "quantiles": 5,
     "horizons": [
       1,
+      3,
       5,
-      20
+      10
     ],
     "minimum_cross_section": 4,
     "promotion_policy": "manual_walk_forward_holdout_required"
