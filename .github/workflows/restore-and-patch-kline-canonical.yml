@@ -1,0 +1,126 @@
+name: restore-and-patch-kline-canonical
+
+on:
+  push:
+    branches: [fix/single-etf-decision-surface-20260903]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/single-etf-decision-surface-20260903
+          fetch-depth: 0
+      - name: Restore current main K-line shape and apply minimal canonical projection
+        run: |
+          git fetch origin main
+          git show origin/main:backend/app/services/kline_stabilization_service.py > backend/app/services/kline_stabilization_service.py
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('backend/app/services/kline_stabilization_service.py')
+          t = p.read_text(encoding='utf-8')
+
+          def one(old: str, new: str, label: str) -> None:
+              global t
+              n = t.count(old)
+              if n != 1:
+                  raise SystemExit(f'{label}: expected one match, found {n}')
+              t = t.replace(old, new, 1)
+
+          def between(start: str, end: str, replacement: str, label: str) -> None:
+              global t
+              i = t.find(start)
+              j = t.find(end, i + 1) if i >= 0 else -1
+              if i < 0 or j < 0:
+                  raise SystemExit(f'{label}: markers missing start={i} end={j}')
+              t = t[:i] + replacement + t[j:]
+
+          one(
+              'from app.models import DailyBar, Instrument, QuoteSnapshot, SectorSnapshot\nfrom app.utils.pattern_forecast import pattern_forecast_snapshot\nfrom app.utils.td_sequential import td_setup_snapshot\n',
+              'from app.models import DailyBar, ForecastSnapshot, Instrument, QuoteSnapshot, SectorSnapshot\nfrom app.services.current_decision_service import CurrentDecisionService\nfrom app.utils.td_sequential import td_setup_snapshot\n',
+              'imports',
+          )
+
+          one(
+              'def _pct(value: float | None) -> float | None:\n    """规范化涨跌幅数值。\n\n    重要：QuoteSnapshot.pct_change 的单位约定是「百分比」（与 dashboard_service\n    等既有消费方一致，东财「涨跌幅」列也是百分比）。这里只做精度收敛，\n    不做 ×100 换算——历史版本曾在此误乘 100，导致看板出现 -136% / +367% 之类的\n    不可能数值。单位口径一旦存疑应停止信号，而不是猜测性换算。\n    """\n    return round(value, 2) if value is not None else None\n\n\nclass KlineStabilizationService:',
+              'def _pct(value: float | None) -> float | None:\n    """规范化涨跌幅数值。\n\n    重要：QuoteSnapshot.pct_change 的单位约定是「百分比」（与 dashboard_service\n    等既有消费方一致，东财「涨跌幅」列也是百分比）。这里只做精度收敛，\n    不做 ×100 换算——历史版本曾在此误乘 100，导致看板出现 -136% / +367% 之类的\n    不可能数值。单位口径一旦存疑应停止信号，而不是猜测性换算。\n    """\n    return round(value, 2) if value is not None else None\n\n\ndef _forecast_note(diagnostics: Any) -> str:\n    """Read an optional note without assuming legacy diagnostics JSON shape."""\n    if isinstance(diagnostics, dict):\n        note = diagnostics.get("note")\n        if isinstance(note, str) and note.strip():\n            return note.strip()\n    return "persisted ForecastSnapshot"\n\n\nclass KlineStabilizationService:',
+              'forecast note helper',
+          )
+
+          one(
+              '    def _sector_alias(self) -> dict[str, str]:\n',
+              '    @staticmethod\n    def _latest_forecast(db: Session, instrument_id: int, horizon: int = 1) -> ForecastSnapshot | None:\n        return db.scalar(\n            select(ForecastSnapshot)\n            .where(ForecastSnapshot.instrument_id == instrument_id, ForecastSnapshot.horizon == horizon)\n            .order_by(ForecastSnapshot.as_of_date.desc(), ForecastSnapshot.generated_at.desc())\n            .limit(1)\n        )\n\n    def _sector_alias(self) -> dict[str, str]:\n',
+              'latest forecast insertion',
+          )
+
+          one(
+              '    def _row(self, db: Session, instrument: Instrument) -> dict[str, Any]:',
+              '    def _row(\n        self,\n        db: Session,\n        instrument: Instrument,\n        *,\n        current_decision: dict[str, Any] | None = None,\n        decision_snapshot_id: str | None = None,\n    ) -> dict[str, Any]:',
+              'row signature',
+          )
+
+          one(
+              '        td = td_setup_snapshot(frame) if not frame.empty else {"label": "—", "direction": "none", "sub_label": "", "desc": "", "countdown": 0, "setup_length": 9}\n        pattern = pattern_forecast_snapshot(frame) if not frame.empty else {"expected_return": None, "p_up": None, "confidence": 0, "sample_count": 0, "calibration_status": "not_calibrated", "note": "数据不足"}\n        chan = self._chanlun_state(frame)\n',
+              '        td = td_setup_snapshot(frame) if not frame.empty else {"label": "—", "direction": "none", "sub_label": "", "desc": "", "countdown": 0, "setup_length": 9}\n        stored_forecast = self._latest_forecast(db, instrument.id, 1)\n        if stored_forecast is None:\n            pattern = {\n                "expected_return": None, "p_up": None, "confidence": 0, "sample_count": 0,\n                "calibration_status": "not_calibrated", "note": "persisted forecast unavailable",\n                "source": "unavailable", "p_up_semantics": "unavailable",\n            }\n        else:\n            status = str(stored_forecast.calibration_status or "not_calibrated")\n            pattern = {\n                "expected_return": stored_forecast.expected_return,\n                "p_up": stored_forecast.p_up,\n                "confidence": stored_forecast.confidence,\n                "sample_count": stored_forecast.sample_count,\n                "calibration_status": status,\n                "note": _forecast_note(stored_forecast.diagnostics_json),\n                "source": "persisted_forecast_snapshot",\n                "p_up_semantics": (\n                    "calibrated_up_probability"\n                    if status == "calibrated"\n                    else "weighted_historical_neighbor_up_frequency"\n                ),\n            }\n        chan = self._chanlun_state(frame)\n        if current_decision is None:\n            decision_snapshot_id, decisions = CurrentDecisionService(self.settings).resolve_many(db, [instrument])\n            current_decision = decisions.get(str(instrument.ts_code).strip().upper())\n',
+              'persisted forecast projection',
+          )
+
+          one(
+              '        # 操作建议（研究态启发式，不构成交易指令）\n        action = self._research_action(td, pattern, volume, current_price)\n',
+              '        # Current action is projected from the single canonical decision contract.\n        action = str((current_decision or {}).get("state") or "数据异常")\n',
+              'canonical action',
+          )
+
+          one(
+              '                "calibration_status": pattern.get("calibration_status"),\n                "note": pattern.get("note"),\n            },\n            "chanlun": chan,\n            "action": action,\n            "actionable": False,  # 研究态：永不 actionable\n',
+              '                "calibration_status": pattern.get("calibration_status"),\n                "note": pattern.get("note"),\n                "source": pattern.get("source"),\n                "p_up": pattern.get("p_up"),\n                "p_up_semantics": pattern.get("p_up_semantics"),\n            },\n            "chanlun": chan,\n            "action": action,\n            "action_source": (current_decision or {}).get("source", "unavailable"),\n            "action_canonical": bool((current_decision or {}).get("canonical", False)),\n            "decision_snapshot_id": decision_snapshot_id,\n            "actionable": False,  # 研究态：永不 actionable\n',
+              'row action metadata',
+          )
+
+          between(
+              '    @staticmethod\n    def _research_action(',
+              '    # ---------- 汇总 ----------',
+              '    # ---------- 汇总 ----------',
+              'remove second action engine',
+          )
+
+          one(
+              '        instruments = self._instruments(db)\n        rows = [self._row(db, instrument) for instrument in instruments]\n',
+              '        instruments = self._instruments(db)\n        decision_snapshot_id, decisions = CurrentDecisionService(self.settings).resolve_many(db, instruments)\n        rows = [\n            self._row(\n                db,\n                instrument,\n                current_decision=decisions.get(str(instrument.ts_code).strip().upper()),\n                decision_snapshot_id=decision_snapshot_id,\n            )\n            for instrument in instruments\n        ]\n',
+              'summary canonical map',
+          )
+
+          one(
+              '            "减仓": sum(1 for row in rows if row["action"] == "减仓"),\n        }\n',
+              '            "减仓": sum(1 for row in rows if row["action"] == "减仓"),\n            "数据异常": sum(1 for row in rows if row["action"] == "数据异常"),\n        }\n',
+              'anomaly count',
+          )
+
+          one(
+              '            "automatic_orders": False,\n            "counts": counts,\n',
+              '            "automatic_orders": False,\n            "current_decision_contract": "decision_board_snapshot_then_signal_grade_then_signal_snapshot_last_resort",\n            "decision_snapshot_id": decision_snapshot_id,\n            "counts": counts,\n',
+              'summary metadata',
+          )
+
+          one(
+              '                "TD 九转为确定性指标；明日预测为形态匹配（horizon=1）且未完成 walk-forward 校准，仅供研究参考。",\n                "缠论指标基于 chanlun 框架计算，仅作研究视图。",\n',
+              '                "action 与主页共用唯一 current decision；TD/MA/MACD/KDJ/RSI/缠论只作解释，不生成第二套动作。",\n                "明日预测读取与主页相同的持久化 ForecastSnapshot；未校准 p_up 仅表示历史相似样本上涨占比。",\n                "缠论指标基于 chanlun 框架计算，仅作研究视图。",\n',
+              'disclaimers',
+          )
+
+          p.write_text(t, encoding='utf-8')
+          PY
+          git rm .github/workflows/restore-and-patch-kline-canonical.yml
+      - name: Commit corrected K-line projection
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add backend/app/services/kline_stabilization_service.py
+          git commit -m 'fix: preserve K-line API shape under canonical projection'
+          git push origin HEAD:fix/single-etf-decision-surface-20260903
