@@ -127,6 +127,7 @@ class ETF1430WorkbenchService:
                     "support_touch_probability": None, "resistance_touch_probability": None,
                     "sample_count": 0, "confidence": 0.0, "similarity_distance": None,
                     "calibration_status": "not_calibrated",
+                    "as_of_date": None, "feature_basis": "unavailable", "intraday_provisional_used": False,
                     "diagnostics": {"reason": "persisted_forecast_missing"},
                 }
                 continue

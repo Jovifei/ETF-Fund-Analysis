@@ -30,10 +30,8 @@ from app.models import (
     QuoteSnapshot,
     TaskRun,
 )
-from app.services.forecast_service import similarity_forecast
 from app.services.signal_grade_service import GRADE_ORDER, SignalGradeService, classify_row
 from app.services.trading_calendar_service import TradingCalendarService
-from app.utils.feature_store import build_feature_frame, feature_columns_for_horizon
 from app.utils.indicators_v05 import calculate_indicators
 from app.utils.numbers import finite_or_none
 from app.utils.support_resistance import build_support_resistance
@@ -383,6 +381,8 @@ class DecisionBoardService:
             },
             "indicator_status": {
                 "basis": "confirmed_daily_history_plus_explicit_provisional_state",
+                "forecast_basis": "persisted_settled_daily_snapshots",
+                "intraday_forecast_policy": "disabled_until_time_matched_intraday_history",
                 "td": "TD9 setup only; TD13 not implemented",
                 "chan": "overlap-zone approximation only; not full Chan/CZSC",
             },
@@ -415,7 +415,6 @@ class DecisionBoardService:
                     cfg=SignalGradeService(self.settings).config,
                 ),
             }
-            forecast_map = dict(derived["forecasts"])
             freshness, data_status = "stale", "provisional_unverified_research_only" if not provisional.timestamp_verified else "provisional_research_only"
         history, confirmed_levels = self._history_and_levels(db, instrument.id)
         if provisional_status["used_for_derived_values"]:
@@ -574,6 +573,8 @@ class DecisionBoardService:
             "status": "computed_research_only" if row.timestamp_verified else "computed_unverified_research_only",
             "used_for_derived_values": True,
             "reason": "temporary_confirmed_history_plus_complete_provisional_ohlcv",
+            "forecast_policy": "persisted_settled_daily_only",
+            "forecast_policy_reason": "no_time_matched_intraday_neighbor_history",
             "source_time_verified": bool(row.timestamp_verified),
             "observed_at": observed.isoformat(), "source": row.source, "timestamp_verified": bool(row.timestamp_verified),
             "derived": derived,
@@ -676,28 +677,6 @@ class DecisionBoardService:
         )
         try:
             indicators = calculate_indicators(raw, self.settings.load_strategy()["indicator"])
-            feature_frame = build_feature_frame(raw, self.settings.load_strategy()["indicator"]).frame
-            forecast_config = self.settings.load_strategy()["forecast"]
-            forecasts = {}
-            for horizon in HORIZONS:
-                result = similarity_forecast(
-                    feature_frame,
-                    horizon=horizon,
-                    neighbors=int(forecast_config.get("neighbors", 80)),
-                    minimum_neighbors=int(forecast_config.get("minimum_neighbors", 25)),
-                    maximum_confidence=float(forecast_config.get("maximum_confidence_uncalibrated", 55)),
-                    feature_columns=feature_columns_for_horizon(horizon, feature_frame.columns),
-                    conformal_alpha=float(forecast_config.get("conformal_alpha", 0.20)),
-                )
-                forecasts[str(horizon)] = {
-                    "expected_return": result.expected_return,
-                    "q10": result.q10,
-                    "q50": result.q50,
-                    "q90": result.q90,
-                    "p_up": result.p_up,
-                    "return_semantics": {"unit": "decimal_ratio", "no_unit_guessing": True},
-                    "calibration_status": "not_calibrated",
-                }
             support_resistance = build_support_resistance(raw)
         except Exception:
             # Source/history quality failure is represented to the read model,
@@ -706,7 +685,6 @@ class DecisionBoardService:
         return {
             "indicator_values": dict(indicators.values),
             "support_resistance": support_resistance,
-            "forecasts": forecasts,
             "td_basis": "TD9 setup only; TD13 not implemented",
             "chan_basis": "overlap-zone approximation only; not full Chan/CZSC",
         }
@@ -714,6 +692,9 @@ class DecisionBoardService:
     @staticmethod
     def _forecast_payload(row) -> dict:
         return {
+            "source": "persisted_forecast_snapshot" if row is not None else "unavailable",
+            "feature_basis": "settled_daily_bars" if row is not None else "unavailable",
+            "intraday_provisional_used": False,
             "expected_return": finite_or_none(row.expected_return) if row is not None else None,
             "q10": finite_or_none(row.q10) if row is not None else None,
             "q50": finite_or_none(row.q50) if row is not None else None,
@@ -830,6 +811,8 @@ class DecisionBoardService:
             },
             "indicator_status": {
                 "basis": "confirmed_daily_history_plus_explicit_provisional_state",
+                "forecast_basis": "persisted_settled_daily_snapshots",
+                "intraday_forecast_policy": "disabled_until_time_matched_intraday_history",
                 "td": "TD9 setup only; TD13 not implemented",
                 "chan": "overlap-zone approximation only; not full Chan/CZSC",
             },
