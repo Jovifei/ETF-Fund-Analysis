@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   patch:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,7 +28,6 @@ jobs:
                   raise SystemExit(f'{path}: expected exactly one match, got {count}')
               p.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          # Local-only deployment runbook must never be committed.
           p = Path('.gitignore')
           text = p.read_text(encoding='utf-8')
           rule = 'docs/PRIVATE_REMOTE_DEPLOYMENT.md'
@@ -37,34 +35,15 @@ jobs:
               text = text.rstrip() + '\n\n# Private remote deployment operations guide (local only, do not commit)\n' + rule + '\n'
               p.write_text(text, encoding='utf-8')
 
-          replace_once(
-              'config/strategy.json',
-              '"signal_grade_version": "signal-grade-v0.3.0",',
-              '"signal_grade_version": "signal-grade-v0.3.1-reference-display",',
-          )
+          replace_once('config/strategy.json', '"signal_grade_version": "signal-grade-v0.3.0",', '"signal_grade_version": "signal-grade-v0.3.1-reference-display",')
           replace_once('config/strategy.json', '"rsi_strong": 60,', '"rsi_strong": 50,')
           replace_once('config/strategy.json', '"rsi_weak": 40,', '"rsi_weak": 30,\n    "rsi_oversold": 30,')
 
-          replace_once(
-              'backend/app/services/signal_grade_service.py',
-              '"""Read-only ETF signal grading view (signal-grade-v0.1.0).',
-              '"""Read-only ETF signal grading view (signal-grade-v0.3.1-reference-display).',
-          )
-          replace_once(
-              'backend/app/services/signal_grade_service.py',
-              '        kind, label = "gold", "金叉"',
-              '        kind, label = "gold", "强势金叉" if dif > 0 else "弱势金叉"',
-          )
-          replace_once(
-              'backend/app/services/signal_grade_service.py',
-              '        kind, label = "approach_gold", "将金叉"',
-              '        kind, label = "approach_gold", "将叉"',
-          )
-          replace_once(
-              'backend/app/services/signal_grade_service.py',
-              '        kind, label = "bull_cont", "多头延续"',
-              '        kind, label = "bull_cont", "多头延续" if dif > 0 else "修复延续"',
-          )
+          replace_once('backend/app/services/signal_grade_service.py', '"""Read-only ETF signal grading view (signal-grade-v0.1.0).', '"""Read-only ETF signal grading view (signal-grade-v0.3.1-reference-display).')
+          replace_once('backend/app/services/signal_grade_service.py', '        kind, label = "gold", "金叉"', '        kind, label = "gold", "强势金叉" if dif > 0 else "弱势金叉"')
+          replace_once('backend/app/services/signal_grade_service.py', '        kind, label = "approach_gold", "将金叉"', '        kind, label = "approach_gold", "将叉"')
+          replace_once('backend/app/services/signal_grade_service.py', '        kind, label = "bull_cont", "多头延续"', '        kind, label = "bull_cont", "多头延续" if dif > 0 else "修复延续"')
+
           old_rsi = '''def classify_rsi(rsi: float | None, cfg: dict[str, Any]) -> dict[str, Any]:
     if rsi is None:
         return {"value": None, "label": "RSI不足"}
@@ -95,44 +74,23 @@ jobs:
     return {"value": round(rsi, 1), "label": label}
 '''
           replace_once('backend/app/services/signal_grade_service.py', old_rsi, new_rsi)
-          replace_once(
-              'backend/app/services/signal_grade_service.py',
-              '        "rsi_strong": cfg.get("rsi_strong", 60),\n        "rsi_weak": cfg.get("rsi_weak", 40),',
-              '        "rsi_strong": cfg.get("rsi_strong", 50),\n        "rsi_oversold": cfg.get("rsi_oversold", cfg.get("rsi_weak", 30)),',
-          )
-          replace_once(
-              'backend/app/services/signal_grade_service.py',
-              '        self.version = str(self.strategy.get("signal_grade_version", "signal-grade-v0.1.0"))',
-              '        self.version = str(self.strategy.get("signal_grade_version", "signal-grade-v0.3.1-reference-display"))',
-          )
+          replace_once('backend/app/services/signal_grade_service.py', '        "rsi_strong": cfg.get("rsi_strong", 60),\n        "rsi_weak": cfg.get("rsi_weak", 40),', '        "rsi_strong": cfg.get("rsi_strong", 50),\n        "rsi_oversold": cfg.get("rsi_oversold", cfg.get("rsi_weak", 30)),')
+          replace_once('backend/app/services/signal_grade_service.py', '        self.version = str(self.strategy.get("signal_grade_version", "signal-grade-v0.1.0"))', '        self.version = str(self.strategy.get("signal_grade_version", "signal-grade-v0.3.1-reference-display"))')
 
-          # Existing test asserts the public version exactly.
-          replace_once(
-              'backend/tests/test_signal_grade.py',
-              '    assert payload["version"] == "signal-grade-v0.3.0"',
-              '    assert payload["version"] == "signal-grade-v0.3.1-reference-display"',
-          )
+          replace_once('backend/tests/test_signal_grade.py', '    assert payload["version"] == "signal-grade-v0.3.0"', '    assert payload["version"] == "signal-grade-v0.3.1-reference-display"')
+          replace_once('docs/REFERENCE_BOARD_PARITY.md', '- 用户持仓和完整系统 `/legacy`。', '- 用户持仓与统一主页详情能力；历史 `/legacy` 路径仅重定向到 `/`，不得恢复第二套用户界面。')
 
-          # The old docs still claimed /legacy was a separate full system, while current main redirects it to /.
-          replace_once(
-              'docs/REFERENCE_BOARD_PARITY.md',
-              '- 用户持仓和完整系统 `/legacy`。',
-              '- 用户持仓与统一主页详情能力；历史 `/legacy` 路径仅重定向到 `/`，不得恢复第二套用户界面。',
-          )
-          marker = '## 7. 预测口径\n'
           p = Path('docs/REFERENCE_BOARD_PARITY.md')
           text = p.read_text(encoding='utf-8')
+          marker = '## 7. 预测口径\n'
           if '### MACD 显示语义' not in text:
               insert = '''### MACD 显示语义\n\n- `gold` 且 DIF > 0：强势金叉；DIF <= 0：弱势金叉；\n- `bull_cont` 且 DIF > 0：多头延续；DIF <= 0：修复延续；\n- `approach_gold`：将叉；`approach_death`：将死叉；\n- `death`：死叉；\n- `bear_cont` 继续显示为空头延续，**不得**因此自动改成“减仓”。\n\n这些是显示解释，不改变 `kind` 与 canonical 五档。\n\n'''
               if marker not in text:
-                  raise SystemExit('docs/REFERENCE_BOARD_PARITY.md: prediction marker missing')
-              text = text.replace(marker, insert + marker, 1)
-              p.write_text(text, encoding='utf-8')
+                  raise SystemExit('REFERENCE_BOARD_PARITY prediction marker missing')
+              p.write_text(text.replace(marker, insert + marker, 1), encoding='utf-8')
 
-          test_path = Path('backend/tests/test_reference_display_reconciliation.py')
-          test_path.write_text('''from __future__ import annotations\n\nfrom app.services.signal_grade_service import assign_grade, classify_macd, classify_rsi\n\n\ndef test_reference_rsi_bands_match_unified_board() -> None:\n    cfg = {"rsi_overbought": 70, "rsi_strong": 50, "rsi_oversold": 30}\n    assert classify_rsi(72, cfg)["label"] == "超买 · 短期回调风险高"\n    assert classify_rsi(55, cfg)["label"] == "正常偏强 · 趋势中段"\n    assert classify_rsi(40, cfg)["label"] == "偏弱 · 动能不足"\n    assert classify_rsi(25, cfg)["label"] == "超卖 · 反弹概率升高"\n\n\ndef test_reference_macd_labels_do_not_promote_bear_cont_to_reduce() -> None:\n    gold = classify_macd(\n        {"macd_dif": 0.02, "macd_dea": 0.01, "macd_hist": 0.01},\n        {"macd_dif": 0.0, "macd_dea": 0.01, "macd_hist": -0.01},\n        0.0008,\n    )\n    assert gold["kind"] == "gold"\n    assert gold["label"] == "强势金叉"\n\n    bear = classify_macd(\n        {"macd_dif": -0.03, "macd_dea": -0.02, "macd_hist": -0.02},\n        {"macd_dif": -0.02, "macd_dea": -0.01, "macd_hist": -0.01},\n        0.0008,\n    )\n    assert bear["kind"] == "bear_cont"\n    assert bear["label"] == "空头延续"\n    grade = assign_grade(\n        pct_change=-0.01,\n        volume={"kind": "flat"},\n        ma={"kind": "mixed"},\n        macd=bear,\n        kdj={"j": 40, "kind": "healthy", "death": False},\n        cfg={"j_add_cap": 90, "stall_return": 0.002},\n    )\n    assert grade == "可试探"\n''', encoding='utf-8')
+          Path('backend/tests/test_reference_display_reconciliation.py').write_text('''from __future__ import annotations\n\nfrom app.services.signal_grade_service import assign_grade, classify_macd, classify_rsi\n\n\ndef test_reference_rsi_bands_match_unified_board() -> None:\n    cfg = {"rsi_overbought": 70, "rsi_strong": 50, "rsi_oversold": 30}\n    assert classify_rsi(72, cfg)["label"] == "超买 · 短期回调风险高"\n    assert classify_rsi(55, cfg)["label"] == "正常偏强 · 趋势中段"\n    assert classify_rsi(40, cfg)["label"] == "偏弱 · 动能不足"\n    assert classify_rsi(25, cfg)["label"] == "超卖 · 反弹概率升高"\n\n\ndef test_reference_macd_labels_do_not_promote_bear_cont_to_reduce() -> None:\n    gold = classify_macd({"macd_dif": 0.02, "macd_dea": 0.01, "macd_hist": 0.01}, {"macd_dif": 0.0, "macd_dea": 0.01, "macd_hist": -0.01}, 0.0008)\n    assert gold["kind"] == "gold"\n    assert gold["label"] == "强势金叉"\n    bear = classify_macd({"macd_dif": -0.03, "macd_dea": -0.02, "macd_hist": -0.02}, {"macd_dif": -0.02, "macd_dea": -0.01, "macd_hist": -0.01}, 0.0008)\n    assert bear["kind"] == "bear_cont"\n    assert bear["label"] == "空头延续"\n    assert assign_grade(pct_change=-0.01, volume={"kind": "flat"}, ma={"kind": "mixed"}, macd=bear, kdj={"j": 40, "kind": "healthy", "death": False}, cfg={"j_add_cap": 90, "stall_return": 0.002}) == "可试探"\n''', encoding='utf-8')
 
-          # Remove this one-shot workflow from the business tree.
           Path('.github/workflows/reconcile-reference-display-20260904.yml').unlink()
           PY
           git config user.name "github-actions[bot]"
