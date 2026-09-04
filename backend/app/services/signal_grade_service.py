@@ -1,4 +1,4 @@
-"""Read-only ETF signal grading view (signal-grade-v0.1.0).
+"""Read-only ETF signal grading view (signal-grade-v0.3.1-reference-display).
 
 Derives colourful research labels from stored indicator/quote/forecast snapshots.
 Does not mutate production signal thresholds, holdings, or orders.
@@ -101,13 +101,13 @@ def classify_macd(values: dict[str, Any], previous: dict[str, Any] | None, appro
     if crossed_down or (hist < 0 and dif < dea and prev_hist is not None and prev_hist >= 0):
         kind, label = "death", "死叉"
     elif crossed_up or (hist > 0 and dif > dea and prev_hist is not None and prev_hist <= 0):
-        kind, label = "gold", "金叉"
+        kind, label = "gold", "强势金叉" if dif > 0 else "弱势金叉"
     elif hist > 0 and (shrinking or (0 < hist <= approach and dif > dea)):
         kind, label = "approach_death", "将死叉"
     elif hist < 0 and (expanding or (abs(hist) <= approach and dif < dea)):
-        kind, label = "approach_gold", "将金叉"
+        kind, label = "approach_gold", "将叉"
     elif hist > 0:
-        kind, label = "bull_cont", "多头延续"
+        kind, label = "bull_cont", "多头延续" if dif > 0 else "修复延续"
     else:
         kind, label = "bear_cont", "空头延续"
     return {"label": label, "kind": kind, "dif": round(dif, 4), "dea": round(dea, 4)}
@@ -146,14 +146,14 @@ def classify_kdj(values: dict[str, Any], previous: dict[str, Any] | None, cfg: d
 def classify_rsi(rsi: float | None, cfg: dict[str, Any]) -> dict[str, Any]:
     if rsi is None:
         return {"value": None, "label": "RSI不足"}
-    if rsi >= float(cfg["rsi_overbought"]):
-        label = "超买 · 回调风险高"
-    elif rsi >= float(cfg["rsi_strong"]):
+    if rsi >= float(cfg.get("rsi_overbought", 70)):
+        label = "超买 · 短期回调风险高"
+    elif rsi >= float(cfg.get("rsi_strong", 50)):
         label = "正常偏强 · 趋势中段"
-    elif rsi <= float(cfg["rsi_weak"]):
+    elif rsi >= float(cfg.get("rsi_oversold", cfg.get("rsi_weak", 30))):
         label = "偏弱 · 动能不足"
     else:
-        label = "正常整理 · 趋势中段"
+        label = "超卖 · 反弹概率升高"
     return {"value": round(rsi, 1), "label": label}
 
 
@@ -214,8 +214,8 @@ def classify_row(
     })
     rsi = classify_rsi(_f(values, "rsi14"), {
         "rsi_overbought": cfg.get("rsi_overbought", 70),
-        "rsi_strong": cfg.get("rsi_strong", 60),
-        "rsi_weak": cfg.get("rsi_weak", 40),
+        "rsi_strong": cfg.get("rsi_strong", 50),
+        "rsi_oversold": cfg.get("rsi_oversold", cfg.get("rsi_weak", 30)),
     })
     td = classify_td(values)
     vs_yesterday = None
@@ -249,7 +249,7 @@ class SignalGradeService:
         self.settings = settings or get_settings()
         self.strategy = self.settings.load_strategy()
         self.config = dict(self.strategy.get("signal_grade", {}))
-        self.version = str(self.strategy.get("signal_grade_version", "signal-grade-v0.1.0"))
+        self.version = str(self.strategy.get("signal_grade_version", "signal-grade-v0.3.1-reference-display"))
         # 行业/概念/全市场板块口径与「K线企稳分析看板」共用同一份配置，
         # 保证两个只读研究视图的板块数据完全一致。
         self.workbench_config = self._load_workbench_config()

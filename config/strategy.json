@@ -3,7 +3,7 @@
   "indicator_version": "indicator-v0.5.1",
   "forecast_version": "similarity-corridor-v0.7.1-horizon-aligned",
   "signal_center_version": "signal-center-v0.3.0-canonical-fallback",
-  "signal_grade_version": "signal-grade-v0.3.0",
+  "signal_grade_version": "signal-grade-v0.3.1-reference-display",
   "signal_grade": {
     "j_add_cap": 90,
     "j_overbought": 100,
@@ -13,8 +13,9 @@
     "volume_contract": 0.9,
     "stall_return": 0.002,
     "rsi_overbought": 70,
-    "rsi_strong": 60,
-    "rsi_weak": 40,
+    "rsi_strong": 50,
+    "rsi_weak": 30,
+    "rsi_oversold": 30,
     "macd_approach_hist": 0.0008,
     "disclaimer": "研究提示，非操作指令",
     "board_score_weights": {

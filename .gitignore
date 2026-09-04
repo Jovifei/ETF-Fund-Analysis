@@ -26,3 +26,6 @@ backend/*.egg-info/
 
 # WorkBuddy workspace memory (local only)
 .workbuddy/
+
+# Private remote deployment operations guide (local only, do not commit)
+docs/PRIVATE_REMOTE_DEPLOYMENT.md
