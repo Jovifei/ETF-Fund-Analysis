@@ -89,7 +89,7 @@ def test_grade_view_does_not_write_holdings(db_session):
     after = HoldingService().list(db_session)
     assert payload["writes_holdings"] is False
     assert payload["research_only"] is True
-    assert payload["version"] == "signal-grade-v0.3.0"
+    assert payload["version"] == "signal-grade-v0.3.1-reference-display"
     assert before == after
     assert all(not row["actionable"] for row in payload["rows"])
     assert set(payload["groups"]) == set(GRADE_ORDER)
