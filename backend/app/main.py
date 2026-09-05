@@ -98,14 +98,19 @@ def index() -> FileResponse:
 
 @app.get("/legacy", include_in_schema=False)
 def legacy() -> RedirectResponse:
-    # Historical bookmark only.  New navigation never exposes /legacy.
+    # Historical bookmark only. New navigation never exposes /legacy.
     return RedirectResponse("/research", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
-@app.get("/workbench/1430", include_in_schema=False)
-def etf_1430_workbench() -> FileResponse:
-    # Compatibility URL for the secondary 14:30 decision mode.
+@app.get("/decision/1430", include_in_schema=False)
+def decision_1430() -> FileResponse:
+    # Secondary decision mode: same product domain as Decision, not a peer workbench.
     return FileResponse(STATIC_DIR / "etf_1430_workbench.html", media_type="text/html; charset=utf-8")
+
+
+@app.get("/workbench/1430", include_in_schema=False)
+def legacy_etf_1430_workbench() -> RedirectResponse:
+    return RedirectResponse("/decision/1430", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get("/workbench/kline", include_in_schema=False)
@@ -157,7 +162,7 @@ def static_legacy_index() -> RedirectResponse:
 
 @app.get("/assets/etf_1430_workbench.html", include_in_schema=False)
 def static_etf_1430_workbench() -> RedirectResponse:
-    return RedirectResponse("/workbench/1430", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    return RedirectResponse("/decision/1430", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get("/assets/kline_stabilization.html", include_in_schema=False)
