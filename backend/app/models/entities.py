@@ -837,6 +837,27 @@ class Holding(Base, TimestampMixin):
     user: Mapped[AuthUser | None] = relationship(back_populates="holdings")
 
 
+class UserWatchlistEntry(Base, TimestampMixin):
+    """用户自选关注（与全局 Instrument universe 分离；修复方案 PR-D）。
+
+    user_id 为 None 表示系统/匿名池（认证关闭的本地模式，语义与 Holding 一致）。
+    """
+
+    __tablename__ = "user_watchlist_entries"
+    __table_args__ = (
+        UniqueConstraint("user_id", "instrument_id", name="uq_watchlist_user_instrument"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("auth_users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instruments.id", ondelete="CASCADE"), index=True
+    )
+    note: Mapped[str | None] = mapped_column(Text)
+
+
 class HoldingImportSession(Base, TimestampMixin):
     """Metadata for a short-lived screenshot import; never stores image bytes."""
 

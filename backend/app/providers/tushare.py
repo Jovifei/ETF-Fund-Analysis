@@ -44,6 +44,44 @@ class TushareProvider(MarketProvider):
             return frame
         return []
 
+    def resolve_instrument(self, code: str) -> InstrumentRecord | None:
+        """按代码在上游 fund_basic 全量场内基金中解析一个标的。
+
+        支持三种输入：`512480.SH` 完整代码、`512480` 6 位 symbol。
+        上游不可达/未命中返回 None，由调用方决定是否允许人工确认后入库。
+        """
+        needle = code.strip().upper()
+        if not needle:
+            return None
+        try:
+            frame = self.pro.fund_basic(market="E")
+        except Exception as exc:  # 权限或网络问题按能力缺失处理
+            logger.warning("Tushare resolve_instrument unavailable: %s", exc)
+            return None
+        for row in self._records(frame):
+            ts_code = str(row.get("ts_code") or "").upper()
+            symbol = ts_code.split(".", 1)[0]
+            if ts_code != needle and symbol != needle:
+                continue
+            name = str(row.get("name") or "")
+            kind = "ETF" if "ETF" in name else ("LOF" if "LOF" in name else "ETF")
+            return InstrumentRecord(
+                ts_code=ts_code,
+                symbol=symbol,
+                name=name or ts_code,
+                kind=kind,
+                exchange=ts_code.split(".", 1)[-1] if "." in ts_code else None,
+                enabled=True,
+                metadata={
+                    "management": row.get("management"),
+                    "found_date": row.get("found_date"),
+                    "list_date": row.get("list_date"),
+                    "m_fee": row.get("m_fee"),
+                    "c_fee": row.get("c_fee"),
+                },
+            )
+        return None
+
     def list_instruments(self, codes: list[str] | None = None) -> list[InstrumentRecord]:
         selected = {c.upper() for c in codes} if codes else None
         config_items = [

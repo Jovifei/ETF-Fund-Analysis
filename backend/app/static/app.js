@@ -1244,6 +1244,32 @@ function renderInstruments() {
   return;
 }
 
+async function loadWatchlist() {
+  try {
+    const rows = await api('/api/watchlist');
+    const node = qs('#watchlistList');
+    if (!node) return;
+    node.innerHTML = rows.length ? rows.map(r => `<div class="watchlist-item" style="display:flex;gap:8px;align-items:center;padding:4px 0"><strong>${escapeHtml(r.name || r.ts_code)}</strong><span class="muted">${escapeHtml(r.ts_code)}</span>${r.note?`<span class="muted">· ${escapeHtml(r.note)}</span>`:''}<span style="flex:1"></span><button class="small-button detail-jump" data-code="${escapeHtml(r.ts_code)}">详情</button><button class="small-button edit-holding" data-code="${escapeHtml(r.ts_code)}">转持仓</button><button class="small-button danger watchlist-remove" data-id="${r.id}">移除</button></div>`).join('') : '尚未添加自选。';
+    qsa('#watchlistList .watchlist-remove').forEach(b => b.addEventListener('click', async () => {
+      try { await api(`/api/watchlist/entries/${b.dataset.id}`, {method:'DELETE'}); await loadWatchlist(); toast('已移除自选'); } catch (e) { toast(`移除失败：${e.message}`); }
+    }));
+    qsa('#watchlistList .edit-holding').forEach(b => b.addEventListener('click', () => openHolding(b.dataset.code)));
+    qsa('#watchlistList .detail-jump').forEach(b => b.addEventListener('click', () => { window.location.href = `/etf/${encodeURIComponent(b.dataset.code)}`; }));
+  } catch (e) { /* 认证或网络失败时保留占位 */ }
+}
+
+async function addWatchlistEntry() {
+  const input = qs('#watchlistCodeInput');
+  const code = (input.value || '').trim();
+  if (!code) { toast('请输入代码'); return; }
+  try {
+    const result = await api('/api/watchlist/entries', {method:'POST', body: JSON.stringify({code})});
+    input.value = '';
+    await loadWatchlist();
+    toast(result.entry && result.entry.duplicate ? '该标的已在自选中' : '已添加自选');
+  } catch (e) { toast(`添加失败：${e.message}`, 5000); }
+}
+
 function renderHoldings() {
   const holdings = state.data.holdings || [];
   const total = holdings.reduce((sum,h) => sum + Number(h.market_value || 0), 0);
@@ -1255,7 +1281,7 @@ function renderHoldings() {
     ['现金 / 未分配', '未录入', '本版不推断现金余额'],
   ];
   qs('#holdingSummary').innerHTML = items.map(([l,v,s]) => `<div class="summary-card"><div class="label">${escapeHtml(l)}</div><div class="value">${escapeHtml(v)}</div><div class="sub">${escapeHtml(s)}</div></div>`).join('');
-  qs('#holdingTable tbody').innerHTML = holdings.length ? holdings.map(h => `<tr><td><div class="instrument-name">${displayIdentity(h.ts_code, h.name)}</div><div class="instrument-meta">${escapeHtml(h.theme_l1 || '未分类')}/${escapeHtml(h.theme_l2 || '-')}</div></td><td>${escapeHtml(fmt(h.shares,4))}</td><td>${escapeHtml(fmt(h.cost_price,4))}</td><td>${escapeHtml(fmt(h.latest_price,4))}</td><td>${escapeHtml(amountText(h.market_value))}</td><td class="${escapeHtml(colorClass(h.pnl))}">${escapeHtml(fmt(h.pnl,2))} / ${escapeHtml(holdingPnlPercent(h))}</td><td>${escapeHtml(fmt(h.current_weight*100,1))}%</td><td>${h.target_weight==null?'—':escapeHtml(fmt(h.target_weight*100,1))+'%'}</td><td><button class="small-button edit-holding" data-code="${escapeHtml(h.ts_code)}">修改</button> <button class="small-button danger delete-holding" data-code="${escapeHtml(h.ts_code)}">删除</button></td></tr>`).join('') : '<tr class="loading-row"><td colspan="9">尚未录入持仓</td></tr>';
+  qs('#holdingTable tbody').innerHTML = holdings.length ? holdings.map(h => `<tr><td><div class="instrument-name">${displayIdentity(h.ts_code, h.name)}</div><div class="instrument-meta">${escapeHtml(h.theme_l1 || '未分类')}/${escapeHtml(h.theme_l2 || '-')}</div></td><td>${escapeHtml(fmt(h.shares,4))}</td><td>${escapeHtml(fmt(h.cost_price,4))}</td><td>${escapeHtml(fmt(h.latest_price,4))}</td><td>${escapeHtml(amountText(h.market_value))}</td><td class="${escapeHtml(colorClass(h.pnl))}">${escapeHtml(fmt(h.pnl,2))} / ${escapeHtml(holdingPnlPercent(h))}</td><td>${escapeHtml(fmt(h.current_weight*100,1))}%</td><td>${h.target_weight==null?'—':escapeHtml(fmt(h.target_weight*100,1))+'%'}</td><td>${escapeHtml(h.current_action||'—')}</td><td class="${escapeHtml(colorClass(h.forecasts&&h.forecasts['1']?h.forecasts['1'].expected_return:null))}">${escapeHtml(h.forecasts&&h.forecasts['1']?pct(h.forecasts['1'].expected_return,2,true):'—')}</td><td class="${escapeHtml(colorClass(h.forecasts&&h.forecasts['3']?h.forecasts['3'].expected_return:null))}">${escapeHtml(h.forecasts&&h.forecasts['3']?pct(h.forecasts['3'].expected_return,2,true):'—')}</td><td class="${escapeHtml(colorClass(h.forecasts&&h.forecasts['5']?h.forecasts['5'].expected_return:null))}">${escapeHtml(h.forecasts&&h.forecasts['5']?pct(h.forecasts['5'].expected_return,2,true):'—')}</td><td class="${escapeHtml(colorClass(h.forecasts&&h.forecasts['10']?h.forecasts['10'].expected_return:null))}">${escapeHtml(h.forecasts&&h.forecasts['10']?pct(h.forecasts['10'].expected_return,2,true):'—')}</td><td>${escapeHtml(fmt(h.nearest_support,3))}</td><td>${escapeHtml(fmt(h.nearest_resistance,3))}</td><td><button class="small-button edit-holding" data-code="${escapeHtml(h.ts_code)}">修改</button> <button class="small-button danger delete-holding" data-code="${escapeHtml(h.ts_code)}">删除</button></td></tr>`).join('') : '<tr class="loading-row"><td colspan="16">尚未录入持仓</td></tr>';
   qsa('.edit-holding').forEach(b => b.addEventListener('click', () => openHolding(b.dataset.code)));
   qsa('.delete-holding').forEach(b => b.addEventListener('click', () => deleteHolding(b.dataset.code)));
   syncHoldingOptions();
@@ -2116,6 +2142,7 @@ function switchTab(tab) {
   if (tab === 'system' && !state.settings) loadSettings();
   if (tab === 'signals' && !state.signalCenter) loadSignalCenter();
   if (tab === 'dashboard') loadDecisionBoard(true);
+  if (tab === 'holdings') loadWatchlist();
 }
 
 function openHolding(code = null) {
@@ -2320,6 +2347,8 @@ function bindEvents() {
     }
   });
   qs('#newHoldingButton').addEventListener('click',()=>openHolding());
+  qs('#watchlistAddButton').addEventListener('click',addWatchlistEntry);
+  qs('#watchlistCodeInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addWatchlistEntry();}});
   qs('#holdingForm').addEventListener('submit',saveHolding);
   qs('#portfolioImportButton').addEventListener('click', openPortfolioImport);
   qs('#portfolioImportCloseButton').addEventListener('click', cancelPortfolioImport);

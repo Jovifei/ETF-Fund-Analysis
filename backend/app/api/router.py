@@ -43,6 +43,7 @@ from app.api.schemas import (
     ReviewEnqueueRequest,
     ReviewRunner,
     ReviewTransitionRequest,
+    WatchlistAddRequest,
     RuntimeUpdate,
     TaskRequest,
 )
@@ -57,7 +58,7 @@ from app.core.security import (
     session_cookie_name,
 )
 from app.db.session import SessionLocal, get_db
-from app.models import AuthUser, EventLog, ReportArtifact
+from app.models import AuthUser, EventLog, Instrument, ReportArtifact
 from app.ocr.image_validation import ImageValidationError, read_limited_bytes
 from app.services.analysis_persistence_service import AnalysisStorageNotMigrated
 from app.services.auth_service import (
@@ -77,6 +78,10 @@ from app.services.holding_import_service import (
     HoldingImportUnavailable,
 )
 from app.services.holding_service import HoldingNotFoundError, HoldingService
+from app.services.watchlist_service import WatchlistError, WatchlistService
+from app.services.support_resistance_service import SupportResistanceService
+from app.services.current_decision_service import CurrentDecisionService
+from app.utils.latest_snapshots import latest_forecast_map
 from app.services.market_context_service import MarketContextService
 from app.services.report_service import ReportService
 from app.services.review_service import CandidateNotFoundError, ReviewService
@@ -496,8 +501,39 @@ def news(
 
 
 @private_router.get("/holdings")
-def holdings(db: Annotated[Session, Depends(get_db)], user: Annotated[AuthUser | None, Depends(optional_current_user)]) -> list[dict]:
-    return HoldingService().list(db, user_id=user.id if user is not None else None)
+def holdings(
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
+) -> list[dict]:
+    rows = HoldingService().list(db, user_id=user.id if user is not None else None)
+    # 持仓页融合（PR-D）：当前动作 + 1/3/5/10 预测 + 距支撑/压力，全部读已落库快照。
+    instruments = {inst.ts_code: inst for inst in db.scalars(select(Instrument)).all()}
+    _, decisions = CurrentDecisionService(settings).resolve_many(db, list(instruments.values()))
+    forecast_map = latest_forecast_map(db)
+    sr_service = SupportResistanceService(settings)
+    for row in rows:
+        code = str(row.get("ts_code") or "").upper()
+        instrument = instruments.get(code)
+        decision = decisions.get(code) or {}
+        row["current_action"] = decision.get("state")
+        row["action_source"] = decision.get("source")
+        forecasts = forecast_map.get(instrument.id, {}) if instrument else {}
+        row["forecasts"] = {
+            str(horizon): {
+                "expected_return": item.expected_return,
+                "p_up": item.p_up,
+                "calibration_status": item.calibration_status,
+                "as_of_date": item.as_of_date.isoformat() if item.as_of_date else None,
+            }
+            for horizon, item in sorted(forecasts.items())
+        }
+        sr = sr_service.latest(db, instrument.id) if instrument else None
+        nearest_support = (sr.get("nearest_support") or {}).get("price") if isinstance(sr, dict) else None
+        nearest_resistance = (sr.get("nearest_resistance") or {}).get("price") if isinstance(sr, dict) else None
+        row["nearest_support"] = nearest_support
+        row["nearest_resistance"] = nearest_resistance
+    return rows
 
 
 @private_router.put("/holdings/{ts_code}")
@@ -532,6 +568,49 @@ def delete_holding(ts_code: str, db: Annotated[Session, Depends(get_db)], user: 
         db.commit()
     except HoldingNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"status": "ok", "deleted": deleted}
+
+
+@private_router.get("/watchlist")
+def watchlist_entries(
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
+) -> list[dict]:
+    return WatchlistService(settings).list_entries(db, user_id=user.id if user is not None else None)
+
+
+@private_router.post("/watchlist/entries", status_code=201)
+def add_watchlist_entry(
+    payload: WatchlistAddRequest,
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
+) -> dict:
+    try:
+        entry = WatchlistService(settings).add(
+            db,
+            code=payload.code,
+            note=payload.note,
+            user_id=user.id if user is not None else None,
+        )
+        db.commit()
+    except WatchlistError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"status": "ok", "entry": entry}
+
+
+@private_router.delete("/watchlist/entries/{entry_id}")
+def delete_watchlist_entry(
+    entry_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    user: Annotated[AuthUser | None, Depends(optional_current_user)],
+) -> dict:
+    deleted = WatchlistService(settings).delete(db, entry_id, user_id=user.id if user is not None else None)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="关注条目不存在")
+    db.commit()
     return {"status": "ok", "deleted": deleted}
 
 

@@ -69,6 +69,14 @@ class MarketProvider(ABC):
     def is_trade_day(self, day: date) -> bool:
         return day.weekday() < 5
 
+    def resolve_instrument(self, code: str) -> InstrumentRecord | None:
+        """按代码解析一个标的（名称/交易所/类型）；未找到或能力缺失返回 None。
+
+        供用户自助添加自选使用；实现必须走既有上游接口（如 fund_basic），
+        不允许在业务层直连行情站。
+        """
+        return None
+
     # ---- 板块涨跌家数（K线企稳看板）----
     # 行业/概念板块与全市场宽度分三个能力，各自可独立降级：
     # 不支持的 provider 默认抛 CapabilityUnavailable，由调用方决定是否跳过。

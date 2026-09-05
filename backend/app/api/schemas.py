@@ -78,6 +78,16 @@ class AdminUserResponse(BaseModel):
     last_login_at: datetime | None = None
 
 
+class WatchlistAddRequest(BaseModel):
+    code: str = Field(min_length=4, max_length=32)
+    note: str | None = Field(default=None, max_length=500)
+
+    @field_validator("code")
+    @classmethod
+    def normalize_code(cls, value: str) -> str:
+        return value.strip().upper()
+
+
 class HoldingUpsert(BaseModel):
     ts_code: str = Field(min_length=6, max_length=32)
     shares: float = Field(ge=0)

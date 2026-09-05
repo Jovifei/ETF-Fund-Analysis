@@ -47,6 +47,26 @@ class MockProvider(MarketProvider):
             )
         return result
 
+    def resolve_instrument(self, code: str) -> InstrumentRecord | None:
+        """Mock 只能解析其内置 watchlist 内的标的（含 6 位 symbol）。"""
+        needle = code.strip().upper()
+        for item in self._watchlist:
+            if item["ts_code"].upper() == needle or item["symbol"] == needle:
+                exchange = item["ts_code"].split(".")[-1] if "." in item["ts_code"] else None
+                return InstrumentRecord(
+                    ts_code=item["ts_code"],
+                    symbol=item["symbol"],
+                    name=item["name"],
+                    kind=item.get("kind", "ETF"),
+                    exchange=exchange,
+                    theme_l1=item.get("theme_l1"),
+                    theme_l2=item.get("theme_l2"),
+                    benchmark=item.get("benchmark"),
+                    enabled=bool(item.get("enabled", True)),
+                    metadata={"mock": True},
+                )
+        return None
+
     @staticmethod
     def _seed(ts_code: str) -> int:
         return sum(ord(ch) * (i + 1) for i, ch in enumerate(ts_code))

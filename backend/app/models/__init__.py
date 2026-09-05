@@ -27,6 +27,7 @@ from app.models.entities import (
     SignalSnapshot,
     SupportResistanceSnapshot,
     TaskRun,
+    UserWatchlistEntry,
 )
 
 __all__ = [
@@ -48,6 +49,7 @@ __all__ = [
     "CalibrationProfile",
     "SignalSnapshot",
     "Holding",
+    "UserWatchlistEntry",
     "HoldingImportSession",
     "HoldingImportCandidate",
     "NewsItem",
@@ -55,6 +57,7 @@ __all__ = [
     "SectorSnapshot",
     "SupportResistanceSnapshot",
     "TaskRun",
+    "UserWatchlistEntry",
     "ProviderAudit",
     "EventLog",
     "ReportArtifact",
