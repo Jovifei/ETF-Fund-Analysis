@@ -22,4 +22,8 @@ def summary(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, Any]:
-    return KlineStabilizationService(settings).summary(db)
+    payload = KlineStabilizationService(settings).summary(db)
+    # PR-I：该兼容 API 已废弃——K线研判并入 /etf/{code} 详情台，宽度并入 /boards。
+    payload["deprecated"] = True
+    payload["successor"] = "/etf/{ts_code} + /boards"
+    return payload

@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -107,8 +107,10 @@ def etf_1430_workbench() -> FileResponse:
 
 
 @app.get("/workbench/kline", include_in_schema=False)
-def kline_stabilization() -> FileResponse:
-    return FileResponse(STATIC_DIR / "kline_stabilization.html", media_type="text/html; charset=utf-8")
+def kline_stabilization() -> RedirectResponse:
+    # PR-I：K线研判页下线——K线/支撑压力由 /etf/{code} 详情台承接，
+    # 行业/概念/全市场宽度三列由 /boards 承接；旧地址 307 保留一个版本。
+    return RedirectResponse("/boards", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get("/boards", include_in_schema=False)
@@ -133,8 +135,8 @@ def static_etf_1430_workbench() -> FileResponse:
 
 
 @app.get("/assets/kline_stabilization.html", include_in_schema=False)
-def static_kline_stabilization() -> FileResponse:
-    return FileResponse(STATIC_DIR / "kline_stabilization.html", media_type="text/html; charset=utf-8")
+def static_kline_stabilization() -> RedirectResponse:
+    return RedirectResponse("/boards", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 # Mount static resources after exact legacy-HTML redirects so old bookmarks cannot

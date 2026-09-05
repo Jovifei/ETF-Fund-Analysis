@@ -1575,7 +1575,16 @@ function renderNews() {
     const href = safeHttpUrl(item.url);
     const title = href ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a>` : escapeHtml(item.title);
     const impact = numericValue(item.impact_score) ? `${Number(item.impact_score) >= 0 ? '+' : ''}${escapeHtml(fmt(item.impact_score,2))}` : '—';
-    return `<article class="news-card"><div><h3>${title}</h3><div class="news-meta">${escapeHtml(item.source)} · ${escapeHtml(timeText(item.published_at))} · ${escapeHtml((item.affected_themes || []).join(' / '))}</div>${item.facts?.length ? `<p><strong>事实：</strong>${escapeHtml(item.facts.join('；'))}</p>` : ''}${item.inferences?.length ? `<div class="news-facts">推断：${escapeHtml(item.inferences.join('；'))}</div>` : ''}${item.risk_flags?.length ? `<div class="news-facts amber">风险：${escapeHtml(item.risk_flags.join('；'))}</div>` : ''}</div><div><div class="news-score ${escapeHtml(colorClass(item.impact_score))}">${impact}</div><div class="news-meta">${escapeHtml(item.impact_direction || '中性')} · ${escapeHtml(item.impact_horizon || '-')}</div></div></article>`;
+    // 解析来源分层（PR-I）：规则启发式 vs 模型分析，必须可分辨；provenance 异常显式告警。
+    const analysis = item.analysis || {};
+    const modelText = typeof analysis.model_analysis === 'string' ? analysis.model_analysis.trim() : '';
+    let sourceBadge;
+    if (analysis.analysis_coherent === false) sourceBadge = '<span class="news-facts amber">解析来源校验异常</span>';
+    else if (modelText) sourceBadge = `<span class="news-facts">模型分析 · ${escapeHtml(analysis.model || analysis.provider || '已配置模型')}</span>`;
+    else if (analysis.source === 'heuristic') sourceBadge = '<span class="news-facts muted">词典启发式解析（未启用 AI 深度分析）</span>';
+    else sourceBadge = '';
+    const modelBlock = modelText ? `<p><strong>AI 深度解读：</strong>${escapeHtml(modelText)}</p>` : '';
+    return `<article class="news-card"><div><h3>${title}</h3><div class="news-meta">${escapeHtml(item.source)} · ${escapeHtml(timeText(item.published_at))} · ${escapeHtml((item.affected_themes || []).join(' / '))}</div>${sourceBadge}${item.facts?.length ? `<p><strong>事实：</strong>${escapeHtml(item.facts.join('；'))}</p>` : ''}${modelBlock}${item.inferences?.length ? `<div class="news-facts">推断（启发式）：${escapeHtml(item.inferences.join('；'))}</div>` : ''}${item.risk_flags?.length ? `<div class="news-facts amber">风险：${escapeHtml(item.risk_flags.join('；'))}</div>` : ''}</div><div><div class="news-score ${escapeHtml(colorClass(item.impact_score))}">${impact}</div><div class="news-meta">${escapeHtml(item.impact_direction || '中性')} · ${escapeHtml(item.impact_horizon || '-')}</div></div></article>`;
   }).join('') : '<div class="loading-row">暂无新闻；可在“系统”中运行 refresh_news。</div>';
 }
 

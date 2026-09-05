@@ -14,15 +14,21 @@ def test_all_research_entrypoints_are_accessible_and_render_expected_surfaces() 
         "/": "decision_board_workbuddy.js",
         "/legacy": "中国 ETF/LOF 私有决策看板",
         "/workbench/1430": "ETF 14:30 决策工作台",
-        "/workbench/kline": "kline_stabilization.js",
+        "/boards": "行业板块 · 板块市场",
+        "/etf/510300.SH": "ETF 详情 · 研究研判台",
         "/assets/index.html": "中国 ETF/LOF 私有决策看板",
         "/assets/etf_1430_workbench.html": "ETF 14:30 决策工作台",
-        "/assets/kline_stabilization.html": "kline_stabilization.js",
     }
     for path, expected_token in expected_matches.items():
         response = client.get(path, follow_redirects=False)
         assert response.status_code == 200, f"{path} failed with {response.status_code}"
         assert expected_token in response.text, f"{expected_token} not in {path}"
+
+    # PR-I：K线研判页下线——307 到 /boards（详情台承接 K 线，板块页承接宽度）
+    for retired in ("/workbench/kline", "/assets/kline_stabilization.html"):
+        response = client.get(retired, follow_redirects=False)
+        assert response.status_code == 307, f"{retired} expected 307, got {response.status_code}"
+        assert response.headers["location"] == "/boards"
 
 
 def test_all_current_research_surfaces_share_the_same_action(bootstrapped, db_session) -> None:

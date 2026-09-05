@@ -40,9 +40,11 @@ def test_etf_1430_summary_and_detail_contract(bootstrapped, db_session):
 
 def test_etf_1430_http_and_static_contract(bootstrapped):
     with TestClient(app) as client:
-        for route in ("/workbench/1430", "/workbench/kline", "/legacy"):
+        for route in ("/workbench/1430", "/legacy"):
             page = client.get(route, follow_redirects=False)
             assert page.status_code == 200
+        retired = client.get("/workbench/kline", follow_redirects=False)
+        assert retired.status_code == 307 and retired.headers["location"] == "/boards"
         home = client.get("/")
         assert home.status_code == 200
         assert 'href="/legacy"' in home.text

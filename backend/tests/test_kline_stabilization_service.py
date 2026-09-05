@@ -159,3 +159,16 @@ def test_config_readers_expose_concept_alias_and_broad_market_themes():
     assert isinstance(concept_alias, dict)
     assert concept_alias.get("半导体") == "芯片"
     assert "宽基" in service._broad_market_themes()
+
+
+def test_kline_summary_api_marks_deprecated(bootstrapped):
+    """PR-I：兼容 API 废弃标记——K线研判并入 /etf/{code} + /boards。"""
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    with TestClient(app) as client:
+        response = client.get("/api/workbench/kline/summary")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload.get("deprecated") is True
+        assert "/etf/" in payload.get("successor", "")
