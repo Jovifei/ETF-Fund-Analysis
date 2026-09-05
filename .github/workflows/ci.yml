@@ -39,8 +39,10 @@ jobs:
           node --check backend/app/static/etf_detail.js
           node --check backend/app/static/legacy_route.js
           node --check backend/app/static/kline_stabilization.js
-      - name: Decision board JavaScript tests
-        run: node --test backend/app/static/decision_board_workbuddy.test.js
+      - name: Browser JavaScript tests
+        run: |
+          node --test backend/app/static/decision_board_workbuddy.test.js
+          node --test backend/app/static/legacy_route.test.js
       - name: Basic committed-secret scan
         run: python codex/skills/fund-research/scripts/check_no_secrets.py
       - name: Validate Alembic on a clean database
