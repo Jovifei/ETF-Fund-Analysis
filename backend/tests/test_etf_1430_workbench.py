@@ -42,11 +42,10 @@ def test_etf_1430_http_and_static_contract(bootstrapped):
     with TestClient(app) as client:
         for route in ("/workbench/1430", "/workbench/kline", "/legacy"):
             page = client.get(route, follow_redirects=False)
-            assert page.status_code in {307, 308}
-            assert page.headers["location"] == "/"
+            assert page.status_code == 200
         home = client.get("/")
         assert home.status_code == 200
-        assert 'href="/legacy"' not in home.text
+        assert 'href="/legacy"' in home.text
         assert "统一决策台" in home.text
         script = client.get("/assets/etf_1430_workbench.js")
         assert script.status_code == 200

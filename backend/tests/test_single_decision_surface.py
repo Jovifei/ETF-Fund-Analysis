@@ -8,19 +8,21 @@ from app.services.kline_stabilization_service import KlineStabilizationService
 from app.services.signal_center_service import SignalCenterService
 
 
-def test_all_legacy_html_entrypoints_redirect_to_the_unified_board() -> None:
+def test_all_research_entrypoints_are_accessible_and_render_expected_surfaces() -> None:
     client = TestClient(app)
-    for path in (
-        "/legacy",
-        "/workbench/1430",
-        "/workbench/kline",
-        "/assets/index.html",
-        "/assets/etf_1430_workbench.html",
-        "/assets/kline_stabilization.html",
-    ):
+    expected_matches = {
+        "/": "decision_board_workbuddy.js",
+        "/legacy": "中国 ETF/LOF 私有决策看板",
+        "/workbench/1430": "ETF 14:30 决策工作台",
+        "/workbench/kline": "kline_stabilization.js",
+        "/assets/index.html": "中国 ETF/LOF 私有决策看板",
+        "/assets/etf_1430_workbench.html": "ETF 14:30 决策工作台",
+        "/assets/kline_stabilization.html": "kline_stabilization.js",
+    }
+    for path, expected_token in expected_matches.items():
         response = client.get(path, follow_redirects=False)
-        assert response.status_code == 307, path
-        assert response.headers["location"] == "/", path
+        assert response.status_code == 200, f"{path} failed with {response.status_code}"
+        assert expected_token in response.text, f"{expected_token} not in {path}"
 
 
 def test_all_current_research_surfaces_share_the_same_action(bootstrapped, db_session) -> None:

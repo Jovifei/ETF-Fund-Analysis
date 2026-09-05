@@ -42,8 +42,8 @@ def test_reference_board_is_primary_and_legacy_is_preserved() -> None:
     assert legacy.status_code == 200
     assert "ETF / LOF 决策台" in legacy.text
 
-    assert compatibility.status_code == 307
-    assert compatibility.headers["location"] == "/"
+    assert compatibility.status_code == 200
+    assert "ETF 14:30 决策工作台" in compatibility.text
 
 
 def test_reference_board_assets_and_columns_are_same_origin() -> None:

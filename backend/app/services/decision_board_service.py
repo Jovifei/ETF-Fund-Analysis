@@ -323,12 +323,14 @@ class DecisionBoardService:
             local_date = (
                 generated.astimezone(SHANGHAI) if generated.tzinfo else generated.replace(tzinfo=SHANGHAI)
             ).date()
-            if not self.calendar.decision(local_date).is_trade_day:
-                stale_ids.append(snapshot.id)
-                continue
-            if local_date not in kept_dates and len(kept_dates) < 20:
-                kept_dates.append(local_date)
-            elif local_date not in kept_dates:
+            trade_date = (
+                self.calendar.effective_trade_date(local_date)
+                if hasattr(self.calendar, "effective_trade_date")
+                else local_date
+            )
+            if trade_date not in kept_dates and len(kept_dates) < 20:
+                kept_dates.append(trade_date)
+            elif trade_date not in kept_dates:
                 stale_ids.append(snapshot.id)
         if stale_ids:
             db.execute(delete(DecisionBoardSnapshot).where(DecisionBoardSnapshot.id.in_(stale_ids)))

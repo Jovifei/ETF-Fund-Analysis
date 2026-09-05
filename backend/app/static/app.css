@@ -33,8 +33,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .status-dot:before { content:""; display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--quiet); margin-right:7px; }
 .status-dot.online:before { background:var(--down); box-shadow:0 0 8px var(--down); }
 .status-dot.offline:before { background:var(--up); }
-button.ghost,button.primary { border:1px solid var(--line); border-radius:3px; padding:8px 12px; color:var(--text); background:#102032; }
-button.ghost:hover { border-color:var(--cyan); color:var(--cyan); }
+button.ghost,button.primary,a.ghost { border:1px solid var(--line); border-radius:3px; padding:8px 12px; color:var(--text); background:#102032; text-decoration:none; display:inline-flex; align-items:center; }
+button.ghost:hover,a.ghost:hover { border-color:var(--cyan); color:var(--cyan); }
 button.primary { border-color:#2d8c8d; background:#15535a; box-shadow:0 8px 20px rgba(21,83,90,.3); }
 button.primary:hover { background:#1c6970; }
 button:disabled { opacity:.45; cursor:not-allowed; }

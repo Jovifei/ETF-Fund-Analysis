@@ -8,17 +8,39 @@
 </head>
 <body>
   <div id="authOverlay" class="auth-overlay hidden">
-    <form id="authForm" class="auth-card">
+    <div class="auth-card">
       <div class="eyebrow">PRIVATE RESEARCH</div>
-      <h2>账户登录</h2>
-      <p>使用服务器中已创建的私有账户。会话使用 HttpOnly Cookie，页面不保存密码或令牌。</p>
-      <label for="identifierInput">用户名或邮箱</label>
-      <input id="identifierInput" type="text" autocomplete="username" maxlength="320" required>
-      <label for="passwordInput">密码</label>
-      <input id="passwordInput" type="password" autocomplete="current-password" maxlength="1024" required>
-      <button type="submit" class="primary">进入决策看板</button>
-      <div id="authError" class="error"></div>
-    </form>
+      <div class="auth-tabs">
+        <button id="tabLoginBtn" type="button" class="auth-tab active">账户登录</button>
+        <button id="tabRegisterBtn" type="button" class="auth-tab">创建账户</button>
+      </div>
+
+      <form id="authLoginForm" class="auth-section">
+        <h2>账户登录</h2>
+        <p>使用系统已注册账户登录。会话使用 HttpOnly Cookie，页面不保存密码或令牌。</p>
+        <label for="identifierInput">用户名或邮箱</label>
+        <input id="identifierInput" type="text" autocomplete="username" maxlength="320" required>
+        <label for="passwordInput">密码</label>
+        <input id="passwordInput" type="password" autocomplete="current-password" maxlength="1024" required>
+        <button type="submit" class="primary" style="width:100%;margin-top:12px;">进入决策看板</button>
+      </form>
+
+      <form id="authRegisterForm" class="auth-section hidden">
+        <h2>创建账户</h2>
+        <p>输入注册信息与邀请码创建账户。注册成功后将自动登录进入决策台。</p>
+        <label for="regIdentifierInput">用户名</label>
+        <input id="regIdentifierInput" type="text" autocomplete="username" minlength="1" maxlength="128" placeholder="用于登录的用户名" required>
+        <label for="regEmailInput">邮箱（可选）</label>
+        <input id="regEmailInput" type="email" autocomplete="email" maxlength="320" placeholder="name@example.com">
+        <label for="regPasswordInput">密码（至少6位）</label>
+        <input id="regPasswordInput" type="password" autocomplete="new-password" minlength="6" maxlength="1024" required>
+        <label for="regInviteCodeInput">邀请码</label>
+        <input id="regInviteCodeInput" type="text" autocomplete="off" maxlength="128" placeholder="系统注册邀请码" required>
+        <button type="submit" class="primary" style="width:100%;margin-top:12px;">完成注册并进入</button>
+      </form>
+
+      <div id="authError" class="error" style="margin-top:10px;"></div>
+    </div>
   </div>
 
   <header class="app-topbar">
@@ -26,6 +48,12 @@
       <span class="brand-mark">基</span>
       <div><strong>ETF / LOF 决策</strong><small>ETF / LOF 决策台 · 私有研究系统</small></div>
     </div>
+    <nav class="top-nav" aria-label="看板导航">
+      <a href="/" class="nav-tab active">🎯 企稳决策台</a>
+      <a href="/legacy" class="nav-tab">📊 综合研究中心</a>
+      <a href="/workbench/1430" class="nav-tab">⏱️ 14:30 尾盘博弈</a>
+      <a href="/workbench/kline" class="nav-tab">📈 K线研判</a>
+    </nav>
     <div class="top-actions">
       <span class="source-chip muted">统一决策台</span>
       <span id="accountBadge" class="source-chip muted">未登录</span>

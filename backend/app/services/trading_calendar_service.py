@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from functools import lru_cache
 from typing import Any
 
@@ -77,3 +77,11 @@ class TradingCalendarService:
 
     def actionable_day(self, day: date) -> bool:
         return self.decision(day).actionable
+
+    def effective_trade_date(self, day: date) -> date:
+        current = day
+        for _ in range(30):
+            if self.decision(current).is_trade_day:
+                return current
+            current -= timedelta(days=1)
+        return day

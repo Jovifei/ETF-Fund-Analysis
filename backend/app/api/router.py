@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import secrets
 from datetime import timedelta
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -37,6 +38,7 @@ from app.api.schemas import (
     HoldingUpsert,
     LoginRequest,
     MarketProbeRequest,
+    RegisterRequest,
     ReviewCandidateResponse,
     ReviewEnqueueRequest,
     ReviewRunner,
@@ -203,6 +205,63 @@ def login(
         raise failure
     login_throttle.record_success(key)
     issued = AuthService().create_session(db, user, ttl=timedelta(minutes=settings.auth_session_ttl_minutes), user_agent=request.headers.get("User-Agent"), client_ip=request.client.host if request.client else None)
+    db.commit()
+    _set_auth_cookies(response, settings, issued.session_token, issued.csrf_token)
+    return AuthStatusResponse(authenticated=True, identifier=user.username, role=user.role)
+
+
+@router.post("/auth/register", response_model=AuthStatusResponse, status_code=status.HTTP_201_CREATED)
+def register(
+    payload: RegisterRequest,
+    request: Request,
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> AuthStatusResponse:
+    if not settings.auth_enabled:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="认证服务未启用")
+    if not settings.registration_enabled:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="当前未开放自主注册")
+
+    key = _login_throttle_key(request)
+    if login_throttle.is_limited(key):
+        login_throttle.record_failure(key)
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="尝试次数过多，请稍后再试")
+
+    configured_invite = (settings.registration_invite_code or "").strip()
+    if not configured_invite or not secrets.compare_digest(payload.invite_code.strip(), configured_invite):
+        login_throttle.record_failure(key)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="邀请码错误，无法创建账户")
+
+    try:
+        user = AuthService().create_user(
+            db,
+            username=payload.identifier,
+            email=payload.email,
+            password=payload.password,
+            role="member",
+        )
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from None
+    except Exception as exc:
+        from sqlalchemy.exc import IntegrityError
+
+        if isinstance(exc, IntegrityError):
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="该用户名或邮箱已被注册") from None
+        db.rollback()
+        raise
+
+    login_throttle.record_success(key)
+    issued = AuthService().create_session(
+        db,
+        user,
+        ttl=timedelta(minutes=settings.auth_session_ttl_minutes),
+        user_agent=request.headers.get("User-Agent"),
+        client_ip=request.client.host if request.client else None,
+    )
     db.commit()
     _set_auth_cookies(response, settings, issued.session_token, issued.csrf_token)
     return AuthStatusResponse(authenticated=True, identifier=user.username, role=user.role)

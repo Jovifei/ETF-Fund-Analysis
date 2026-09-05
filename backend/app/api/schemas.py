@@ -22,6 +22,31 @@ class LoginRequest(BaseModel):
     password: str = Field(max_length=1024)
 
 
+class RegisterRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    identifier: str = Field(min_length=1, max_length=128)
+    password: str = Field(min_length=6, max_length=1024)
+    email: str | None = Field(default=None, max_length=320)
+    invite_code: str = Field(min_length=1, max_length=128)
+
+    @field_validator("identifier", "invite_code")
+    @classmethod
+    def check_not_blank(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("must not be empty or whitespace only")
+        return stripped
+
+    @field_validator("email")
+    @classmethod
+    def check_email(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        stripped = v.strip()
+        return stripped if stripped else None
+
+
 class AuthStatusResponse(BaseModel):
     authenticated: bool
     identifier: str | None = None

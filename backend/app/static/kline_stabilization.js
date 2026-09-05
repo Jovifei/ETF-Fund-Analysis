@@ -331,6 +331,11 @@ function render(data) {
       <div class="disclaimer">${esc(meta.disclaimer || '')}</div>
     </div>
     <div class="header-right">
+      <div style="display:flex;gap:6px;margin-bottom:8px;justify-content:flex-end;">
+        <a href="/" style="color:#58e6db;text-decoration:none;font-size:12px;border:1px solid #1f364d;padding:4px 8px;border-radius:4px;background:#0d1822;">🎯 企稳台</a>
+        <a href="/legacy" style="color:#8ba0b5;text-decoration:none;font-size:12px;border:1px solid #1f364d;padding:4px 8px;border-radius:4px;background:#0d1822;">📊 综合中心</a>
+        <a href="/workbench/1430" style="color:#8ba0b5;text-decoration:none;font-size:12px;border:1px solid #1f364d;padding:4px 8px;border-radius:4px;background:#0d1822;">⏱️ 14:30</a>
+      </div>
       <div class="date">${esc(meta.date)}</div>
       <div class="market">${esc(meta.market || '')}</div>
     </div>
@@ -366,7 +371,7 @@ async function loadSummary() {
     const token = localStorage.getItem('fundDecisionToken') || '';
     const headers = new Headers();
     if (token) headers.set('Authorization', `Bearer ${token}`);
-    const response = await fetch('/api/workbench/kline/summary', { headers });
+    const response = await fetch('/api/workbench/kline/summary', { headers, credentials: 'same-origin' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     render(data);
