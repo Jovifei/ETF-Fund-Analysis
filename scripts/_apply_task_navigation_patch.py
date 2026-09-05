@@ -1,0 +1,274 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+
+def replace_once(path: str, old: str, new: str) -> None:
+    p = Path(path)
+    text = p.read_text(encoding="utf-8")
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f"{path}: expected exactly one match, got {count}: {old[:120]!r}")
+    p.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+
+# Task-oriented route aliases and retired K-line routing.
+main = "backend/app/main.py"
+replace_once(
+    main,
+    '    return RedirectResponse("/boards", status_code=status.HTTP_307_TEMPORARY_REDIRECT)\n\n\n@app.get("/boards", include_in_schema=False)',
+    '    return RedirectResponse("/", status_code=status.HTTP_307_TEMPORARY_REDIRECT)\n\n\n@app.get("/boards", include_in_schema=False)',
+)
+replace_once(
+    main,
+    '@app.get("/etf/{ts_code}", include_in_schema=False)\ndef etf_detail(ts_code: str) -> FileResponse:\n',
+    '@app.get("/holdings", include_in_schema=False)\ndef holdings_entry() -> RedirectResponse:\n    return RedirectResponse("/legacy#holdings", status_code=status.HTTP_307_TEMPORARY_REDIRECT)\n\n\n@app.get("/research", include_in_schema=False)\ndef research_entry() -> RedirectResponse:\n    return RedirectResponse("/legacy#signals", status_code=status.HTTP_307_TEMPORARY_REDIRECT)\n\n\n@app.get("/research/news", include_in_schema=False)\ndef research_news_entry() -> RedirectResponse:\n    return RedirectResponse("/legacy#news", status_code=status.HTTP_307_TEMPORARY_REDIRECT)\n\n\n@app.get("/system", include_in_schema=False)\ndef system_entry() -> RedirectResponse:\n    return RedirectResponse("/legacy#system", status_code=status.HTTP_307_TEMPORARY_REDIRECT)\n\n\n@app.get("/etf/{ts_code}", include_in_schema=False)\ndef etf_detail(ts_code: str) -> FileResponse:\n',
+)
+replace_once(
+    main,
+    '    return RedirectResponse("/boards", status_code=status.HTTP_307_TEMPORARY_REDIRECT)\n\n\n# Mount static resources',
+    '    return RedirectResponse("/", status_code=status.HTTP_307_TEMPORARY_REDIRECT)\n\n\n# Mount static resources',
+)
+
+# Decision page: four task-oriented primary destinations; 14:30 is secondary mode.
+decision_html = "backend/app/static/decision_board_workbuddy.html"
+replace_once(
+    decision_html,
+    '      <a href="/" class="nav-tab active">🎯 决策</a>\n      <a href="/boards" class="nav-tab">🔥 板块</a>\n      <a href="/legacy" class="nav-tab">🔬 研究中心</a>\n      <a href="/workbench/1430" class="nav-tab">⏱️ 14:30 尾盘</a>\n      \n',
+    '      <a href="/" class="nav-tab active">🎯 决策</a>\n      <a href="/boards" class="nav-tab">🔥 板块</a>\n      <a href="/holdings" class="nav-tab">💼 持仓</a>\n      <a href="/research" class="nav-tab">🔬 研究</a>\n',
+)
+replace_once(
+    decision_html,
+    '      <span class="source-chip muted">统一决策台</span>\n',
+    '      <a href="/workbench/1430" class="ghost" title="进入决策总览的尾盘研究模式">⏱️ 尾盘模式</a>\n      <span class="source-chip muted">统一决策台</span>\n',
+)
+
+# Boards and ETF detail share the same task-oriented navigation.
+replace_once(
+    "backend/app/static/boards.html",
+    '      <a class="ghost link" href="/" title="返回决策总览">🎯 决策</a>\n      <a class="ghost link" href="/workbench/1430" title="14:30 尾盘模式">⏱️ 14:30 尾盘</a>\n      <a class="ghost link" href="/legacy" title="研究中心">🔬 研究中心</a>\n',
+    '      <a class="ghost link" href="/" title="决策总览">🎯 决策</a>\n      <a class="ghost link" href="/boards" title="行业板块">🔥 板块</a>\n      <a class="ghost link" href="/holdings" title="我的持仓">💼 持仓</a>\n      <a class="ghost link" href="/research" title="研究中心">🔬 研究</a>\n',
+)
+replace_once(
+    "backend/app/static/etf_detail.html",
+    '      <a class="ghost link" href="/" title="返回决策总览">🎯 决策</a>\n      <a class="ghost link" href="/workbench/1430" title="14:30 尾盘模式">⏱️ 14:30 尾盘</a>\n      <a class="ghost link" href="/boards" title="行业板块">🔥 板块</a>\n      <a class="ghost link" href="/legacy" title="研究中心">🔬 研究中心</a>\n',
+    '      <a class="ghost link" href="/" title="决策总览">🎯 决策</a>\n      <a class="ghost link" href="/boards" title="行业板块">🔥 板块</a>\n      <a class="ghost link" href="/holdings" title="我的持仓">💼 持仓</a>\n      <a class="ghost link" href="/research" title="研究中心">🔬 研究</a>\n',
+)
+
+# 14:30 is explicitly a mode; rows go to the one ETF detail page.
+workbench_html = "backend/app/static/etf_1430_workbench.html"
+replace_once(
+    workbench_html,
+    '      <div><strong>ETF 决策工作台</strong><span>中国场内 ETF / LOF · 研究模式</span></div>\n',
+    '      <div><strong>14:30 尾盘模式</strong><span>决策总览 · 尾盘研究</span></div>\n',
+)
+replace_once(
+    workbench_html,
+    '      <a class="ghost link" href="/" title="返回决策总览">🎯 决策</a>\n      <a class="ghost link" href="/boards" title="行业板块">🔥 板块</a>\n      <a class="ghost link" href="/legacy" title="研究中心">🔬 研究中心</a>\n      \n',
+    '      <a class="ghost link" href="/" title="决策总览">🎯 决策</a>\n      <a class="ghost link" href="/boards" title="行业板块">🔥 板块</a>\n      <a class="ghost link" href="/holdings" title="我的持仓">💼 持仓</a>\n      <a class="ghost link" href="/research" title="研究中心">🔬 研究</a>\n',
+)
+replace_once(workbench_html, '<h1>北京时间 14:30 ETF 买入 / 卖出研究候选</h1>', '<h1>北京时间 14:30 · 尾盘研究模式</h1>')
+
+workbench_js = "backend/app/static/etf_1430_workbench.js"
+replace_once(
+    workbench_js,
+    "function actionClass(action) {\n  if (action === '买入候选') return 'buy';\n  if (action === '可试探') return 'probe';\n  if (action === '持有/观察') return 'hold';\n  if (action === '减仓候选') return 'reduce';\n  if (action === '回避') return 'avoid';\n  return 'data';\n}",
+    "function actionClass(action) {\n  if (action === '可加仓' || action === '可入场') return 'buy';\n  if (action === '可试探') return 'probe';\n  if (action === '观望') return 'hold';\n  if (action === '减仓') return 'reduce';\n  return 'data';\n}",
+)
+replace_once(
+    workbench_js,
+    "    summaryCard('买入候选', counts['买入候选'] || 0, '综合分与风险收益比达标', '#27e48a'),\n    summaryCard('可试探', counts['可试探'] || 0, '信号尚需价格确认', '#ffb020'),\n    summaryCard('持有 / 观察', counts['持有/观察'] || 0, '不追高，等待结构变化', '#4aa8ff'),\n    summaryCard('减仓候选', counts['减仓候选'] || 0, '持仓风险需要复核', '#ff5b61'),\n    summaryCard('回避', counts['回避'] || 0, '结构或动量不利', '#b879ff'),",
+    "    summaryCard('可加仓', counts['可加仓'] || 0, 'canonical 五档 · 加仓候选', '#27e48a'),\n    summaryCard('可入场', counts['可入场'] || 0, 'canonical 五档 · 入场候选', '#4aa8ff'),\n    summaryCard('可试探', counts['可试探'] || 0, 'canonical 五档 · 弱信号', '#ffb020'),\n    summaryCard('观望', counts['观望'] || 0, 'canonical 五档 · 等待确认', '#8aa4bd'),\n    summaryCard('减仓', counts['减仓'] || 0, 'canonical 五档 · 风险复核', '#ff5b61'),",
+)
+replace_once(
+    workbench_js,
+    "  body.querySelectorAll('tr[data-code]').forEach(row => row.addEventListener('click', () => openDetail(row.dataset.code)));",
+    "  body.querySelectorAll('tr[data-code]').forEach(row => row.addEventListener('click', () => { window.location.assign(`/etf/${encodeURIComponent(row.dataset.code)}`); }));",
+)
+replace_once(
+    workbench_js,
+    "      <dt>上涨概率</dt><dd>${number(item.p_up) ? `${(Number(item.p_up)*100).toFixed(1)}%` : '—'}</dd>",
+    "      <dt>${item.calibration_status === 'calibrated' ? '上涨概率' : '历史上涨占比'}</dt><dd>${number(item.p_up) ? `${(Number(item.p_up)*100).toFixed(1)}%` : '—'}</dd>",
+)
+
+# Decision rows also route to the global detail page.
+decision_js = "backend/app/static/decision_board_workbuddy.js"
+replace_once(
+    decision_js,
+    "$$('.decision-data-row').forEach(tr=>{const open=()=>openDetail(tr.dataset.code);tr.addEventListener('click',open);tr.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}});});",
+    "$$('.decision-data-row').forEach(tr=>{const open=()=>window.location.assign(`/etf/${encodeURIComponent(tr.dataset.code)}`);tr.addEventListener('click',open);tr.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}});});",
+)
+
+# Legacy becomes a compatibility shell for Research/Holdings/System.
+legacy_html = "backend/app/static/index.html"
+replace_once(legacy_html, '<title>中国 ETF/LOF 私有决策看板</title>', '<title>ETF 研究中心</title>')
+replace_once(
+    legacy_html,
+    '<div><strong>ETF / LOF 决策台</strong><span id="environmentLabel">私有研究系统</span></div>',
+    '<div><strong id="legacyShellTitle">ETF 研究中心</strong><span id="environmentLabel">私有研究系统</span></div>',
+)
+replace_once(
+    legacy_html,
+    '<button data-tab="dashboard" class="active" role="tab" aria-selected="true">决策看板</button>\n      <button data-tab="signals" role="tab" aria-selected="false">信号中心</button>\n      <button data-tab="holdings" role="tab" aria-selected="false">持仓</button>\n      <button data-tab="news" role="tab" aria-selected="false">新闻事件</button>\n      <button data-tab="system" role="tab" aria-selected="false">系统</button>',
+    '<button data-tab="dashboard" class="active" role="tab" aria-selected="true" hidden>决策看板（兼容）</button>\n      <button data-tab="signals" role="tab" aria-selected="false">信号研究</button>\n      <button data-tab="holdings" role="tab" aria-selected="false" hidden>持仓</button>\n      <button data-tab="news" role="tab" aria-selected="false">新闻证据</button>\n      <button data-tab="system" role="tab" aria-selected="false" hidden>系统</button>',
+)
+replace_once(
+    legacy_html,
+    '      <a class="ghost" href="/" title="返回决策总览">🎯 决策</a>\n      <a class="ghost" href="/workbench/1430" title="14:30 尾盘博弈决策台">⏱️ 14:30</a>\n      <a class="ghost" href="/boards" title="行业板块">🔥 板块</a>\n      <a class="ghost" href="/workbench/kline" title="K线企稳分析看板">📈 K线</a>\n',
+    '      <a class="ghost" href="/" title="决策总览">🎯 决策</a>\n      <a class="ghost" href="/boards" title="行业板块">🔥 板块</a>\n      <a class="ghost" href="/holdings" title="我的持仓">💼 持仓</a>\n      <a class="ghost" href="/research" title="研究中心">🔬 研究</a>\n',
+)
+replace_once(
+    legacy_html,
+    '  <script src="/assets/app.js?v=0.7.4" defer></script>\n',
+    '  <script src="/assets/app.js?v=0.7.4" defer></script>\n  <script src="/assets/legacy_route.js?v=0.8.1" defer></script>\n',
+)
+
+# Held instruments link directly to unified ETF detail.
+app_js = "backend/app/static/app.js"
+replace_once(
+    app_js,
+    '<tr><td><div class="instrument-name">${displayIdentity(h.ts_code, h.name)}</div><div class="instrument-meta">${escapeHtml(h.theme_l1 || \'未分类\')}/${escapeHtml(h.theme_l2 || \'-\')}</div></td>',
+    '<tr><td><a class="instrument-name" href="/etf/${encodeURIComponent(h.ts_code)}">${displayIdentity(h.ts_code, h.name)}</a><div class="instrument-meta">${escapeHtml(h.theme_l1 || \'未分类\')}/${escapeHtml(h.theme_l2 || \'-\')}</div></td>',
+)
+
+Path("backend/app/static/legacy_route.js").write_text(
+    """'use strict';
+
+const LEGACY_DESTINATIONS = Object.freeze({
+  signals: {tab: 'signals', title: 'ETF 研究中心'},
+  news: {tab: 'news', title: 'ETF 研究中心 · 新闻证据'},
+  holdings: {tab: 'holdings', title: '我的持仓'},
+  system: {tab: 'system', title: '系统管理'},
+});
+
+function requestedLegacyDestination() {
+  const key = String(window.location.hash || '').replace(/^#/, '').trim().toLowerCase();
+  return LEGACY_DESTINATIONS[key] || LEGACY_DESTINATIONS.signals;
+}
+
+function applyLegacyDestination() {
+  const destination = requestedLegacyDestination();
+  const button = document.querySelector(`#tabs button[data-tab="${destination.tab}"]`);
+  if (button) button.click();
+  const shellTitle = document.querySelector('#legacyShellTitle');
+  if (shellTitle) shellTitle.textContent = destination.title;
+  document.title = destination.title;
+  const tablist = document.querySelector('#tabs');
+  if (tablist) tablist.hidden = !['signals', 'news'].includes(destination.tab);
+}
+
+window.addEventListener('hashchange', applyLegacyDestination);
+document.addEventListener('DOMContentLoaded', () => window.setTimeout(applyLegacyDestination, 0));
+""",
+    encoding="utf-8",
+)
+
+Path("backend/tests/test_navigation_contract_v081.py").write_text(
+    """from __future__ import annotations
+
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from app.main import app
+
+
+STATIC = Path(__file__).resolve().parents[1] / 'app' / 'static'
+
+
+def test_task_routes_land_on_the_intended_legacy_views() -> None:
+    client = TestClient(app)
+    expected = {
+        '/holdings': '/legacy#holdings',
+        '/research': '/legacy#signals',
+        '/research/news': '/legacy#news',
+        '/system': '/legacy#system',
+    }
+    for path, location in expected.items():
+        response = client.get(path, follow_redirects=False)
+        assert response.status_code == 307
+        assert response.headers['location'] == location
+
+
+def test_primary_pages_expose_task_navigation_not_historical_surfaces() -> None:
+    pages = [
+        STATIC / 'decision_board_workbuddy.html',
+        STATIC / 'boards.html',
+        STATIC / 'etf_detail.html',
+        STATIC / 'etf_1430_workbench.html',
+    ]
+    for path in pages:
+        html = path.read_text(encoding='utf-8')
+        assert '🎯 决策' in html
+        assert '🔥 板块' in html
+        assert '💼 持仓' in html
+        assert '🔬 研究' in html
+        assert '📈 K线' not in html
+
+
+def test_1430_is_secondary_mode_and_uses_canonical_grade_words() -> None:
+    html = (STATIC / 'etf_1430_workbench.html').read_text(encoding='utf-8')
+    js = (STATIC / 'etf_1430_workbench.js').read_text(encoding='utf-8')
+    assert '14:30 尾盘模式' in html
+    for grade in ('可加仓', '可入场', '可试探', '观望', '减仓'):
+        assert grade in js
+    for retired in ('买入候选', '持有/观察', '减仓候选', "action === '回避'"):
+        assert retired not in js
+    assert '历史上涨占比' in js
+
+
+def test_decision_and_1430_rows_open_the_global_etf_detail() -> None:
+    decision = (STATIC / 'decision_board_workbuddy.js').read_text(encoding='utf-8')
+    tail = (STATIC / 'etf_1430_workbench.js').read_text(encoding='utf-8')
+    assert 'window.location.assign(`/etf/${encodeURIComponent(tr.dataset.code)}`)' in decision
+    assert 'window.location.assign(`/etf/${encodeURIComponent(row.dataset.code)}`)' in tail
+
+
+def test_legacy_shell_uses_hash_router_for_research_holdings_and_system() -> None:
+    html = (STATIC / 'index.html').read_text(encoding='utf-8')
+    router = (STATIC / 'legacy_route.js').read_text(encoding='utf-8')
+    assert 'legacy_route.js' in html
+    assert '决策看板（兼容）' in html
+    for key in ('signals', 'news', 'holdings', 'system'):
+        assert f"{key}:" in router
+""",
+    encoding="utf-8",
+)
+
+test_surface = "backend/tests/test_single_decision_surface.py"
+replace_once(
+    test_surface,
+    '# PR-I：K线研判页下线——307 到 /boards（详情台承接 K 线，板块页承接宽度）',
+    '# K线研判页下线：无标的上下文的旧入口回到决策首页；具体 ETF 统一由 /etf/{code} 承接。',
+)
+replace_once(test_surface, 'assert response.headers["location"] == "/boards"', 'assert response.headers["location"] == "/"')
+
+Path("docs/NAVIGATION_CONTRACT_V081.md").write_text(
+    """# v0.8.1 任务驱动导航收敛合同
+
+本变更只收敛页面入口和跳转语义，不修改 canonical current decision、指标算法、Forecast 模型、持仓数据或调度策略。
+
+## 一级任务入口
+
+- `/`：🎯 决策
+- `/boards`：🔥 板块
+- `/holdings`：💼 我的持仓（兼容壳内部定位到 holdings view）
+- `/research`：🔬 研究中心（默认 Signal Research；新闻使用 `/research/news`）
+- `/system`：管理员系统直达入口
+
+`14:30` 不再作为和“决策/板块/持仓/研究”同级的产品入口；它保留 `/workbench/1430` 兼容地址，但在产品语义上是“决策”的尾盘模式。
+
+K线不再是一级入口。任何有明确 ETF 代码的点击都统一进入 `/etf/{ts_code}`。无标的上下文的历史 `/workbench/kline` 只回到 `/`。
+
+## 兼容策略
+
+`/legacy` 暂时保留承载 Signal Center、持仓、新闻和系统模块；新增 `legacy_route.js` 只负责根据 hash 激活对应既有 view，不复制业务计算。后续可在独立 PR 中逐步拆成真正独立的 `/holdings`、`/research`、`/system` 页面。
+
+## 14:30 合同
+
+14:30 页展示 canonical 五档：`可加仓 / 可入场 / 可试探 / 观望 / 减仓`。研究综合分仍只用于排序说明，不能生成第二套 current action。ETF 行点击统一进入全局详情页。
+
+未校准 `p_up` 的页面文案为“历史上涨占比”；只有 calibrated 才允许写“上涨概率”。
+""",
+    encoding="utf-8",
+)
