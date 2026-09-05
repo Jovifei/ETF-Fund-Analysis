@@ -40,18 +40,32 @@ def test_etf_1430_summary_and_detail_contract(bootstrapped, db_session):
 
 def test_etf_1430_http_and_static_contract(bootstrapped):
     with TestClient(app) as client:
-        for route in ("/workbench/1430", "/legacy"):
-            page = client.get(route, follow_redirects=False)
-            assert page.status_code == 200
+        tail = client.get("/workbench/1430", follow_redirects=False)
+        assert tail.status_code == 200
+        assert "14:30 尾盘模式" in tail.text
+
+        legacy = client.get("/legacy", follow_redirects=False)
+        assert legacy.status_code == 307
+        assert legacy.headers["location"] == "/research"
+        research = client.get("/research", follow_redirects=False)
+        assert research.status_code == 200
+        assert "ETF 研究中心" in research.text
+
         retired = client.get("/workbench/kline", follow_redirects=False)
-        assert retired.status_code == 307 and retired.headers["location"] == "/boards"
+        assert retired.status_code == 307 and retired.headers["location"] == "/"
+
         home = client.get("/")
         assert home.status_code == 200
-        assert 'href="/legacy"' in home.text
+        assert 'href="/legacy"' not in home.text
+        assert 'href="/holdings"' in home.text
+        assert 'href="/research"' in home.text
+        assert "尾盘模式" in home.text
         assert "统一决策台" in home.text
+
         script = client.get("/assets/etf_1430_workbench.js")
         assert script.status_code == 200
         assert "预测情景 · 非实际结果" in script.text
+        assert "历史上涨占比" in script.text
         summary = client.get("/api/workbench/1430/summary")
         assert summary.status_code == 200
         payload = summary.json()
