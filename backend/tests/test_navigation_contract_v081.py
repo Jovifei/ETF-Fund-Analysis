@@ -12,10 +12,17 @@ STATIC = Path(__file__).resolve().parents[1] / "app" / "static"
 
 def test_task_routes_are_first_class_urls() -> None:
     client = TestClient(app)
-    for path in ("/holdings", "/research", "/research/news", "/system"):
+    expected_tokens = {
+        "/holdings": "legacy_route.js",
+        "/research": "legacy_route.js",
+        "/research/news": "legacy_route.js",
+        "/system": "legacy_route.js",
+        "/decision/1430": "ETF 决策 · 14:30 尾盘模式",
+    }
+    for path, token in expected_tokens.items():
         response = client.get(path, follow_redirects=False)
         assert response.status_code == 200, f"{path} unexpectedly redirected"
-        assert "legacy_route.js" in response.text
+        assert token in response.text
 
 
 def test_legacy_bookmarks_redirect_to_task_urls() -> None:
@@ -23,7 +30,8 @@ def test_legacy_bookmarks_redirect_to_task_urls() -> None:
     expected = {
         "/legacy": "/research",
         "/assets/index.html": "/research",
-        "/assets/etf_1430_workbench.html": "/workbench/1430",
+        "/workbench/1430": "/decision/1430",
+        "/assets/etf_1430_workbench.html": "/decision/1430",
         "/workbench/kline": "/",
         "/assets/kline_stabilization.html": "/",
     }
@@ -47,11 +55,18 @@ def test_primary_pages_expose_task_navigation_not_historical_surfaces() -> None:
         assert "💼 持仓" in html
         assert "🔬 研究" in html
         assert "📈 K线" not in html
+        assert 'href="/legacy"' not in html
+        assert 'href="/workbench/kline"' not in html
+
+    decision = (STATIC / "decision_board_workbuddy.html").read_text(encoding="utf-8")
+    assert 'href="/decision/1430"' in decision
+    assert 'href="/workbench/1430"' not in decision
 
 
 def test_1430_is_secondary_mode_and_uses_canonical_grade_words() -> None:
     html = (STATIC / "etf_1430_workbench.html").read_text(encoding="utf-8")
     js = (STATIC / "etf_1430_workbench.js").read_text(encoding="utf-8")
+    assert "ETF 决策 · 14:30 尾盘模式" in html
     assert "14:30 尾盘模式" in html
     for grade in ("可加仓", "可入场", "可试探", "观望", "减仓"):
         assert grade in js
