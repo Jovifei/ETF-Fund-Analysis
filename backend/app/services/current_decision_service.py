@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.models import DecisionBoardSnapshot, Instrument, SignalSnapshot
 from app.utils.current_decision import resolve_current_decision
+from app.utils.latest_snapshots import latest_signal_map
 
 
 class CurrentDecisionService:
@@ -65,11 +66,7 @@ class CurrentDecisionService:
             if str(row.get("ts_code") or "").strip().upper() in missing
         }
 
-        latest_signals: dict[int, SignalSnapshot] = {}
-        for snapshot in db.scalars(
-            select(SignalSnapshot).order_by(SignalSnapshot.as_of_time.asc())
-        ).all():
-            latest_signals[snapshot.instrument_id] = snapshot
+        latest_signals: dict[int, SignalSnapshot] = latest_signal_map(db)
 
         result: dict[str, dict[str, Any]] = {}
         for instrument in instruments:

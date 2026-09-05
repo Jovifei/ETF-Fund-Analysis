@@ -25,6 +25,7 @@ from app.models.entities import (
     RuntimeSetting,
     SectorSnapshot,
     SignalSnapshot,
+    SupportResistanceSnapshot,
     TaskRun,
 )
 
@@ -52,6 +53,7 @@ __all__ = [
     "NewsItem",
     "RuntimeSetting",
     "SectorSnapshot",
+    "SupportResistanceSnapshot",
     "TaskRun",
     "ProviderAudit",
     "EventLog",

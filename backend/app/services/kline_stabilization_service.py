@@ -22,9 +22,17 @@ from sqlalchemy import case, select
 from sqlalchemy.orm import Session
 
 from app.core.config import PROJECT_ROOT, Settings, get_settings
-from app.models import DailyBar, ForecastSnapshot, Instrument, QuoteSnapshot, SectorSnapshot
+from app.models import DailyBar, ForecastSnapshot, IndicatorSnapshot, Instrument, QuoteSnapshot, SectorSnapshot
 from app.services.current_decision_service import CurrentDecisionService
-from app.utils.td_sequential import td_setup_snapshot
+from app.utils.indicator_state import (
+    kdj_state_view,
+    macd_state_view,
+    ma_state_view,
+    rsi_state_view,
+    td_state_view,
+    thresholds_from_strategy,
+    volume_state_view,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +56,15 @@ def _pct(value: float | None) -> float | None:
     return round(value, 2) if value is not None else None
 
 
+def _chanlun_importable() -> bool:
+    try:
+        import chanlun  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
 def _forecast_note(diagnostics: Any) -> str:
     """Read an optional note without assuming legacy diagnostics JSON shape."""
     if isinstance(diagnostics, dict):
@@ -67,11 +84,25 @@ class KlineStabilizationService:
 
             self.config = json.loads(path.read_text(encoding="utf-8"))
         self.timezone = ZoneInfo(str(self.config.get("decision_timezone", "Asia/Shanghai")))
+        # 指标状态阈值与 signal_grade 同一来源（strategy.signal_grade），单一口径。
+        self.thresholds = thresholds_from_strategy(self.settings.load_strategy())
 
     # ---------- 数据获取 ----------
 
     def _instruments(self, db: Session) -> list[Instrument]:
         return list(db.scalars(select(Instrument).where(Instrument.enabled.is_(True))).all())
+
+    def _latest_indicator_values(self, db: Session, instrument_id: int) -> tuple[dict[str, Any], dict[str, Any]]:
+        """最新 + 上一条 IndicatorSnapshot.values_json；指标状态唯一数据源。"""
+        rows = db.scalars(
+            select(IndicatorSnapshot)
+            .where(IndicatorSnapshot.instrument_id == instrument_id)
+            .order_by(IndicatorSnapshot.as_of_date.desc(), IndicatorSnapshot.generated_at.desc())
+            .limit(2)
+        ).all()
+        latest = dict(rows[0].values_json or {}) if rows else {}
+        previous = dict(rows[1].values_json or {}) if len(rows) > 1 else {}
+        return latest, previous
 
     def _bars_frame(self, db: Session, instrument_id: int) -> pd.DataFrame:
         rows = db.scalars(
@@ -235,145 +266,6 @@ class KlineStabilizationService:
 
     # ---------- 指标快照 ----------
 
-    @staticmethod
-    def _ma_state(frame: pd.DataFrame) -> dict[str, Any]:
-        if frame.empty or "close" not in frame.columns:
-            return {"label": "—", "color": "neutral", "dirs": [], "vals": "", "bullish": False}
-        close = frame["close"]
-        latest = float(close.iloc[-1])
-        ma_values: dict[str, float | None] = {}
-        for window in (5, 10, 20, 30):
-            ma = close.rolling(window, min_periods=window).mean()
-            ma_values[f"M{window}"] = _finite(ma.iloc[-1]) if len(ma) else None
-        dirs: list[list[str]] = []
-        labels: list[str] = []
-        for key, value in ma_values.items():
-            if value is None:
-                continue
-            labels.append(key)
-            direction = "↑" if latest >= float(value) else "↓"
-            dirs.append([key, direction])
-        vals = " ".join(f"{key}={value:.4g}" for key, value in ma_values.items() if value is not None)
-        # 多头排列: M5>M10>M20>M30
-        ordered = [ma_values[k] for k in ("M5", "M10", "M20", "M30")]
-        bullish = all(v is not None for v in ordered) and all(
-            ordered[i] > ordered[i + 1] for i in range(len(ordered) - 1)
-        )
-        label = "多头排列" if bullish else ("空头排列" if all(v is not None and ordered[i] < ordered[i + 1] for i, v in enumerate(ordered[:-1])) else "多空交织")
-        color = "#2ecc71" if bullish else ("#e74c3c" if label == "空头排列" else "#f39c12")
-        return {"label": label, "color": color, "dirs": dirs, "vals": vals, "bullish": bullish}
-
-    @staticmethod
-    def _macd_state(frame: pd.DataFrame) -> dict[str, Any]:
-        if frame.empty or "close" not in frame.columns:
-            return {"label": "—", "cls": "dk-vf", "vals": ""}
-        close = frame["close"]
-        ema_fast = close.ewm(span=12, adjust=False).mean()
-        ema_slow = close.ewm(span=26, adjust=False).mean()
-        dif = ema_fast - ema_slow
-        dea = dif.ewm(span=9, adjust=False).mean()
-        hist = 2 * (dif - dea)
-        latest_dif = _finite(dif.iloc[-1])
-        latest_dea = _finite(dea.iloc[-1])
-        prev_dif = _finite(dif.iloc[-2]) if len(dif) > 1 else None
-        prev_dea = _finite(dea.iloc[-2]) if len(dea) > 1 else None
-        vals = f"DIF={latest_dif:.4g} DEA={latest_dea:.4g}" if latest_dif is not None and latest_dea is not None else ""
-
-        if latest_dif is None or latest_dea is None:
-            return {"label": "—", "cls": "dk-vf", "vals": vals}
-
-        # 近3日是否金叉/死叉
-        recent_cross = None
-        for i in range(min(3, len(dif) - 1)):
-            idx = len(dif) - 1 - i
-            if idx <= 0:
-                break
-            if dif.iloc[idx] > dea.iloc[idx] and dif.iloc[idx - 1] <= dea.iloc[idx - 1]:
-                recent_cross = "golden"
-                break
-            if dif.iloc[idx] < dea.iloc[idx] and dif.iloc[idx - 1] >= dea.iloc[idx - 1]:
-                recent_cross = "death"
-                break
-
-        if dif.iloc[-1] > dea.iloc[-1]:
-            if recent_cross == "golden" and latest_dif > 0:
-                return {"label": "强势金叉", "cls": "dk-tb", "vals": vals}
-            if recent_cross == "golden" and latest_dif < 0:
-                return {"label": "弱势金叉", "cls": "dk-tw", "vals": vals}
-            if latest_dif > 0:
-                return {"label": "多头延续", "cls": "dk-tm", "vals": vals}
-            return {"label": "修复延续", "cls": "dk-tx", "vals": vals}
-        # DIF < DEA（死叉状态）
-        if recent_cross == "death":
-            return {"label": "死叉", "cls": "dk-tr", "vals": vals}
-        if prev_dif is not None and prev_dea is not None and prev_dif > prev_dea and latest_dif < latest_dea:
-            return {"label": "将死叉", "cls": "dk-td", "vals": vals}
-        return {"label": "空头延续", "cls": "dk-vf", "vals": vals}
-
-    @staticmethod
-    def _kdj_state(frame: pd.DataFrame) -> dict[str, Any]:
-        if frame.empty:
-            return {"label": "—", "cls": "dk-vf", "sub": "", "desc": "", "vals": ""}
-        high, low, close = frame["high"], frame["low"], frame["close"]
-        lowest = low.rolling(9, min_periods=1).min()
-        highest = high.rolling(9, min_periods=1).max()
-        denominator = (highest - lowest).replace(0, float("nan"))
-        rsv = ((close - lowest) / denominator * 100).fillna(50).clip(0, 100)
-        k, d = 50.0, 50.0
-        for value in rsv.tolist():
-            k = (2.0 / 3.0) * k + (1.0 / 3.0) * float(value)
-            d = (2.0 / 3.0) * d + (1.0 / 3.0) * k
-        j = 3 * k - 2 * d
-        vals = f"K={k:.1f} D={d:.1f}"
-
-        if j > 100:
-            return {"label": f"J={j:.1f}", "cls": "dk-tr", "sub": "超买", "desc": "短期过热 · 回调风险高", "vals": vals}
-        if j >= 90:
-            return {"label": f"J={j:.1f}", "cls": "dk-tx", "sub": "偏高", "desc": "动能偏强 · 谨慎追高", "vals": vals}
-        if k < d:
-            return {"label": f"J={j:.1f}", "cls": "dk-tr", "sub": "死叉", "desc": "空头信号 · 短线看跌", "vals": vals}
-        if j < 20:
-            return {"label": f"J={j:.1f}", "cls": "dk-tb", "sub": "低位", "desc": "超卖 · 反弹概率升高", "vals": vals}
-        return {"label": f"J={j:.1f}", "cls": "dk-tm", "sub": "健康", "desc": "趋势健康 · 可持有", "vals": vals}
-
-    @staticmethod
-    def _rsi_state(frame: pd.DataFrame) -> dict[str, Any]:
-        if frame.empty or "close" not in frame.columns:
-            return {"val": "—", "desc": ""}
-        close = frame["close"]
-        delta = close.diff()
-        gain = delta.clip(lower=0)
-        loss = -delta.clip(upper=0)
-        avg_gain = gain.ewm(alpha=1 / 14, adjust=False, min_periods=14).mean()
-        avg_loss = loss.ewm(alpha=1 / 14, adjust=False, min_periods=14).mean()
-        rs = avg_gain / avg_loss.replace(0, float("nan"))
-        rsi = float((100 - (100 / (1 + rs))).iloc[-1]) if len(avg_gain) else 50.0
-        if not rsi == rsi:
-            rsi = 50.0
-        if rsi >= 70:
-            desc = "超买 · 短期回调风险高"
-        elif rsi >= 50:
-            desc = "正常偏强 · 趋势中段"
-        elif rsi >= 30:
-            desc = "偏弱 · 动能不足"
-        else:
-            desc = "超卖 · 反弹概率升高"
-        return {"val": round(rsi, 1), "desc": desc}
-
-    @staticmethod
-    def _volume_state(frame: pd.DataFrame) -> dict[str, Any]:
-        if frame.empty or "volume" not in frame.columns:
-            return {"text": "—", "cls": "dk-vf"}
-        volume = frame["volume"]
-        latest = float(volume.iloc[-1]) or 0.0
-        avg20 = float(volume.rolling(20, min_periods=10).mean().iloc[-1]) or 1.0
-        ratio = latest / avg20 if avg20 > 0 else 1.0
-        if ratio >= 1.15:
-            return {"text": f"放量 {ratio:.2f}", "cls": "dk-vu"}
-        if ratio <= 0.9:
-            return {"text": f"缩量 {ratio:.2f}", "cls": "dk-vd"}
-        return {"text": f"平量 {ratio:.2f}", "cls": "dk-vf"}
-
     # ---------- 缠论（chanlun，可选） ----------
 
     @staticmethod
@@ -436,21 +328,23 @@ class KlineStabilizationService:
         current_decision: dict[str, Any] | None = None,
         decision_snapshot_id: str | None = None,
     ) -> dict[str, Any]:
-        frame = self._bars_frame(db, instrument.id)
+        # 指标状态唯一数据源：IndicatorSnapshot.values_json（与 signal_grade 同一口径）。
+        values, previous_values = self._latest_indicator_values(db, instrument.id)
+        # 完整价格序列仅剩缠论需要；chanlun 不可用时不再加载任何日线。
+        frame = self._bars_frame(db, instrument.id) if _chanlun_importable() else pd.DataFrame()
         quote = self._latest_quote(db, instrument.id)
 
         today_pct = _pct(_finite(quote.pct_change)) if quote else None
         current_price = _finite(quote.price) if quote else None
-        if current_price is None and not frame.empty:
-            current_price = _finite(frame["close"].iloc[-1])
+        if current_price is None:
+            current_price = _finite(values.get("close"))
+        prev_close = _finite(previous_values.get("close"))
         vs_yesterday = "→"
-        if len(frame) >= 2:
-            prev_close = _finite(frame["close"].iloc[-2])
-            if current_price and prev_close and prev_close > 0:
-                change = (current_price - prev_close) / prev_close
-                vs_yesterday = "↑" if change > 0.001 else ("↓" if change < -0.001 else "→")
+        if current_price and prev_close and prev_close > 0:
+            change = (current_price - prev_close) / prev_close
+            vs_yesterday = "↑" if change > 0.001 else ("↓" if change < -0.001 else "→")
 
-        td = td_setup_snapshot(frame) if not frame.empty else {"label": "—", "direction": "none", "sub_label": "", "desc": "", "countdown": 0, "setup_length": 9}
+        td = td_state_view(values)
         stored_forecast = self._latest_forecast(db, instrument.id, 1)
         if stored_forecast is None:
             pattern = {
@@ -500,16 +394,17 @@ class KlineStabilizationService:
         forecast_label = f"{forecast_expected:+.2%}" if forecast_expected is not None else "—"
         conf_text = f"conf {int(pattern.get('confidence') or 0)}" if pattern.get("confidence") else ""
 
-        # 近1周（5日收益，若无 quote 用 close 序列）
+        # 近1周：优先读落库 return_5d（与指标引擎同一口径）
         week_label = "—"
-        if len(frame) >= 6:
+        ret5 = _finite(values.get("return_5d"))
+        if ret5 is None and len(frame) >= 6:
             close = frame["close"]
             ret5 = (float(close.iloc[-1]) / float(close.iloc[-6]) - 1) if float(close.iloc[-6]) > 0 else None
-            if ret5 is not None:
-                week_label = f"{ret5 * 100:+.1f}%"
+        if ret5 is not None:
+            week_label = f"{ret5 * 100:+.1f}%"
 
-        # 量能
-        volume = self._volume_state(frame)
+        # 量能（落库 volume_ratio，单一口径）
+        volume = volume_state_view(values, self.thresholds)
 
         # Current action is projected from the single canonical decision contract.
         action = str((current_decision or {}).get("state") or "数据异常")
@@ -522,11 +417,11 @@ class KlineStabilizationService:
             "today_pct_change": today_pct,
             "vs_yesterday": vs_yesterday,
             "volume": volume,
-            "ma": self._ma_state(frame),
-            "macd": self._macd_state(frame),
-            "kdj": self._kdj_state(frame),
+            "ma": ma_state_view(values, previous_values),
+            "macd": macd_state_view(values, previous_values, self.thresholds),
+            "kdj": kdj_state_view(values, previous_values, self.thresholds),
             "td": td,
-            "rsi": self._rsi_state(frame),
+            "rsi": rsi_state_view(values, self.thresholds),
             "sector": sector,
             "sector_concept": sector_concept,
             "market_breadth": market_breadth,

@@ -33,10 +33,10 @@ from app.models import (
 )
 from app.services.event_service import emit_event
 from app.services.current_decision_service import CurrentDecisionService
-from app.utils.feature_store import build_feature_frame
+from app.services.support_resistance_service import SupportResistanceService
 from app.utils.hashing import stable_hash
+from app.utils.latest_snapshots import latest_forecast_map
 from app.utils.numbers import clamp
-from app.utils.support_resistance import build_support_resistance
 
 
 def _finite(value: Any) -> float | None:
@@ -62,6 +62,7 @@ class ETF1430WorkbenchService:
         path = PROJECT_ROOT / "config" / "etf_1430_workbench.json"
         self.config = json.loads(path.read_text(encoding="utf-8"))
         self.timezone = ZoneInfo(str(self.config.get("decision_timezone", "Asia/Shanghai")))
+        self.support_resistance = SupportResistanceService(self.settings)
 
     @staticmethod
     def _latest(db: Session, model: Any, instrument_id: int, order: Any) -> Any | None:
@@ -71,43 +72,18 @@ class ETF1430WorkbenchService:
 
     @staticmethod
     def _latest_forecasts(db: Session, instrument_id: int) -> dict[int, ForecastSnapshot]:
-        rows = db.scalars(
-            select(ForecastSnapshot)
-            .where(ForecastSnapshot.instrument_id == instrument_id)
-            .order_by(ForecastSnapshot.as_of_date.desc(), ForecastSnapshot.generated_at.desc())
-        ).all()
-        result: dict[int, ForecastSnapshot] = {}
-        for row in rows:
-            result.setdefault(int(row.horizon), row)
-        return result
+        """每 horizon 取最新一条（窗口查询，不加载全量历史）。"""
+        return latest_forecast_map(db, [instrument_id]).get(instrument_id, {})
 
-    def _raw_and_feature_frame(self, db: Session, instrument_id: int) -> tuple[list[DailyBar], pd.DataFrame]:
-        rows = db.scalars(
-            select(DailyBar)
-            .where(DailyBar.instrument_id == instrument_id)
-            .order_by(DailyBar.trade_date)
-        ).all()
-        if not rows:
-            return [], pd.DataFrame()
-        raw = pd.DataFrame(
-            [
-                {
-                    "trade_date": row.trade_date,
-                    "open": row.open,
-                    "high": row.high,
-                    "low": row.low,
-                    "close": row.close,
-                    "volume": row.volume or 0.0,
-                    "amount": row.amount or 0.0,
-                }
-                for row in rows
-            ]
+    def _bars(self, db: Session, instrument_id: int) -> list[DailyBar]:
+        """日线行（升序）。14:30 行不再做请求内特征重算——指标一律读快照。"""
+        return list(
+            db.scalars(
+                select(DailyBar)
+                .where(DailyBar.instrument_id == instrument_id)
+                .order_by(DailyBar.trade_date)
+            ).all()
         )
-        try:
-            feature = build_feature_frame(raw, self.strategy["indicator"]).frame
-        except Exception:
-            feature = pd.DataFrame()
-        return list(rows), feature
 
     def _persisted_forecasts(self, persisted: dict[int, ForecastSnapshot]) -> dict[int, dict[str, Any]]:
         """Read the same persisted forecasts used by the canonical decision board."""
@@ -345,12 +321,12 @@ class ETF1430WorkbenchService:
             "historical_1430_backtest": "not_qualified",
         }
 
-    def _scenario_candles(self, frame: pd.DataFrame, forecasts: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
-        if frame.empty:
+    def _scenario_candles(self, last_bar: DailyBar, forecasts: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
+        if last_bar is None:
             return []
         horizon_days = sorted(int(value) for value in self.config.get("forecast_horizons", [1, 3, 5, 10]))
         total_days = int(self.config.get("scenario_candles", max(horizon_days)))
-        current = float(frame.iloc[-1]["close"])
+        current = float(last_bar.close)
         anchors_x = [0]
         close_anchors = [current]
         low_anchors = [current]
@@ -367,7 +343,7 @@ class ETF1430WorkbenchService:
             close_anchors.append(close_value)
             low_anchors.append(min(low_value, current, close_value))
             high_anchors.append(max(high_value, current, close_value))
-        last_date = pd.Timestamp(frame.iloc[-1]["trade_date"])
+        last_date = pd.Timestamp(last_bar.trade_date)
         dates = pd.bdate_range(last_date + pd.Timedelta(days=1), periods=total_days)
         candles: list[dict[str, Any]] = []
         previous_close = current
@@ -396,7 +372,8 @@ class ETF1430WorkbenchService:
         return candles
 
     def _row(self, db: Session, instrument: Instrument, *, include_chart: bool = False, user_id: int | None = None, current_decision: dict[str, Any] | None = None, decision_snapshot_id: str | None = None) -> dict[str, Any]:
-        bars, frame = self._raw_and_feature_frame(db, instrument.id)
+        # 请求内不再做特征重算：指标读 IndicatorSnapshot，支撑压力读统一快照服务。
+        bars = self._bars(db, instrument.id)
         quote = self._latest(db, QuoteSnapshot, instrument.id, QuoteSnapshot.quote_time)
         indicator = self._latest(db, IndicatorSnapshot, instrument.id, IndicatorSnapshot.generated_at)
         signal = self._latest(db, SignalSnapshot, instrument.id, SignalSnapshot.as_of_time)
@@ -407,11 +384,7 @@ class ETF1430WorkbenchService:
             decision_snapshot_id, decision_map = CurrentDecisionService(self.settings).resolve_many(db, [instrument])
             current_decision = decision_map.get(str(instrument.ts_code).strip().upper())
         values = dict(indicator.values_json or {}) if indicator else {}
-        if not frame.empty:
-            for key, value in frame.iloc[-1].to_dict().items():
-                if key not in values and _finite(value) is not None:
-                    values[key] = float(value)
-        sr = build_support_resistance(frame, self.config.get("support_resistance", {})) if not frame.empty else build_support_resistance(frame)
+        sr = self.support_resistance.latest_or_compute(db, instrument.id, computed_by="request")
         news = self._news(db, instrument)
         trend_score = self._score_trend(values, indicator)
         momentum_score = self._score_momentum(values)
@@ -432,7 +405,7 @@ class ETF1430WorkbenchService:
         action = str((current_decision or {}).get("state") or "数据异常")
         now = datetime.now(self.timezone)
         qualification = self._qualification(quote, now)
-        current_price = _finite(quote.price if quote else None) or (_finite(frame.iloc[-1]["close"]) if not frame.empty else None)
+        current_price = _finite(quote.price if quote else None) or (_finite(float(bars[-1].close)) if bars else None)
         reasons = [
             f"趋势 {trend_score:.1f}",
             f"动量 {momentum_score:.1f}",
@@ -529,7 +502,7 @@ class ETF1430WorkbenchService:
         if include_chart:
             result["chart"] = {
                 "historical": historical,
-                "forecast_scenario": self._scenario_candles(frame, forecasts),
+                "forecast_scenario": self._scenario_candles(bars[-1] if bars else None, forecasts),
                 "forecast_boundary_after": historical[-1]["date"] if historical else None,
                 "overlay_modes": ["综合", "均线", "MACD", "KDJ", "RSI", "缠论近似", "成交密集成本"],
             }

@@ -31,6 +31,7 @@ from app.models import (
     TaskRun,
 )
 from app.services.signal_grade_service import GRADE_ORDER, SignalGradeService, classify_row
+from app.services.support_resistance_service import SupportResistanceService
 from app.services.trading_calendar_service import TradingCalendarService
 from app.utils.indicators_v05 import calculate_indicators
 from app.utils.numbers import finite_or_none
@@ -145,6 +146,7 @@ class DecisionBoardService:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
         self.calendar = TradingCalendarService(self.settings)
+        self.support_resistance = SupportResistanceService(self.settings)
 
     def enqueue_refresh(self, db: Session) -> dict:
         active = db.scalar(
@@ -255,6 +257,12 @@ class DecisionBoardService:
 
     def refresh(self, db: Session, *, generated_at: datetime | None = None, demo: bool = False) -> SnapshotBuild:
         generated_at = generated_at or datetime.now(self.settings.timezone)
+        if not demo:
+            # 统一刷新支撑压力快照（250 根 + 真实成交额口径），payload 构建全部读快照。
+            instruments = db.scalars(
+                select(Instrument).where(Instrument.enabled.is_(True), Instrument.kind.in_(("ETF", "LOF")))
+            ).all()
+            self.support_resistance.capture_for_instruments(db, list(instruments), computed_by="scheduled")
         payload = self._build_payload(db, generated_at)
         if demo:
             ephemeral = DecisionBoardSnapshot(
@@ -601,14 +609,9 @@ class DecisionBoardService:
         ]
         if not history:
             return history, {"status": "missing", "label": "历史不足"}
-        frame = pd.DataFrame(
-            [
-                {"trade_date": item["date"], "open": item["open"], "high": item["high"], "low": item["low"], "close": item["close"], "volume": item["volume"] or 0.0, "amount": 0.0}
-                for item in history
-            ]
-        )
+        # 支撑压力走统一快照服务（250 根 + 真实成交额口径，与其他页面完全一致）。
         try:
-            return history, build_support_resistance(frame)
+            return history, self.support_resistance.latest_or_compute(db, instrument_id)
         except Exception:
             return history, {"status": "missing", "label": "支撑压力计算不足", "chan_zone_approx": None}
 

@@ -747,6 +747,41 @@ class CalibrationProfile(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class SupportResistanceSnapshot(Base):
+    """支撑/压力研究快照（support-resistance-v1）。
+
+    全系统唯一的支撑压力计算持久化点：决策总表、14:30 工作台、ETF 详情
+    都读取这里，而不是各自从日线重算。payload_json 是
+    ``app.utils.support_resistance.build_support_resistance`` 的完整输出
+    （levels 已聚类；chan_zone_approx 为重叠区近似）。
+    """
+
+    __tablename__ = "support_resistance_snapshots"
+    __table_args__ = (
+        UniqueConstraint("instrument_id", "interval", "as_of_date", name="uq_sr_key"),
+        Index(
+            "ix_support_resistance_snapshots_instrument",
+            "instrument_id",
+            "as_of_date",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instruments.id", ondelete="CASCADE")
+    )
+    interval: Mapped[str] = mapped_column(String(8), default="1d")
+    as_of_date: Mapped[date] = mapped_column(Date)
+    current_price: Mapped[float | None] = mapped_column(Float)
+    qualified: Mapped[bool] = mapped_column(Boolean, default=False)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    method_version: Mapped[str] = mapped_column(String(32), default="support-resistance-v1")
+    config_hash: Mapped[str | None] = mapped_column(String(64))
+    source_bars: Mapped[int] = mapped_column(Integer, default=0)
+    computed_by: Mapped[str] = mapped_column(String(16), default="scheduled")
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class SignalSnapshot(Base):
     __tablename__ = "signal_snapshots"
     __table_args__ = (
