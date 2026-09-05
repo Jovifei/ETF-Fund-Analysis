@@ -9,7 +9,7 @@
  */
 
 const $ = (selector, root = document) => root.querySelector(selector);
-const state = { detail: null, mode: '综合', resizeTimer: null, code: null };
+const state = { detail: null, mode: '综合', resizeTimer: null, code: null, interval: '1d', intervalBars: null };
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -150,7 +150,9 @@ function drawChart(row) {
   canvas.width = Math.round(cssWidth * ratio); canvas.height = Math.round(cssHeight * ratio);
   const ctx = canvas.getContext('2d'); ctx.setTransform(ratio,0,0,ratio,0,0); ctx.clearRect(0,0,cssWidth,cssHeight);
 
-  const historical = row.chart.historical || [], forecast = row.chart.forecast_scenario || [];
+  const useMinute = state.interval !== '1d' && state.intervalBars;
+  const historical = useMinute ? state.intervalBars : (row.chart.historical || []);
+  const forecast = useMinute ? [] : (row.chart.forecast_scenario || []);
   const data = [...historical, ...forecast]; if (!data.length) return;
   if (!chartView.end) resetViewport(data.length);
   const sr = row.support_resistance || {};
@@ -233,6 +235,30 @@ function drawChart(row) {
   if (!chartView.hintShown) { chartView.hintShown = true; ctx.fillStyle='#5f7a95'; ctx.fillText('滚轮缩放 · 拖拽平移 · 双击复位', margin.left+6, cssHeight-24); }
 }
 
+async function selectInterval(interval) {
+  if (!state.detail || interval === state.interval) return;
+  if (interval !== '1d') {
+    try {
+      const payload = await api(`/api/instruments/${encodeURIComponent(state.code)}/minute-bars?interval=${interval}`);
+      if (!payload.available) { toast(payload.reason === 'instrument_not_found' ? '标的不存在' : `该周期暂无分钟数据（${payload.reason || '未同步'}）`); return; }
+      state.intervalBars = payload.bars.map(item => ({...item, date: String(item.date).slice(5, 16).replace('T', ' ')}));
+      if (payload.contains_mock) toast('分钟数据为 Mock 演示来源，非真实行情');
+    } catch (error) { toast(`分钟数据加载失败：${error.message}`); return; }
+  }
+  state.interval = interval;
+  document.querySelectorAll('#intervalTabs button').forEach(item => {
+    const active = item.dataset.interval === interval;
+    item.classList.toggle('active', active);
+    if (active) item.setAttribute('aria-selected', 'true'); else item.removeAttribute('aria-selected');
+  });
+  resetViewport((state.detail.chart?.historical || []).length + (state.detail.chart?.forecast_scenario || []).length + 1);
+  drawChart(state.detail);
+}
+
+function initIntervalTabs() {
+  document.querySelectorAll('#intervalTabs button').forEach(button => button.addEventListener('click', () => selectInterval(button.dataset.interval)));
+}
+
 function bindChartInteractions() {
   const canvas = $('#candleCanvas');
   if (!canvas) return;
@@ -274,6 +300,17 @@ function bindChartInteractions() {
   canvas.addEventListener('dblclick', ()=>{ if (state.detail) { resetViewport((state.detail.chart?.historical||[]).length + (state.detail.chart?.forecast_scenario||[]).length); drawChart(state.detail); } });
 }
 
+function renderDetail(row) {
+  state.detail = row; state.mode = '综合';
+  state.dailyChart = row.chart;
+  $('#detailTitle').textContent = `${row.name} · ${row.ts_code}`;
+  $('#detailSub').textContent = `${row.theme_l1 || '未分类'} / ${row.theme_l2 || '—'} · 数据日 ${row.as_of_date || '—'} · 现价 ${fmt(row.current_price, 3)}（${pctPoint(row.today_pct_change)}）`;
+  $('#detailAction').innerHTML = `<span class="chip ${actionClass(row.action)}">${escapeHtml(row.action)}</span>
+    <div class="muted" style="margin-top:6px">自动订单永久关闭 · 研究态${row.actionable ? '' : '（非可执行）'}</div>`;
+  $('#detailWarnings').innerHTML = (row.risks || []).map(item=>`• ${escapeHtml(item)}`).join('<br>') || '研究状态正常；仍不构成自动交易指令。';
+  renderScores(row); renderForecasts(row); renderModes(row); renderLevels(row); renderIndicators(row); renderNews(row); drawChart(row);
+}
+
 async function loadDetail() {
   const code = decodeURIComponent(location.pathname.split('/').pop() || '').trim().toUpperCase();
   state.code = code;
@@ -299,6 +336,7 @@ $('#lockButton').addEventListener('click', async ()=>{try{await api('/api/auth/l
 window.addEventListener('resize', ()=>{clearTimeout(state.resizeTimer);state.resizeTimer=setTimeout(()=>{if(state.detail)drawChart(state.detail)},120)});
 
 bindChartInteractions();
+initIntervalTabs();
 
 fetch('/api/auth/me',{credentials:'same-origin'})
   .then(response=>response.ok?response.json():{authenticated:false})

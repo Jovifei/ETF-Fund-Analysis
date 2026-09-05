@@ -46,6 +46,11 @@
 
     <section id="detailWarnings" class="warning panel"></section>
     <section id="detailScores" class="score-grid"></section>
+    <div class="mode-tabs" id="intervalTabs">
+      <button class="active" data-interval="1d">日K</button>
+      <button data-interval="30m" disabled title="分钟线未同步时不可用">30分钟</button>
+      <button data-interval="60m" disabled title="分钟线未同步时不可用">60分钟</button>
+    </div>
     <div class="mode-tabs" id="modeTabs"></div>
     <div class="chart-shell panel">
       <canvas id="candleCanvas" width="1400" height="610" aria-label="历史及预测情景蜡烛图"></canvas>

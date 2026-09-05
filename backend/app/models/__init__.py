@@ -28,6 +28,7 @@ from app.models.entities import (
     SupportResistanceSnapshot,
     TaskRun,
     UserWatchlistEntry,
+    MarketBar,
 )
 
 __all__ = [
@@ -58,6 +59,7 @@ __all__ = [
     "SupportResistanceSnapshot",
     "TaskRun",
     "UserWatchlistEntry",
+    "MarketBar",
     "ProviderAudit",
     "EventLog",
     "ReportArtifact",

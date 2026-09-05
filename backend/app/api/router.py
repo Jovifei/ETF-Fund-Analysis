@@ -80,6 +80,7 @@ from app.services.holding_import_service import (
 from app.services.holding_service import HoldingNotFoundError, HoldingService
 from app.services.watchlist_service import WatchlistError, WatchlistService
 from app.services.support_resistance_service import SupportResistanceService
+from app.services.market_bar_service import MarketBarService
 from app.services.current_decision_service import CurrentDecisionService
 from app.utils.latest_snapshots import latest_forecast_map
 from app.services.market_context_service import MarketContextService
@@ -489,6 +490,18 @@ def bars(
     if not result:
         raise HTTPException(status_code=404, detail="未找到标的或历史 K 线")
     return result
+
+
+@private_router.get("/instruments/{ts_code}/minute-bars")
+def minute_bars(
+    ts_code: str,
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    interval: str = Query(default="30m", pattern="^(30m|60m)$"),
+    limit: int = Query(default=240, ge=10, le=1000),
+) -> dict:
+    """分钟 K 线（PR-G）。无数据时 available=false——日K 永不冒充分钟线。"""
+    return MarketBarService(settings).read_minute_bars(db, ts_code, interval, limit=limit)
 
 
 @private_router.get("/news")

@@ -89,6 +89,9 @@ class Settings(BaseSettings):
     # Fail-closed by default: self-service registration only opens when the
     # deployment explicitly sets REGISTRATION_ENABLED=true AND a secret invite
     # code. Never ship a usable default invite code.
+    # 多周期分钟线（30m/60m）同步开关：生产默认关闭，真实数据资格后再显式启用；
+    # Mock provider 不受此开关限制（本地演示需要，mock 永远 actionable=false）。
+    minute_bars_enabled: bool = Field(default=False, validation_alias="MINUTE_BARS_ENABLED")
     registration_enabled: bool = Field(default=False, validation_alias="REGISTRATION_ENABLED")
     registration_invite_code: str = Field(default="", validation_alias="REGISTRATION_INVITE_CODE")
     trusted_proxy_headers: bool = False

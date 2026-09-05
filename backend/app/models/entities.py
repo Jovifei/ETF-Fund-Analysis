@@ -858,6 +858,40 @@ class UserWatchlistEntry(Base, TimestampMixin):
     note: Mapped[str | None] = mapped_column(Text)
 
 
+class MarketBar(Base):
+    """多周期行情 bar（修复方案 PR-G）。
+
+    interval ∈ {5m, 15m, 30m, 60m, 1d}；第一阶段只启用 30m/60m（1d 继续走 DailyBar）。
+    bar_time 为该 bar 的结束时间（Asia/Shanghai）；时间戳资格门控与实时报价同规则——
+    未验证的 source timestamp 不参与任何 actionable 判断。
+    """
+
+    __tablename__ = "market_bars"
+    __table_args__ = (
+        UniqueConstraint("instrument_id", "interval", "bar_time", name="uq_market_bar_key"),
+        Index("ix_market_bar_instrument_interval", "instrument_id", "interval", "bar_time"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instruments.id", ondelete="CASCADE")
+    )
+    interval: Mapped[str] = mapped_column(String(8))
+    bar_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    open: Mapped[float] = mapped_column(Float)
+    high: Mapped[float] = mapped_column(Float)
+    low: Mapped[float] = mapped_column(Float)
+    close: Mapped[float] = mapped_column(Float)
+    volume: Mapped[float | None] = mapped_column(Float)
+    amount: Mapped[float | None] = mapped_column(Float)
+    source: Mapped[str] = mapped_column(String(32), default="unknown")
+    source_timestamp: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    timestamp_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    fetched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class HoldingImportSession(Base, TimestampMixin):
     """Metadata for a short-lived screenshot import; never stores image bytes."""
 

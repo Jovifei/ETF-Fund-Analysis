@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import math
 import random
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time as dtime, timedelta
 from zoneinfo import ZoneInfo
 
 from app.core.config import Settings, get_settings
+from app.providers.base import ProviderError
 from app.market_context.contracts import (
     FreshnessStatus,
     MarketContextItem,
@@ -46,6 +47,54 @@ class MockProvider(MarketProvider):
                 )
             )
         return result
+
+    def fetch_minute_bars(self, ts_code: str, interval: str, start_date: date, end_date: date) -> list[BarRecord]:
+        """确定性合成分钟 bar（演示/测试专用，source=mock:minute）。"""
+        if interval not in {"5m", "15m", "30m", "60m"}:
+            raise ProviderError("unsupported minute interval")
+        minutes = int(interval[:-1])
+        step = timedelta(minutes=minutes)
+        rng = random.Random(self._seed(ts_code + interval))
+        records: list[BarRecord] = []
+        base = 2.0 + (self._seed(ts_code) % 50) / 10
+        cursor_day = start_date
+        while cursor_day <= end_date:
+            if cursor_day.weekday() >= 5:
+                cursor_day += timedelta(days=1)
+                continue
+            day_start = datetime.combine(cursor_day, dtime(9, 30), tzinfo=self.tz)
+            morning_end = datetime.combine(cursor_day, dtime(11, 30), tzinfo=self.tz)
+            afternoon_start = datetime.combine(cursor_day, dtime(13, 0), tzinfo=self.tz)
+            afternoon_end = datetime.combine(cursor_day, dtime(15, 0), tzinfo=self.tz)
+            slot = day_start
+            price = base + rng.random() * 0.2
+            while slot < afternoon_end:
+                session_end = morning_end if slot < morning_end else afternoon_end
+                if slot < morning_end and slot + step > morning_end:
+                    slot = afternoon_start
+                bar_end = min(slot + step, session_end)
+                drift = rng.gauss(0, 0.004)
+                open_price = price
+                close_price = max(0.5, price * (1 + drift))
+                high_price = max(open_price, close_price) * (1 + abs(rng.gauss(0, 0.002)))
+                low_price = min(open_price, close_price) * (1 - abs(rng.gauss(0, 0.002)))
+                records.append(
+                    BarRecord(
+                        ts_code=ts_code,
+                        trade_date=bar_end,
+                        open=round(open_price, 6),
+                        high=round(high_price, 6),
+                        low=round(low_price, 6),
+                        close=round(close_price, 6),
+                        volume=float(rng.randint(1_000, 50_000)),
+                        amount=None,
+                        source="mock:minute",
+                    )
+                )
+                price = close_price
+                slot = bar_end + (timedelta(0) if bar_end >= session_end else step)
+            cursor_day += timedelta(days=1)
+        return records
 
     def resolve_instrument(self, code: str) -> InstrumentRecord | None:
         """Mock 只能解析其内置 watchlist 内的标的（含 6 位 symbol）。"""

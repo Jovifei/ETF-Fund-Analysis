@@ -69,6 +69,20 @@ class MarketProvider(ABC):
     def is_trade_day(self, day: date) -> bool:
         return day.weekday() < 5
 
+    def fetch_minute_bars(
+        self,
+        ts_code: str,
+        interval: str,
+        start_date: date,
+        end_date: date,
+    ) -> list[BarRecord]:
+        """分钟级 OHLCV（interval ∈ {5m,15m,30m,60m}）。
+
+        BarRecord.trade_date 携带 bar 结束时间（北京时间）。默认能力缺失，
+        由具体 Provider 显式实现；日线永远不得冒充分钟线。
+        """
+        raise CapabilityUnavailable("minute bars unavailable for this provider")
+
     def resolve_instrument(self, code: str) -> InstrumentRecord | None:
         """按代码解析一个标的（名称/交易所/类型）；未找到或能力缺失返回 None。
 
