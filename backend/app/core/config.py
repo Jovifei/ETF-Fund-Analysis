@@ -86,8 +86,11 @@ class Settings(BaseSettings):
         default=480, validation_alias="AUTH_SESSION_TTL_MINUTES", ge=1, le=1440
     )
     auth_cookie_secure: bool = Field(default=True, validation_alias="AUTH_COOKIE_SECURE")
-    registration_enabled: bool = Field(default=True, validation_alias="REGISTRATION_ENABLED")
-    registration_invite_code: str = Field(default="etf2026", validation_alias="REGISTRATION_INVITE_CODE")
+    # Fail-closed by default: self-service registration only opens when the
+    # deployment explicitly sets REGISTRATION_ENABLED=true AND a secret invite
+    # code. Never ship a usable default invite code.
+    registration_enabled: bool = Field(default=False, validation_alias="REGISTRATION_ENABLED")
+    registration_invite_code: str = Field(default="", validation_alias="REGISTRATION_INVITE_CODE")
     trusted_proxy_headers: bool = False
 
     market_provider: Literal["mock", "tushare", "akshare", "ftshare", "public_composite", "composite"] = "mock"

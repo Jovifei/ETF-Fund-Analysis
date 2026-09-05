@@ -3,52 +3,12 @@
 /**
  * K线企稳分析看板
  * 数据源：后端 /api/workbench/kline/summary（TD九转/形态预测/缠论均由后端计算）
- * fallback：API 不可用时回退到内置静态快照（2026-08-31 盘中v4），保证页面可独立预览。
+ * 数据真实性契约：API 失败时只显示「数据暂不可用」错误态，绝不渲染任何本地静态行情
+ * （AGENTS.md：Mock/非真实数据不得冒充真实数据）。
  */
 
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-// ============ 静态 fallback 数据（与后端结构一致） ============
-const STATIC_DATA = {
-  meta: {
-    title: 'K线企稳分析看板 · 盘中实时v4（16标的）',
-    subtitle: '16标的 · 场外基金关联分析 · iFinD盘中行情+腾讯K线+同花顺指数（14:38盘中）',
-    disclaimer: '※ 仅为AI根据盘中行情分析生成，不构成任何投资操作建议，仅供参考',
-    date: '2026-08-31 14:38',
-    market: '上证 3978.06 (0.65%) | 科技再涨黄金跌',
-  },
-  generated_at: '2026-08-31T14:38:00+08:00',
-  automatic_orders: false,
-  counts: { 可加仓: 0, 可入场: 4, 可试探: 4, 观望: 0, 减仓: 8 },
-  rows: [],  // 由 SNAPSHOT_ROWS 填充
-  disclaimers: [
-    '本看板为研究视图，不构成投资建议，不生成自动订单。',
-    'TD 九转为确定性指标；明日预测为形态匹配（horizon=1）且未完成 walk-forward 校准，仅供研究参考。',
-    '缠论指标基于 chanlun 框架计算，仅作研究视图。',
-  ],
-};
-
-// 静态行快照（结构对齐后端 _row 输出）
-const SNAPSHOT_ROWS = [
-  { name:'AI应用', code:'886108 · 创业板软件ETF联接（含77%） · 10jqka补拉', pct:'+2.02%', vs:'→', vol:'放量 1.24', volCls:'vu', maLabel:'多头排列', maColor:'#2ecc71', maDirs:[['M5','↑'],['M10','↑'],['M20','↑'],['M30','↑']], maVals:'M5=828 M20=843', macdLabel:'将叉', macdCls:'ti', macdVals:'DIF=4.29 DEA=6.56', kdjLabel:'J=59.4', kdjCls:'tm', kdjSub:'健康', kdjDesc:'趋势健康 · 可持有', kdVals:'K=45.1 D=37.9', tdNum:'3', tdCls:'', tdSub:'', tdDesc:'', rsiVal:'58.3', rsiDesc:'正常偏强 · 趋势中段', sectorUp:'390涨', sectorDown:'142跌', sectorRatio:'跌比27%', week:'10日 -5.3%', forecast:'-0.36%', conf:'conf 36', action:'可入场', actionColor:'#4ADE80' },
-  { name:'商业航天', code:'886078 · 卫星ETF联接（含90%） · 10jqka补拉', pct:'+1.48%', vs:'↑', vol:'平量 0.95', volCls:'vu', maLabel:'多头排列', maColor:'#2ecc71', maDirs:[['M5','↑'],['M10','↑'],['M20','↑'],['M30','↑']], maVals:'M5=2081 M20=2101', macdLabel:'修复延续', macdCls:'tx', macdVals:'DIF=-5.92 DEA=-10.6', kdjLabel:'J=50.2', kdjCls:'tm', kdjSub:'健康', kdjDesc:'趋势健康 · 可持有', kdVals:'K=43.9 D=40.8', tdNum:'3', tdCls:'', tdSub:'', tdDesc:'', rsiVal:'54.4', rsiDesc:'正常偏强 · 趋势中段', sectorUp:'363涨', sectorDown:'131跌', sectorRatio:'跌比27%', week:'10日 -4.0%', forecast:'-0.74%', conf:'conf 55', action:'可入场', actionColor:'#4ADE80' },
-  { name:'科创芯片ETF嘉实', code:'588200 · 嘉实上证科创板芯片ETF联接', pct:'+1.62%', vs:'↑', vol:'缩量 0.82', volCls:'vd', maLabel:'多空交织', maColor:'#f39c12', maDirs:[['M5','↑'],['M10','↑'],['M20','↑'],['M30','↓']], maVals:'M5=1.16 M20=1.18', macdLabel:'弱势金叉', macdCls:'tw', macdVals:'DIF=-0.025 DEA=-0.028', kdjLabel:'J=42.1', kdjCls:'tm', kdjSub:'健康', kdjDesc:'趋势健康 · 可持有', kdVals:'K=37.8 D=35.7', tdNum:'3', tdCls:'', tdSub:'', tdDesc:'', rsiVal:'48.3', rsiDesc:'偏弱 · 动能不足', sectorUp:'—', sectorDown:'—', sectorRatio:'—', week:'+0.0%', forecast:'+0.97%', conf:'conf 33', action:'可入场', actionColor:'#4ADE80' },
-  { name:'PCB概念', code:'885959 · 电子ETF联接（含18%）', pct:'+2.24%', vs:'→', vol:'缩量 0.82', volCls:'vd', maLabel:'多头排列', maColor:'#2ecc71', maDirs:[['M5','↑'],['M10','↑'],['M20','↑'],['M30','↑']], maVals:'M5=2557 M20=2532', macdLabel:'多头延续', macdCls:'tm', macdVals:'DIF=6.88 DEA=-8.74', kdjLabel:'J=54.9', kdjCls:'tm', kdjSub:'健康', kdjDesc:'趋势健康 · 可持有', kdVals:'K=47.9 D=44.4', tdNum:'3', tdCls:'', tdSub:'', tdDesc:'', rsiVal:'55.0', rsiDesc:'正常偏强 · 趋势中段', sectorUp:'186涨', sectorDown:'49跌', sectorRatio:'跌比21%', week:'10日 -1.4%', forecast:'-0.98%', conf:'conf 32', action:'可入场', actionColor:'#4ADE80' },
-  { name:'光纤概念', code:'886084 · TMT50ETF联接（含25%）', pct:'+1.29%', vs:'↓', vol:'缩量 0.83', volCls:'vd', maLabel:'多头排列', maColor:'#2ecc71', maDirs:[['M5','↑'],['M10','↑'],['M20','↑'],['M30','↑']], maVals:'M5=3667 M20=3569', macdLabel:'将死叉', macdCls:'td', macdVals:'DIF=40.1 DEA=9.74', kdjLabel:'J=69.2', kdjCls:'tm', kdjSub:'健康', kdjDesc:'趋势健康 · 可持有', kdVals:'K=60.1 D=55.5', tdNum:'3', tdCls:'', tdSub:'', tdDesc:'', rsiVal:'57.8', rsiDesc:'正常偏强 · 趋势中段', sectorUp:'74涨', sectorDown:'36跌', sectorRatio:'跌比33%', week:'10日 -1.9%', forecast:'+0.53%', conf:'conf 30', action:'可试探', actionColor:'#FBBF24' },
-  { name:'稀土ETF嘉实', code:'516150 · 嘉实中证稀土产业ETF联接C', pct:'+0.06%', vs:'→', vol:'放量 1.16', volCls:'vu', maLabel:'多空交织', maColor:'#f39c12', maDirs:[['M5','↑'],['M10','↓'],['M20','↓'],['M30','↑']], maVals:'M5=1.74 M20=1.76', macdLabel:'弱势金叉', macdCls:'tw', macdVals:'DIF=-0.005 DEA=-0.005', kdjLabel:'J=47.2', kdjCls:'tm', kdjSub:'健康', kdjDesc:'趋势健康 · 可持有', kdVals:'K=40.6 D=37.2', tdNum:'3', tdCls:'', tdSub:'', tdDesc:'', rsiVal:'49.3', rsiDesc:'偏弱 · 动能不足', sectorUp:'—', sectorDown:'—', sectorRatio:'—', week:'+0.5%', forecast:'-1.73%', conf:'conf 16', action:'可试探', actionColor:'#FBBF24' },
-  { name:'CPO', code:'886033 · 创业板人工智能ETF联接（含48%）', pct:'+2.12%', vs:'→', vol:'缩量 0.66', volCls:'vd', maLabel:'多头排列', maColor:'#2ecc71', maDirs:[['M5','↑'],['M10','↑'],['M20','↑'],['M30','↑']], maVals:'M5=5739 M20=5623', macdLabel:'将死叉', macdCls:'td', macdVals:'DIF=38.6 DEA=-5.20', kdjLabel:'J=52.8', kdjCls:'tm', kdjSub:'健康', kdjDesc:'趋势健康 · 可持有', kdVals:'K=49.2 D=47.5', tdNum:'3', tdCls:'', tdSub:'', tdDesc:'', rsiVal:'53.9', rsiDesc:'正常偏强 · 趋势中段', sectorUp:'168涨', sectorDown:'41跌', sectorRatio:'跌比20%', week:'10日 -3.9%', forecast:'-0.92%', conf:'conf 41', action:'可试探', actionColor:'#FBBF24' },
-  { name:'锂', code:'884286 · 锂电池ETF联接 · 盘中价10jqka推算', pct:'-1.04%', vs:'↑', vol:'—', volCls:'vf', maLabel:'多头排列', maColor:'#2ecc71', maDirs:[['M5','↑'],['M10','↑'],['M20','↑'],['M30','↑']], maVals:'M5=22927 M20=22127', macdLabel:'将死叉', macdCls:'td', macdVals:'DIF=327 DEA=133', kdjLabel:'J=55.9', kdjCls:'tm', kdjSub:'健康', kdjDesc:'趋势健康 · 可持有', kdVals:'K=54.2 D=53.3', tdNum:'1', tdCls:'', tdSub:'', tdDesc:'', rsiVal:'57.7', rsiDesc:'正常偏强 · 趋势中段', sectorUp:'1涨', sectorDown:'7跌', sectorRatio:'跌比88%', week:'10日 -0.1%', forecast:'+0.97%', conf:'conf 35', action:'可试探', actionColor:'#FBBF24' },
-  { name:'机床ETF华夏', code:'159663 · 华夏中证机床ETF发起式联接', pct:'+2.12%', vs:'→', vol:'缩量 0.65', volCls:'vd', maLabel:'多头排列', maColor:'#2ecc71', maDirs:[['M5','↑'],['M10','↑'],['M20','↑'],['M30','↑']], maVals:'M5=0.985 M20=1.01', macdLabel:'将死叉', macdCls:'td', macdVals:'DIF=-0.016 DEA=-0.019', kdjLabel:'J=24.3', kdjCls:'tr', kdjSub:'死叉', kdjDesc:'空头信号 · 短线看跌', kdVals:'K=29.4 D=31.9', tdNum:'3', tdCls:'', tdSub:'', tdDesc:'', rsiVal:'48.9', rsiDesc:'偏弱 · 动能不足', sectorUp:'—', sectorDown:'—', sectorRatio:'—', week:'-1.1%', forecast:'-0.83%', conf:'conf 35', action:'减仓', actionColor:'#F87171' },
-  { name:'科创半导体ETF华夏', code:'588170 · 华夏上证科创板半导体材料设备ETF联接', pct:'+0.50%', vs:'→', vol:'缩量 0.7', volCls:'vd', maLabel:'多空交织', maColor:'#f39c12', maDirs:[['M5','↑'],['M10','↓'],['M20','↑'],['M30','↑']], maVals:'M5=1.00 M20=1.00', macdLabel:'将死叉', macdCls:'td', macdVals:'DIF=-0.005 DEA=-0.006', kdjLabel:'J=33.1', kdjCls:'tr', kdjSub:'死叉', kdjDesc:'空头信号 · 短线看跌', kdVals:'K=36.6 D=38.4', tdNum:'1', tdCls:'', tdSub:'', tdDesc:'', rsiVal:'49.3', rsiDesc:'偏弱 · 动能不足', sectorUp:'—', sectorDown:'—', sectorRatio:'—', week:'-1.2%', forecast:'+2.08%', conf:'conf 34', action:'减仓', actionColor:'#F87171' },
-  { name:'创业板ETF富国', code:'159971 · 富国创业板ETF联接C', pct:'+0.08%', vs:'→', vol:'缩量 0.57', volCls:'vd', maLabel:'多空交织', maColor:'#f39c12', maDirs:[['M5','↑'],['M10','↓'],['M20','↓'],['M30','↓']], maVals:'M5=1.20 M20=1.23', macdLabel:'死叉', macdCls:'tr', macdVals:'DIF=-0.019 DEA=-0.018', kdjLabel:'J=11.2', kdjCls:'tb', kdjSub:'低位', kdjDesc:'超卖 · 反弹概率升高', kdVals:'K=22.6 D=28.4', tdNum:'1', tdCls:'', tdSub:'', tdDesc:'', rsiVal:'43.6', rsiDesc:'偏弱 · 动能不足', sectorUp:'—', sectorDown:'—', sectorRatio:'—', week:'-3.4%', forecast:'+0.18%', conf:'conf 31', action:'减仓', actionColor:'#F87171' },
-  { name:'电网设备ETF华夏', code:'159326 · 华夏中证电网设备主题ETF联接', pct:'-0.54%', vs:'↓', vol:'缩量 0.71', volCls:'vd', maLabel:'多空交织', maColor:'#f39c12', maDirs:[['M5','↓'],['M10','↓'],['M20','↓'],['M30','↑']], maVals:'M5=1.68 M20=1.69', macdLabel:'将死叉', macdCls:'td', macdVals:'DIF=-0.013 DEA=-0.019', kdjLabel:'J=35.1', kdjCls:'tr', kdjSub:'死叉', kdjDesc:'空头信号 · 短线看跌', kdVals:'K=37.4 D=38.5', tdNum:'1↓', tdCls:'', tdSub:'', tdDesc:'', rsiVal:'46.0', rsiDesc:'偏弱 · 动能不足', sectorUp:'—', sectorDown:'—', sectorRatio:'—', week:'-0.5%', forecast:'-1.36%', conf:'conf 44', action:'减仓', actionColor:'#F87171' },
-  { name:'有色金属ETF华夏', code:'516650 · 华夏有色金属ETF联接C', pct:'-1.60%', vs:'↓', vol:'缩量 0.9', volCls:'vd', maLabel:'多空交织', maColor:'#f39c12', maDirs:[['M5','↓'],['M10','↑'],['M20','↑'],['M30','↑']], maVals:'M5=1.90 M20=1.87', macdLabel:'多头延续', macdCls:'tm', macdVals:'DIF=0.034 DEA=0.030', kdjLabel:'J=100.6', kdjCls:'tr', kdjSub:'超买', kdjDesc:'短期过热 · 回调风险高', kdVals:'K=74.9 D=62.0', tdNum:'TD9', tdCls:'td9', tdSub:'下跌变盘', tdDesc:'上涨衰竭', rsiVal:'55.1', rsiDesc:'正常偏强 · 趋势中段', sectorUp:'—', sectorDown:'—', sectorRatio:'—', week:'+1.7%', forecast:'+0.19%', conf:'conf 14', action:'减仓', actionColor:'#F87171' },
-  { name:'生物制品', code:'881142 · 生物医药ETF联接（含48%） · 今日价iFinD推算', pct:'-2.05%', vs:'→', vol:'—', volCls:'vf', maLabel:'多空交织', maColor:'#f39c12', maDirs:[['M5','↓'],['M10','↓'],['M20','↓'],['M30','↑']], maVals:'M5=6320 M20=6226', macdLabel:'死叉', macdCls:'tr', macdVals:'DIF=140 DEA=151', kdjLabel:'J=14.3', kdjCls:'tb', kdjSub:'低位', kdjDesc:'超卖 · 反弹概率升高', kdVals:'K=34.0 D=43.8', tdNum:'1↓', tdCls:'', tdSub:'', tdDesc:'', rsiVal:'49.1', rsiDesc:'偏弱 · 动能不足', sectorUp:'8涨', sectorDown:'47跌', sectorRatio:'跌比85%', week:'10日 -2.9%', forecast:'-1.43%', conf:'conf 29', action:'减仓', actionColor:'#F87171' },
-  { name:'黄金股ETF华夏', code:'159562 · 华夏中证沪深港黄金产业股票ETF联接', pct:'-3.06%', vs:'→', vol:'缩量 0.8', volCls:'vd', maLabel:'多空交织', maColor:'#f39c12', maDirs:[['M5','↓'],['M10','↑'],['M20','↑'],['M30','↑']], maVals:'M5=2.45 M20=2.29', macdLabel:'将死叉', macdCls:'td', macdVals:'DIF=0.118 DEA=0.105', kdjLabel:'J=76.8', kdjCls:'tm', kdjSub:'健康', kdjDesc:'趋势健康 · 可持有', kdVals:'K=73.3 D=71.5', tdNum:'2', tdCls:'', tdSub:'', tdDesc:'', rsiVal:'61.0', rsiDesc:'正常偏强 · 趋势中段', sectorUp:'—', sectorDown:'—', sectorRatio:'—', week:'+1.0%', forecast:'+2.27%', conf:'conf 25', action:'减仓', actionColor:'#F87171' },
-  { name:'黄金ETF国泰', code:'518800 · 国泰黄金ETF联接', pct:'-3.67%', vs:'→', vol:'平量 1.08', volCls:'vu', maLabel:'多空交织', maColor:'#f39c12', maDirs:[['M5','↓'],['M10','↓'],['M20','↑'],['M30','↑']], maVals:'M5=9.97 M20=9.51', macdLabel:'将死叉', macdCls:'td', macdVals:'DIF=0.244 DEA=0.199', kdjLabel:'J=76.4', kdjCls:'tr', kdjSub:'死叉', kdjDesc:'空头信号 · 短线看跌', kdVals:'K=81.3 D=83.8', tdNum:'2↓', tdCls:'', tdSub:'', tdDesc:'', rsiVal:'52.7', rsiDesc:'正常偏强 · 趋势中段', sectorUp:'—', sectorDown:'—', sectorRatio:'—', week:'+1.1%', forecast:'+0.45%', conf:'conf 30', action:'减仓', actionColor:'#F87171' },
-];
-STATIC_DATA.rows = SNAPSHOT_ROWS;
 
 // ============ 后端数据 → 渲染格式适配 ============
 // 兼容两种输入：后端 API 行（today_pct_change / td 嵌套对象）与静态快照行（pct / tdNum 平铺）
@@ -365,20 +325,41 @@ function render(data) {
 }
 
 // ============ 数据加载 ============
+function renderUnavailable(message) {
+  $('#app').innerHTML = `
+  <div class="header">
+    <div class="header-left">
+      <h1>K线企稳分析看板</h1>
+      <div class="subtitle">ETF / LOF 场内研究 · 技术指标 + 板块宽度 + 历史形态预测</div>
+      <div class="disclaimer">※ 仅为系统根据行情与历史样本生成的研究结果，不构成任何投资操作建议。</div>
+    </div>
+  </div>
+  <div style="padding:48px 24px;text-align:center;">
+    <div style="font-size:15px;color:var(--text,#cfe3f5);font-weight:600;margin-bottom:8px">数据暂不可用</div>
+    <div style="font-size:12px;color:var(--text-muted,#8ba0b5);margin-bottom:4px">${esc(message || '后端数据源拉取失败或会话已失效')}</div>
+    <div style="font-size:11px;color:var(--text-dim,#5f7a95);margin-bottom:16px">本页不提供任何离线静态行情；请检查网络或重新登录后重试。</div>
+    <button id="klineRetryButton" style="background:#152d3a;color:#58e6db;border:1px solid #1f364d;padding:6px 18px;border-radius:4px;cursor:pointer;font-size:12px">重试</button>
+  </div>`;
+  const retry = document.querySelector('#klineRetryButton');
+  if (retry) retry.addEventListener('click', loadSummary);
+}
+
 async function loadSummary() {
   $('#app').innerHTML = '<div style="padding:60px;text-align:center;color:var(--text-muted)"><div class="spinner" style="width:28px;height:28px;border-radius:50%;border:2px solid currentColor;border-top-color:transparent;animation:spin .8s linear infinite;margin:0 auto 12px"></div>正在计算 K 线企稳分析…</div>';
   try {
-    const token = localStorage.getItem('fundDecisionToken') || '';
-    const headers = new Headers();
-    if (token) headers.set('Authorization', `Bearer ${token}`);
-    const response = await fetch('/api/workbench/kline/summary', { headers, credentials: 'same-origin' });
+    // 认证统一走 HttpOnly Cookie（same-origin 自动携带）；不使用任何 localStorage Token。
+    const response = await fetch('/api/workbench/kline/summary', { credentials: 'same-origin' });
+    if (response.status === 401) {
+      renderUnavailable('会话已失效，请先在企稳决策台登录');
+      return;
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     render(data);
   } catch (error) {
-    // API 不可用 -> 回退到静态快照
-    console.warn('kline API 不可用，回退静态快照:', error.message);
-    render(STATIC_DATA);
+    // 数据真实性契约：失败只显示不可用态，绝不回退静态行情。
+    console.warn('kline API 不可用:', error.message);
+    renderUnavailable(`后端接口调用失败（${error.message}）`);
   }
 }
 

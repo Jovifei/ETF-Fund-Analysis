@@ -141,3 +141,10 @@ def test_registration_validation_constraints(client: TestClient) -> None:
         json={"identifier": "validuser", "password": "valid_password_2026", "invite_code": "  "},
     )
     assert blank_code.status_code == 422
+
+
+def test_registration_defaults_are_fail_closed() -> None:
+    """P0 安全回归：未显式配置时注册必须默认关闭，且不存在可用的默认邀请码。"""
+    settings = Settings(_env_file=None, auth_enabled=True)
+    assert settings.registration_enabled is False
+    assert settings.registration_invite_code == ""
