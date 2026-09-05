@@ -31,7 +31,7 @@ def test_dashboard_api_and_static_assets(bootstrapped):
         bars = client.get("/api/instruments/510300.SH/bars?limit=25")
         assert bars.status_code == 200 and len(bars.json()) == 25
         index = client.get("/")
-        assert index.status_code == 200 and "ETF / LOF 决策台" in index.text
+        assert index.status_code == 200 and "ETF 决策 · 总览" in index.text
         script = client.get("/assets/app.js")
         assert script.status_code == 200 and "connectEvents" in script.text
         reports = client.get("/api/reports")

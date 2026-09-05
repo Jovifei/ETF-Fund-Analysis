@@ -76,3 +76,17 @@ def test_etf_1430_required_operational_files_exist():
     ]
     missing = [item for item in required if not (root / item).is_file()]
     assert missing == []
+
+
+def test_etf_detail_page_route_and_contract(bootstrapped):
+    """PR-C：全站唯一 ETF 详情页 /etf/{ts_code}（决策表/板块/持仓/14:30 点击标的的统一入口）。"""
+    with TestClient(app) as client:
+        page = client.get("/etf/512480.SH")
+        assert page.status_code == 200
+        assert "ETF 详情 · 研究研判台" in page.text
+        assert 'src="/assets/etf_detail.js' in page.text
+        assert "退出登录" in page.text
+        script = client.get("/assets/etf_detail.js")
+        assert script.status_code == 200
+        assert "/api/workbench/1430/" in script.text
+        assert "预测情景 · 非实际结果" in script.text

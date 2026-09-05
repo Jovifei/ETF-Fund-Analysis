@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ETF 详情 · 研究研判台</title>
+  <link rel="stylesheet" href="/assets/etf_1430_workbench.css?v=0.2.0">
+</head>
+<body>
+  <div id="authOverlay" class="overlay hidden" role="dialog" aria-modal="true">
+    <form id="authForm" class="modal auth-card">
+      <div class="eyebrow">PRIVATE RESEARCH</div>
+      <h1>登录私有研究看板</h1>
+      <p>账户密码只用于服务器验证，浏览器不保存会话令牌。</p>
+      <input id="identifierInput" type="text" autocomplete="username" placeholder="用户名或邮箱" required>
+      <input id="passwordInput" type="password" autocomplete="current-password" placeholder="密码" required>
+      <button class="primary" type="submit">进入详情页</button>
+      <div id="authError" class="error"></div>
+    </form>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="mark">ETF</div>
+      <div><strong>ETF 详情 · 研究研判台</strong><span>中国场内 ETF / LOF · 研究模式</span></div>
+    </div>
+    <div class="top-actions">
+      <a class="ghost link" href="/" title="返回决策总览">🎯 决策</a>
+      <a class="ghost link" href="/workbench/1430" title="14:30 尾盘模式">⏱️ 14:30 尾盘</a>
+      <a class="ghost link" href="/legacy" title="研究中心">🔬 研究中心</a>
+      <button id="refreshButton" class="ghost">刷新</button>
+      <button id="lockButton" class="ghost">退出登录</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="hero panel">
+      <div>
+        <div class="eyebrow">ACTUAL HISTORY + FORECAST SCENARIO · NO AUTOMATIC ORDERS</div>
+        <h1 id="detailTitle">加载中…</h1>
+        <p id="detailSub" class="muted">未来蜡烛为条件化情景可视化，不是实际未来 OHLC；所有内容仅为研究提示，非操作指令。</p>
+      </div>
+      <div id="detailAction" class="hero-meta"></div>
+    </section>
+
+    <section id="detailWarnings" class="warning panel"></section>
+    <section id="detailScores" class="score-grid"></section>
+    <div class="mode-tabs" id="modeTabs"></div>
+    <div class="chart-shell panel">
+      <canvas id="candleCanvas" width="1400" height="610" aria-label="历史及预测情景蜡烛图"></canvas>
+      <div class="chart-legend">
+        <span><i class="dot actual-up"></i>历史上涨</span>
+        <span><i class="dot actual-down"></i>历史下跌</span>
+        <span><i class="dot forecast"></i>未来预测情景</span>
+        <span><i class="line support"></i>支撑</span>
+        <span><i class="line resistance"></i>压力</span>
+      </div>
+    </div>
+    <div class="detail-grid">
+      <section class="subpanel panel"><h3>1 / 3 / 5 / 10 日预测</h3><div id="forecastCards" class="forecast-grid"></div></section>
+      <section class="subpanel panel"><h3>支撑 / 压力依据</h3><div id="levelTable" class="level-table"></div></section>
+      <section class="subpanel panel"><h3>技术指标快照</h3><div id="indicatorGrid" class="indicator-grid"></div></section>
+      <section class="subpanel panel"><h3>新闻与风险证据</h3><div id="newsList" class="news-list"></div></section>
+    </div>
+  </main>
+
+  <script src="/assets/etf_detail.js?v=0.1.0" defer></script>
+</body>
+</html>

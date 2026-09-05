@@ -28,8 +28,10 @@ def test_reference_board_is_primary_and_legacy_is_preserved() -> None:
     compatibility = client.get("/workbench/1430", follow_redirects=False)
 
     assert primary.status_code == 200
-    assert "K线企稳分析看板" in primary.text
-    assert "盘中实时 v5" in primary.text
+    # 命名统一（修复方案 PR-C）：/ 页一页一名「ETF 决策 · 总览」
+    assert "ETF 决策 · 总览" in primary.text
+    assert "K线企稳分析看板" not in primary.text
+    assert "企稳" not in primary.text
     assert "gradeCounters" in primary.text
     assert "tickerStrip" in primary.text
     assert "referenceLegend" in primary.text

@@ -111,6 +111,12 @@ def kline_stabilization() -> FileResponse:
     return FileResponse(STATIC_DIR / "kline_stabilization.html", media_type="text/html; charset=utf-8")
 
 
+@app.get("/etf/{ts_code}", include_in_schema=False)
+def etf_detail(ts_code: str) -> FileResponse:
+    # 全站唯一的 ETF 详情研判台：决策表 / 板块 / 持仓 / 14:30 工作台点击标的都进入这里。
+    return FileResponse(STATIC_DIR / "etf_detail.html", media_type="text/html; charset=utf-8")
+
+
 @app.get("/assets/index.html", include_in_schema=False)
 def static_legacy_index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html", media_type="text/html; charset=utf-8")
