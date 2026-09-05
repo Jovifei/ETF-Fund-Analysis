@@ -40,9 +40,13 @@ def test_etf_1430_summary_and_detail_contract(bootstrapped, db_session):
 
 def test_etf_1430_http_and_static_contract(bootstrapped):
     with TestClient(app) as client:
-        tail = client.get("/workbench/1430", follow_redirects=False)
+        tail = client.get("/decision/1430", follow_redirects=False)
         assert tail.status_code == 200
         assert "14:30 尾盘模式" in tail.text
+
+        compatibility = client.get("/workbench/1430", follow_redirects=False)
+        assert compatibility.status_code == 307
+        assert compatibility.headers["location"] == "/decision/1430"
 
         legacy = client.get("/legacy", follow_redirects=False)
         assert legacy.status_code == 307
@@ -59,6 +63,7 @@ def test_etf_1430_http_and_static_contract(bootstrapped):
         assert 'href="/legacy"' not in home.text
         assert 'href="/holdings"' in home.text
         assert 'href="/research"' in home.text
+        assert 'href="/decision/1430"' in home.text
         assert "尾盘模式" in home.text
         assert "统一决策台" in home.text
 
@@ -95,7 +100,7 @@ def test_etf_1430_required_operational_files_exist():
 
 
 def test_etf_detail_page_route_and_contract(bootstrapped):
-    """PR-C：全站唯一 ETF 详情页 /etf/{ts_code}（决策表/板块/持仓/14:30 点击标的的统一入口）。"""
+    """全站唯一 ETF 详情页 /etf/{ts_code}（决策/板块/持仓/14:30 共用）。"""
     with TestClient(app) as client:
         page = client.get("/etf/512480.SH")
         assert page.status_code == 200
