@@ -8,6 +8,9 @@ from app.services.kline_stabilization_service import KlineStabilizationService
 from app.services.signal_center_service import SignalCenterService
 
 
+APP_SHELL_ASSET = "/assets/app_shell.js?v=0.8.0-nav1"
+
+
 def test_all_research_entrypoints_are_accessible_and_render_expected_surfaces() -> None:
     client = TestClient(app)
     expected_matches = {
@@ -29,6 +32,38 @@ def test_all_research_entrypoints_are_accessible_and_render_expected_surfaces() 
         response = client.get(retired, follow_redirects=False)
         assert response.status_code == 307, f"{retired} expected 307, got {response.status_code}"
         assert response.headers["location"] == "/boards"
+
+
+def test_navigation_shell_has_four_primary_entries_plus_1430_task() -> None:
+    client = TestClient(app)
+
+    # 用户可记忆的稳定入口：四个一级业务入口 + 一个 14:30 任务入口。
+    portfolio = client.get("/portfolio", follow_redirects=False)
+    research = client.get("/research", follow_redirects=False)
+    assert portfolio.status_code == 307
+    assert portfolio.headers["location"] == "/legacy#holdings"
+    assert research.status_code == 307
+    assert research.headers["location"] == "/legacy#signals"
+
+    # 每个用户可见页面都加载同一份 App Shell；不再由各页面各自定义跳转语义。
+    for path in ("/", "/boards", "/legacy", "/workbench/1430", "/etf/510300.SH"):
+        response = client.get(path, follow_redirects=False)
+        assert response.status_code == 200
+        assert APP_SHELL_ASSET in response.text
+
+    shell = client.get("/assets/app_shell.js")
+    assert shell.status_code == 200
+    for required in (
+        "/portfolio",
+        "/research",
+        "/workbench/1430",
+        ".decision-data-row[data-code]",
+        "#decisionRows tr[data-code]",
+        "#gradeGroups tr[data-code]",
+        "#holdings",
+        "#signals",
+    ):
+        assert required in shell.text
 
 
 def test_all_current_research_surfaces_share_the_same_action(bootstrapped, db_session) -> None:
