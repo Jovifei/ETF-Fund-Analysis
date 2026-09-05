@@ -110,12 +110,32 @@ def etf_1430_workbench() -> FileResponse:
 def kline_stabilization() -> RedirectResponse:
     # PR-I：K线研判页下线——K线/支撑压力由 /etf/{code} 详情台承接，
     # 行业/概念/全市场宽度三列由 /boards 承接；旧地址 307 保留一个版本。
-    return RedirectResponse("/boards", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    return RedirectResponse("/", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get("/boards", include_in_schema=False)
 def boards_page() -> FileResponse:
     return FileResponse(STATIC_DIR / "boards.html", media_type="text/html; charset=utf-8")
+
+
+@app.get("/holdings", include_in_schema=False)
+def holdings_entry() -> RedirectResponse:
+    return RedirectResponse("/legacy#holdings", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+
+@app.get("/research", include_in_schema=False)
+def research_entry() -> RedirectResponse:
+    return RedirectResponse("/legacy#signals", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+
+@app.get("/research/news", include_in_schema=False)
+def research_news_entry() -> RedirectResponse:
+    return RedirectResponse("/legacy#news", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+
+@app.get("/system", include_in_schema=False)
+def system_entry() -> RedirectResponse:
+    return RedirectResponse("/legacy#system", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get("/etf/{ts_code}", include_in_schema=False)
@@ -136,7 +156,7 @@ def static_etf_1430_workbench() -> FileResponse:
 
 @app.get("/assets/kline_stabilization.html", include_in_schema=False)
 def static_kline_stabilization() -> RedirectResponse:
-    return RedirectResponse("/boards", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    return RedirectResponse("/", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 # Mount static resources after exact legacy-HTML redirects so old bookmarks cannot

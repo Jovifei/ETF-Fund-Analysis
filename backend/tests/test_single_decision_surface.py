@@ -24,11 +24,11 @@ def test_all_research_entrypoints_are_accessible_and_render_expected_surfaces() 
         assert response.status_code == 200, f"{path} failed with {response.status_code}"
         assert expected_token in response.text, f"{expected_token} not in {path}"
 
-    # PR-I：K线研判页下线——307 到 /boards（详情台承接 K 线，板块页承接宽度）
+    # K线研判页下线：无标的上下文的旧入口回到决策首页；具体 ETF 统一由 /etf/{code} 承接。
     for retired in ("/workbench/kline", "/assets/kline_stabilization.html"):
         response = client.get(retired, follow_redirects=False)
         assert response.status_code == 307, f"{retired} expected 307, got {response.status_code}"
-        assert response.headers["location"] == "/boards"
+        assert response.headers["location"] == "/"
 
 
 def test_all_current_research_surfaces_share_the_same_action(bootstrapped, db_session) -> None:
