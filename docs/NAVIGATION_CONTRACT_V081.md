@@ -50,17 +50,24 @@
 - `/workbench/kline` -> `/`
 - `/assets/kline_stabilization.html` -> `/`
 
-旧 hash 书签仍由兼容壳识别，但新导航不再生成 `/legacy` 或 `/workbench/*` URL。后续独立 PR 可以把 `/holdings`、`/research`、`/system` 拆成真正独立的页面组件；本 PR 先解决用户跳转心智，不冒险重写大体量 `app.js`。
+旧 hash 书签继续兼容，并在页面加载后自动归一到一等 URL：
+
+- `/legacy#holdings`（浏览器跟随 307 后为 `/research#holdings`）-> `/holdings`
+- `/legacy#news` -> `/research/news`
+- `/legacy#system` -> `/system`
+- `/legacy#signals` -> `/research`
+
+新导航不再生成 `/legacy`、hash 工作区地址或 `/workbench/*` URL。后续独立 PR 可以把 `/holdings`、`/research`、`/system` 拆成真正独立的页面组件；本轮先解决用户跳转心智，不冒险重写大体量 `app.js`。
 
 ## 统一 ETF 详情
 
-决策表、板块成员、持仓、14:30 尾盘模式中的 ETF 都应进入：
+决策表、板块成员、持仓、14:30 尾盘模式，以及研究中心的信号分级、板块代理和机会/风险/止盈前排中的 ETF，都统一进入：
 
 ```text
 /etf/{ts_code}
 ```
 
-不再维护 Kline 全市场页或各页面自己的第二个详情入口。
+研究壳使用 `legacy_route.js` 的捕获阶段委托接管上述历史动态列表点击；这样无需继续扩散或复制旧 `openDetail()` 弹层逻辑。旧弹层代码暂时保留作兼容，不再作为正常导航入口。
 
 ## 14:30 数据与动作合同
 
