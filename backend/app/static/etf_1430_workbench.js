@@ -20,11 +20,10 @@ function pctRatio(value, digits = 2) { return number(value) ? `${Number(value) >
 function pctPoint(value, digits = 2) { return number(value) ? `${Number(value) >= 0 ? '+' : ''}${Number(value).toFixed(digits)}%` : '—'; }
 function color(value) { return !number(value) ? 'neutral' : Number(value) >= 0 ? 'up' : 'down'; }
 function actionClass(action) {
-  if (action === '买入候选') return 'buy';
+  if (action === '可加仓' || action === '可入场') return 'buy';
   if (action === '可试探') return 'probe';
-  if (action === '持有/观察') return 'hold';
-  if (action === '减仓候选') return 'reduce';
-  if (action === '回避') return 'avoid';
+  if (action === '观望') return 'hold';
+  if (action === '减仓') return 'reduce';
   return 'data';
 }
 function timeText(value) {
@@ -62,11 +61,11 @@ function renderSummary(data) {
   state.summary = data;
   const counts = data.counts || {};
   $('#summaryCards').innerHTML = [
-    summaryCard('买入候选', counts['买入候选'] || 0, '综合分与风险收益比达标', '#27e48a'),
-    summaryCard('可试探', counts['可试探'] || 0, '信号尚需价格确认', '#ffb020'),
-    summaryCard('持有 / 观察', counts['持有/观察'] || 0, '不追高，等待结构变化', '#4aa8ff'),
-    summaryCard('减仓候选', counts['减仓候选'] || 0, '持仓风险需要复核', '#ff5b61'),
-    summaryCard('回避', counts['回避'] || 0, '结构或动量不利', '#b879ff'),
+    summaryCard('可加仓', counts['可加仓'] || 0, 'canonical 五档 · 加仓候选', '#27e48a'),
+    summaryCard('可入场', counts['可入场'] || 0, 'canonical 五档 · 入场候选', '#4aa8ff'),
+    summaryCard('可试探', counts['可试探'] || 0, 'canonical 五档 · 弱信号', '#ffb020'),
+    summaryCard('观望', counts['观望'] || 0, 'canonical 五档 · 等待确认', '#8aa4bd'),
+    summaryCard('减仓', counts['减仓'] || 0, 'canonical 五档 · 风险复核', '#ff5b61'),
     summaryCard('标的总数', (data.rows || []).length, '自动订单永久关闭', '#28d7e5'),
   ].join('');
   $('#generatedAt').textContent = `生成：${timeText(data.generated_at)}`;
@@ -96,7 +95,7 @@ function renderRows(rows) {
       <td><span class="chip ${actionClass(row.action)}">${escapeHtml(row.action)}</span>${row.actionable ? '' : '<div class="instrument-code">研究态</div>'}</td>
     </tr>`;
   }).join('');
-  body.querySelectorAll('tr[data-code]').forEach(row => row.addEventListener('click', () => openDetail(row.dataset.code)));
+  body.querySelectorAll('tr[data-code]').forEach(row => row.addEventListener('click', () => { window.location.assign(`/etf/${encodeURIComponent(row.dataset.code)}`); }));
 }
 
 async function loadSummary() {
@@ -121,7 +120,7 @@ function renderForecasts(row) {
     <h4>${escapeHtml(item.horizon)} 日</h4>
     <div class="main ${color(item.expected_return)}">${pctRatio(item.expected_return)}</div>
     <dl>
-      <dt>上涨概率</dt><dd>${number(item.p_up) ? `${(Number(item.p_up)*100).toFixed(1)}%` : '—'}</dd>
+      <dt>${item.calibration_status === 'calibrated' ? '上涨概率' : '历史上涨占比'}</dt><dd>${number(item.p_up) ? `${(Number(item.p_up)*100).toFixed(1)}%` : '—'}</dd>
       <dt>终点中位价</dt><dd>${fmt(item.terminal_price_q50,3)}</dd>
       <dt>路径支撑</dt><dd class="down">${fmt(item.path_low_price_q50,3)}</dd>
       <dt>路径压力</dt><dd class="up">${fmt(item.path_high_price_q50,3)}</dd>

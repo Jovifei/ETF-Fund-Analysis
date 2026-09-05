@@ -40,12 +40,13 @@ COPY config /app/config
 COPY scripts /app/scripts
 COPY --from=builder /wheels /wheels
 
-# Install the already-built project wheel plus its market extras from the
-# builder wheelhouse. Do not rebuild the local source tree in the runtime
-# stage: that would re-enter PEP-517 build isolation and require setuptools,
-# Rust/C toolchains and other build-only dependencies in the production image.
+# Install the project wheel produced by this exact build plus its market extras
+# from the builder wheelhouse. Do not pin the application version here: the
+# wheel filename/version is owned by pyproject.toml, and a second hard-coded
+# Docker version can silently drift during a release. --no-index still keeps
+# the runtime install confined to the audited wheelhouse.
 RUN pip install --no-cache-dir --no-index --find-links=/wheels \
-        "china-fund-decision[market]==0.7.0" \
+        "china-fund-decision[market]" \
     && rm -rf /wheels
 
 RUN useradd --create-home --uid 10001 appuser \

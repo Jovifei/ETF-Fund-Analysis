@@ -34,6 +34,10 @@ jobs:
         run: |
           node --check backend/app/static/app.js
           node --check backend/app/static/decision_board_workbuddy.js
+          node --check backend/app/static/boards.js
+          node --check backend/app/static/etf_1430_workbench.js
+          node --check backend/app/static/etf_detail.js
+          node --check backend/app/static/legacy_route.js
           node --check backend/app/static/kline_stabilization.js
       - name: Decision board JavaScript tests
         run: node --test backend/app/static/decision_board_workbuddy.test.js

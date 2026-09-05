@@ -20,15 +20,17 @@ REFERENCE_COLUMNS = (
 )
 
 
-def test_reference_board_is_primary_and_legacy_is_preserved() -> None:
+def test_reference_board_is_primary_and_research_is_task_surface() -> None:
     client = TestClient(app)
 
     primary = client.get("/")
-    legacy = client.get("/legacy")
+    legacy = client.get("/legacy", follow_redirects=False)
+    research = client.get("/research", follow_redirects=False)
     compatibility = client.get("/workbench/1430", follow_redirects=False)
+    tail_mode = client.get("/decision/1430", follow_redirects=False)
 
     assert primary.status_code == 200
-    # 命名统一（修复方案 PR-C）：/ 页一页一名「ETF 决策 · 总览」
+    # 命名统一：/ 页一页一名「ETF 决策 · 总览」。
     assert "ETF 决策 · 总览" in primary.text
     assert "K线企稳分析看板" not in primary.text
     assert "企稳" not in primary.text
@@ -41,11 +43,18 @@ def test_reference_board_is_primary_and_legacy_is_preserved() -> None:
     assert "/assets/decision_board_workbuddy.js" in primary.text
     assert "workbuddy.link" not in primary.text
 
-    assert legacy.status_code == 200
-    assert "ETF / LOF 决策台" in legacy.text
+    # /legacy is historical compatibility only; normal navigation uses /research.
+    assert legacy.status_code == 307
+    assert legacy.headers["location"] == "/research"
+    assert research.status_code == 200
+    assert "ETF 研究中心" in research.text
+    assert "决策看板（兼容）" in research.text
 
-    assert compatibility.status_code == 200
-    assert "ETF 14:30 决策工作台" in compatibility.text
+    # 14:30 is a secondary Decision mode. The historical workbench URL only redirects.
+    assert compatibility.status_code == 307
+    assert compatibility.headers["location"] == "/decision/1430"
+    assert tail_mode.status_code == 200
+    assert "14:30 尾盘模式" in tail_mode.text
 
 
 def test_reference_board_assets_and_columns_are_same_origin() -> None:
