@@ -115,8 +115,32 @@ function renderModes(row) {
   }));
 }
 function filteredLevels(row) {
-  return (row.support_resistance?.levels || []).filter(level => (level.methods || []).some(method => modeMatches(method, state.mode))).sort((a,b)=>Math.abs(a.distance_pct)-Math.abs(b.distance_pct)).slice(0,8);
+  return (row.support_resistance?.levels || []).filter(level => (level.methods || []).some(method => modeMatches(method, state.mode))).sort((a,b)=>Math.abs(a.distance_pct)-Math.abs(b.distance_pct));
 }
+
+// ---------- 图表视口（PR-F：缩放 / 平移 / 十字线 / 半透明支撑压力区） ----------
+const chartView = { start: 0, end: 0, crosshair: null, dragging: false, dragOriginX: 0, dragStart: 0, hintShown: false };
+const MIN_VISIBLE_BARS = 10;
+
+function resetViewport(total) {
+  chartView.start = 0;
+  chartView.end = Math.max(total, 1);
+}
+
+function visibleSlice(data) {
+  const total = data.length;
+  if (chartView.end <= chartView.start || chartView.end > total || chartView.start < 0) resetViewport(total);
+  return data.slice(chartView.start, chartView.end);
+}
+
+function zoneBounds(level, sr) {
+  const tolerance = Number(sr?.default_zone_tolerance) || 0;
+  let low = Number(level.zone_low), high = Number(level.zone_high);
+  if (!Number.isFinite(low) || !Number.isFinite(high)) { low = Number(level.price) - tolerance; high = Number(level.price) + tolerance; }
+  if (high - low < tolerance * 0.4) { const mid = (low + high) / 2; low = mid - tolerance * 0.2; high = mid + tolerance * 0.2; }
+  return [low, high];
+}
+
 function drawChart(row) {
   const canvas = $('#candleCanvas');
   if (!canvas || !row?.chart) return;
@@ -125,35 +149,129 @@ function drawChart(row) {
   const cssWidth = Math.max(320, rect.width || 1200), cssHeight = Math.max(300, rect.height || 520);
   canvas.width = Math.round(cssWidth * ratio); canvas.height = Math.round(cssHeight * ratio);
   const ctx = canvas.getContext('2d'); ctx.setTransform(ratio,0,0,ratio,0,0); ctx.clearRect(0,0,cssWidth,cssHeight);
+
   const historical = row.chart.historical || [], forecast = row.chart.forecast_scenario || [];
   const data = [...historical, ...forecast]; if (!data.length) return;
+  if (!chartView.end) resetViewport(data.length);
+  const sr = row.support_resistance || {};
   const levels = filteredLevels(row);
-  let minPrice = Math.min(...data.map(item=>Number(item.low)), ...levels.map(item=>Number(item.price)));
-  let maxPrice = Math.max(...data.map(item=>Number(item.high)), ...levels.map(item=>Number(item.price)));
+  const visible = visibleSlice(data);
+  const offset = chartView.start;
+
+  let minPrice = Math.min(...visible.map(item=>Number(item.low)), ...levels.map(item=>Number(item.price)), ...levels.map(item=>zoneBounds(item, sr)[0]));
+  let maxPrice = Math.max(...visible.map(item=>Number(item.high)), ...levels.map(item=>Number(item.price)), ...levels.map(item=>zoneBounds(item, sr)[1]));
   const pad = Math.max((maxPrice-minPrice)*0.08, maxPrice*0.005); minPrice -= pad; maxPrice += pad;
   const margin = {left:64,right:86,top:25,bottom:42};
   const plotW = cssWidth-margin.left-margin.right, plotH=cssHeight-margin.top-margin.bottom;
   const y = price => margin.top + (maxPrice-price)/(maxPrice-minPrice)*plotH;
-  const step = plotW/Math.max(data.length,1); const x = i => margin.left+(i+.5)*step;
+  const step = plotW/Math.max(visible.length,1);
+  const x = i => margin.left+(i+0.5)*step;
+  const xAbsolute = absoluteIndex => x(absoluteIndex - offset);
+
   ctx.font='11px system-ui'; ctx.strokeStyle='#1e2a3b'; ctx.fillStyle='#71849e'; ctx.lineWidth=1;
   for(let i=0;i<=6;i++){const py=margin.top+i*plotH/6;ctx.beginPath();ctx.moveTo(margin.left,py);ctx.lineTo(margin.left+plotW,py);ctx.stroke();const price=maxPrice-i*(maxPrice-minPrice)/6;ctx.fillText(price.toFixed(3),margin.left+plotW+8,py+4)}
-  const boundaryX = margin.left + historical.length*step;
-  if(forecast.length){ctx.fillStyle='rgba(123,64,232,.07)';ctx.fillRect(boundaryX,margin.top,plotW-(boundaryX-margin.left),plotH);ctx.save();ctx.setLineDash([6,5]);ctx.strokeStyle='#b879ff';ctx.beginPath();ctx.moveTo(boundaryX,margin.top);ctx.lineTo(boundaryX,margin.top+plotH);ctx.stroke();ctx.restore();ctx.fillStyle='#c69aff';ctx.fillText('预测情景 · 非实际结果',Math.min(boundaryX+8,cssWidth-170),margin.top+16)}
-  levels.forEach((level,index)=>{const py=y(Number(level.price));ctx.save();ctx.setLineDash([5,4]);ctx.strokeStyle=level.kind==='support'?'#27e48a':'#ff5b61';ctx.globalAlpha=.75;ctx.beginPath();ctx.moveTo(margin.left,py);ctx.lineTo(margin.left+plotW,py);ctx.stroke();ctx.restore();ctx.fillStyle=level.kind==='support'?'#47ef9c':'#ff777b';ctx.fillText(`${level.kind==='support'?'支':'压'} ${Number(level.price).toFixed(3)}`,margin.left+4,py-4-index%2*11)});
+
+  // 半透明支撑/压力区域（先画区域，再画蜡烛）
+  levels.forEach(level=>{
+    const [low, high] = zoneBounds(level, sr);
+    const top = y(Math.max(low, high)), height = Math.max(2, Math.abs(y(low)-y(high)));
+    ctx.save();
+    ctx.globalAlpha = 0.16;
+    ctx.fillStyle = level.kind==='support' ? '#27e48a' : '#ff5b61';
+    ctx.fillRect(margin.left, top, plotW, height);
+    ctx.restore();
+  });
+
+  // 预测分界
+  const histVisibleEnd = Math.max(0, historical.length - offset);
+  const boundaryX = margin.left + histVisibleEnd*step;
+  if(forecast.length && histVisibleEnd > 0 && histVisibleEnd < visible.length){
+    ctx.fillStyle='rgba(123,64,232,.07)';ctx.fillRect(boundaryX,margin.top,cssWidth-margin.right-boundaryX,plotH);
+    ctx.save();ctx.setLineDash([6,5]);ctx.strokeStyle='#b879ff';ctx.beginPath();ctx.moveTo(boundaryX,margin.top);ctx.lineTo(boundaryX,margin.top+plotH);ctx.stroke();ctx.restore();
+    ctx.fillStyle='#c69aff';ctx.fillText('预测情景 · 非实际结果',Math.min(boundaryX+8,cssWidth-170),margin.top+16);
+  }
+
+  // 支撑/压力中枢线（区域之上再画细线 + 标签）
+  levels.slice(0, 14).forEach((level,index)=>{
+    const py=y(Number(level.price));
+    ctx.save();ctx.setLineDash([5,4]);ctx.strokeStyle=level.kind==='support'?'#27e48a':'#ff5b61';ctx.globalAlpha=.75;ctx.beginPath();ctx.moveTo(margin.left,py);ctx.lineTo(margin.left+plotW,py);ctx.stroke();ctx.restore();
+    ctx.fillStyle=level.kind==='support'?'#47ef9c':'#ff777b';
+    ctx.fillText(`${level.kind==='support'?'支':'压'} ${Number(level.price).toFixed(3)}`,margin.left+4,py-4-index%2*11);
+  });
+
+  // 趋势线（综合/均线模式）
   const trendLines = row.support_resistance?.trend_lines || [];
-  trendLines.filter(line=>state.mode==='综合'||state.mode==='均线').forEach(line=>{const startX=x(Math.max(0,historical.length-1-(line.end_index-line.start_index)));const endX=boundaryX+Math.min(forecast.length,5)*step;ctx.strokeStyle=line.label.includes('支撑')?'#28d7e5':'#ffb020';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(startX,y(Number(line.start_price)));ctx.lineTo(endX,y(Number(line.projected_price)));ctx.stroke()});
-  data.forEach((item,index)=>{const px=x(index);const open=Number(item.open),close=Number(item.close),high=Number(item.high),low=Number(item.low);const isForecast=Boolean(item.is_forecast);const rising=close>=open;const bodyColor=isForecast?'#9b6cff':rising?'#ff5b61':'#27e48a';ctx.strokeStyle=bodyColor;ctx.fillStyle=bodyColor;ctx.globalAlpha=isForecast?.76:1;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,y(high));ctx.lineTo(px,y(low));ctx.stroke();const top=y(Math.max(open,close)),bottom=y(Math.min(open,close));const width=Math.max(2,Math.min(9,step*.62));ctx.fillRect(px-width/2,top,width,Math.max(1,bottom-top));ctx.globalAlpha=1});
-  ctx.fillStyle='#71849e';const labelEvery=Math.max(1,Math.ceil(data.length/8));data.forEach((item,index)=>{if(index%labelEvery===0||index===data.length-1){ctx.save();ctx.translate(x(index),cssHeight-15);ctx.rotate(-.35);ctx.fillText(String(item.date).slice(5),0,0);ctx.restore()}});
+  trendLines.filter(line=>state.mode==='综合'||state.mode==='均线').forEach(line=>{
+    const startX=xAbsolute(Math.max(0,historical.length-1-(line.end_index-line.start_index)));
+    const endX=xAbsolute(Math.min(data.length-1, historical.length + Math.min(forecast.length,5)-1));
+    if (endX <= margin.left || startX >= cssWidth-margin.right) return;
+    ctx.strokeStyle=line.label.includes('支撑')?'#28d7e5':'#ffb020';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(startX,y(Number(line.start_price)));ctx.lineTo(endX,y(Number(line.projected_price)));ctx.stroke();ctx.lineWidth=1;
+  });
+
+  // 蜡烛（可见窗口）
+  visible.forEach((item,index)=>{const px=x(index);const open=Number(item.open),close=Number(item.close),high=Number(item.high),low=Number(item.low);const isForecast=Boolean(item.is_forecast);const rising=close>=open;const bodyColor=isForecast?'#9b6cff':rising?'#ff5b61':'#27e48a';ctx.strokeStyle=bodyColor;ctx.fillStyle=bodyColor;ctx.globalAlpha=isForecast?.76:1;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px,y(high));ctx.lineTo(px,y(low));ctx.stroke();const top=y(Math.max(open,close)),bottom=y(Math.min(open,close));const width=Math.max(2,Math.min(9,step*.62));ctx.fillRect(px-width/2,top,width,Math.max(1,bottom-top));ctx.globalAlpha=1});
+
+  // 时间轴
+  ctx.fillStyle='#71849e';const labelEvery=Math.max(1,Math.ceil(visible.length/8));visible.forEach((item,index)=>{if(index%labelEvery===0||index===visible.length-1){ctx.save();ctx.translate(x(index),cssHeight-15);ctx.rotate(-.35);ctx.fillText(String(item.date).slice(5),0,0);ctx.restore()}});
+
+  // 十字光标 + OHLC 提示
+  if (chartView.crosshair) {
+    const cx = chartView.crosshair.x, cy = chartView.crosshair.y;
+    if (cx >= margin.left && cx <= margin.left+plotW && cy >= margin.top && cy <= margin.top+plotH) {
+      ctx.save();ctx.setLineDash([3,3]);ctx.strokeStyle='#8ba0b5';ctx.beginPath();ctx.moveTo(cx,margin.top);ctx.lineTo(cx,margin.top+plotH);ctx.moveTo(margin.left,cy);ctx.lineTo(margin.left+plotW,cy);ctx.stroke();ctx.restore();
+      const hoverIndex = Math.min(visible.length-1, Math.max(0, Math.floor((cx-margin.left)/step)));
+      const item = visible[hoverIndex];
+      if (item) {
+        const lines = [String(item.date), `O ${Number(item.open).toFixed(3)}  H ${Number(item.high).toFixed(3)}`, `L ${Number(item.low).toFixed(3)}  C ${Number(item.close).toFixed(3)}`, item.is_forecast ? '预测情景·非实际' : '实际历史'];
+        const boxW = 210, boxH = 78, boxX = Math.min(cx+12, cssWidth-boxW-6), boxY = Math.min(cy+12, cssHeight-boxH-6);
+        ctx.fillStyle='rgba(10,20,32,.92)';ctx.strokeStyle='#27455f';ctx.beginPath();ctx.roundRect(boxX,boxY,boxW,boxH,6);ctx.fill();ctx.stroke();
+        ctx.fillStyle='#cfe3f5';lines.forEach((line,i)=>ctx.fillText(line,boxX+10,boxY+18+i*16));
+      }
+    }
+  }
+
+  if (!chartView.hintShown) { chartView.hintShown = true; ctx.fillStyle='#5f7a95'; ctx.fillText('滚轮缩放 · 拖拽平移 · 双击复位', margin.left+6, cssHeight-24); }
 }
 
-function renderDetail(row) {
-  state.detail = row; state.mode = '综合';
-  $('#detailTitle').textContent = `${row.name} · ${row.ts_code}`;
-  $('#detailSub').textContent = `${row.theme_l1 || '未分类'} / ${row.theme_l2 || '—'} · 数据日 ${row.as_of_date || '—'} · 现价 ${fmt(row.current_price, 3)}（${pctPoint(row.today_pct_change)}）`;
-  $('#detailAction').innerHTML = `<span class="chip ${actionClass(row.action)}">${escapeHtml(row.action)}</span>
-    <div class="muted" style="margin-top:6px">自动订单永久关闭 · 研究态${row.actionable ? '' : '（非可执行）'}</div>`;
-  $('#detailWarnings').innerHTML = (row.risks || []).map(item=>`• ${escapeHtml(item)}`).join('<br>') || '研究状态正常；仍不构成自动交易指令。';
-  renderScores(row); renderForecasts(row); renderModes(row); renderLevels(row); renderIndicators(row); renderNews(row); drawChart(row);
+function bindChartInteractions() {
+  const canvas = $('#candleCanvas');
+  if (!canvas) return;
+  canvas.addEventListener('wheel', event => {
+    if (!state.detail) return;
+    event.preventDefault();
+    const data = [...(state.detail.chart?.historical||[]), ...(state.detail.chart?.forecast_scenario||[])];
+    const total = data.length; if (!total) return;
+    if (!chartView.end) resetViewport(total);
+    const span = chartView.end - chartView.start;
+    const factor = event.deltaY > 0 ? 1.2 : 1/1.2;
+    const newSpan = Math.max(MIN_VISIBLE_BARS, Math.min(total, Math.round(span*factor)));
+    const rect = canvas.getBoundingClientRect();
+    const ratio = (event.clientX - rect.left - 64) / Math.max(1, rect.width - 150);
+    const anchor = chartView.start + Math.max(0, Math.min(span, Math.round(span*ratio)));
+    let start = Math.round(anchor - (anchor-chartView.start)*factor);
+    start = Math.max(0, Math.min(start, total-newSpan));
+    chartView.start = start; chartView.end = start + newSpan;
+    drawChart(state.detail);
+  }, {passive:false});
+  canvas.addEventListener('mousedown', event => { chartView.dragging = true; chartView.dragOriginX = event.clientX; chartView.dragStart = chartView.start; });
+  window.addEventListener('mouseup', ()=>{ chartView.dragging = false; });
+  canvas.addEventListener('mousemove', event => {
+    const rect = canvas.getBoundingClientRect();
+    const cx = event.clientX-rect.left, cy = event.clientY-rect.top;
+    if (chartView.dragging && state.detail) {
+      const data = [...(state.detail.chart?.historical||[]), ...(state.detail.chart?.forecast_scenario||[])];
+      const total = data.length;
+      const span = chartView.end - chartView.start;
+      const step = Math.max(1,(rect.width-150)/span);
+      const shiftBars = Math.round((chartView.dragOriginX - event.clientX)/step);
+      const start = Math.max(0, Math.min(total-span, chartView.dragStart + shiftBars));
+      chartView.start = start; chartView.end = start + span;
+    }
+    chartView.crosshair = {x: cx, y: cy};
+    if (state.detail) drawChart(state.detail);
+  });
+  canvas.addEventListener('mouseleave', ()=>{ chartView.crosshair = null; chartView.dragging = false; if (state.detail) drawChart(state.detail); });
+  canvas.addEventListener('dblclick', ()=>{ if (state.detail) { resetViewport((state.detail.chart?.historical||[]).length + (state.detail.chart?.forecast_scenario||[]).length); drawChart(state.detail); } });
 }
 
 async function loadDetail() {
@@ -179,6 +297,8 @@ $('#authForm').addEventListener('submit', async event => {
 $('#refreshButton').addEventListener('click', loadDetail);
 $('#lockButton').addEventListener('click', async ()=>{try{await api('/api/auth/logout',{method:'POST'});}catch(_){ } showAuth();});
 window.addEventListener('resize', ()=>{clearTimeout(state.resizeTimer);state.resizeTimer=setTimeout(()=>{if(state.detail)drawChart(state.detail)},120)});
+
+bindChartInteractions();
 
 fetch('/api/auth/me',{credentials:'same-origin'})
   .then(response=>response.ok?response.json():{authenticated:false})

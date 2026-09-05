@@ -179,6 +179,9 @@ def _cluster(candidates: Iterable[_Candidate], *, current: float, tolerance: flo
         methods = sorted({item.method for item in group})
         distance = price / current - 1 if current > 0 else 0
         strength = min(100.0, 14.0 * total_weight + 5.0 * len(methods))
+        # 区域 = 聚类成员的实际价格跨度（半透明区域渲染的依据）。
+        zone_low = min(item.price for item in group)
+        zone_high = max(item.price for item in group)
         levels.append(
             {
                 "price": round(price, 6),
@@ -187,6 +190,9 @@ def _cluster(candidates: Iterable[_Candidate], *, current: float, tolerance: flo
                 "methods": methods,
                 "confirmations": len(group),
                 "distance_pct": round(distance * 100, 3),
+                "zone_low": round(zone_low, 6),
+                "zone_high": round(zone_high, 6),
+                "zone_basis": "clustered_price_span",
             }
         )
     return levels
@@ -227,6 +233,23 @@ def build_support_resistance(
             candidates.append(_Candidate(price, "确认分形高点" if kind == "high" else "确认分形低点", 1.0))
             for method in _indicator_confirmations(frame, index, kind):
                 candidates.append(_Candidate(price, method, 1.25))
+
+    # TD9 价格确认：卖出 setup 计数 >= 8 的 bar 的高点是潜在耗竭压力，
+    # 买入 setup 计数 >= 8 的 bar 的低点是潜在耗竭支撑。计数来自特征 frame
+    # 的逐行 td_buy_setup/td_sell_setup 列；数值本身永远不换算成价格。
+    minimum_index = max(0, len(frame) - lookback_pivots)
+    if "td_sell_setup" in frame.columns:
+        sell_values = frame["td_sell_setup"].fillna(0).astype(float)
+        for index in range(minimum_index, len(frame)):
+            if sell_values.iloc[index] >= 8:
+                price = float(frame.iloc[index]["high"])
+                candidates.append(_Candidate(price, "TD9卖出耗竭确认", 1.1))
+    if "td_buy_setup" in frame.columns:
+        buy_values = frame["td_buy_setup"].fillna(0).astype(float)
+        for index in range(minimum_index, len(frame)):
+            if buy_values.iloc[index] >= 8:
+                price = float(frame.iloc[index]["low"])
+                candidates.append(_Candidate(price, "TD9买入耗竭确认", 1.1))
 
     current_row = frame.iloc[-1]
     for window in (5, 10, 20, 30, 60):
@@ -302,6 +325,7 @@ def build_support_resistance(
         "current_price": round(current, 6),
         "atr14": round(float(atr), 6),
         "cluster_tolerance": round(tolerance, 6),
+        "default_zone_tolerance": round(max(tolerance, float(atr) * 0.15), 6),
         "levels": levels,
         "nearest_support": supports[0] if supports else None,
         "nearest_resistance": resistances[0] if resistances else None,
