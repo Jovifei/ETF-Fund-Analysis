@@ -27,6 +27,7 @@ def test_reference_board_is_primary_and_research_is_task_surface() -> None:
     legacy = client.get("/legacy", follow_redirects=False)
     research = client.get("/research", follow_redirects=False)
     compatibility = client.get("/workbench/1430", follow_redirects=False)
+    tail_mode = client.get("/decision/1430", follow_redirects=False)
 
     assert primary.status_code == 200
     # 命名统一：/ 页一页一名「ETF 决策 · 总览」。
@@ -49,9 +50,11 @@ def test_reference_board_is_primary_and_research_is_task_surface() -> None:
     assert "ETF 研究中心" in research.text
     assert "决策看板（兼容）" in research.text
 
-    # 14:30 remains reachable as a secondary decision mode, not a peer product home.
-    assert compatibility.status_code == 200
-    assert "14:30 尾盘模式" in compatibility.text
+    # 14:30 is a secondary Decision mode. The historical workbench URL only redirects.
+    assert compatibility.status_code == 307
+    assert compatibility.headers["location"] == "/decision/1430"
+    assert tail_mode.status_code == 200
+    assert "14:30 尾盘模式" in tail_mode.text
 
 
 def test_reference_board_assets_and_columns_are_same_origin() -> None:
