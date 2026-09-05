@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.router import router as api_router
@@ -23,6 +23,18 @@ settings = get_settings()
 configure_logging(settings.log_level)
 logger = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+APP_SHELL_ASSET = "/assets/app_shell.js?v=0.8.0-nav1"
+APP_SHELL_TAG = f'<script src="{APP_SHELL_ASSET}" defer></script>'
+
+
+def _page_response(filename: str) -> HTMLResponse:
+    """Serve one static surface with the single shared navigation contract."""
+    html = (STATIC_DIR / filename).read_text(encoding="utf-8")
+    if APP_SHELL_ASSET not in html:
+        if "</body>" not in html:
+            raise RuntimeError(f"static HTML page is missing </body>: {filename}")
+        html = html.replace("</body>", f"  {APP_SHELL_TAG}\n</body>", 1)
+    return HTMLResponse(content=html, media_type="text/html")
 
 
 @asynccontextmanager
@@ -92,18 +104,28 @@ app.include_router(workbench_kline_router)
 
 
 @app.get("/", include_in_schema=False)
-def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "decision_board_workbuddy.html", media_type="text/html; charset=utf-8")
+def index() -> HTMLResponse:
+    return _page_response("decision_board_workbuddy.html")
 
 
 @app.get("/legacy", include_in_schema=False)
-def legacy() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html", media_type="text/html; charset=utf-8")
+def legacy() -> HTMLResponse:
+    return _page_response("index.html")
+
+
+@app.get("/portfolio", include_in_schema=False)
+def portfolio() -> RedirectResponse:
+    return RedirectResponse("/legacy#holdings", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+
+@app.get("/research", include_in_schema=False)
+def research() -> RedirectResponse:
+    return RedirectResponse("/legacy#signals", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get("/workbench/1430", include_in_schema=False)
-def etf_1430_workbench() -> FileResponse:
-    return FileResponse(STATIC_DIR / "etf_1430_workbench.html", media_type="text/html; charset=utf-8")
+def etf_1430_workbench() -> HTMLResponse:
+    return _page_response("etf_1430_workbench.html")
 
 
 @app.get("/workbench/kline", include_in_schema=False)
@@ -114,24 +136,24 @@ def kline_stabilization() -> RedirectResponse:
 
 
 @app.get("/boards", include_in_schema=False)
-def boards_page() -> FileResponse:
-    return FileResponse(STATIC_DIR / "boards.html", media_type="text/html; charset=utf-8")
+def boards_page() -> HTMLResponse:
+    return _page_response("boards.html")
 
 
 @app.get("/etf/{ts_code}", include_in_schema=False)
-def etf_detail(ts_code: str) -> FileResponse:
+def etf_detail(ts_code: str) -> HTMLResponse:
     # 全站唯一的 ETF 详情研判台：决策表 / 板块 / 持仓 / 14:30 工作台点击标的都进入这里。
-    return FileResponse(STATIC_DIR / "etf_detail.html", media_type="text/html; charset=utf-8")
+    return _page_response("etf_detail.html")
 
 
 @app.get("/assets/index.html", include_in_schema=False)
-def static_legacy_index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html", media_type="text/html; charset=utf-8")
+def static_legacy_index() -> HTMLResponse:
+    return _page_response("index.html")
 
 
 @app.get("/assets/etf_1430_workbench.html", include_in_schema=False)
-def static_etf_1430_workbench() -> FileResponse:
-    return FileResponse(STATIC_DIR / "etf_1430_workbench.html", media_type="text/html; charset=utf-8")
+def static_etf_1430_workbench() -> HTMLResponse:
+    return _page_response("etf_1430_workbench.html")
 
 
 @app.get("/assets/kline_stabilization.html", include_in_schema=False)
