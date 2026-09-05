@@ -310,6 +310,8 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
                 ("refresh_indicators", {}),
                 ("refresh_forecasts", {}),
                 ("refresh_signals", {}),
+                ("refresh_sector_snapshots", {}),
+                ("refresh_decision_board", {}),
                 ("generate_report", {}),
             ):
                 _run_guarded(

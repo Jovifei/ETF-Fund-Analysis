@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 import urllib.request
 from zoneinfo import ZoneInfo
@@ -15,7 +16,7 @@ from app.market_context.contracts import (
     VerificationStatus,
 )
 from app.providers.base import MarketProvider, ProviderError
-from app.providers.types import BarRecord, InstrumentRecord, QuoteRecord, SectorRecord
+from app.providers.types import BarRecord, InstrumentRecord, NewsRecord, QuoteRecord, SectorRecord
 from app.utils.numbers import finite_or_none
 
 logger = logging.getLogger(__name__)
@@ -658,3 +659,82 @@ class AKShareProvider(MarketProvider):
             source=self.name,
             board_type="market",
         )
+
+    def fetch_news(self, since_hours: int = 24) -> list[NewsRecord]:
+        now = datetime.now(self.tz)
+        cutoff = now - timedelta(hours=since_hours)
+        records: list[NewsRecord] = []
+
+        # 1. 优先尝试东方财富 7x24 全球财经快讯 (stock_info_global_em)
+        try:
+            df = self.ak.stock_info_global_em()
+            for row in self._records(df):
+                title = str(row.get("标题") or "").strip()
+                if not title:
+                    continue
+                summary = str(row.get("摘要") or "").strip() or None
+                raw_time = row.get("发布时间")
+                published: datetime | None = None
+                if raw_time:
+                    try:
+                        published = datetime.strptime(str(raw_time).strip(), "%Y-%m-%d %H:%M:%S").replace(tzinfo=self.tz)
+                    except Exception:
+                        pass
+                published = published or now
+                if published < cutoff:
+                    continue
+                source_id = hashlib.sha256(f"em:{title}:{published.isoformat()}".encode()).hexdigest()[:32]
+                records.append(
+                    NewsRecord(
+                        source="akshare:eastmoney",
+                        source_id=source_id,
+                        title=title[:500],
+                        published_at=published,
+                        summary=summary[:4000] if summary else None,
+                        url=str(row.get("链接") or "") or None,
+                    )
+                )
+            if records:
+                logger.info("AKShare news (eastmoney) returned %d items", len(records))
+                return records
+        except Exception as exc:
+            logger.warning("AKShare news (eastmoney) failed: %s", exc)
+
+        # 2. 备选财联社 7x24 全球财经快讯 (stock_info_global_cls)
+        try:
+            df = self.ak.stock_info_global_cls()
+            for row in self._records(df):
+                title = str(row.get("标题") or "").strip()
+                content = str(row.get("内容") or "").strip()
+                if not title and not content:
+                    continue
+                display_title = title or content[:80]
+                pub_date = row.get("发布日期")
+                pub_time = row.get("发布时间")
+                published: datetime | None = None
+                if pub_date and pub_time:
+                    try:
+                        published = datetime.combine(pub_date, pub_time).replace(tzinfo=self.tz)
+                    except Exception:
+                        pass
+                published = published or now
+                if published < cutoff:
+                    continue
+                source_id = hashlib.sha256(f"cls:{display_title}:{published.isoformat()}".encode()).hexdigest()[:32]
+                records.append(
+                    NewsRecord(
+                        source="akshare:cls",
+                        source_id=source_id,
+                        title=display_title[:500],
+                        published_at=published,
+                        summary=content[:4000] if content else None,
+                        url=None,
+                    )
+                )
+            if records:
+                logger.info("AKShare news (cls) returned %d items", len(records))
+                return records
+        except Exception as exc:
+            logger.warning("AKShare news (cls) failed: %s", exc)
+
+        return records
