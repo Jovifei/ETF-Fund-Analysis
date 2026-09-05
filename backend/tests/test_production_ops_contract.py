@@ -30,3 +30,10 @@ def test_provider_smoke_uses_application_quote_timestamp_qualification() -> None
     assert "MarketService._qualify_quote_timestamp" in source
     assert '"verified_realtime"' in source
     assert '"provider_realtime"' in source
+
+
+def test_production_dockerfile_installs_the_wheel_built_from_current_source() -> None:
+    source = (ROOT / "backend" / "Dockerfile").read_text(encoding="utf-8")
+    assert '"china-fund-decision[market]"' in source
+    assert "china-fund-decision[market]==" not in source
+    assert "--no-index --find-links=/wheels" in source

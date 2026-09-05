@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>中国 ETF/LOF 私有决策看板</title>
+  <title>ETF 研究中心</title>
   <link rel="stylesheet" href="/assets/app.css?v=0.7.4">
 </head>
 <body>
@@ -24,20 +24,20 @@
   <header class="topbar">
     <div class="brand">
       <div class="brand-mark">基</div>
-      <div><strong>ETF / LOF 决策台</strong><span id="environmentLabel">私有研究系统</span></div>
+      <div><strong id="legacyShellTitle">ETF 研究中心</strong><span id="environmentLabel">私有研究系统</span></div>
     </div>
     <nav id="tabs" class="tabs" role="tablist" aria-label="研究视图">
-      <button data-tab="dashboard" class="active" role="tab" aria-selected="true">决策看板</button>
-      <button data-tab="signals" role="tab" aria-selected="false">信号中心</button>
-      <button data-tab="holdings" role="tab" aria-selected="false">持仓</button>
-      <button data-tab="news" role="tab" aria-selected="false">新闻事件</button>
-      <button data-tab="system" role="tab" aria-selected="false">系统</button>
+      <button data-tab="dashboard" class="active" role="tab" aria-selected="true" hidden>决策看板（兼容）</button>
+      <button data-tab="signals" role="tab" aria-selected="false">信号研究</button>
+      <button data-tab="holdings" role="tab" aria-selected="false" hidden>持仓</button>
+      <button data-tab="news" role="tab" aria-selected="false">新闻证据</button>
+      <button data-tab="system" role="tab" aria-selected="false" hidden>系统</button>
     </nav>
     <div class="top-actions">
-      <a class="ghost" href="/" title="返回决策总览">🎯 决策</a>
-      <a class="ghost" href="/workbench/1430" title="14:30 尾盘博弈决策台">⏱️ 14:30</a>
+      <a class="ghost" href="/" title="决策总览">🎯 决策</a>
       <a class="ghost" href="/boards" title="行业板块">🔥 板块</a>
-      <a class="ghost" href="/workbench/kline" title="K线企稳分析看板">📈 K线</a>
+      <a class="ghost" href="/holdings" title="我的持仓">💼 持仓</a>
+      <a class="ghost" href="/research" title="研究中心">🔬 研究</a>
       <span id="accountIdentity" class="account-identity hidden" aria-live="polite"></span>
       <span id="sourceBadge" class="source-badge fallback" aria-live="polite">来源 —</span>
       <span id="connectionBadge" class="status-dot offline">离线</span>
@@ -218,5 +218,6 @@
   </div>
   <div id="toast" class="toast hidden"></div>
   <script src="/assets/app.js?v=0.7.4" defer></script>
+  <script src="/assets/legacy_route.js?v=0.8.1" defer></script>
 </body>
 </html>

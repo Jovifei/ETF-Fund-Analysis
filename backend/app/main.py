@@ -97,20 +97,27 @@ def index() -> FileResponse:
 
 
 @app.get("/legacy", include_in_schema=False)
-def legacy() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html", media_type="text/html; charset=utf-8")
+def legacy() -> RedirectResponse:
+    # Historical bookmark only. New navigation never exposes /legacy.
+    return RedirectResponse("/research", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+
+@app.get("/decision/1430", include_in_schema=False)
+def decision_1430() -> FileResponse:
+    # Secondary decision mode: same product domain as Decision, not a peer workbench.
+    return FileResponse(STATIC_DIR / "etf_1430_workbench.html", media_type="text/html; charset=utf-8")
 
 
 @app.get("/workbench/1430", include_in_schema=False)
-def etf_1430_workbench() -> FileResponse:
-    return FileResponse(STATIC_DIR / "etf_1430_workbench.html", media_type="text/html; charset=utf-8")
+def legacy_etf_1430_workbench() -> RedirectResponse:
+    return RedirectResponse("/decision/1430", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get("/workbench/kline", include_in_schema=False)
 def kline_stabilization() -> RedirectResponse:
-    # PR-I：K线研判页下线——K线/支撑压力由 /etf/{code} 详情台承接，
-    # 行业/概念/全市场宽度三列由 /boards 承接；旧地址 307 保留一个版本。
-    return RedirectResponse("/boards", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    # K-line research is instrument-specific and belongs to /etf/{ts_code}.
+    # An old bookmark without an instrument context returns to Decision.
+    return RedirectResponse("/", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get("/boards", include_in_schema=False)
@@ -118,27 +125,51 @@ def boards_page() -> FileResponse:
     return FileResponse(STATIC_DIR / "boards.html", media_type="text/html; charset=utf-8")
 
 
+def _research_shell() -> FileResponse:
+    return FileResponse(STATIC_DIR / "index.html", media_type="text/html; charset=utf-8")
+
+
+@app.get("/holdings", include_in_schema=False)
+def holdings_entry() -> FileResponse:
+    return _research_shell()
+
+
+@app.get("/research", include_in_schema=False)
+def research_entry() -> FileResponse:
+    return _research_shell()
+
+
+@app.get("/research/news", include_in_schema=False)
+def research_news_entry() -> FileResponse:
+    return _research_shell()
+
+
+@app.get("/system", include_in_schema=False)
+def system_entry() -> FileResponse:
+    return _research_shell()
+
+
 @app.get("/etf/{ts_code}", include_in_schema=False)
 def etf_detail(ts_code: str) -> FileResponse:
-    # 全站唯一的 ETF 详情研判台：决策表 / 板块 / 持仓 / 14:30 工作台点击标的都进入这里。
+    # Single ETF detail surface used by Decision / Boards / Holdings / 14:30.
     return FileResponse(STATIC_DIR / "etf_detail.html", media_type="text/html; charset=utf-8")
 
 
 @app.get("/assets/index.html", include_in_schema=False)
-def static_legacy_index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html", media_type="text/html; charset=utf-8")
+def static_legacy_index() -> RedirectResponse:
+    return RedirectResponse("/research", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get("/assets/etf_1430_workbench.html", include_in_schema=False)
-def static_etf_1430_workbench() -> FileResponse:
-    return FileResponse(STATIC_DIR / "etf_1430_workbench.html", media_type="text/html; charset=utf-8")
+def static_etf_1430_workbench() -> RedirectResponse:
+    return RedirectResponse("/decision/1430", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get("/assets/kline_stabilization.html", include_in_schema=False)
 def static_kline_stabilization() -> RedirectResponse:
-    return RedirectResponse("/boards", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+    return RedirectResponse("/", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 # Mount static resources after exact legacy-HTML redirects so old bookmarks cannot
-# bypass the single user-facing ETF board while CSS/JS/assets remain available.
+# bypass the task-oriented routes while CSS/JS/assets remain available.
 app.mount("/assets", StaticFiles(directory=STATIC_DIR), name="assets")

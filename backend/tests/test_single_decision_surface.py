@@ -8,27 +8,35 @@ from app.services.kline_stabilization_service import KlineStabilizationService
 from app.services.signal_center_service import SignalCenterService
 
 
-def test_all_research_entrypoints_are_accessible_and_render_expected_surfaces() -> None:
+def test_research_entrypoints_follow_task_oriented_surface_contract() -> None:
     client = TestClient(app)
     expected_matches = {
         "/": "decision_board_workbuddy.js",
-        "/legacy": "中国 ETF/LOF 私有决策看板",
-        "/workbench/1430": "ETF 14:30 决策工作台",
         "/boards": "行业板块 · 板块市场",
+        "/holdings": "ETF 研究中心",
+        "/research": "ETF 研究中心",
+        "/research/news": "ETF 研究中心",
+        "/system": "ETF 研究中心",
+        "/decision/1430": "ETF 决策 · 14:30 尾盘模式",
         "/etf/510300.SH": "ETF 详情 · 研究研判台",
-        "/assets/index.html": "中国 ETF/LOF 私有决策看板",
-        "/assets/etf_1430_workbench.html": "ETF 14:30 决策工作台",
     }
     for path, expected_token in expected_matches.items():
         response = client.get(path, follow_redirects=False)
         assert response.status_code == 200, f"{path} failed with {response.status_code}"
         assert expected_token in response.text, f"{expected_token} not in {path}"
 
-    # PR-I：K线研判页下线——307 到 /boards（详情台承接 K 线，板块页承接宽度）
-    for retired in ("/workbench/kline", "/assets/kline_stabilization.html"):
-        response = client.get(retired, follow_redirects=False)
-        assert response.status_code == 307, f"{retired} expected 307, got {response.status_code}"
-        assert response.headers["location"] == "/boards"
+    redirects = {
+        "/legacy": "/research",
+        "/assets/index.html": "/research",
+        "/workbench/1430": "/decision/1430",
+        "/assets/etf_1430_workbench.html": "/decision/1430",
+        "/workbench/kline": "/",
+        "/assets/kline_stabilization.html": "/",
+    }
+    for path, location in redirects.items():
+        response = client.get(path, follow_redirects=False)
+        assert response.status_code == 307, f"{path} expected 307, got {response.status_code}"
+        assert response.headers["location"] == location
 
 
 def test_all_current_research_surfaces_share_the_same_action(bootstrapped, db_session) -> None:
