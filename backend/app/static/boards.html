@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>行业板块 · 板块市场</title>
+  <link rel="stylesheet" href="/assets/etf_1430_workbench.css?v=0.2.0">
+</head>
+<body>
+  <div id="authOverlay" class="overlay hidden" role="dialog" aria-modal="true">
+    <form id="authForm" class="modal auth-card">
+      <div class="eyebrow">PRIVATE RESEARCH</div>
+      <h1>登录私有研究看板</h1>
+      <p>账户密码只用于服务器验证，浏览器不保存会话令牌。</p>
+      <input id="identifierInput" type="text" autocomplete="username" placeholder="用户名或邮箱" required>
+      <input id="passwordInput" type="password" autocomplete="current-password" placeholder="密码" required>
+      <button class="primary" type="submit">进入板块市场</button>
+      <div id="authError" class="error"></div>
+    </form>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="mark">🔥</div>
+      <div><strong>行业板块 · 板块市场</strong><span>板块广度 + ETF 代理 · 研究模式</span></div>
+    </div>
+    <div class="top-actions">
+      <a class="ghost link" href="/" title="返回决策总览">🎯 决策</a>
+      <a class="ghost link" href="/workbench/1430" title="14:30 尾盘模式">⏱️ 14:30 尾盘</a>
+      <a class="ghost link" href="/legacy" title="研究中心">🔬 研究中心</a>
+      <button id="refreshButton" class="ghost">刷新</button>
+      <button id="lockButton" class="ghost">退出登录</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="hero panel">
+      <div>
+        <div class="eyebrow">SECTOR MARKET · ETF PROXY SEMANTICS</div>
+        <h1>板块强度与轮动总览</h1>
+        <p>板块涨跌为「板块涨跌家数快照 + 池内主题 ETF 代理」，不是东财板块指数行情；广度缺失时诚实显示不可用。</p>
+      </div>
+      <div id="metaBar" class="hero-meta">等待数据…</div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div><div class="eyebrow">BOARD RANKING</div><h2>板块排名</h2></div>
+        <div class="mode-tabs" id="kindTabs">
+          <button class="active" data-kind="">全部</button>
+          <button data-kind="industry">行业板块</button>
+          <button data-kind="concept">概念板块</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="decision-table">
+          <thead>
+            <tr>
+              <th>#</th><th>板块</th><th>类型</th><th>今日(板块快照)</th><th>上涨</th><th>下跌</th><th>跌比</th><th>主 ETF</th><th>现价/今日</th><th>动作</th><th>成员</th>
+            </tr>
+          </thead>
+          <tbody id="boardRows"></tbody>
+        </table>
+      </div>
+      <p class="muted" style="padding:8px 14px">覆盖语义：广度来自 SectorSnapshot（行业/概念涨跌家数）；主 ETF 行情与动作来自统一决策契约。无 ETF 代理的板块显示「无代理」。</p>
+    </section>
+  </main>
+
+  <script src="/assets/boards.js?v=0.1.0" defer></script>
+</body>
+</html>

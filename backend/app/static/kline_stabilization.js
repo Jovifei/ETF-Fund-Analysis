@@ -293,7 +293,8 @@ function render(data) {
     <div class="header-right">
       <div style="display:flex;gap:6px;margin-bottom:8px;justify-content:flex-end;">
         <a href="/" style="color:#58e6db;text-decoration:none;font-size:12px;border:1px solid #1f364d;padding:4px 8px;border-radius:4px;background:#0d1822;">🎯 决策</a>
-        <a href="/legacy" style="color:#8ba0b5;text-decoration:none;font-size:12px;border:1px solid #1f364d;padding:4px 8px;border-radius:4px;background:#0d1822;">🔬 研究中心</a>
+        <a href="/boards" style="color:#8ba0b5;text-decoration:none;font-size:12px;border:1px solid #1f364d;padding:4px 8px;border-radius:4px;background:#0d1822;">🔥 板块</a>
+      <a href="/legacy" style="color:#8ba0b5;text-decoration:none;font-size:12px;border:1px solid #1f364d;padding:4px 8px;border-radius:4px;background:#0d1822;">🔬 研究中心</a>
         <a href="/workbench/1430" style="color:#8ba0b5;text-decoration:none;font-size:12px;border:1px solid #1f364d;padding:4px 8px;border-radius:4px;background:#0d1822;">⏱️ 14:30</a>
       </div>
       <div class="date">${esc(meta.date)}</div>

@@ -5,11 +5,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.models import Instrument
+from app.models import Instrument, SectorSnapshot
 from app.services.signal_grade_service import SignalGradeService
 from app.utils.numbers import clamp, finite_or_none
 
@@ -182,6 +182,89 @@ class BoardService:
             if board.get("id") == board_id:
                 return board
         return None
+
+    def market_overview(self, db: Session, kind: str | None = None) -> dict[str, Any]:
+        """行业/概念板块市场总览（PR-E 一等页数据源）。
+
+        板块行 = catalog 板块 + 最新 SectorSnapshot 广度 + ETF 代理动作/涨跌。
+        广度缺失时诚实标注 unavailable，不用成员 ETF 涨跌冒充板块指数。
+        """
+        base = self.build(db)
+        all_boards = list(base.get("industry", [])) + list(base.get("concept", []))
+
+        # 一次性取每个 (board_type, sector_name) 的最新广度行
+        breadth: dict[tuple[str, str], SectorSnapshot] = {}
+        names_by_kind: dict[str, set[str]] = {}
+        for item in all_boards:
+            names_by_kind.setdefault(item["kind"], set()).add(item["name"])
+        for k, names in names_by_kind.items():
+            if not names:
+                continue
+            latest_dates = (
+                select(
+                    SectorSnapshot.sector_name.label("name"),
+                    func.max(SectorSnapshot.trade_date).label("max_date"),
+                )
+                .where(SectorSnapshot.board_type == k, SectorSnapshot.sector_name.in_(names))
+                .group_by(SectorSnapshot.sector_name)
+                .subquery()
+            )
+            rows = db.scalars(
+                select(SectorSnapshot).join(
+                    latest_dates,
+                    and_(
+                        SectorSnapshot.sector_name == latest_dates.c.name,
+                        SectorSnapshot.trade_date == latest_dates.c.max_date,
+                        SectorSnapshot.board_type == k,
+                    ),
+                )
+            ).all()
+            for row in rows:
+                breadth[(k, row.sector_name)] = row
+        trade_date = max((row.trade_date for row in breadth.values()), default=None)
+
+        for item in all_boards:
+            row = breadth.get((item["kind"], item["name"]))
+            if row is not None:
+                total = int(row.total_count or (row.up_count or 0) + (row.down_count or 0) + (row.flat_count or 0))
+                down_ratio = round((row.down_count or 0) / total * 100, 1) if total else None
+                item["breadth"] = {
+                    "trade_date": row.trade_date.isoformat(),
+                    "up": row.up_count,
+                    "down": row.down_count,
+                    "flat": row.flat_count,
+                    "total": total,
+                    "down_ratio": down_ratio,
+                    "source": row.source,
+                }
+                item["sector_pct_change"] = row.pct_change
+            else:
+                item["breadth"] = None
+                item["sector_pct_change"] = None
+
+        selected = [item for item in all_boards if kind is None or item["kind"] == kind]
+        selected.sort(
+            key=lambda item: (
+                item["sector_pct_change"] if item["sector_pct_change"] is not None else -999,
+                item["pct_change"] if item["pct_change"] is not None else -999,
+            ),
+            reverse=True,
+        )
+        return {
+            "version": base.get("version"),
+            "research_only": True,
+            "actionable": False,
+            "scrapes_eastmoney": False,
+            "coverage_note": "板块行为 ETF 代理与板块涨跌家数快照，非东财板块指数行情",
+            "trade_date": trade_date.isoformat() if trade_date else None,
+            "kind": kind,
+            "counts": {
+                "total": len(selected),
+                "with_breadth": sum(1 for item in selected if item["breadth"]),
+                "with_etf": sum(1 for item in selected if item["members"]),
+            },
+            "boards": selected,
+        }
 
     def _pack_board(
         self,

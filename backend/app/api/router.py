@@ -806,6 +806,16 @@ def signal_grade(
     return SignalGradeService(settings).build(db)
 
 
+@private_router.get("/sectors/market")
+def sectors_market(
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    kind: str | None = Query(default=None, pattern="^(industry|concept)$"),
+) -> dict:
+    """行业/概念板块市场总览（PR-E 一等页）：广度 + ETF 代理，诚实标注覆盖语义。"""
+    return BoardService(settings).market_overview(db, kind=kind)
+
+
 @private_router.get("/signals/boards")
 def signal_boards(
     db: Annotated[Session, Depends(get_db)],
