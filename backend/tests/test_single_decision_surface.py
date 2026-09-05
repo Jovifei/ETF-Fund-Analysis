@@ -17,7 +17,7 @@ def test_research_entrypoints_follow_task_oriented_surface_contract() -> None:
         "/research": "ETF 研究中心",
         "/research/news": "ETF 研究中心",
         "/system": "ETF 研究中心",
-        "/workbench/1430": "ETF 14:30 决策工作台",
+        "/decision/1430": "ETF 决策 · 14:30 尾盘模式",
         "/etf/510300.SH": "ETF 详情 · 研究研判台",
     }
     for path, expected_token in expected_matches.items():
@@ -28,7 +28,8 @@ def test_research_entrypoints_follow_task_oriented_surface_contract() -> None:
     redirects = {
         "/legacy": "/research",
         "/assets/index.html": "/research",
-        "/assets/etf_1430_workbench.html": "/workbench/1430",
+        "/workbench/1430": "/decision/1430",
+        "/assets/etf_1430_workbench.html": "/decision/1430",
         "/workbench/kline": "/",
         "/assets/kline_stabilization.html": "/",
     }
