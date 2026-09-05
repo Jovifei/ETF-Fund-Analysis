@@ -60,6 +60,7 @@ services:
       retries: 5
     volumes:
       - ./config:/app/config:ro
+      - ./backend:/app/backend:ro
       - ./reports:/app/reports
       - ./backups:/app/backups
     networks: [backend]
@@ -101,6 +102,7 @@ services:
       disable: true
     volumes:
       - ./config:/app/config:ro
+      - ./backend:/app/backend:ro
       - ./reports:/app/reports
       - ./backups:/app/backups
     networks: [backend]
