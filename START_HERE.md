@@ -1,6 +1,6 @@
 # ETF Research 工作站：完整源码交付
 
-交付日期：2026-09-06。正式发布版本：`1.0.0`。
+交付日期：2026-09-06。正式发布版本：`1.0.1`。
 
 这是完整项目源码包，不是只有 docs 的规划包，也不是需要另找原文件的增量补丁。
 包含原有后端、旧界面、Vue 新界面、数据库迁移、测试、Bridge、Vibe 产物适配、部署文件及**已构建的前端**。
@@ -31,6 +31,21 @@ python3.12 -m venv .venv
 脚本只绑定回环地址，使用临时模拟数据库；界面持续显示演示标识。关闭进程后演示持仓不保留。
 它拒绝在已有 `.env` / `deploy/.env.production` 的目录旁启动，不读取生产数据库。
 真实持仓与真实行情请使用独立、有认证的部署，不能把无认证演示端口暴露到公网。
+
+## 本地真实行情（v1.0.1）
+
+先安装市场可选依赖，再只初始化 1–3 只 ETF 到仓库外的 SQLite 文件：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[market]"
+.\.venv\Scripts\python.exe scripts/initialize_local_market_data.py `
+  --provider akshare `
+  --codes 510300.SH 512480.SH 159928.SZ `
+  --database-url "sqlite:///E:/Claude_allow/Download/etf-v101-runtime/market.sqlite3" `
+  --report "E:/Claude_allow/Download/etf-v101-runtime/initialization-report.json"
+```
+
+这个命令执行 Alembic、走 `WorkspaceDataJob → TaskService` 的既有审计链，但不启动 scheduler、不调用模型、不接受 Mock，也不会从命令行读取或显示 Tushare Token。Tushare 要由运行环境或受控设置单独配置；先用 `/api/workspace/data-sources` 和 `scripts/qualify_market_data.py` 核验后再使用。
 
 ## 阅读顺序
 

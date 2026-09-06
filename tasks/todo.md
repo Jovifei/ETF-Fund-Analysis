@@ -1,5 +1,14 @@
 # v0.5.0 Local Validation Execution Plan
 
+## v1.0.1：本地真实数据接入（2026-09-06，进行中）
+
+- [x] RED：为来源就绪状态写测试；状态只能公开能力、依赖和资格，绝不回显 Tushare Token。
+- [x] GREEN：提供 `/api/workspace/data-sources`；解析运行时配置后的有效来源，不发起网络调用、不触发模型。
+- [x] RED：为本地初始化器写测试；它必须显式拒绝 Mock、禁止自动 fallback、要求仓库外 SQLite 数据库。
+- [x] GREEN：实现 1–3 只 ETF 的受限本地初始化命令，通过现有 `WorkspaceDataJob → TaskService` 链路入库，并输出脱敏结果。
+- [x] 验证：以 AKShare 对 3 只 ETF 执行小样本真实日线初始化；不将盘后/无资格 quote 标为实时，不启用模型或自动交易。
+- [x] 发布：更新版本记录为 v1.0.1，完成专项测试、类型构建、迁移和数据源资格检查；全量 pytest 在既有校准顺序阻塞处未完成，记录后提交、标记并推送。
+
 ## Multi-user security remediation (2026-09-01, active)
 
 ### Browser identity / regression / deployment handoff repair (2026-09-02, in progress)

@@ -15,7 +15,7 @@ import time
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging
@@ -41,7 +41,7 @@ def _stop(*_):
     STOP = True
 
 
-def sync_catalog(db, provider, *, enable_codes=()):
+def sync_catalog(db, provider, *, run_id: str, enable_codes=()):
     wanted = set(enable_codes)
     known = {row.ts_code: row for row in db.scalars(select(Instrument))}
     if wanted and wanted.issubset(known):
@@ -54,7 +54,15 @@ def sync_catalog(db, provider, *, enable_codes=()):
             error = exc
             raise
         finally:
-            record_provider_audit(db, operation="list_etf_catalog", provider=provider, result=records, error=error, latency_ms=timer.elapsed_ms)
+            record_provider_audit(
+                db,
+                run_id=run_id,
+                operation="list_etf_catalog",
+                provider=provider,
+                result=records,
+                error=error,
+                latency_ms=timer.elapsed_ms,
+            )
     created = 0
     for record in records:
         row = known.get(record.ts_code)
@@ -89,6 +97,39 @@ def outcome_state(outcome: dict) -> str:
     return "succeeded"
 
 
+def task_sequence(kind: str, request: dict) -> list[tuple[str, dict]]:
+    """Return the bounded deterministic sequence for one workspace data job."""
+    if kind == "validate":
+        return [("validate_forecasts", {})]
+    if kind == "shadow_audit":
+        return [("shadow_run_audit", {})]
+    if kind == "onboard":
+        codes = request["codes"]
+        return [
+            ("refresh_bars", {"lookback_days": request["lookback_days"], "codes": codes}),
+            ("refresh_indicators", {}),
+            ("refresh_forecasts", {}),
+            ("refresh_quotes", {"codes": codes}),
+            ("refresh_signals", {}),
+            ("refresh_decision_board", {}),
+        ]
+    if kind == "refresh":
+        codes = request.get("codes") or None
+        return [
+            ("sync_instruments", {}),
+            ("refresh_bars", {"lookback_days": request["lookback_days"], "codes": codes}),
+            ("refresh_indicators", {}),
+            ("refresh_forecasts", {}),
+            ("refresh_quotes", {"codes": codes}),
+            ("refresh_signals", {}),
+            ("refresh_sector_snapshots", {}),
+            ("refresh_market_context", {}),
+            ("refresh_news", {"since_hours": 72}),
+            ("refresh_decision_board", {}),
+        ]
+    raise ValueError("unsupported workspace task")
+
+
 def execute(job_id: str) -> int:
     # A data job cannot silently bill a model via the legacy news enrichment path.
     settings = get_settings().model_copy(update={"analysis_enabled": False, "llm_enabled": False})
@@ -113,7 +154,12 @@ def execute(job_id: str) -> int:
         if kind in {"refresh", "onboard"}:
             try:
                 with session_scope() as db:
-                    outcome = sync_catalog(db, tasks.provider, enable_codes=request.get("codes", []) if kind == "onboard" else ())
+                    outcome = sync_catalog(
+                        db,
+                        tasks.provider,
+                        run_id=f"workspace-data:{job_id}",
+                        enable_codes=request.get("codes", []) if kind == "onboard" else (),
+                    )
                     if kind == "onboard":
                         for code in request["codes"]:
                             WatchlistService(settings).add(db, code=code, user_id=owner_id)
@@ -123,22 +169,7 @@ def execute(job_id: str) -> int:
                 failed = True
                 if kind == "onboard":
                     raise
-        if kind == "validate":
-            sequence = [("validate_forecasts", {})]
-        elif kind == "shadow_audit":
-            sequence = [("shadow_run_audit", {})]
-        elif kind in {"refresh", "onboard"}:
-            codes = request.get("codes") or None
-            sequence = [] if kind == "onboard" else [("sync_instruments", {})]
-            sequence += [
-                ("refresh_bars", {"lookback_days": request["lookback_days"], "codes": codes}),
-                ("refresh_indicators", {}), ("refresh_forecasts", {}),
-                ("refresh_quotes", {"codes": codes}), ("refresh_signals", {}),
-                ("refresh_sector_snapshots", {}), ("refresh_market_context", {}), ("refresh_news", {"since_hours": 72}),
-                ("refresh_decision_board", {}),
-            ]
-        else:
-            raise ValueError("unsupported workspace task")
+        sequence = task_sequence(kind, request)
         bar_failed = False
         for task_name, kwargs in sequence:
             if bar_failed and task_name in {"refresh_indicators", "refresh_forecasts"}:

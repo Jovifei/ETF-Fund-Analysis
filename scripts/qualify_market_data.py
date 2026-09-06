@@ -29,11 +29,11 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import statistics
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
-from datetime import date, datetime, timedelta, timezone
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
@@ -65,6 +65,13 @@ CONDITION_KEYS = [
 ]
 
 
+def qualification_settings(settings, provider_name: str):
+    """Bind --provider to the factory settings; report labels alone are unsafe."""
+    return settings.model_copy(
+        update={"market_provider": provider_name, "allow_mock_fallback": False}
+    )
+
+
 class LatencyTracker:
     def __init__(self) -> None:
         self._samples: dict[str, list[float]] = {}
@@ -94,15 +101,22 @@ def _percentile(values: list[float]) -> tuple[float, float]:
 
 
 def _call_with_timeout(func, timeout_seconds: float):
-    """Run func() in a worker thread with a hard timeout. Returns (value, error)."""
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(func)
-        try:
-            return future.result(timeout=timeout_seconds), None
-        except FutureTimeout:
-            return None, TimeoutError(f"exceeded {timeout_seconds:.0f}s budget")
-        except Exception as exc:  # noqa: BLE001 - qualification tool records everything
-            return None, exc
+    """Return a bounded verdict without waiting for a blocked provider call."""
+    pool = ThreadPoolExecutor(max_workers=1)
+    future = pool.submit(func)
+    try:
+        return future.result(timeout=timeout_seconds), None
+    except FutureTimeout:
+        future.cancel()
+        return None, TimeoutError(f"exceeded {timeout_seconds:.0f}s budget")
+    except Exception as exc:  # noqa: BLE001 - qualification tool records everything
+        return None, exc
+    finally:
+        # ``with ThreadPoolExecutor`` calls shutdown(wait=True), which makes a
+        # nominal provider timeout wait for a blocked request.  Qualification
+        # must return its bounded verdict immediately; the provider process is
+        # short-lived and an individual request may still finish in the background.
+        pool.shutdown(wait=False, cancel_futures=True)
 
 
 def _bar_quality(bars: list, today: date) -> dict:
@@ -125,8 +139,17 @@ def _bar_quality(bars: list, today: date) -> dict:
             duplicates += 1
         seen_dates.add(bar.trade_date)
         try:
-            o, h, l, c = float(bar.open), float(bar.high), float(bar.low), float(bar.close)
-            if not (h >= max(o, c) and l <= min(o, c) and o > 0 and h > 0 and l > 0 and c > 0):
+            open_price, high_price, low_price, close_price = (
+                float(bar.open), float(bar.high), float(bar.low), float(bar.close)
+            )
+            if not (
+                high_price >= max(open_price, close_price)
+                and low_price <= min(open_price, close_price)
+                and open_price > 0
+                and high_price > 0
+                and low_price > 0
+                and close_price > 0
+            ):
                 violations += 1
         except (TypeError, ValueError):
             violations += 1
@@ -257,6 +280,7 @@ def main() -> int:
 
     settings = get_settings()
     provider_name = args.provider or settings.market_provider
+    settings = qualification_settings(settings, provider_name)
     tracker = LatencyTracker()
     clock = MarketClock()
     today = date.today()
