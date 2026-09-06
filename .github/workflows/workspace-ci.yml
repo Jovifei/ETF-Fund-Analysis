@@ -27,8 +27,10 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
         run: |
-          pip install -e '.[dev,workspace]'
+          pip install -e '.[dev]'
           npm ci --ignore-scripts --prefix frontend
+      - name: Dependency security gate
+        run: npm audit --audit-level=high --prefix frontend
       - name: Workspace backend contracts
         run: pytest backend/tests/test_workspace*.py -q
       - name: TypeScript check

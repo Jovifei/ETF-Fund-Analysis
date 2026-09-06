@@ -1,3 +1,11 @@
+# Build the UI once. The final image does not run Node or mount source code.
+FROM node:22-bookworm-slim AS frontend-builder
+WORKDIR /workspace/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --ignore-scripts
+COPY frontend ./
+RUN npm run typecheck && npm run build
+
 FROM python:3.12-slim AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
@@ -39,6 +47,7 @@ COPY backend /app/backend
 COPY config /app/config
 COPY scripts /app/scripts
 COPY --from=builder /wheels /wheels
+COPY --from=frontend-builder /workspace/backend/app/workspace_dist /app/backend/app/workspace_dist
 
 # Install the project wheel produced by this exact build plus its market extras
 # from the builder wheelhouse. Do not pin the application version here: the
