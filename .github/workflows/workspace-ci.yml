@@ -1,0 +1,35 @@
+name: workspace-ci
+on:
+  push:
+    branches: ['feat/etf-workspace-vue-20260906']
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: workspace-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies
+        run: pip install -e '.[dev,market]'
+      - name: Workspace contracts
+        run: pytest backend/tests/test_workspace*.py -q
+      - name: Collect source and small offline testing dependency
+        if: always()
+        run: |
+          mkdir -p /tmp/workspace-artifacts
+          git archive -o /tmp/workspace-artifacts/source.tar HEAD
+          pip download --no-deps 'pwdlib==0.3.1' -d /tmp/workspace-artifacts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workspace-source-${{ github.run_id }}
+          path: /tmp/workspace-artifacts/
+          retention-days: 2
