@@ -22,12 +22,12 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "6.0.1",
     "@vue/test-utils": "2.4.6",
-    "@playwright/test": "1.55.0",
+    "@playwright/test": "1.55.1",
     "@types/node": "22.18.1",
     "jsdom": "26.1.0",
     "typescript": "5.9.2",
-    "vite": "7.1.4",
-    "vitest": "3.2.4",
+    "vite": "7.3.5",
+    "vitest": "3.2.7",
     "vue-tsc": "3.0.6"
   }
 }
