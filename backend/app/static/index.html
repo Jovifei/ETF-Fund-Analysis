@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>ETF 研究中心</title>
   <link rel="stylesheet" href="/assets/app.css?v=0.7.4">
+  <link rel="stylesheet" href="/assets/shell.css?v=0.1.0">
 </head>
 <body>
   <div id="authOverlay" class="overlay auth-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="authHeading">
@@ -21,6 +22,7 @@
     </form>
   </div>
 
+  <div id="shellTopbar"></div>
   <header class="topbar">
     <div class="brand">
       <div class="brand-mark">基</div>
@@ -81,8 +83,11 @@
         <p class="muted small curve-note">曲线按交易日统计各类信号数量，随系统运行逐日累积；系数变化会以当前口径重算历史分类。</p>
       </div>
       <div class="panel">
-        <div class="panel-head"><div><div class="eyebrow">SECTOR STRENGTH</div><h2>板块强度</h2></div><div id="sectorMeta" class="muted"></div></div>
-        <div id="sectorList" class="sector-list"><div class="loading-row">等待信号中心数据...</div></div>
+        <div class="panel-head"><div><div class="eyebrow">SECTOR STRENGTH</div><h2>板块市场</h2></div></div>
+        <div style="padding:14px"><a href="/boards" style="color:inherit;text-decoration:none;display:block;border:1px solid var(--line,#1e3247);border-radius:10px;padding:14px">
+          <strong>板块强度已升级为独立「板块」页</strong>
+          <div class="muted" style="font-size:12px;margin-top:4px">行业/概念广度、涨跌家数、板块内 ETF 代理与统一动作分级 → 点击进入 /boards（避免与板块页两处口径）</div>
+        </a></div>
       </div>
       <div class="panel">
         <div class="panel-head">
@@ -217,7 +222,8 @@
     <section class="modal confirm-modal"><button class="modal-close" data-close="portfolioConfirmOverlay" aria-label="关闭确认对话框">×</button><div class="eyebrow">EXPLICIT ACTION</div><h2 id="portfolioConfirmHeading">确认写入持仓？</h2><p>仅已明确选择、数值有效且未拒绝的候选会交给持仓服务。确认后才会更新持仓与看板；重复点击是幂等的。</p><div class="button-row"><button id="portfolioConfirmNo" class="ghost" type="button">返回复核</button><button id="portfolioConfirmYes" class="primary" type="button">确认导入并写入</button></div><div id="portfolioConfirmError" class="error-text" role="alert"></div></section>
   </div>
   <div id="toast" class="toast hidden"></div>
-  <script src="/assets/app.js?v=0.7.4" defer></script>
+  <script src="/assets/app_shell.js?v=0.1.0" defer></script>
+  <script src="/assets/app.js?v=0.8.3" defer></script>
   <script src="/assets/legacy_route.js?v=0.8.1" defer></script>
 </body>
 </html>

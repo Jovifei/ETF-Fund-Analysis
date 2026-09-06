@@ -120,6 +120,11 @@ def kline_stabilization() -> RedirectResponse:
     return RedirectResponse("/", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
+@app.get("/account", include_in_schema=False)
+def account_page() -> FileResponse:
+    return FileResponse(STATIC_DIR / "account.html", media_type="text/html; charset=utf-8")
+
+
 @app.get("/boards", include_in_schema=False)
 def boards_page() -> FileResponse:
     return FileResponse(STATIC_DIR / "boards.html", media_type="text/html; charset=utf-8")

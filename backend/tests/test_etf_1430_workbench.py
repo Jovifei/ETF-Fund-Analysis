@@ -61,11 +61,16 @@ def test_etf_1430_http_and_static_contract(bootstrapped):
         home = client.get("/")
         assert home.status_code == 200
         assert 'href="/legacy"' not in home.text
-        assert 'href="/holdings"' in home.text
-        assert 'href="/research"' in home.text
-        assert 'href="/decision/1430"' in home.text
-        assert "尾盘模式" in home.text
-        assert "统一决策台" in home.text
+        # 主导航由统一壳 JS 渲染：断言壳脚本包含全部一级链接（单一来源）
+        shell_js = client.get("/assets/app_shell.js")
+        assert shell_js.status_code == 200
+        for link in ('/boards', '/holdings', '/research', '/account'):
+            assert f"href: '{link}'" in shell_js.text
+        # 尾盘模式/统一决策台文案来自决策页 JS 壳配置
+        workbuddy_js = client.get("/assets/decision_board_workbuddy.js")
+        assert workbuddy_js.status_code == 200
+        assert "尾盘模式" in workbuddy_js.text
+        assert "/decision/1430" in workbuddy_js.text
 
         script = client.get("/assets/etf_1430_workbench.js")
         assert script.status_code == 200
@@ -106,7 +111,7 @@ def test_etf_detail_page_route_and_contract(bootstrapped):
         assert page.status_code == 200
         assert "ETF 详情 · 研究研判台" in page.text
         assert 'src="/assets/etf_detail.js' in page.text
-        assert "退出登录" in page.text
+        assert 'id="shellTopbar"' in page.text and "/assets/app_shell.js" in page.text
         script = client.get("/assets/etf_detail.js")
         assert script.status_code == 200
         assert "/api/workbench/1430/" in script.text

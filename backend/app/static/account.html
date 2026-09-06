@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN" class="shell-page">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>个人中心</title>
+  <link rel="stylesheet" href="/assets/etf_1430_workbench.css?v=0.2.0">
+  <link rel="stylesheet" href="/assets/shell.css?v=0.1.0">
+</head>
+<body>
+  <div id="shellTopbar"></div>
+
+  <main class="page" style="max-width:960px">
+    <section class="hero panel">
+      <div>
+        <div class="eyebrow">PERSONAL CENTER · 研究非指令</div>
+        <h1>个人中心</h1>
+        <p>账户信息、我的自选与系统入口。持仓页保留独立一级入口；本页是登录后的个人空间。</p>
+      </div>
+      <div id="accountMeta" class="hero-meta">读取中…</div>
+    </section>
+
+    <section class="panel" style="margin-top:14px">
+      <div class="panel-head"><div><div class="eyebrow">ACCOUNT</div><h2>账户</h2></div></div>
+      <div id="accountInfo" class="detail-grid" style="padding:10px 14px"></div>
+      <div style="padding:0 14px 12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button id="logoutButton">退出登录</button>
+      </div>
+      <p class="muted" style="padding:0 14px 12px">账户规则：系统关闭公开注册（需服务器配置邀请码）。首个创建的账户自动成为管理员；之后由管理员在「系统管理 → 用户管理」中创建其他账户，并可在创建时指定 admin / member 角色。</p>
+    </section>
+
+    <section class="panel" style="margin-top:14px">
+      <div class="panel-head"><div><div class="eyebrow">MY WATCHLIST</div><h2>我的自选</h2></div>
+        <div style="display:flex;gap:8px">
+          <input id="watchlistCodeInput" type="text" placeholder="代码，如 159915" style="max-width:200px">
+          <button id="watchlistAddButton">添加自选</button>
+        </div>
+      </div>
+      <div id="watchlistList" style="padding:10px 14px"></div>
+    </section>
+
+    <section class="panel" style="margin-top:14px">
+      <div class="panel-head"><div><div class="eyebrow">QUICK LINKS</div><h2>快捷入口</h2></div></div>
+      <div id="quickLinks" class="detail-grid" style="padding:10px 14px;gap:10px"></div>
+    </section>
+  </main>
+
+  <script src="/assets/app_shell.js?v=0.1.0" defer></script>
+  <script src="/assets/account.js?v=0.1.0" defer></script>
+</body>
+</html>

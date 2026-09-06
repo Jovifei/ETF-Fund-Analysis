@@ -96,7 +96,9 @@ def test_reference_board_keeps_multi_user_session_auth():
     root = Path(__file__).parents[1] / "app" / "static"
     html = (root / "decision_board_workbuddy.html").read_text(encoding="utf-8")
     js = (root / "decision_board_workbuddy.js").read_text(encoding="utf-8")
-    assert "identifierInput" in html and "passwordInput" in html and "logoutButton" in html
+    assert "identifierInput" in html and "passwordInput" in html
+    # PR-壳统一：退出按钮由 app_shell 的 actionsHtml 渲染（页面脚本仍绑定其 id）
+    assert "logoutButton" in js and 'id="shellTopbar"' in html and "ETFShell.render" in js
     assert "PRIVATE_ACCESS_TOKEN" not in html and "tokenInput" not in html
     assert "/api/auth/login" in js and "/api/auth/me" in js and "/api/auth/logout" in js
     assert "credentials:'same-origin'" in js and "X-CSRF-Token" in js

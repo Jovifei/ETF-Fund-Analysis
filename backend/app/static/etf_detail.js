@@ -259,6 +259,13 @@ function initIntervalTabs() {
   document.querySelectorAll('#intervalTabs button').forEach(button => button.addEventListener('click', () => selectInterval(button.dataset.interval)));
 }
 
+if (window.ETFShell) ETFShell.render({
+  active: 'decision',
+  title: 'ETF 详情 · 研究研判台',
+  subtitle: '中国场内 ETF / LOF · 研究模式',
+  actionsHtml: `<button id="refreshButton">刷新</button><button id="lockButton">退出登录</button>`,
+});
+
 function bindChartInteractions() {
   const canvas = $('#candleCanvas');
   if (!canvas) return;

@@ -110,4 +110,7 @@ def test_sectors_market_api_and_boards_page(bootstrapped):
         # 决策总览导航含板块入口
         home = client.get("/")
         assert home.status_code == 200
-        assert 'href="/boards"' in home.text
+        # 主导航由统一壳 JS 渲染：断言壳脚本包含 /boards 链接（单一来源）
+        shell_js = client.get("/assets/app_shell.js")
+        assert shell_js.status_code == 200
+        assert "/boards" in shell_js.text

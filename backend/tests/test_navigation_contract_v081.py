@@ -47,19 +47,30 @@ def test_primary_pages_expose_task_navigation_not_historical_surfaces() -> None:
         STATIC / "boards.html",
         STATIC / "etf_detail.html",
         STATIC / "etf_1430_workbench.html",
+        STATIC / "index.html",
     ]
+    shell_js = (STATIC / "app_shell.js").read_text(encoding="utf-8")
+    # v0.8.2 统一壳：一级导航唯一来源是 app_shell.js（SVG 图标 + 文字标签），
+    # 每个一级页面只承载壳挂载点；跨页位置/字体由 shell.css 固定。
+    for label in ("决策", "板块", "持仓", "研究", "个人中心"):
+        assert f'label: \'{label}\'' in shell_js, f"shell nav missing {label}"
+    for href in ("/boards", "/holdings", "/research", "/account"):
+        assert f"href: '{href}'" in shell_js
+    assert "K线" not in shell_js
+    assert "/legacy" not in shell_js and "/workbench/kline" not in shell_js
+
     for path in pages:
         html = path.read_text(encoding="utf-8")
-        assert "🎯 决策" in html
-        assert "🔥 板块" in html
-        assert "💼 持仓" in html
-        assert "🔬 研究" in html
+        assert 'id="shellTopbar"' in html, f"{path} missing shell mount"
+        assert "app_shell.js" in html, f"{path} missing shell script"
+        assert "shell.css" in html, f"{path} missing shell css"
         assert "📈 K线" not in html
         assert 'href="/legacy"' not in html
         assert 'href="/workbench/kline"' not in html
 
     decision = (STATIC / "decision_board_workbuddy.html").read_text(encoding="utf-8")
-    assert 'href="/decision/1430"' in decision
+    decision_js = (STATIC / "decision_board_workbuddy.js").read_text(encoding="utf-8")
+    assert "/decision/1430" in decision_js
     assert 'href="/workbench/1430"' not in decision
 
 

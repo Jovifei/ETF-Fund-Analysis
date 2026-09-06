@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="shell-page">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ETF 决策 · 14:30 尾盘模式</title>
   <link rel="stylesheet" href="/assets/etf_1430_workbench.css?v=0.1.0">
+  <link rel="stylesheet" href="/assets/shell.css?v=0.1.0">
 </head>
 <body>
   <div id="authOverlay" class="overlay hidden" role="dialog" aria-modal="true">
@@ -19,21 +20,7 @@
     </form>
   </div>
 
-  <header class="topbar">
-    <div class="brand">
-      <div class="mark">14:30</div>
-      <div><strong>14:30 尾盘模式</strong><span>决策总览 · 尾盘研究</span></div>
-    </div>
-    <div class="top-actions">
-      <a class="ghost link" href="/" title="决策总览">🎯 决策</a>
-      <a class="ghost link" href="/boards" title="行业板块">🔥 板块</a>
-      <a class="ghost link" href="/holdings" title="我的持仓">💼 持仓</a>
-      <a class="ghost link" href="/research" title="研究中心">🔬 研究</a>
-      <button id="refreshButton" class="ghost">刷新</button>
-      <button id="generateButton" class="primary">生成研究报告</button>
-      <button id="lockButton" class="ghost">退出登录</button>
-    </div>
-  </header>
+  <div id="shellTopbar"></div>
 
   <main class="page">
     <section class="hero panel">
@@ -95,6 +82,7 @@
     </section>
   </div>
 
-  <script src="/assets/etf_1430_workbench.js?v=0.1.0" defer></script>
+    <script src="/assets/app_shell.js?v=0.1.0" defer></script>
+  <script src="/assets/etf_1430_workbench.js?v=0.8.2" defer></script>
 </body>
 </html>

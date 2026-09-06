@@ -83,6 +83,13 @@ function render(data) {
     : '<tr><td colspan="11" class="empty">暂无板块数据，请等待板块快照同步任务完成。</td></tr>';
 }
 
+if (window.ETFShell) ETFShell.render({
+  active: 'boards',
+  title: '行业板块 · 板块市场',
+  subtitle: '板块广度 + ETF 代理 · 研究模式',
+  actionsHtml: `<button id="refreshButton">刷新</button><button id="lockButton">退出登录</button>`,
+});
+
 async function loadBoards() {
   $('#boardRows').innerHTML = '<tr><td colspan="11" class="empty">正在加载板块市场…</td></tr>';
   try {

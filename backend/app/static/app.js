@@ -1962,7 +1962,10 @@ function renderSignalCenter() {
   qs('#signalSummaryCards').innerHTML = cards.map(([label, value, sub, color]) => `<div class="summary-card"><div class="label">${escapeHtml(label)}</div><div class="value"${color?` style="color:${color}"`:''}>${escapeHtml(value)}</div><div class="sub">${escapeHtml(sub)}</div></div>`).join('');
   qs('#signalCurveMeta').textContent = `口径 ${payload.version} · 生成 ${timeText(payload.generated_at)}`;
   const sectors = payload.sectors || [];
-  qs('#sectorList').innerHTML = sectors.length ? sectors.map(sectorRow).join('') : '<div class="loading-row">暂无板块数据；需要先完成指标重算（refresh_indicators）。</div>';
+  const sectorListNode = qs('#sectorList');
+  if (sectorListNode) sectorListNode.innerHTML = sectors.length ? sectors.map(sectorRow).join('') : '<div class="loading-row">暂无板块数据；需要先完成指标重算（refresh_indicators）。</div>';
+  const sectorMetaNode = qs('#sectorMeta');
+  if (sectorMetaNode) sectorMetaNode.textContent = '板块市场已迁移至独立「板块」页（/boards）';
   renderFrontList();
   const slider = qs('#coefficientSlider');
   if (document.activeElement !== slider) slider.value = payload.coefficient;
@@ -2406,6 +2409,17 @@ function bindEvents() {
 }
 
 async function start() {
+  if (window.ETFShell) ETFShell.render({
+    active: ({'/research': 'research', '/research/news': 'research', '/holdings': 'holdings', '/system': 'account'})[location.pathname] || 'research',
+    title: ({'/research': 'ETF 研究中心', '/research/news': '研究中心 · 新闻证据', '/holdings': '我的持仓', '/system': '系统管理'})[location.pathname] || 'ETF 研究中心',
+    subtitle: '私有研究系统',
+    titleId: 'legacyShellTitle',
+    actionsHtml: `<span id="accountIdentity" class="hidden" aria-live="polite"></span>
+      <span id="sourceBadge" aria-live="polite">来源 —</span>
+      <span id="connectionBadge">离线</span>
+      <button id="refreshButton">刷新</button>
+      <button id="lockButton">退出登录</button>`,
+  });
   handleDecisionBoardRoute(); bindEvents(); renderTaskButtons();
   try { await refreshAuthIdentity(); } catch (_) { state.sessionActive = false; state.auth = {identifier: null, role: null}; renderAuthIdentity(); }
   if (!state.sessionActive) { showAuth(); return; }

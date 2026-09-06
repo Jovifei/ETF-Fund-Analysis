@@ -98,6 +98,13 @@ function renderRows(rows) {
   body.querySelectorAll('tr[data-code]').forEach(row => row.addEventListener('click', () => { window.location.assign(`/etf/${encodeURIComponent(row.dataset.code)}`); }));
 }
 
+if (window.ETFShell) ETFShell.render({
+  active: 'decision',
+  title: 'ETF 决策 · 14:30 尾盘模式',
+  subtitle: '决策总览 · 尾盘研究',
+  actionsHtml: `<button id="refreshButton">刷新</button><button id="generateButton" class="primary">生成研究报告</button><button id="lockButton">退出登录</button>`,
+});
+
 async function loadSummary() {
   $('#decisionRows').innerHTML = '<tr><td colspan="12" class="empty">正在计算 14:30 工作台…</td></tr>';
   try {

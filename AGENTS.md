@@ -1,5 +1,15 @@
 # Codex / Agent 操作契约
 
+<!-- BEGIN:codex-token-efficiency -->
+## Token-efficient navigation
+
+- Obey the mandatory reading order below, but do not preload any additional history or repository-wide content.
+- When `.codegraph/` exists, start code exploration with lightweight CodeGraph tools: file map, symbol search, callers/callees, impact, and single-node lookup. Use broad context/explore only if these are insufficient.
+- Use `rg` for exact identifiers, errors, config keys, and headings; read only matching ranges. Read a whole file only when its full behavior is necessary.
+- Search documentation names/headings first and open only task-relevant sections. Do not read archived reports, generated output, dependencies, media, databases, or logs by default.
+- Run focused checks first. Keep verbose output on disk and return only exit status, failing cases, and the relevant error region.
+<!-- END:codex-token-efficiency -->
+
 ## 项目性质
 
 这是用户个人私有的中国 ETF/LOF 研究系统。它可以输出研究状态和仓位变化提示，但不连接券商、不自动下单，也不把模型输出描述成确定事实。
