@@ -74,9 +74,28 @@
 
 - WorkBuddy：信息优先级/五档分组/指标解释参考，不是像素级复制；
 - `illusionno/fund-analysis-matrix`：暗色金融卡片/表格与详情交互参考；
-- 中国行情习惯：涨/强用红暖色，下跌/风险用绿；
+- 中国行情习惯：上涨/偏强用红暖色，下跌用绿；风险/阻断另用清楚的状态强调，不与行情方向混淆；
 - forecast 情景使用独立紫/虚线/非实际标识；
 - 当前 Canvas 已有 zoom/pan/crosshair/Zone，不因旧计划提 Lightweight Charts 就强制重写。
+
+## 生产浏览器认证与数据库合同
+
+后续部署/排障文档必须继续明确下面这套浏览器数据库认证配置，不能恢复旧 Bearer Token/localStorage 方案：
+
+```text
+AUTH_ENABLED=true
+DATABASE_URL=<PostgreSQL URL>
+AUTO_CREATE_SCHEMA=false
+AUTH_COOKIE_SECURE=true
+```
+
+数据库完成 Alembic 迁移后，在服务器本地使用：
+
+```text
+fund-decision auth-bootstrap-admin
+```
+
+创建首个管理员。浏览器只通过 HttpOnly/SameSite Cookie 会话与 CSRF 保护访问；密码、会话令牌和生产凭据不得写入 localStorage、页面、Git、聊天或报告。
 
 ## 当前真正卡点
 
