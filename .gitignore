@@ -29,3 +29,19 @@ backend/*.egg-info/
 
 # Private remote deployment operations guide (local only, do not commit)
 docs/PRIVATE_REMOTE_DEPLOYMENT.md
+
+# Opt-in workspace runtime, never commit user data or build dependencies.
+deploy/workspace.env
+frontend/node_modules/
+frontend/test-results/
+frontend/playwright-report/
+backend/app/workspace_dist/
+bridge/jobs/
+bridge/runner-home/
+bridge/device.secret
+bridge/claim.json
+
+# Delivery and isolated trial outputs are local only.
+.local/
+trial-runtime/
+.delivery-validation/

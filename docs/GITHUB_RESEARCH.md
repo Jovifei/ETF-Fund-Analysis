@@ -180,3 +180,11 @@
 - 不在 Python path；
 - 不允许存放生产密钥；
 - 仅用于人工比较和测试。
+
+
+## Revision 2026-09-06：P0–P4 全文件交付
+
+不覆盖以上旧日期结论。实际吸收与拒绝边界见 [DELIVERY_P0_P4](DELIVERY_P0_P4.md)。
+Vibe固定09e8404已提供隔离试验工具与五类原生产物导出/预览/审核适配，未将上游设为主站运行依赖，未完成真实模型试点。
+KLineCharts9.8.12已用于Vue图表，计算仍由已有Python公式提供；不复制QuantDinger独立前端或Kairo资源。
+人物Skill按目录/版本判断，候选风格模板位于config/research_styles.json，无生产策略晋升权。

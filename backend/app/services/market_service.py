@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from datetime import date, datetime, timedelta
 from uuid import uuid4
 
@@ -112,62 +113,57 @@ class MarketService:
             wanted = {code.upper() for code in codes}
             instruments = [item for item in instruments if item.ts_code.upper() in wanted or item.symbol in wanted]
         end_date = datetime.now(self.settings.timezone).date()
-        totals = {"inserted": 0, "updated": 0, "instruments": 0, "failures": []}
+        totals = {"inserted": 0, "updated": 0, "unchanged": 0, "instruments": 0, "failures": []}
         for instrument in instruments:
             start_date = end_date - timedelta(days=lookback_days)
-            earliest = db.scalar(
-                select(func.min(DailyBar.trade_date)).where(DailyBar.instrument_id == instrument.id)
-            )
-            latest = db.scalar(
-                select(func.max(DailyBar.trade_date)).where(DailyBar.instrument_id == instrument.id)
-            )
+            earliest, latest = db.execute(
+                select(func.min(DailyBar.trade_date), func.max(DailyBar.trade_date))
+                .where(DailyBar.instrument_id == instrument.id)
+            ).one()
             if earliest is not None and latest is not None and earliest <= start_date:
-                # History already covers the requested lookback; refresh a short overlap only.
+                # Keep a correction overlap; extending history still backfills.
                 start_date = max(start_date, latest - timedelta(days=7))
             timer = AuditTimer()
             error: Exception | None = None
             records = []
             try:
-                records = self.provider.fetch_daily_bars(instrument.ts_code, start_date, end_date)
-                totals["instruments"] += 1
-                for item in records:
-                    row = db.scalar(
-                        select(DailyBar).where(
+                records = list(self.provider.fetch_daily_bars(instrument.ts_code, start_date, end_date))
+                # Validate the complete batch before touching persisted history.
+                # Exact duplicates are idempotent; conflicting duplicates are
+                # not silently selected by whichever record happens to be last.
+                batch = self._validated_bar_batch(records, instrument.ts_code, start_date, end_date)
+                counts = {"inserted": 0, "updated": 0, "unchanged": 0}
+                with db.begin_nested():
+                    existing = {
+                        (row.trade_date, row.adjust): row
+                        for row in db.scalars(select(DailyBar).where(
                             DailyBar.instrument_id == instrument.id,
-                            DailyBar.trade_date == item.trade_date,
-                            DailyBar.adjust == item.adjust,
-                        )
-                    )
-                    payload = item.to_dict()
-                    if row is None:
-                        row = DailyBar(
-                            instrument_id=instrument.id,
-                            trade_date=item.trade_date,
-                            open=item.open,
-                            high=item.high,
-                            low=item.low,
-                            close=item.close,
-                            adjust=item.adjust,
-                            source=item.source,
-                            quality_hash=stable_hash(payload),
-                        )
-                        db.add(row)
-                        totals["inserted"] += 1
-                    else:
-                        totals["updated"] += 1
-                    row.open = item.open
-                    row.high = item.high
-                    row.low = item.low
-                    row.close = item.close
-                    row.pre_close = item.pre_close
-                    row.volume = item.volume
-                    row.amount = item.amount
-                    row.pct_change = item.pct_change
-                    row.source = item.source
-                    row.quality_hash = stable_hash(payload)
+                            DailyBar.trade_date >= start_date, DailyBar.trade_date <= end_date,
+                        ))
+                    }
+                    for key, (item, content_hash) in batch.items():
+                        row = existing.get(key)
+                        if row is not None and row.quality_hash == content_hash:
+                            counts["unchanged"] += 1
+                            continue
+                        if row is None:
+                            row = DailyBar(instrument_id=instrument.id, trade_date=item.trade_date,
+                                           adjust=item.adjust)
+                            db.add(row)
+                            existing[key] = row
+                            counts["inserted"] += 1
+                        else:
+                            counts["updated"] += 1
+                        for field in ("open", "high", "low", "close", "pre_close", "volume", "amount", "pct_change", "source"):
+                            setattr(row, field, getattr(item, field))
+                        row.quality_hash = content_hash
+                    db.flush()
+                totals["instruments"] += 1
+                for key in counts:
+                    totals[key] += counts[key]
             except Exception as exc:
                 error = exc
-                totals["failures"].append({"ts_code": instrument.ts_code, "error": f"{type(exc).__name__}: {exc}"})
+                totals["failures"].append({"ts_code": instrument.ts_code, "error": type(exc).__name__})
             finally:
                 if self.persist_provider_audits:
                     record_provider_audit(
@@ -181,7 +177,38 @@ class MarketService:
                     )
         db.flush()
         emit_event(db, "bars.updated", {**totals, "run_id": run_id})
-        return {"run_id": run_id, **totals}
+        return {"run_id": run_id, "ingestion_policy": "daily-batch-v1", **totals}
+
+    @staticmethod
+    def _validated_bar_batch(records, ts_code: str, start_date: date, end_date: date) -> dict:
+        """Bound and validate provider records without changing price/indicator formulas."""
+        if len(records) > 50_000:
+            raise ProviderError("daily history batch exceeds the bounded record limit")
+        batch = {}
+        for item in records:
+            if item.ts_code != ts_code or not isinstance(item.trade_date, date) or isinstance(item.trade_date, datetime):
+                raise ProviderError("daily history identity mismatch")
+            if not start_date <= item.trade_date <= end_date:
+                raise ProviderError("daily history outside requested window")
+            if not isinstance(item.adjust, str) or not item.adjust or len(item.adjust) > 8:
+                raise ProviderError("daily history adjustment is invalid")
+            if not isinstance(item.source, str) or not item.source or len(item.source) > 32:
+                raise ProviderError("daily history source is invalid")
+            prices = [item.open, item.high, item.low, item.close]
+            if any(isinstance(v, bool) or v is None or not math.isfinite(float(v)) or float(v) <= 0 for v in prices):
+                raise ProviderError("daily history price is invalid")
+            if not item.low <= min(item.open, item.close) <= max(item.open, item.close) <= item.high:
+                raise ProviderError("daily history OHLC bounds are inconsistent")
+            for name in ("pre_close", "volume", "amount", "pct_change"):
+                value = getattr(item, name)
+                if value is not None and (isinstance(value, bool) or not math.isfinite(float(value))
+                                          or (name != "pct_change" and float(value) < 0)):
+                    raise ProviderError("daily history numeric field is invalid")
+            key, digest = (item.trade_date, item.adjust), stable_hash(item.to_dict())
+            if key in batch and batch[key][1] != digest:
+                raise ProviderError("daily history contains conflicting duplicate observations")
+            batch[key] = (item, digest)
+        return batch
 
     def refresh_quotes(
         self,

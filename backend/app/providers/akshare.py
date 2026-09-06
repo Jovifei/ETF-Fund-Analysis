@@ -25,13 +25,17 @@ logger = logging.getLogger(__name__)
 class AKShareProvider(MarketProvider):
     name = "akshare"
 
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(self, settings: Settings | None = None, *, ak_client: Any | None = None) -> None:
         self.settings = settings or get_settings()
-        try:
-            import akshare as ak  # type: ignore
-        except ImportError as exc:
-            raise ProviderError("未安装 akshare；请安装 market 可选依赖") from exc
-        self.ak = ak
+        # Explicit client injection keeps adapter unit tests independent of the
+        # optional live-data package. Production still imports the real client
+        # and fails closed when it is missing; there is no mock fallback.
+        if ak_client is None:
+            try:
+                import akshare as ak_client  # type: ignore
+            except ImportError as exc:
+                raise ProviderError("未安装 akshare；请安装 market 可选依赖") from exc
+        self.ak = ak_client
         self.tz = ZoneInfo(self.settings.timezone_name)
         self._watchlist = self.settings.load_watchlist()["instruments"]
 

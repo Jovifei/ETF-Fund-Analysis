@@ -334,9 +334,7 @@ class _FakeAk:
 
 
 def _provider(em=None, ths=None) -> AKShareProvider:
-    provider = AKShareProvider()
-    provider.ak = _FakeAk(em=em, ths=ths)
-    return provider
+    return AKShareProvider(ak_client=_FakeAk(em=em, ths=ths))
 
 
 def test_akshare_sector_uses_eastmoney_when_available():

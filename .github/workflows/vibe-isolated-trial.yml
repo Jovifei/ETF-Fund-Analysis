@@ -1,0 +1,101 @@
+name: vibe-isolated-trial
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-trial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VRA_PYTHON: python
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: simonlin1212/Vibe-Research
+          ref: 09e8404a33ba0d05e036e01207be4701c61d692c
+          path: isolated-vibe
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Pin verification and private directories
+        id: pin
+        run: |
+          test "$(git -C isolated-vibe rev-parse HEAD)" = '09e8404a33ba0d05e036e01207be4701c61d692c'
+          mkdir -m 700 -p "$RUNNER_TEMP/vibe-data" "$RUNNER_TEMP/vibe-codex-home" "$RUNNER_TEMP/vibe-evidence"
+          echo "VRA_DATA_ROOT=$RUNNER_TEMP/vibe-data" >> "$GITHUB_ENV"
+          echo "CODEX_HOME=$RUNNER_TEMP/vibe-codex-home" >> "$GITHUB_ENV"
+          echo "VRA_CODEX_HOME=$RUNNER_TEMP/vibe-codex-home" >> "$GITHUB_ENV"
+      - name: Isolated dependency installation
+        id: install
+        working-directory: isolated-vibe
+        run: |
+          npm ci --ignore-scripts --prefix orchestrator
+          npm ci --ignore-scripts --prefix desktop
+          python -m venv .venv
+          .venv/bin/pip install pytest -r .agents/skills/data-access/scripts/requirements.txt
+          echo "VRA_PYTHON=$PWD/.venv/bin/python" >> "$GITHUB_ENV"
+      - name: Upstream orchestrator test suite
+        id: orchestrator
+        working-directory: isolated-vibe
+        run: npm test --prefix orchestrator > "$RUNNER_TEMP/vibe-evidence/orchestrator-tests.log" 2>&1
+      - name: Upstream TypeScript contract
+        id: types
+        if: always() && steps.install.outcome == 'success'
+        working-directory: isolated-vibe
+        run: npm run typecheck --prefix orchestrator > "$RUNNER_TEMP/vibe-evidence/typecheck.log" 2>&1
+      - name: Upstream desktop tests and production build
+        id: desktop
+        if: always() && steps.install.outcome == 'success'
+        working-directory: isolated-vibe
+        run: |
+          npm test --prefix desktop > "$RUNNER_TEMP/vibe-evidence/desktop-tests.log" 2>&1
+          npm run build --prefix desktop > "$RUNNER_TEMP/vibe-evidence/desktop-build.log" 2>&1
+      - name: Upstream deterministic calculation tests
+        id: python
+        if: always() && steps.install.outcome == 'success'
+        working-directory: isolated-vibe
+        run: .venv/bin/python -m pytest calc/tests -q > "$RUNNER_TEMP/vibe-evidence/calculation-tests.log" 2>&1
+      - name: Bounded real-input preflight without a model
+        id: preflight
+        if: always() && steps.install.outcome == 'success'
+        working-directory: isolated-vibe
+        shell: bash
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=5s 180s node orchestrator/src/run.ts --symbol 510300 --market SH --run-id etf-isolated-no-agent --no-agent --execution-mode controlled_mcp --endpoints core --no-archive --python "$VRA_PYTHON" > "$RUNNER_TEMP/vibe-evidence/preflight.json" 2> "$RUNNER_TEMP/vibe-evidence/preflight.log"
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Explicit demo and real-model qualification record
+        if: always()
+        env:
+          PIN: ${{ steps.pin.outcome }}
+          INSTALL: ${{ steps.install.outcome }}
+          TESTS: ${{ steps.orchestrator.outcome }}
+          TYPES: ${{ steps.types.outcome }}
+          DESKTOP: ${{ steps.desktop.outcome }}
+          PYTHON_TESTS: ${{ steps.python.outcome }}
+          PREFLIGHT_EXIT: ${{ steps.preflight.outputs.exit_code }}
+        run: |
+          python - <<'PY'
+          import json, os, hashlib
+          from pathlib import Path
+          from datetime import datetime, timezone
+          root = Path(os.environ['RUNNER_TEMP']) / 'vibe-evidence'
+          root.mkdir(exist_ok=True)
+          result = {'schema':'etf-vibe-isolation-trial-v1','upstream_commit':'09e8404a33ba0d05e036e01207be4701c61d692c','observed_at':datetime.now(timezone.utc).isoformat(),'checks':{k:os.environ.get(k) for k in ['PIN','INSTALL','TESTS','TYPES','DESKTOP','PYTHON_TESTS']},'real_input_preflight_exit':os.environ.get('PREFLIGHT_EXIT'),'real_model_status':'blocked_missing_user_login','model_called':False,'production_database_connected':False,'qualification':'not_qualified','notes':['Upstream company-analysis preflight is not an ETF-adapted research result.','Unit tests and builds are engineering evidence, not profitability or live-model evidence.'],'artifacts':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in root.iterdir() if p.is_file()}}
+          (root/'trial-manifest.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vibe-isolated-trial-${{ github.run_id }}
+          path: ${{ runner.temp }}/vibe-evidence/
+          retention-days: 14

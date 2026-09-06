@@ -1,0 +1,31 @@
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 158ca7025305, initial schema
+INFO  [alembic.runtime.migration] Running upgrade 158ca7025305 -> 9f1c2b3a4d5e, Persist validated multi-model analysis and review candidates.
+INFO  [alembic.runtime.migration] Running upgrade 9f1c2b3a4d5e -> a2b3c4d5e6f7, Add configuration-backed market context registry and observations.
+INFO  [alembic.runtime.migration] Running upgrade a2b3c4d5e6f7 -> b3c4d5e6f7a8, Add bounded transient holding-import OCR records.
+INFO  [alembic.runtime.migration] Running upgrade b3c4d5e6f7a8 -> c4d5e6f7a8b9, forecast corridor and reproducibility provenance
+INFO  [alembic.runtime.migration] Running upgrade c4d5e6f7a8b9 -> d5e6f7a8b9c0, calibration candidate profiles for forecast promotion governance
+INFO  [alembic.runtime.migration] Running upgrade d5e6f7a8b9c0 -> e6f7a8b9c0d1, persist unified decision-board snapshots and isolated provisional input
+INFO  [alembic.runtime.migration] Running upgrade e6f7a8b9c0d1 -> f7a8b9c0d1e2, enforce one active decision-board refresh
+INFO  [alembic.runtime.migration] Running upgrade f7a8b9c0d1e2 -> 0a9b1c2d3e4f, add closed-enrollment multi-user authentication foundations
+INFO  [alembic.runtime.migration] Running upgrade 0a9b1c2d3e4f -> 1b2c3d4e5f6a, add nullable owner boundaries for private portfolio records
+INFO  [alembic.runtime.migration] Running upgrade 1b2c3d4e5f6a -> 2c3d4e5f6a7b, enforce one legacy/system holding per instrument
+INFO  [alembic.runtime.migration] Running upgrade 2c3d4e5f6a7b -> e7f8a9b0c1d2, sector snapshots for kline stabilization workbench
+INFO  [alembic.runtime.migration] Running upgrade e7f8a9b0c1d2 -> f1a2b3c4d5e6, sector snapshots: add board_type (industry/concept/market)
+INFO  [alembic.runtime.migration] Running upgrade f1a2b3c4d5e6 -> a3b4c5d6e7f8, widen signal version columns to 64 chars
+INFO  [alembic.runtime.migration] Running upgrade a3b4c5d6e7f8 -> a9b8c7d6e5f4, support resistance snapshots (unified single-source S/R store)
+INFO  [alembic.runtime.migration] Running upgrade a9b8c7d6e5f4 -> b0c1d2e3f4a5, user watchlist entries (user-scoped fund watchlists)
+INFO  [alembic.runtime.migration] Running upgrade b0c1d2e3f4a5 -> c2d3e4f5a6b7, multi-interval market bars (30m/60m intraday research)
+INFO  [alembic.runtime.migration] Running upgrade c2d3e4f5a6b7 -> d40609090001, Isolated workspace research, device, import and asynchronous task state.
+INFO  [alembic.runtime.migration] Running upgrade d40609090001 -> d40609090002, Replay receipts for signed device requests (no credential material).
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.schemas
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.tables
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.types
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.constraints
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.defaults
+INFO  [alembic.runtime.plugins] setting up autogenerate plugin alembic.autogenerate.comments
+No new upgrade operations detected.
+d40609090002 (head)

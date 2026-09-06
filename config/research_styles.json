@@ -1,0 +1,39 @@
+{
+  "schema_version": "research-style-registry-v1",
+  "production_enabled": false,
+  "templates": [
+    {
+      "id": "trend-counterevidence",
+      "name": "趋势与反证",
+      "version": "1.0",
+      "status": "hypothesis_only",
+      "description": "先陈述趋势依据，再列量能、相关指标冗余、失效条件和样本外反例。多空角色不是两套交易指令。",
+      "required_evidence": ["deterministic_indicators", "decision_snapshot"],
+      "questions": ["引用哪些已知时点的证据？", "哪些指标只是同一趋势的重复表达？", "什么新证据会推翻当前解释？"],
+      "references": [{"title": "TradingAgents：多角色反证架构（参考方法，不复制交易决策）", "url": "https://github.com/TauricResearch/TradingAgents", "scope": "architecture_reference"}],
+      "qualification": "not_qualified"
+    },
+    {
+      "id": "portfolio-risk-context",
+      "name": "防守与持仓风险",
+      "version": "1.0",
+      "status": "hypothesis_only",
+      "description": "检查集中度、报价覆盖、主题重叠与收益相关；个人成本仅是风险上下文，不能当成共享市场信号。",
+      "required_evidence": ["private_risk_context"],
+      "questions": ["是否遗漏现金和未录入资产？", "哪些权重因报价缺失而不能确定？", "收益相关与真实成分重叠有没有混淆？"],
+      "references": [{"title": "本项目持仓数据与研究包合同", "url": "docs/DELIVERY_P0_P4.md", "scope": "local_contract"}],
+      "qualification": "not_qualified"
+    },
+    {
+      "id": "catalyst-point-in-time",
+      "name": "催化与信息时点",
+      "version": "1.0",
+      "status": "hypothesis_only",
+      "description": "区分发布时间、采集时间、来源断言和分析推断；后到的新闻不能回填为 14:30 已知信息。",
+      "required_evidence": ["news_untrusted_content"],
+      "questions": ["原始来源在哪里，何时可见？", "有没有相互冲突的消息？", "哪些材料过期、缺失或只有社区转述？"],
+      "references": [{"title": "Vibe-Research：证据、计算、冲突与报告分离", "url": "https://github.com/simonlin1212/Vibe-Research/tree/09e8404a33ba0d05e036e01207be4701c61d692c", "scope": "architecture_reference"}],
+      "qualification": "not_qualified"
+    }
+  ]
+}

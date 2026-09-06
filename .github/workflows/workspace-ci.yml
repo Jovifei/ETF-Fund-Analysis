@@ -1,0 +1,56 @@
+name: workspace-ci
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: workspace-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: |
+          pip install -e '.[dev]'
+          npm ci --ignore-scripts --prefix frontend
+      - name: Dependency security gate
+        run: npm audit --audit-level=high --prefix frontend
+      - name: Workspace backend contracts
+        run: pytest backend/tests/test_workspace*.py backend/tests/test_delivery*.py -q
+      - name: TypeScript check
+        run: npm run typecheck --prefix frontend
+      - name: Vue unit tests
+        run: npm run test --prefix frontend
+      - name: Production frontend build
+        run: npm run build --prefix frontend
+      - name: Chromium browser dependencies
+        run: cd frontend && npx playwright install --with-deps chromium
+      - name: Real browser smoke with isolated mock data
+        run: npm run test:e2e --prefix frontend
+      - name: Auditable source archive
+        if: always()
+        run: mkdir -p /tmp/workspace-source && git archive -o /tmp/workspace-source/source.tar HEAD
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workspace-evidence-${{ github.run_id }}
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+            /tmp/workspace-source/
+          retention-days: 7

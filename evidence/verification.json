@@ -1,0 +1,82 @@
+{
+  "generated_at": "2026-09-06T12:44:23.356620+00:00",
+  "workspace_version": "0.9.0-rc.2",
+  "app_package_version": "0.8.0",
+  "baseline_main": "3c7bdc7ff36b3dea482651e087127a33c4974903",
+  "absorbed_implementation": "7adfbc0d6dd38edc8345b67705ae86aa1d6acd4e",
+  "absorbed_git_tree": "1e3471e525ce50baec3615ced1f9fb3062f84fa0",
+  "source_modified_after_absorbed_commit": true,
+  "pushed_this_delivery": false,
+  "python": "3.13.5",
+  "node": "v22.16.0",
+  "python_packages": {
+    "fastapi": "0.128.2",
+    "sqlalchemy": "2.0.50",
+    "pydantic": "2.13.4",
+    "pydantic-settings": "2.14.1",
+    "pandas": "2.2.3",
+    "numpy": "2.3.5",
+    "httpx": "0.28.1",
+    "pytest": "9.0.2",
+    "openpyxl": "3.1.5",
+    "defusedxml": "0.7.1",
+    "alembic": "1.18.4",
+    "pwdlib": "0.3.1"
+  },
+  "backend_pytest": {
+    "name": "pytest",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "1",
+    "tests": "783",
+    "time": "224.583",
+    "timestamp": "2026-09-06T12:28:49.000661+00:00",
+    "hostname": "localhost"
+  },
+  "backend_passed": 782,
+  "post_final_backend_targeted_passed": 33,
+  "vue_tests": {
+    "passed": 19,
+    "test_files": 6
+  },
+  "legacy_js_tests": {
+    "passed": 19
+  },
+  "vue_typecheck": "passed",
+  "vue_build": "passed",
+  "compileall": "passed",
+  "sqlite_migration": {
+    "head": "d40609090002",
+    "upgrade": "passed",
+    "check": "passed"
+  },
+  "packaged_asgi_smoke": "passed",
+  "offline_browser": {
+    "validation_kind": "offline_browser_with_in_process_asgi",
+    "mock": true,
+    "models_called": false,
+    "network_navigation": false,
+    "production_http_e2e": "not_run_in_this_harness",
+    "checks": [
+      "real overview component consumes real ASGI mock snapshots",
+      "search/watchlist/detail/canvas zoom drag reset without model tasks",
+      "holding preview confirmation persisted and canonical chart shows cost",
+      "native-artifact preview and explicit unverified candidate import",
+      "factor templates and responsive mobile drawer"
+    ],
+    "page_errors": [],
+    "api_calls": 28
+  },
+  "standard_http_browser_e2e": "blocked_by_managed_browser_url_policy_not_claimed_passed",
+  "docker": "not_executed",
+  "postgresql": "not_executed_test_postgres_url_not_configured",
+  "fresh_network_dependency_install": "not_executed_in_current_offline_environment",
+  "live_dependency_audit": "not_executed_in_current_offline_environment",
+  "live_model": "not_executed",
+  "live_provider": "not_executed",
+  "chinese_ocr_engine": "not_installed",
+  "vibe_full_model_trial": "not_verified_requires_actual_user_login_and_upstream_test_resolution",
+  "historical_1430_backtest": "not_qualified",
+  "automatic_orders": false,
+  "standalone_packaged_tree_asgi_smoke": "passed"
+}

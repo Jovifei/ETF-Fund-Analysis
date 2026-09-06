@@ -1,0 +1,12 @@
+{
+  "status": "passed",
+  "mode": "isolated_mock_asgi_smoke",
+  "routes": [
+    "/",
+    "/etf/512480.SH",
+    "/holdings",
+    "/ai",
+    "/settings"
+  ],
+  "models_called": false
+}

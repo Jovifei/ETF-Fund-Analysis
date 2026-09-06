@@ -1,0 +1,101 @@
+# Independent opt-in deployment; does not reuse or mutate production volumes.
+name: etf-workspace
+
+x-app: &app
+  image: etf-workspace:${WORKSPACE_IMAGE_TAG:-local}
+  build:
+    context: ..
+    dockerfile: backend/Dockerfile
+  init: true
+  read_only: true
+  restart: unless-stopped
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  tmpfs:
+    - /tmp:size=128m,mode=1777
+    - /var/lib/china-fund-decision/ocr-transient:size=256m,mode=0700,uid=10001,gid=10001
+  environment: &environment
+    DATABASE_URL: postgresql+psycopg://fundapp:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in a private env file}@db:5432/fund_decision
+    APP_ENV: ${APP_ENV:-development}
+    AUTH_ENABLED: "true"
+    AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+    AUTO_CREATE_SCHEMA: "false"
+    REGISTRATION_ENABLED: "false"
+    MARKET_PROVIDER: ${MARKET_PROVIDER:-public_composite}
+    ALLOW_MOCK_FALLBACK: "false"
+    TUSHARE_TOKEN: ${TUSHARE_TOKEN:-}
+    LLM_ENABLED: "false"
+    ANALYSIS_ENABLED: "false"
+    OCR_MODE: ${OCR_MODE:-disabled}
+    OCR_TRANSIENT_ROOT: /var/lib/china-fund-decision/ocr-transient
+    REPORTS_DIR: /app/reports
+    BACKUP_DIR: /app/backups
+    WORKSPACE_UI_ENABLED: "true"
+    WORKSPACE_BRIDGE_ENABLED: ${WORKSPACE_BRIDGE_ENABLED:-false}
+    WORKSPACE_DAILY_REVIEW_ENABLED: ${WORKSPACE_DAILY_REVIEW_ENABLED:-false}
+    WORKSPACE_DAILY_JOB_BUDGET: ${WORKSPACE_DAILY_JOB_BUDGET:-5}
+    WORKSPACE_MAX_ACTIVE_JOBS: ${WORKSPACE_MAX_ACTIVE_JOBS:-3}
+    TZ: Asia/Shanghai
+  volumes:
+    - reports:/app/reports
+    - backups:/app/backups
+  networks: [workspace]
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fund_decision
+      POSTGRES_USER: fundapp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in a private env file}
+      TZ: Asia/Shanghai
+    volumes: [database:/var/lib/postgresql/data]
+    networks: [workspace]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U fundapp -d fund_decision"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    <<: *app
+    command: [sh, -c, "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    ports: ["127.0.0.1:${WORKSPACE_PORT:-8081}:8000"]
+    depends_on:
+      db: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, curl, -fsS, "http://127.0.0.1:8000/api/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+      retries: 10
+
+  worker:
+    <<: *app
+    command: [python, -m, app.workspace.worker]
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, python, scripts/workspace_worker_health.py]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  scheduler:
+    <<: *app
+    command: [python, -m, app.scheduler]
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck: {disable: true}
+
+networks:
+  workspace: {driver: bridge}
+volumes:
+  database:
+  reports:
+  backups:
