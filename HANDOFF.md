@@ -1,68 +1,126 @@
-# 交接说明（发行版 0.7.0）
+# 交接说明（v0.8.x）
 
-## 当前结论
+更新时间：2026-09-06  
+应用发行版本：`0.8.0`  
+产品/导航合同：`v0.8.1`
 
-应用/发行包版本为 `0.7.0`。策略、指标、预测和回测版本由 `config/strategy.json` 独立管理，当前策略为 `signal-v0.7.0-research`（以及对应的 `indicator-v0.5.1`、`similarity-corridor-v0.7.0` 等版本）。当前结论必须写作本地/Mock 已验证，不能写作生产就绪、实时、calibrated 或投资建议。
+这份根目录文件只负责告诉后续 Agent **先读什么、不要做什么**。完整项目脉络已经迁移到 `docs/` 当前权威文档。
 
-## 接手前阅读
+## 接手前阅读顺序
 
-1. `AGENTS.md`
-2. `STATUS.md`
-3. `README.md`、`QUICKSTART.md` 与 `docs/USER_GUIDE.md`
-4. `CODEX_DEPLOYMENT_TASKS.md`
-5. `docs/ARCHITECTURE.md`、`docs/IMPLEMENTATION_MATRIX.md`、`docs/ALIYUN_DEPLOYMENT.md`
-6. `config/strategy.json`、`config/market_context.json` 和 `vendor/manifest.json`
+1. `AGENTS.md` — 安全、数据真实性、策略修改硬合同；
+2. `STATUS.md` — 当前最短状态；
+3. `docs/README.md` — 文档权威层级；
+4. `docs/PROJECT_HANDOFF_20260906.md` — 最终目标、历史、开源借鉴、卡点；
+5. `docs/UI_UX_CONTRACT.md` — 页面/颜色/组件/交互；
+6. `docs/ROADMAP_TO_FINAL.md` — 剩余工作；
+7. `docs/NAVIGATION_CONTRACT_V081.md` — 当前路由精确合同；
+8. `docs/ARCHITECTURE.md`、`docs/IMPLEMENTATION_MATRIX.md`；
+9. 修改专题代码前再读对应测试和专题文档。
 
-## 分析 provider 契约
-
-默认关闭。生产若明确启用，只配置一个 Codex/OpenAI Responses 主 provider：服务器本地 `.env` 的 `OPENAI_API_KEY`、`ANALYSIS_PRIMARY_MODEL`、`ANALYSIS_CODEX_BASE_URL`、`ANALYSIS_PRIMARY_MODE=responses`，以及 `ANALYSIS_ENABLED=true`、`ANALYSIS_CODEX_ENABLED=true`、`ANALYSIS_PRIMARY_PROVIDER=codex_openai_responses`。Anthropic Messages/DeepSeek 仅手工切换且必须成为唯一 enabled primary；失败不静默 failover。
-
-模型无工具、无凭据/数据库/网络抓取/券商权限，不计算指标、预测、仓位或交易动作。Codex/Claude Code 只能在应用生成证据包后异步生成只读 review candidate；人工明确接受后才记录。不得从聊天、Git、报告或截图回传密钥。
-
-## 市场上下文与 OCR
-
-- 六项默认上下文是中国行业/板块广度、S&P 500、Nasdaq Composite、Nasdaq-100、中国半导体 ETF 代理、韩国半导体 ETF 代理。两个代理的代码默认 null，disabled/unverified，直到 Provider 资格包证明代码、覆盖、流动性、时间和字段质量。
-- 今日变化是观察主字段，价格次级；Mock、unavailable、历史快照或缺失核心数据不得产生 actionable 信号。上下文刷新默认 15 分钟，scheduler 只每 30 秒检查到期。
-- Pillow 是核心 OCR 校验；Paddle 仅限 Python 3.12/Linux 本地资格验证、`paddle-local-v1` manifest（路径/大小/SHA-256）和私有只读模型根。当前环境没有真实 Paddle 包/model 资格证明。Docker 镜像不安装重型 Paddle，缺模型诚实返回 503/unavailable。
-- OCR 上传最大 10MiB、12,000×12,000、4,000 万像素、60 秒硬超时、15 分钟 TTL；transient root 0700、模型 root 私有只读；生产 Windows fail-closed。上传→OCR→编辑/拒绝→确认，确认前不写持仓；云复核默认关闭，仅明确同意可用且当前不出网。
-
-## 迁移、备份与运行
-
-生产数据库只用 PostgreSQL 16；先做可验证备份，再按以下顺序执行：
+## 当前用户工作流
 
 ```text
-158ca7025305 -> 9f1c2b3a4d5e -> a2b3c4d5e6f7 -> b3c4d5e6f7a8 -> c4d5e6f7a8b9 -> d5e6f7a8b9c0 -> e6f7a8b9c0d1 -> f7a8b9c0d1e2 -> 0a9b1c2d3e4f -> 1b2c3d4e5f6a -> 2c3d4e5f6a7b (current head)
+/               决策
+/boards         板块
+/holdings       持仓
+/research       研究
+/research/news  新闻
+/system         系统
+/decision/1430  决策的 14:30 二级模式
+/etf/{code}     全局唯一 ETF 详情
 ```
 
-The disposable SQLite migration chain now passes `alembic upgrade head`, `current`, full `downgrade base`/re-upgrade, and `alembic check` at `2c3d4e5f6a7b`; the historical chain includes `d5e6f7a8b9c0`, `e6f7a8b9c0d1`, and `f7a8b9c0d1e2` before authentication. The audited metadata reconciliation preserves the historical review/analysis hash-check names, the opaque import-session check, and legacy nullable calibration JSON; a unique `candidate_id` constraint remains its lookup index. Real PostgreSQL upgrade/downgrade/backup-restore evidence remains a deployment gate.
+旧 `/legacy`、`/workbench/*` 只做兼容。不要重新把它们放回一级导航。
 
-回滚只能在隔离实例验证备份 SHA-256 和可恢复性后执行 `alembic downgrade`，不得手工改生产库。API 仅映射 `127.0.0.1:8080`，PostgreSQL 不暴露宿主机端口，公网必须经 Caddy/Nginx HTTPS；反代上传上限 12MB 以覆盖 10MiB 图像和 multipart 开销。
+## 当前最重要的语义合同
 
-## 尚未获得的证据
+### 一个 current action
+同一 ETF 同一时刻只能有一个 canonical current action：
 
-真实 Tushare/AKShare/新闻/OpenAI 端点权限和稳定性、真实 PostgreSQL 迁移/恢复、ECS/HTTPS、Paddle Python 3.12 wheel/model、上下文代理资格、真实 walk-forward/预测校准和完整交易约束仍待部署环境完成。不要把测试绿灯、Mock bootstrap 或候选报告升级为这些证据。
+```text
+可加仓 / 可入场 / 可试探 / 观望 / 减仓
+```
 
-## 交接下一步
+研究 score、Signal Center coefficient、14:30 排名分只能排序/解释，不能改写它。
 
-运行 `tasks/todo.md` 的 D3 review 命令集，记录实际版本、测试、迁移、Mock HTTP、浏览器烟测、Docker/Compose 和 secret scan 结果；最后用显式文件列表归属本轮变更，不声称拥有复制快照中的其他脏文件。
+### 一个 ETF 详情
+从 Decision / Boards / Holdings / Research / 14:30 看单只 ETF 都去：
 
-## 信号中心（v0.6.0）
+```text
+/etf/{code}
+```
 
-- 端点：`GET /api/signals/center?coefficient=0.5~1.5&days=5~250`，返回汇总卡、机会/风险/止盈前排、信号行情曲线和板块强度；只读取层，不改写生产信号。
-- 设置：`PUT /api/settings` 的 `signal_center_coefficient`（0.50–1.50，默认 1.00），存于 `runtime_settings`，无迁移需求。
-- 前端：第 5 个页签"信号中心"——汇总卡、Canvas 三序列曲线、板块强度排名、前排三页签（条目可点开 K 线详情）、信号系数滑块；命中持仓的条目显示"已持有 · 注意账户影响"琥珀色提醒。
-- 边界：mock provider 下 `research_only=true` 并全局告警；前排列表一律标注"研究提示，非操作指令"。
+### 一个 forecast horizon 合同
 
-## ETF 信号分级（signal-grade-v0.1.0）
+```text
+1 / 3 / 5 / 10
+```
 
-- 端点：`GET /api/signals/grade`，只读取 Indicator/Quote/Forecast 快照，派生量能/均线/MACD/KDJ/RSI/九转标签与五档；**不写 Holding、不改生产信号**。
-- 前端：第 6 个页签「ETF信号分级」——五张计数卡、分组宽表（空组文案「今日无『X』标的」）、预测格强制「FORECAST · 非实际结果」。
-- 标的：`config/watchlist.json` v2 行业主题池 + 标普500/纳斯达克100/黄金/黄金股；`510300.SH` 仍为门控基准。不接同花顺指数代码。
-- 卡点：免费档（系统页默认）即可拉东财公开 ETF；完整档才需要 Token。Token 在系统页只写不回显，可用「测试是否连通」。规格见 `docs/superpowers/specs/2026-08-30-etf-signal-grade-design.md`。
-- 决策看板现为行业/概念板块卡片（`GET /api/signals/boards`，`config/board_catalog.json`），不是东财实时板块指数。
+20D 是历史规划/可选未来研究，不是当前运行合同。
 
-- 使用说明：`docs/USER_GUIDE.md`。生产浏览器认证必须显式设置 `AUTH_ENABLED=true`，并使用 PostgreSQL `DATABASE_URL`、`AUTO_CREATE_SCHEMA=false` 和 `AUTH_COOKIE_SECURE=true`；完成 Alembic 后只在服务器本地运行 `fund-decision auth-bootstrap-admin` 创建首个管理员。账户密码哈希和可撤销会话仅存于数据库。生产不得配置 `AUTH_USERNAME`、`AUTH_PASSWORD_HASH`、`AUTH_SESSION_SECRET` 或旧 Bearer；兼容 Bearer 不能代表浏览器身份。
+未 calibrated 的 `p_up` 只能写“历史相似样本上涨占比”。
 
-## ETF 14:30 Workbench 本地接收
+### 数据真实优先
 
-本交付以完整 ZIP 覆盖包提供，不依赖此前远端空壳分支。使用 `docs/LOCAL_AGENT_PROMPT_ETF_1430.md` 覆盖到本地仓库、运行门禁、创建新分支、提交 PR 后再合并。不要把日线 Mock 结果描述成历史 14:30 策略验证。
+- Mock/stale/degraded/unverified/missing 不冒充真实；
+- 日 K 不冒充分钟线；
+- provider 失败显示错误/降级，不恢复静态假数据；
+- 所有外部数据经过 Provider Adapter + audit。
+
+## 页面视觉合同
+
+不要“凭印象重画”。读 `docs/UI_UX_CONTRACT.md`：
+
+- WorkBuddy：信息优先级/五档分组/指标解释参考，不是像素级复制；
+- `illusionno/fund-analysis-matrix`：暗色金融卡片/表格与详情交互参考；
+- 中国行情习惯：涨/强用红暖色，下跌/风险用绿；
+- forecast 情景使用独立紫/虚线/非实际标识；
+- 当前 Canvas 已有 zoom/pan/crosshair/Zone，不因旧计划提 Lightweight Charts 就强制重写。
+
+## 当前真正卡点
+
+功能很多已经实现，但**最终研究可信度还没封版**：
+
+1. 真实 5/15m 14:30 point-in-time 数据；
+2. 费用/滑点/可成交性/停牌涨跌停等事件约束；
+3. 1/3/5/10 forecast OOS 校准；
+4. 事件驱动验证；
+5. Shadow Run；
+6. 人工批准。
+
+因此当前必须继续保持：
+
+```text
+historical_1430_backtest = not_qualified
+```
+
+这比继续增加指标、页面或模型更优先。
+
+## UI 技术债
+
+- `/holdings`、`/research`、`/system` 仍复用 legacy shell；
+- `/decision/1430` 仍有独立 HTML/JS；
+- 最终可拆组件和删除 legacy DOM，但不能改变 current action / forecast / 数据真实性合同。
+
+## 每次修改流程
+
+1. 读当前代码/测试，不从旧聊天/旧计划直接推断现状；
+2. 先写失败测试或复现；
+3. 修改；
+4. 运行相关局部测试；
+5. 跑完整 CI 门禁；
+6. 策略/指标/预测语义改动必须升级相应版本并补 walk-forward/回测/泄漏检查；
+7. PR 合并后再部署；
+8. 生产先备份、`git pull --ff-only`、迁移、health/provider audit/smoke，可回滚。
+
+## 不做
+
+- 自动交易；
+- 券商连接；
+- AI 自动写 current action/持仓；
+- 为了回测好看自动调阈值；
+- 把测试/Mock/旧生产记录描述成当前新变更的生产证据；
+- 从第三方源码/历史 Git/文档复制凭据或违反许可证。
+
+如接下来没有用户新的优先级指示，默认按 `docs/ROADMAP_TO_FINAL.md` 的 P0 开始：**真实 14:30 point-in-time 数据闭环。**
