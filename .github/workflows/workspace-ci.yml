@@ -19,6 +19,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: pip
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -26,26 +27,29 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install dependencies
         run: |
-          pip install -e '.[dev,market,workspace]'
+          pip install -e '.[dev,workspace]'
           npm ci --ignore-scripts --prefix frontend
       - name: Workspace backend contracts
         run: pytest backend/tests/test_workspace*.py -q
-      - name: Export audited development inputs
-        if: always()
-        run: |
-          mkdir -p /tmp/workspace-inputs
-          git archive -o /tmp/workspace-inputs/source.tar HEAD
-          test ! -d frontend/node_modules || tar -czf /tmp/workspace-inputs/node-modules.tgz -C frontend node_modules
-          pip download --no-deps 'pwdlib==0.3.1' -d /tmp/workspace-inputs
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: workspace-inputs-${{ github.run_id }}
-          path: /tmp/workspace-inputs/
-          retention-days: 2
       - name: TypeScript check
         run: npm run typecheck --prefix frontend
       - name: Vue unit tests
         run: npm run test --prefix frontend
       - name: Production frontend build
         run: npm run build --prefix frontend
+      - name: Chromium browser dependencies
+        run: cd frontend && npx playwright install --with-deps chromium
+      - name: Real browser smoke with isolated mock data
+        run: npm run test:e2e --prefix frontend
+      - name: Auditable source archive
+        if: always()
+        run: mkdir -p /tmp/workspace-source && git archive -o /tmp/workspace-source/source.tar HEAD
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workspace-evidence-${{ github.run_id }}
+          path: |
+            frontend/test-results/
+            frontend/playwright-report/
+            /tmp/workspace-source/
+          retention-days: 7
