@@ -16,7 +16,8 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import Field
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -25,7 +26,7 @@ from app.db.session import get_db
 from app.models import AuthUser
 from app.workspace.config import workspace_settings
 from app.workspace.jobs import WorkspaceError, accept_result, job_view, owner_scope, utc
-from app.workspace.models import WorkspaceBridgeDevice, WorkspaceResearchJob
+from app.workspace.models import WorkspaceBridgeDevice, WorkspaceBridgeReceipt, WorkspaceResearchJob
 from app.workspace.protocol import DeviceFailure, DeviceResult, Heartbeat, PairRequest, StrictModel
 
 router = APIRouter(prefix="/api/bridge")
@@ -51,6 +52,9 @@ def device_view(row: WorkspaceBridgeDevice) -> dict:
 
 def new_pairing(db: Session, label: str, user_id: int | None) -> dict:
     scope = owner_scope(user_id)
+    now = datetime.now(UTC)
+    db.execute(update(WorkspaceBridgeDevice).where(WorkspaceBridgeDevice.owner_scope == scope, WorkspaceBridgeDevice.status == "pending", WorkspaceBridgeDevice.pairing_expires_at < now).values(status="expired", pairing_hash=None))
+    db.execute(update(WorkspaceBridgeDevice).where(WorkspaceBridgeDevice.owner_scope == scope, WorkspaceBridgeDevice.status == "active", WorkspaceBridgeDevice.token_expires_at < now).values(status="expired", token_hash=None))
     count = db.scalar(select(func.count()).select_from(WorkspaceBridgeDevice).where(WorkspaceBridgeDevice.owner_scope == scope, WorkspaceBridgeDevice.status.in_(("active", "pending")))) or 0
     if count >= 5:
         raise WorkspaceError(429, "revoke_unused_devices_before_pairing")
@@ -58,7 +62,7 @@ def new_pairing(db: Session, label: str, user_id: int | None) -> dict:
     row = WorkspaceBridgeDevice(device_id=uuid4().hex, user_id=user_id, owner_scope=scope, label=label, pairing_hash=secret_hash(code), pairing_expires_at=datetime.now(UTC) + timedelta(minutes=10))
     db.add(row)
     db.flush()
-    return {"device": device_view(row), "pairing_code": code, "expires_in_seconds": 600, "note": "一次性配对码仅用于本地连接器；不是模型密钥。关闭此页面后不再显示。"}
+    return {"device": device_view(row), "pairing_code": code, "expires_in_seconds": 600, "expires_at": row.pairing_expires_at.isoformat(), "note": "一次性配对码仅用于本地连接器；不是模型密钥。关闭此页面后不再显示。"}
 
 
 @router.post("/pair")
@@ -95,7 +99,7 @@ async def require_device(request: Request, db: DB, settings: Config) -> Workspac
     if not re.fullmatch(r"[A-Za-z0-9_-]{40,128}", token):
         raise HTTPException(401, "invalid_device_credential")
     now = datetime.now(UTC)
-    row = db.scalar(select(WorkspaceBridgeDevice).where(WorkspaceBridgeDevice.token_hash == secret_hash(token), WorkspaceBridgeDevice.status == "active", WorkspaceBridgeDevice.token_expires_at > now))
+    row = db.scalar(select(WorkspaceBridgeDevice).where(WorkspaceBridgeDevice.token_hash == secret_hash(token), WorkspaceBridgeDevice.status == "active", WorkspaceBridgeDevice.token_expires_at > now).with_for_update())
     if row is None:
         raise HTTPException(401, "invalid_device_credential")
     if row.user_id is not None:
@@ -107,15 +111,31 @@ async def require_device(request: Request, db: DB, settings: Config) -> Workspac
     if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
         timestamp = request.headers.get("x-bridge-time", "")
         signature = request.headers.get("x-bridge-signature", "")
+        nonce = request.headers.get("x-bridge-nonce", "")
+        if not re.fullmatch(r"[a-f0-9]{32}", nonce):
+            raise HTTPException(401, "invalid_device_nonce")
         try:
             valid_time = abs(time.time() - int(timestamp)) <= 300
         except ValueError:
             valid_time = False
         body_hash = hashlib.sha256(await request.body()).hexdigest()
-        message = f"{request.method}\n{request.url.path}\n{timestamp}\n{body_hash}".encode()
+        message = f"{request.method}\n{request.url.path}\n{timestamp}\n{nonce}\n{body_hash}".encode()
         expected = hmac.new(token.encode(), message, hashlib.sha256).hexdigest()
         if not valid_time or not hmac.compare_digest(expected, signature):
             raise HTTPException(401, "invalid_device_signature")
+        receipt_id = f"{row.device_id}:{nonce}"
+        if db.get(WorkspaceBridgeReceipt, receipt_id) is not None:
+            raise HTTPException(409, "device_request_replayed")
+        db.execute(delete(WorkspaceBridgeReceipt).where(WorkspaceBridgeReceipt.created_at < now - timedelta(minutes=10)))
+        recent = db.scalar(select(func.count()).select_from(WorkspaceBridgeReceipt).where(WorkspaceBridgeReceipt.device_id == row.device_id, WorkspaceBridgeReceipt.created_at > now - timedelta(minutes=1))) or 0
+        if recent >= 120:
+            raise HTTPException(429, "device_rate_limited")
+        db.add(WorkspaceBridgeReceipt(receipt_id=receipt_id, device_id=row.device_id, created_at=now))
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(409, "device_request_replayed") from None
     return row
 
 
@@ -140,7 +160,9 @@ def claim(payload: LeaseRequest, db: DB, device: Device) -> dict:
     if existing:
         if existing.status != "running" or existing.lease_until is None or utc(existing.lease_until) <= now:
             raise HTTPException(409, "claim_already_closed")
-        return _lease_view(existing)
+        result = _lease_view(existing)
+        db.commit()  # Consume the signed request nonce even for idempotent claims.
+        return result
     db.execute(update(WorkspaceResearchJob).where(WorkspaceResearchJob.owner_scope == device.owner_scope, WorkspaceResearchJob.status == "running", WorkspaceResearchJob.lease_until < now).values(status="failed", failure_reason="lease_expired"))
     running = db.scalar(select(WorkspaceResearchJob.job_id).where(WorkspaceResearchJob.lease_device_id == device.device_id, WorkspaceResearchJob.status == "running").limit(1))
     if running:

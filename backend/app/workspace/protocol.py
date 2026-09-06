@@ -7,7 +7,7 @@ import math
 import re
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 Code = Annotated[str, StringConstraints(pattern=r"^\d{6}\.(SH|SZ|BJ)$")]
 Hash = Annotated[str, StringConstraints(pattern=r"^[a-f0-9]{64}$")]
@@ -80,6 +80,15 @@ class ResearchRequest(StrictModel):
     ts_code: Code | None = None
     include_holdings: bool = False
     request_key: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9_-]{16,64}$")
+
+
+    @model_validator(mode="after")
+    def coherent_target(self):
+        if self.kind == "daily" and self.ts_code is not None:
+            raise ValueError("daily research cannot target one instrument")
+        if self.kind == "etf" and self.ts_code is None:
+            raise ValueError("ETF research requires a code")
+        return self
 
 
 class ReviewRequest(StrictModel):

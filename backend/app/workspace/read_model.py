@@ -16,7 +16,7 @@ from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.models import DailyBar, ForecastSnapshot, Holding, IndicatorSnapshot, Instrument, MarketBar, QuoteSnapshot, ReportArtifact, UserWatchlistEntry
+from app.models import DailyBar, ForecastSnapshot, Holding, IndicatorSnapshot, Instrument, MarketBar, QuoteSnapshot, ReportArtifact, SectorSnapshot, UserWatchlistEntry
 from app.services.decision_board_service import DecisionBoardService
 from app.services.factor_analysis_service import DEFAULT_FACTORS
 from app.services.support_resistance_service import SupportResistanceService
@@ -257,3 +257,15 @@ def portfolio_risk(db: Session, settings: Settings, user_id: int | None) -> dict
             key = item["theme"] or "未分类"
             theme_weights[key] = theme_weights.get(key, 0) + item["weight"]
     return {"pricing_complete": portfolio["pricing_complete"], "max_weight": max((item["weight"] or 0 for item in items), default=0) if portfolio["pricing_complete"] else None, "theme_weights": theme_weights, "correlations": correlations, "basis": "last_120_daily_return_pearson_unadjusted_research", "limitations": ["不含未录入现金和资产", "收益相关性不是成分股重叠", "未复权收益会受分红影响", "个人成本不参与共享市场信号"], "actionable": False}
+
+
+def sector_overview(db: Session, settings: Settings) -> dict:
+    """Two bounded read-only SQL queries; no all-market grade/indicator hydration."""
+    ranked = select(SectorSnapshot.id, func.row_number().over(partition_by=[SectorSnapshot.board_type, SectorSnapshot.sector_name], order_by=[SectorSnapshot.trade_date.desc(), SectorSnapshot.fetched_at.desc(), SectorSnapshot.id.desc()]).label("rn")).subquery()
+    rows = db.scalars(select(SectorSnapshot).join(ranked, ranked.c.id == SectorSnapshot.id).where(ranked.c.rn == 1).order_by(SectorSnapshot.board_type, SectorSnapshot.sector_name).limit(1000)).all()
+    boards = []
+    for row in rows:
+        total = row.total_count or 0
+        valid_breadth = total > 0 and sum((row.up_count or 0, row.down_count or 0, row.flat_count or 0)) == total
+        boards.append({"board_type": row.board_type, "sector_name": row.sector_name, "sector_pct_change": number(row.pct_change), "source": row.source, "source_as_of": iso(row.trade_date), "fetched_at": iso(row.fetched_at), "is_mock": settings.market_provider == "mock" or "mock" in row.source.lower(), "breadth": {"trade_date": iso(row.trade_date), "available": valid_breadth, "up": row.up_count if valid_breadth else None, "down": row.down_count if valid_breadth else None, "flat": row.flat_count if valid_breadth else None, "total": total if valid_breadth else None}})
+    return {"boards": boards, "scope": "persisted_sector_snapshots", "pct_change_unit": "percentage_points", "source_as_of": max((iso(row.trade_date) for row in rows), default=None), "freshness": "read_source_dates_not_live" if rows else "missing", "actionable": False}

@@ -64,6 +64,8 @@ def sync_catalog(db, provider, *, enable_codes=()):
             db.add(row)
             known[row.ts_code] = row
             created += 1
+    if any(known[code].kind not in {"ETF", "LOF"} for code in wanted & known.keys()):
+        raise ValueError("only ETF/LOF can enter workspace research pool")
     if wanted - known.keys():
         raise ValueError("requested ETF missing from catalog")
     active = sum(bool(row.enabled) for row in known.values())
@@ -77,7 +79,7 @@ def sync_catalog(db, provider, *, enable_codes=()):
 
 def execute(job_id: str) -> int:
     # A data job cannot silently bill a model via the legacy news enrichment path.
-    settings = get_settings().model_copy(update={"analysis_enabled": False})
+    settings = get_settings().model_copy(update={"analysis_enabled": False, "llm_enabled": False})
     steps = []
     with session_scope() as db:
         row = db.get(WorkspaceDataJob, job_id)
@@ -120,7 +122,7 @@ def execute(job_id: str) -> int:
                 ("refresh_bars", {"lookback_days": request["lookback_days"], "codes": codes}),
                 ("refresh_indicators", {}), ("refresh_forecasts", {}),
                 ("refresh_quotes", {"codes": codes}), ("refresh_signals", {}),
-                ("refresh_sector_snapshots", {}), ("refresh_news", {"since_hours": 72}),
+                ("refresh_sector_snapshots", {}), ("refresh_market_context", {}), ("refresh_news", {"since_hours": 72}),
                 ("refresh_decision_board", {}),
             ]
         else:

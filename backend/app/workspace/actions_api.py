@@ -122,6 +122,14 @@ def cancel_research(job_id: str, db: DB, user: User):
     return jobs.job_view(row)
 
 
+@router.post("/research-jobs/{job_id}/retry")
+def retry_research(job_id: str, db: DB, user: User):
+    row = jobs.owned_job(db, job_id, jobs.owner_scope(user.id if user else None), lock=True)
+    jobs.retry(db, row)
+    db.commit()
+    return jobs.job_view(row)
+
+
 @router.get("/devices")
 def devices(db: DB, user: User):
     rows = db.scalars(select(WorkspaceBridgeDevice).where(WorkspaceBridgeDevice.owner_scope == jobs.owner_scope(user.id if user else None)).order_by(WorkspaceBridgeDevice.created_at.desc()).limit(20))
@@ -156,10 +164,13 @@ def list_imports(db: DB, user: User):
 
 @router.post("/imports/preview")
 async def preview_file(db: DB, user: User, file: UploadFile = File(...)):
-    data = await file.read(workspace_settings().import_max_bytes + 1)
-    row = imports.preview(db, data, Path(file.filename or "").suffix.lower(), user.id if user else None)
-    db.commit()
-    return imports.view(row)
+    try:
+        data = await file.read(workspace_settings().import_max_bytes + 1)
+        row = imports.preview(db, data, Path(file.filename or "").suffix.lower(), user.id if user else None)
+        db.commit()
+        return imports.view(row)
+    finally:
+        await file.close()
 
 
 @router.post("/imports/preview-rows")

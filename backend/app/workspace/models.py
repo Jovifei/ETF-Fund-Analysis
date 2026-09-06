@@ -101,3 +101,11 @@ class WorkspacePreference(Base):
     user_id: Mapped[int | None] = mapped_column(ForeignKey("auth_users.id", ondelete="CASCADE"))
     settings_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
+class WorkspaceBridgeReceipt(Base):
+    """Short-lived nonce receipts; no token, request body or response stored."""
+    __tablename__ = "workspace_bridge_receipts"
+    receipt_id: Mapped[str] = mapped_column(String(65), primary_key=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("workspace_bridge_devices.device_id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)

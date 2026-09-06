@@ -26,7 +26,9 @@ def search(db: DB, settings: Config, user: User, response: Response, q: str = Qu
 
 
 @private_router.get("/workspace/overview")
-def overview(db: DB, settings: Config, user: User, horizon: Literal[1, 3, 5, 10] = 1, offset: int = Query(default=0, ge=0, le=10000), limit: int = Query(default=100, ge=1, le=500), theme: str | None = Query(default=None, max_length=128)) -> dict:
+def overview(db: DB, settings: Config, user: User, horizon: int = Query(default=1), offset: int = Query(default=0, ge=0, le=10000), limit: int = Query(default=100, ge=1, le=500), theme: str | None = Query(default=None, max_length=128)) -> dict:
+    if horizon not in (1, 3, 5, 10):
+        raise HTTPException(422, "horizon must be one of 1, 3, 5, 10")
     return read_model.overview(db, settings, horizon, offset, limit, theme)
 
 
@@ -44,6 +46,11 @@ def chart(code: str, db: DB, settings: Config, user: User, interval: Literal["1d
     if result is None:
         raise HTTPException(404, "ETF/LOF 不在已同步目录中")
     return result
+
+
+@private_router.get("/workspace/sectors")
+def sectors(db: DB, settings: Config, user: User) -> dict:
+    return read_model.sector_overview(db, settings)
 
 
 @private_router.get("/workspace/holdings")

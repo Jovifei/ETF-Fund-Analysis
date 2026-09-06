@@ -186,6 +186,8 @@ def accept_result(db: Session, row: WorkspaceResearchJob, result: ResearchResult
 
 
 def review(db: Session, row: WorkspaceResearchJob, result_hash: str, decision: str, note: str) -> WorkspaceResearchJob:
+    if decision not in {"accepted", "rejected"}:
+        raise WorkspaceError(422, "invalid_review_decision")
     if row.status != "completed" or row.result_hash != result_hash:
         raise WorkspaceError(409, "review_result_mismatch")
     if row.review_status == decision:
@@ -196,4 +198,21 @@ def review(db: Session, row: WorkspaceResearchJob, result_hash: str, decision: s
     row.reviewed_at = datetime.now(UTC)
     db.flush()
     # Intentionally no signal/holding/calibration writes or event-based promotion.
+    return row
+
+
+def retry(db: Session, row: WorkspaceResearchJob) -> WorkspaceResearchJob:
+    """An explicit user retry preserves the frozen evidence; never automatic."""
+    now = datetime.now(UTC)
+    if row.status not in {"failed", "cancelled"} or row.result_hash:
+        raise WorkspaceError(409, "research_retry_requires_failed_or_cancelled")
+    if utc(row.expires_at) <= now or row.attempts >= 3:
+        raise WorkspaceError(409, "research_retry_expired_or_exhausted")
+    lock_owner(db, row.owner_scope)
+    active = db.scalar(select(func.count()).select_from(WorkspaceResearchJob).where(WorkspaceResearchJob.owner_scope == row.owner_scope, WorkspaceResearchJob.status.in_(("queued", "running")), WorkspaceResearchJob.expires_at > now)) or 0
+    if active >= workspace_settings().max_active_jobs:
+        raise WorkspaceError(429, "research_job_budget_exceeded")
+    row.status, row.failure_reason = "queued", None
+    row.lease_id = row.lease_device_id = row.lease_until = None
+    db.flush()
     return row

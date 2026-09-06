@@ -76,10 +76,10 @@ def test_workspace_job_http_does_not_execute_a_model(bootstrapped):
 
 def signed(token, path, data):
     raw = json.dumps(data, ensure_ascii=False, separators=(',', ':')).encode()
-    timestamp = str(int(time.time()))
-    message = f'POST\n{path}\n{timestamp}\n{hashlib.sha256(raw).hexdigest()}'.encode()
+    timestamp, nonce = str(int(time.time())), uuid4().hex
+    message = f'POST\n{path}\n{timestamp}\n{nonce}\n{hashlib.sha256(raw).hexdigest()}'.encode()
     return raw, {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json',
-                 'X-Bridge-Time': timestamp, 'X-Bridge-Signature': hmac.new(token.encode(), message, hashlib.sha256).hexdigest()}
+                 'X-Bridge-Time': timestamp, 'X-Bridge-Nonce': nonce, 'X-Bridge-Signature': hmac.new(token.encode(), message, hashlib.sha256).hexdigest()}
 
 
 def test_bridge_pair_scope_signature_and_revocation(monkeypatch, bootstrapped):

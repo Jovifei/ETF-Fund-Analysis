@@ -9,7 +9,7 @@ import PageState from '../components/PageState.vue'
 import Badge from '../components/Badge.vue'
 const route=useRoute(),horizon=ref(1),theme=ref(''),filter=ref(''),offset=ref(0),limit=100
 const q=useQuery<Overview>(()=>`/api/workspace/overview?horizon=${horizon.value}&offset=${offset.value}&limit=${limit}${theme.value?'&theme='+encodeURIComponent(theme.value):''}`)
-const market=useQuery<Record<string,unknown>>('/api/market-context'),sectors=useQuery<Record<string,unknown>>('/api/sectors/market')
+const market=useQuery<Record<string,unknown>>('/api/market-context'),sectors=useQuery<Record<string,unknown>>('/api/workspace/sectors')
 const marketItems=computed(()=>{const items=market.data.value?.latest_view??[];return Array.isArray(items)?items.map(record).filter(x=>x.context_kind==='index'||x.kind==='index').slice(0,4):[]})
 const sectorItems=computed(()=>{const data=sectors.data.value;const rows=data?.boards??[];return Array.isArray(rows)?rows.map(record).filter(x=>x.board_type!=='market').slice(0,12):[]})
 const rows=computed(()=>q.data.value?.rows.filter(row=>(!filter.value||row.grade===filter.value))??[])
