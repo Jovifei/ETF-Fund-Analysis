@@ -12,6 +12,7 @@ from app.models import AuthUser
 from app.workspace import read_model
 from app.workspace.actions_api import router as actions_router
 from app.workspace.bridge_api import router as device_router
+from app.workspace.import_revisions import router as revision_router
 
 private_router = APIRouter(prefix="/api", dependencies=[Depends(require_private_access)])
 DB = Annotated[Session, Depends(get_db)]
@@ -69,6 +70,7 @@ def factors(db: DB, settings: Config, user: User) -> dict:
 
 
 private_router.include_router(actions_router)
+private_router.include_router(revision_router)
 # Machine credentials never inherit the legacy browser authentication path.
 router = APIRouter()
 router.include_router(private_router)

@@ -48,6 +48,12 @@ COPY config /app/config
 COPY scripts /app/scripts
 COPY --from=builder /wheels /wheels
 COPY --from=frontend-builder /workspace/backend/app/workspace_dist /app/backend/app/workspace_dist
+COPY frontend/NOTICE.md /app/THIRD_PARTY_LICENSES/NOTICE.md
+COPY --from=frontend-builder /workspace/frontend/node_modules/vue/LICENSE /app/THIRD_PARTY_LICENSES/vue.txt
+COPY --from=frontend-builder /workspace/frontend/node_modules/vue-router/LICENSE /app/THIRD_PARTY_LICENSES/vue-router.txt
+COPY --from=frontend-builder /workspace/frontend/node_modules/pinia/LICENSE /app/THIRD_PARTY_LICENSES/pinia.txt
+COPY --from=frontend-builder /workspace/frontend/node_modules/klinecharts/LICENSE /app/THIRD_PARTY_LICENSES/klinecharts.txt
+COPY --from=frontend-builder /workspace/frontend/node_modules/lucide-vue-next/LICENSE /app/THIRD_PARTY_LICENSES/lucide-vue-next.txt
 
 # Install the project wheel produced by this exact build plus its market extras
 # from the builder wheelhouse. Do not pin the application version here: the

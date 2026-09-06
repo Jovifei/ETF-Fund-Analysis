@@ -1,12 +1,13 @@
 """The real outbound client exercised against the ASGI API; no model login."""
 import importlib.util
+import json
 import os
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import event
+from sqlalchemy import event, select
 
 from app.core.config import get_settings
 from app.db.session import get_engine, session_scope
@@ -65,7 +66,7 @@ def test_signed_client_real_user_round_trip_and_revocation(monkeypatch, tmp_path
             job_id = created.json()['job']['job_id']
             lease = client.claim()
             assert lease['job']['job_id'] == job_id
-            assert client.claim()['lease_id'] == lease['lease_id']
+            assert client.claim()['lease_id'] == lease['lease_id']  # retry-safe with fresh nonce
             assert client.remote_status(job_id)['status'] == 'running'
             assert (root / 'jobs' / job_id / 'prompt.txt').is_file()
             assert not (root / 'jobs' / job_id / 'result.json').exists()
@@ -87,6 +88,7 @@ def test_signed_client_real_user_round_trip_and_revocation(monkeypatch, tmp_path
 
 
 def test_workspace_read_queries_remain_bounded_and_do_not_call_provider(bootstrapped):
+    from app.workspace import read_model
     from app.models import Instrument
     with session_scope() as db:
         for i in range(120):
@@ -106,3 +108,14 @@ def test_workspace_read_queries_remain_bounded_and_do_not_call_provider(bootstra
                 assert not any(s.lstrip().upper().startswith(('INSERT', 'UPDATE', 'DELETE')) for s in statements)
     finally:
         event.remove(engine, 'before_cursor_execute', capture)
+
+
+def test_reviewed_model_version_is_a_fail_closed_gate(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    root = bridge.private_root(tmp_path / 'runner')
+    folder = root / 'jobs' / ('a' * 32)
+    folder.mkdir(parents=True)
+    monkeypatch.setattr(bridge.subprocess, 'run', lambda *a, **k: SimpleNamespace(returncode=0, stdout='codex-cli 0.0.1'))
+    with pytest.raises(bridge.BridgeError, match='unreviewed_codex_version'):
+        bridge.codex_once(root, folder, 'codex', 'model-test-only')
+    assert not (folder / 'result.json').exists()

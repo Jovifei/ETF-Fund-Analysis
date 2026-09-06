@@ -38,7 +38,8 @@ export class ChartAdapter {
     const lastTime = projectBars(data.bars.slice(-1))[0]?.timestamp
     if (lastTime) {
       const levels = data.sr_overlay_allowed ? data.support_resistance?.levels ?? [] : []
-      for (const level of levels.slice(0, 12)) this.zone(level, lastTime)
+      const nearest = [...levels].filter(level => levelPrice(level) != null).sort((a, b) => Math.abs(levelPrice(a)! - data.bars.at(-1)!.close) - Math.abs(levelPrice(b)! - data.bars.at(-1)!.close)).slice(0, 6)
+      for (const level of nearest) this.zone(level, lastTime)
       if (data.cost_overlay_allowed && cost != null && cost > 0) chart.createOverlay({ name: 'priceLine', lock: true, points: [{ timestamp: lastTime, value: cost }], styles: { line: { color: '#d8b776', size: 1, style: 'dashed' }, text: { color: '#d8b776' } } } as OverlayCreate)
     }
     this.listener = event => onCursor(data.bars[event.dataIndex ?? data.bars.length - 1])

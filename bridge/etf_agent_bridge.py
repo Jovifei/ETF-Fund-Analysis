@@ -182,7 +182,7 @@ class Bridge:
         self.post(f"/api/bridge/jobs/{job_id}/failure", {"lease_id": lease["lease_id"], "reason": reason})
         (self.root / "claim.json").unlink(missing_ok=True)
 
-    def work_once(self, binary: str, model: str) -> bool:
+    def work_once(self, binary: str, model: str, *, timeout: int = 600) -> bool:
         response = self.claim()
         if not response.get("job"):
             return False
@@ -195,7 +195,7 @@ class Bridge:
         output = folder / "result.json"
         try:
             if not output.exists():
-                output = codex_once(self.root, folder, binary, model)
+                output = codex_once(self.root, folder, binary, model, timeout=timeout)
             self.submit(job_id, output)
         except (BridgeError, ValueError, OSError, subprocess.SubprocessError) as exc:
             if not output.exists():
@@ -205,6 +205,18 @@ class Bridge:
                     pass  # Preserve claim marker when the failure cannot be acknowledged.
             raise
         return True
+
+    def release_closed_claim(self, job_id: str) -> None:
+        self.job_folder(job_id)
+        status = self.remote_status(job_id)
+        if status.get("status") not in {"completed", "failed", "cancelled", "expired"} and not status.get("expired"):
+            raise BridgeError("cannot_release_active_claim")
+        marker = self.root / "claim.json"
+        if marker.exists():
+            lease = read_json(self.job_folder(job_id) / "lease.json")
+            if read_json(marker).get("claim_id") != lease.get("lease_id"):
+                raise BridgeError("local_claim_identity_mismatch")
+            marker.unlink()
 
     def claim(self) -> dict:
         marker = self.root / "claim.json"
@@ -323,6 +335,7 @@ def main() -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     pair = sub.add_parser("pair"); pair.add_argument("--origin", required=True)
     sub.add_parser("doctor"); sub.add_parser("claim"); sub.add_parser("heartbeat")
+    release = sub.add_parser("release"); release.add_argument("job_id")
     submit = sub.add_parser("submit"); submit.add_argument("job_id"); submit.add_argument("result")
     run = sub.add_parser("run-codex"); run.add_argument("job_id"); run.add_argument("--binary", default="codex"); run.add_argument("--model", required=True)
     work = sub.add_parser("work"); work.add_argument("--binary", default="codex"); work.add_argument("--model", required=True)
@@ -352,6 +365,9 @@ def main() -> int:
         elif args.command == "claim":
             value = bridge.claim()
             print(json.dumps({"job_id": (value.get("job") or {}).get("job_id"), "status": "exported_for_review" if value.get("job") else "no_job", "model_called": False}))
+        elif args.command == "release":
+            bridge.release_closed_claim(args.job_id)
+            print("已清理远端终结任务的本地领取标记，未删除研究记录。")
         elif args.command == "submit":
             value = bridge.submit(args.job_id, Path(args.result))
             print(json.dumps({"status": value.get("status"), "review_status": value.get("review_status"), "actionable": False}))
@@ -361,7 +377,7 @@ def main() -> int:
             deadline, completed = time.monotonic() + args.max_minutes * 60, 0
             while completed < args.max_jobs and time.monotonic() < deadline:
                 bridge.post("/api/bridge/heartbeat", {"bridge_version": VERSION, "login_state": "unknown", "mode": "codex_no_tools"})
-                if bridge.work_once(args.binary, args.model):
+                if bridge.work_once(args.binary, args.model, timeout=max(1, min(600, int(deadline - time.monotonic())))):
                     completed += 1
                     print(json.dumps({"completed_candidates": completed, "published": False}))
                 else:
