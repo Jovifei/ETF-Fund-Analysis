@@ -24,6 +24,8 @@ dependencies = [
   "alembic>=1.14,<2",
   "Pillow<13,>=10",
   "exchange-calendars>=4.11,<5",
+  "openpyxl==3.1.5",
+  "defusedxml==0.7.1",
 ]
 
 [project.optional-dependencies]
@@ -57,6 +59,7 @@ dev = [
 
 [project.scripts]
 fund-decision = "app.cli:app"
+fund-workspace-worker = "app.workspace.worker:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["backend"]
@@ -83,4 +86,4 @@ include-package-data = true
 where = ["backend"]
 
 [tool.setuptools.package-data]
-app = ["static/*", "templates/*"]
+app = ["static/*", "templates/*", "workspace_dist/index.html", "workspace_dist/workspace-assets/*"]
