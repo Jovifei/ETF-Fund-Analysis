@@ -18,6 +18,8 @@ from app.core.logging import configure_logging
 from app.db.session import init_db, session_scope
 from app.services.holding_import_service import HoldingImportService
 from app.services.runtime_service import RuntimeService
+from app.workspace.api import router as workspace_router
+from app.workspace.ui import WorkspaceMiddleware
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -53,7 +55,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="私有 ETF/LOF 研究看板。技术指标与信号为确定性计算，AI 仅用于结构化新闻解读。",
+    description="私有 ETF/LOF 研究看板。技术指标与信号为确定性计算，AI 仅用于结构化研究解读。",
     lifespan=lifespan,
     docs_url="/docs" if settings.app_env != "production" else None,
     redoc_url=None,
@@ -67,6 +69,9 @@ if settings.cors_origin_list:
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_headers=["Authorization", "Content-Type"],
     )
+
+# The security-header middleware below remains outermost, including Vue files.
+app.add_middleware(WorkspaceMiddleware)
 
 
 @app.middleware("http")
@@ -89,6 +94,7 @@ async def request_id(request: Request, call_next):
 app.include_router(api_router)
 app.include_router(workbench_1430_router)
 app.include_router(workbench_kline_router)
+app.include_router(workspace_router)
 
 
 @app.get("/", include_in_schema=False)
@@ -98,13 +104,11 @@ def index() -> FileResponse:
 
 @app.get("/legacy", include_in_schema=False)
 def legacy() -> RedirectResponse:
-    # Historical bookmark only. New navigation never exposes /legacy.
     return RedirectResponse("/research", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @app.get("/decision/1430", include_in_schema=False)
 def decision_1430() -> FileResponse:
-    # Secondary decision mode: same product domain as Decision, not a peer workbench.
     return FileResponse(STATIC_DIR / "etf_1430_workbench.html", media_type="text/html; charset=utf-8")
 
 
@@ -115,8 +119,6 @@ def legacy_etf_1430_workbench() -> RedirectResponse:
 
 @app.get("/workbench/kline", include_in_schema=False)
 def kline_stabilization() -> RedirectResponse:
-    # K-line research is instrument-specific and belongs to /etf/{ts_code}.
-    # An old bookmark without an instrument context returns to Decision.
     return RedirectResponse("/", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
@@ -151,7 +153,6 @@ def system_entry() -> FileResponse:
 
 @app.get("/etf/{ts_code}", include_in_schema=False)
 def etf_detail(ts_code: str) -> FileResponse:
-    # Single ETF detail surface used by Decision / Boards / Holdings / 14:30.
     return FileResponse(STATIC_DIR / "etf_detail.html", media_type="text/html; charset=utf-8")
 
 
@@ -170,6 +171,4 @@ def static_kline_stabilization() -> RedirectResponse:
     return RedirectResponse("/", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
-# Mount static resources after exact legacy-HTML redirects so old bookmarks cannot
-# bypass the task-oriented routes while CSS/JS/assets remain available.
 app.mount("/assets", StaticFiles(directory=STATIC_DIR), name="assets")
