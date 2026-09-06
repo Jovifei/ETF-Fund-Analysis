@@ -1,72 +1,31 @@
-# 文档入口与权威层级
+# 文档入口：当前实现与下一阶段目标分开读
 
-更新时间：2026-09-06  
-当前应用发行版本：`0.8.0`  
-当前导航合同：`v0.8.1`（这是产品/路由合同版本，不代表 `pyproject.toml` 已升级到 0.8.1）
+更新：2026-09-06，用户补充Kairo截图、本地研究工作站与开源吸收要求后。
+应用基线0.8.0；现有导航合同v0.8.1；**vNext为规划，尚未部署**。
 
-本目录历史文档很多，部分记录的是当时的实验、分支状态或规划。后续 Agent **不要按文件日期猜权威性**，按下面顺序阅读。
+## 首次接手
 
-## 1. 接手必读：当前权威文档
+先读根目录 `AGENTS.md`、`STATUS.md`、`HANDOFF.md`，然后按下表阅读。
 
-1. [`PROJECT_HANDOFF_20260906.md`](PROJECT_HANDOFF_20260906.md)  
-   项目最终目标、来龙去脉、阶段实现方式、开源借鉴、当前卡点和剩余目标。
-2. [`UI_UX_CONTRACT.md`](UI_UX_CONTRACT.md)  
-   页面结构、路由、组件、颜色、交互、视觉参考与禁止事项。
-3. [`ROADMAP_TO_FINAL.md`](ROADMAP_TO_FINAL.md)  
-   从当前 main 到“真正完成”的剩余工作、优先级、验收标准。
-4. [`NAVIGATION_CONTRACT_V081.md`](NAVIGATION_CONTRACT_V081.md)  
-   当前 URL 与导航语义的精确合同。
-5. [`ARCHITECTURE.md`](ARCHITECTURE.md)  
-   当前运行架构、单一计算权威、数据/预测/14:30 边界。
-6. [`IMPLEMENTATION_MATRIX.md`](IMPLEMENTATION_MATRIX.md)  
-   能力完成度、已验证证据与尚未取得的资格。
-7. [`DOCS_RECONCILIATION_20260906.md`](DOCS_RECONCILIATION_20260906.md)  
-   本轮文档梳理采用了哪些证据、改了什么、哪些内容因共享聊天链接不可抓取而无法直接核对。
+| 文档 | 用途 | 状态 |
+|---|---|---|
+| [ETF_WORKSPACE_VNEXT](planning/ETF_WORKSPACE_VNEXT.md) | 最新目标、需求ID、步骤、依赖、验收、ETF/个股分期 | 当前目标总案 |
+| [OSS_ABSORPTION_20260906](research/OSS_ABSORPTION_20260906.md) | 指定项目/补充Skill的源码锚点、可吸收项、许可与缺口 | 定向审阅，未安装 |
+| [UI_UX_CONTRACT](UI_UX_CONTRACT.md) | Kairo式左栏/搜索/账户、页面、组件、配色、空态 | 待实施 |
+| [LOCAL_RESEARCH_BRIDGE](planning/LOCAL_RESEARCH_BRIDGE.md) | 本地Codex/Vibe产物、API模式、权限、上传/审核/发布 | 待实施 |
+| [FACTOR_SKILL_GOVERNANCE](planning/FACTOR_SKILL_GOVERNANCE.md) | 持仓三类含义、因子相关性、风格Skill、研究准入 | 待实施 |
+| [PROCESS_LOG_20260906_VNEXT](PROCESS_LOG_20260906_VNEXT.md) | 这轮做过/没做过什么、覆盖范围、决策修订与交接 | 过程记录 |
 
-代码修改前仍必须先读仓库根目录：`AGENTS.md`、`STATUS.md`、`HANDOFF.md`。
+## 现有代码合同与历史
 
-## 2. 当前专题合同
+`NAVIGATION_CONTRACT_V081.md`、`CURRENT_DECISION_SOURCE_CONTRACT_20260903.md`、`HORIZON_ALIGNMENT_20260903.md`、`ARCHITECTURE.md`和`IMPLEMENTATION_MATRIX.md`描述既有基线，不能当新功能已完成的证明。`ETF_1430_VALIDATION.md`保留策略资格门禁；不阻止先交付诚实标注的研究页面。
 
-- [`CURRENT_DECISION_SOURCE_CONTRACT_20260903.md`](CURRENT_DECISION_SOURCE_CONTRACT_20260903.md)：当前动作唯一来源。
-- [`HORIZON_ALIGNMENT_20260903.md`](HORIZON_ALIGNMENT_20260903.md)：当前预测期限固定为 `1/3/5/10`；20D 仅保留历史兼容/未来研究资格。
-- [`ETF_1430_DECISION_WORKBENCH.md`](ETF_1430_DECISION_WORKBENCH.md)：14:30 决策模式的当前语义和数据边界。
-- [`ETF_1430_VALIDATION.md`](ETF_1430_VALIDATION.md)：真正验证 14:30 策略所缺的 point-in-time 证据。
-- [`FORECAST_CORRIDOR.md`](FORECAST_CORRIDOR.md)：预测走廊语义。
-- [`ETF_DATA_ONBOARDING_PLAN.md`](ETF_DATA_ONBOARDING_PLAN.md)：免费/增强数据源的实测历史与能力矩阵。
-- [`ALIYUN_DEPLOYMENT.md`](ALIYUN_DEPLOYMENT.md)：生产部署与回滚。
-- [`GITHUB_RESEARCH.md`](GITHUB_RESEARCH.md)：开源项目调研及“借鉴而不耦合”的边界。
+`RELEASE_V080.md`是历史发布证据，不证明今天ECS版本/数据仍一致。`GITHUB_RESEARCH.md`是早期调研，本轮补充项目看新审阅。`COMPREHENSIVE_SYSTEM_REFACTOR_PLAN.md`、WorkBuddy实验、旧交付prompt和日期型记录保留审计价值。
 
-## 3. 发布记录
+[上一轮项目总交接原文](https://github.com/Jovifei/ETF-Fund-Analysis/blob/3c7bdc7ff36b3dea482651e087127a33c4974903/docs/PROJECT_HANDOFF_20260906.md)及[旧路线图](https://github.com/Jovifei/ETF-Fund-Analysis/blob/3c7bdc7ff36b3dea482651e087127a33c4974903/docs/ROADMAP_TO_FINAL.md)按固定提交保存。没有删除历史来掩盖需求变更。
 
-- [`RELEASE_V080.md`](RELEASE_V080.md)：v0.8.0 架构收敛发布记录。
-- [`NAVIGATION_CONTRACT_V081.md`](NAVIGATION_CONTRACT_V081.md)：v0.8.0 发布后的任务驱动导航收敛合同。
+## 冲突处理
 
-## 4. 历史设计依据：保留，但不能直接当当前实现合同
+安全与数据真实性继续遵守AGENTS。**产品目标以用户最新明确需求为准；实现状态以固定版本代码、测试和实际部署证据为准。** 两者冲突应记录为待实现差距，不能用代码现状否决需求，也不能用规划冒充完成。技术选型和新增工具权限需要独立评审。
 
-### `COMPREHENSIVE_SYSTEM_REFACTOR_PLAN.md`
-三份 AI 方案综合形成的 Master Plan。它解释了为什么要收敛为“决策/板块/持仓/研究 + ETF 详情 + 14:30 模式”，非常重要；但有几项后来没有原样实现：
-
-- 规划建议引入 TradingView Lightweight Charts；当前实际实现仍是 CSP-safe 原生 Canvas，并已具备缩放/平移/十字光标。
-- 规划曾提出 `/portfolio`；当前合同使用 `/holdings`。
-- 规划把 20D 作为后续目标；当前经过专门对齐后仍以 `1/3/5/10` 为正式研究期限。
-- 规划要求 14:30 完全内嵌首页；当前先收敛为 `/decision/1430` 的“决策二级模式”，仍复用独立 HTML。
-
-因此：**用它理解目标和取舍，不要用它覆盖当前路由、预测期限或实现事实。**
-
-### `DECISION_BOARD_WORKBUDDY_REPLICA.md`
-WorkBuddy 风格视觉实验记录。应继续保留作为 UI 设计来源，但其中“前端研究评分”已经被后续“服务端为唯一计算权威”原则替代。当前应以 `UI_UX_CONTRACT.md` 为准。
-
-### 其他日期型/分支型文档
-如 branch reconciliation、局部修复计划、旧交付 prompt 等，主要用于追溯当时为什么做某个决定。除非当前权威文档明确引用，否则不应恢复旧路由、旧评分或旧数据回退。
-
-## 5. 文档冲突时的裁决顺序
-
-发生冲突时按以下顺序裁决：
-
-1. `AGENTS.md` 的安全/真实性/策略边界；
-2. 当前 `main` 的代码和自动化测试；
-3. 本页“当前权威文档”；
-4. 最新发布/导航合同；
-5. 历史计划、实验和聊天摘要。
-
-尤其禁止因为旧规划写过某项能力，就把“计划中”描述成“已实现/已验证”。
+本轮只学习/规划/整理文档。后续AI未获实施授权，不安装项目、不启动任务、不修改业务代码、不自动交易。任何状态升级写清证据日期、版本、范围和未覆盖项。
