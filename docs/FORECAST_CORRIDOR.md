@@ -1,63 +1,154 @@
-# 预测走廊（Forecast Corridor）
+# 预测走廊（Forecast Corridor）当前合同
 
-## 概述
+更新时间：2026-09-06
 
-v0.7.0 引入的预测走廊系统，在 1/5/20 日终点预测的基础上，增加了路径低点/高点价格走廊、支撑/压力触及概率和走廊位置指标。所有输出均为研究级（research-grade），状态始终为 `not_calibrated`。
+## 1. 当前 horizon
 
-## 路径低点/高点价格走廊
+当前新生成的 forecast / factor / 14:30 研究期限统一为：
 
-对每个 horizon（1/5/20 日）：
-
-- **path_low_price_q10/q50/q90**：预测路径期间最低价的分位数
-- **path_high_price_q10/q50/q90**：预测路径期间最高价的分位数
-
-计算方法：使用相似样本法（similarity-based），特征向量加权邻居的未来路径最低/最高价格分位数。
-
-## 支撑/压力触及概率
-
-- **support_touch_probability**：预测路径最低价触及支撑位的概率
-- **resistance_touch_probability**：预测路径最高价触及压力位的概率
-
-支撑位：BOLL 下轨 → MA20；压力位：BOLL 上轨（取可用值）。
-
-## 走廊位置
-
-`corridor_position`（0-100）：当前收盘价在 path_low_q50 与 path_high_q50 之间的相对位置。
-
-## 校准状态
-
-`calibration_status` 始终为 `not_calibrated`。走廊宽度使用 `local_conformal_research_v1` 方法进行研究级加宽：
-
+```text
+1 / 3 / 5 / 10 trading sessions
 ```
+
+这是 `HORIZON_ALIGNMENT_20260903.md` 锁定的当前代码合同。
+
+历史 v0.7 文档和已持久化旧 artifact 曾使用 `1/5/20`。20 日 feature lookup 可以为历史 artifact 复现保留，但 **20D 不属于当前新运行配置**；若以后重新启用，必须单独建立 h=20 的 purged walk-forward、校准和人工批准。
+
+---
+
+## 2. 走廊输出是什么
+
+对当前每个 horizon（1/3/5/10），ForecastSnapshot 可包含：
+
+### 终点分布
+
+- `q10 / q50 / q90`：终点收益分位数；
+- `terminal_price_q10 / q50 / q90`：终点价格情景分位数。
+
+### 路径低点/高点
+
+- `path_low_price_q10 / q50 / q90`：预测路径期间最低价的研究分位数；
+- `path_high_price_q10 / q50 / q90`：预测路径期间最高价的研究分位数。
+
+### 支撑/压力触及
+
+- `support_touch_probability`；
+- `resistance_touch_probability`。
+
+### 走廊位置
+
+`corridor_position`（0–100）表示当前价格在路径低点/高点中位情景之间的位置，用于研究解释，不是交易阈值本身。
+
+---
+
+## 3. 数据与算法边界
+
+当前 forecast 的权威是**持久化 ForecastSnapshot**，页面不得在浏览器或每次 HTTP 请求中临时再训练/重算一个不同模型。
+
+相似样本/全局研究服务可以产生候选研究结果，但写入/读取时必须保留：
+
+- horizon；
+- feature schema/version；
+- model/version；
+- as_of_date；
+- data_cutoff；
+- generated_at；
+- sample_count；
+- confidence；
+- calibration_status；
+- interval_method。
+
+14:30 的 provisional 当日状态可以用于当前指标、grade、S/R 和图表，但不能偷偷进入以已结算日线为邻居的 EOD forecast baseline。
+
+---
+
+## 4. `p_up` 文案合同
+
+### 未校准
+
+当：
+
+```text
+calibration_status != calibrated
+```
+
+`p_up` 只能解释为：
+
+> 历史相似样本上涨占比
+
+不能写“未来上涨概率”。
+
+### 已校准
+
+只有某个 horizon 经过样本外校准门禁并人工批准，且 snapshot 明确写入：
+
+```text
+calibration_status = calibrated
+```
+
+页面才允许使用“上涨概率”文案。
+
+---
+
+## 5. Forecast scenario 蜡烛/走廊
+
+未来可视化只是条件化研究情景：
+
+```text
+is_forecast = true
+not_actual = true
+```
+
+必须与历史真实 K 线有明确视觉分界（当前 UI 使用独立紫色/虚线/半透明语义）。
+
+它不能被描述为未来真实 OHLC，也不能用于回填任何历史 point-in-time 特征。
+
+---
+
+## 6. 研究级 interval 加宽
+
+历史实现包含 `local_conformal_research_v1` 等研究级残差加宽方法。例如概念上可使用：
+
+```text
 correction = quantile(|actual - q50|, clamp(1 - alpha, 0.5, 0.99))
 conformal_q10 = min(q10, expected - correction)
 conformal_q90 = max(q90, expected + correction)
 ```
 
-这是研究级残差加宽，**不是正式的 MAPIE 校准**，状态保持 `not_calibrated`。
+这类研究加宽**本身不等于完成正式校准**。是否 calibrated 只由对应 horizon 的 OOS 验证和人工批准决定。
 
-## 验证指标
+---
 
-`validate_forecasts` 输出以下走廊相关指标：
+## 7. 最终必须验证的指标
 
-| 指标 | 说明 |
+每个 1/3/5/10 horizon 分开报告：
+
+| 指标 | 目的 |
 |---|---|
-| interval_80_coverage | q10-q90 区间覆盖率 |
-| interval_90_coverage | q05-q95 区间覆盖率 |
-| interval_80_mean_width | 80% 区间平均宽度 |
-| interval_90_mean_width | 90% 区间平均宽度 |
-| quantile_crossing_rate | q10>q50 或 q50>q90 的比例 |
-| path_low coverage | 路径低点 80% 区间覆盖率 |
-| path_high coverage | 路径高点 80% 区间覆盖率 |
-| support_touch_brier | 支撑触及概率的 Brier Score |
-| resistance_touch_brier | 压力触及概率的 Brier Score |
-| pinball_loss | q10/q50/q90 的 Pinball Loss |
+| direction accuracy | 方向识别 |
+| Brier Score | 概率/上涨占比校准质量（在适用语义下） |
+| MAE | 中心预测误差 |
+| pinball loss | q10/q50/q90 分位数质量 |
+| interval_80_coverage | 80% 区间覆盖 |
+| interval_90_coverage | 90% 区间覆盖 |
+| interval mean width | 区间是否过宽 |
+| quantile_crossing_rate | 分位数合法性 |
+| path_low coverage | 路径低点区间质量 |
+| path_high coverage | 路径高点区间质量 |
+| support_touch_brier | 支撑触及研究质量 |
+| resistance_touch_brier | 压力触及研究质量 |
 
-## 从 v0.6.0 迁移
+验证必须使用 purged/rolling walk-forward 和真正隔离的 Holdout，不能根据 Holdout 反复调参后继续称其为样本外结果。
 
-- `forecast_snapshots` 表新增 12 个走廊列 + `interval_method`（迁移 d5e6f7a8b9c0 → c4d5e6f7a8b9）
-- 预测特征从 v0.6.0 的 12 个扩展到 `feature-store-v0.7.0`（含 ADX/DMI/OBV/MFI/CMF/RPS/RSRS/箱体/海龟/缩量回踩/volume_profile_approx）
+---
 
-## 生产决策边界
+## 8. 对 current action 的边界
 
-走廊预测**不直接修改信号权重或仓位**。`signal.forecast_risk_adjustment.requires_calibrated: true` 意味着只有当预测被标记为 `calibrated` 时才会参与信号调整——目前为 `not_calibrated`，因此不参与。
+Forecast Corridor 不拥有 current action。
+
+- canonical current action 由当前决策合同统一提供；
+- 未 calibrated forecast 不应直接驱动生产动作阈值；
+- `research_score` 可以引用 forecast 作为排序/解释证据，但不能创造第二套“买/卖”结论；
+- Mock/stale/unverified forecast 继续受数据资格门控。
+
+详细验证路径见 `ETF_1430_VALIDATION.md` 和 `ROADMAP_TO_FINAL.md`。
