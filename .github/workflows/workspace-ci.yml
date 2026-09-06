@@ -1,0 +1,51 @@
+name: workspace-ci
+on:
+  push:
+    branches: ['feat/workspace-p0-p4-20260906']
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: workspace-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: |
+          pip install -e '.[dev,market,workspace]'
+          npm ci --ignore-scripts --prefix frontend
+      - name: Workspace backend contracts
+        run: pytest backend/tests/test_workspace*.py -q
+      - name: Export audited development inputs
+        if: always()
+        run: |
+          mkdir -p /tmp/workspace-inputs
+          git archive -o /tmp/workspace-inputs/source.tar HEAD
+          test ! -d frontend/node_modules || tar -czf /tmp/workspace-inputs/node-modules.tgz -C frontend node_modules
+          pip download --no-deps 'pwdlib==0.3.1' -d /tmp/workspace-inputs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workspace-inputs-${{ github.run_id }}
+          path: /tmp/workspace-inputs/
+          retention-days: 2
+      - name: TypeScript check
+        run: npm run typecheck --prefix frontend
+      - name: Vue unit tests
+        run: npm run test --prefix frontend
+      - name: Production frontend build
+        run: npm run build --prefix frontend
