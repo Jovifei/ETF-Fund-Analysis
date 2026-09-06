@@ -1,34 +1,64 @@
-# 实现矩阵（发行版 0.7.0）
+# 当前实现矩阵（v0.8.x）
 
-| 能力 | 实现位置 | 当前证据 | 未完成/部署门槛 |
+更新时间：2026-09-06  
+应用发行版本：`0.8.0`  
+导航合同：`v0.8.1`
+
+> “已实现”只表示代码/当前环境具有该能力；“已验证”必须说明验证范围。真实交易有效性、forecast calibrated、真实分钟资格不能由 CI/Mock 代替。
+
+| 能力 | 当前状态 | 已有证据 | 仍缺什么 / 边界 |
 |---|---|---|---|
-| 应用与 Python 包版本 | `backend/app/core/config.py`, `pyproject.toml` | 已设为 `0.7.0`，健康接口/打包元数据可检查 | 发布流水线仍需实际打包验收 |
-| ETF/LOF 行情与技术指标 | providers + `indicator_service.py` | 单元/集成测试、Mock 流水线 | Tushare/AKShare 权限、真实字段和实时新鲜度 |
-| 策略/信号/回测版本 | `config/strategy.json` | 当前为 `signal-v0.7.0-research` 等策略版本；本版未改公式/阈值 | 真实 walk-forward、停牌/涨跌停/LOF 溢价和第二引擎对账 |
-| 预测 | `forecast_service.py` | 本地 Mock 生成和测试 | 始终 `not_calibrated`，真实样本外校准与人工封版缺失 |
-| 单一主分析 provider | `analysis/`, `analysis_service.py`, config | Codex/OpenAI Responses、Anthropic、DeepSeek 合约和 no-tool 输出测试 | 服务器本地 key/model/base/mode 配置、端点资格；失败不静默切换 |
-| 异步 Codex/Claude Code review | review contracts/API | 只读候选与人工 accept 状态已实现 | 仍需人工操作；不能直接写生产或做数值决策 |
-| 六项市场上下文 | `market_context/`, `config/market_context.json` | 六卡片、today-change-first、来源/新鲜度渲染与 Mock 测试 | 六项 Provider 真实资格；两项 ETF 代理仍 null/disabled/unverified |
-| 新闻 | RSS/Tushare + analysis gateway | 去重、审计和 Mock/heuristic 流程 | 真实新闻权限、稳定 RSS 和模型端点 |
-| 持仓截图 OCR | `ocr/`, `holding_import_service.py` | Pillow 校验、私有会话、编辑/拒绝/确认和 no-preconfirm-write 测试 | 真实 Paddle 包、Python 3.12 wheel/model、Linux 私有目录资格；Windows 生产 fail-closed |
-| OCR 安全与限制 | `backend/app/core/config.py` + `backend/app/services/holding_import_service.py` | 10MiB 图像、像素/尺寸、60s hard timeout、15m TTL、spawn cleanup | 运维需建立 transient root 0700、模型根私有只读 |
-| Docker/反向代理 | `docker-compose.yml`, Dockerfile, Caddy/Nginx examples | Compose/配置可静态检查；代理 body limit 12MB | 当前镜像不装重型 Paddle；缺少显式合格 provision 时 OCR 503；ECS 构建待验证 |
-| 数据库迁移 | `backend/alembic/versions` | `158ca7025305` → `9f1c2b3a4d5e` → `a2b3c4d5e6f7` → `b3c4d5e6f7a8` → `c4d5e6f7a8b9` → `d5e6f7a8b9c0` → `e6f7a8b9c0d1` → `f7a8b9c0d1e2` → `0a9b1c2d3e4f` → `1b2c3d4e5f6a` → `2c3d4e5f6a7b`（当前 head）；隔离 SQLite upgrade/downgrade/re-upgrade/`alembic check` 通过 | 真实 PostgreSQL upgrade/downgrade/backup restore |
-| 调度器 | `scheduler.py` | 本地 cadence/失败隔离测试；市场上下文默认 15m、tick 30s | ECS 完整交易日观察和告警 |
-| 报告/审计 | report/audit services | 本地 HTML/JSON 与输入哈希、来源字段 | 真实数据长期归档和运维恢复演练 |
-| 自动交易 | 无 | 明确不实现 | 不得由 Agent 擅自增加 |
+| FastAPI / PostgreSQL / Alembic / SSE | 已实现并有生产运行记录 | v0.8.0 release、迁移 head、容器 health、CI smoke | 每次新部署仍需备份/迁移/smoke；不能沿用旧证据代替新变更验证 |
+| 用户认证 / CSRF / 多用户 | 已实现 | HttpOnly Cookie、CSRF、账户/会话/隔离测试 | 生产 secrets 只在服务器；禁止恢复 legacy browser bearer/localStorage |
+| ETF 真实日线/spot | 已实现 | AKShare/public composite 实测、生产数据入库 | provider 稳定性需持续 audit；Tushare 为可选增强 |
+| 板块行业/概念 | 已实现 | `/boards`、SectorSnapshot、行业/概念数据 | 部分免费概念源缺真实涨跌家数；不得用 ETF 代理伪造 |
+| 市场上下文 | 已实现基础 | A股/美股指数、部分 tradable proxy 接入历史 | 韩国半导体代理等仍未完整资格 |
+| IndicatorSnapshot 单一权威 | 已完成 v0.8 收敛 | cross-surface tests、请求时重复计算移除 | 指标公式变更需版本升级和验证 |
+| canonical current action | 已完成 | DecisionBoard/SignalGrade/Signal fallback 统一、跨页面一致性测试 | 后续 UI/score 不得生成第二套 action |
+| Support/Resistance Snapshot | 已完成 | 统一存储、250-bar 口径、跨页面一致性 | 仍需更长期触及率/假突破研究验证 |
+| S/R Zone + TD9 价格确认 | 已实现 | zone_low/high、Canvas Zone overlay、TD9 price cluster | 研究算法效果还可长期验证，但不是页面缺失 |
+| Forecast 1/3/5/10 | 已实现研究基线 | horizon 对齐、persisted snapshots、purged WFO infrastructure | **仍未 calibrated**；真实 OOS Brier/pinball/coverage 和人工批准未完成 |
+| 20D forecast | 非当前运行合同 | 历史 feature 支持/旧 Master Plan | 只有用户重新确认并为 h=20 单独验证后再启用 |
+| WorkBuddy 风格 Decision | 已实现并成为首页演进基础 | 五档表、指标解释、来源/时效、统一动作 | UI 仍可优化，但不能恢复前端二次评分 |
+| `/boards` 一等板块页 | 已实现 | BoardService + API + static UI | 可继续改善板块长期/多周期强弱，不得改变 breadth 语义 |
+| Watchlist | 已实现 | user_watchlist_entries + API + UI | 可继续改善批量管理/独立持仓页体验 |
+| Holdings 融合 forecast/action/SR | 已实现 | holdings API + 1/3/5/10 + current action + S/R | 成本线/个人风险在 `/etf/{code}` 的融合还可加强；当前页面仍复用 legacy shell |
+| 全局 ETF Detail `/etf/{code}` | 已实现 | 单一详情路由、K线、Zone、指标、forecast、news | 持仓成本线与个人 context 可继续增强 |
+| Canvas 交互图表 | 已实现 | wheel zoom / drag pan / reset / crosshair / OHLC / zones | Lightweight Charts 只是历史候选，不是必做迁移 |
+| MarketBar 30m/60m 底座 | 已实现 | migration、service、API、detail interval tabs | **真实分钟 Provider 资格未闭环**；缺数据继续 disabled；日K不能冒充分钟 |
+| 真实 5m/15m point-in-time | 构建器有，真实数据验证未完成 | `build_1430_point_in_time_dataset.py` / 验证合同 | **最终目标硬阻塞**：真实历史、14:30 cutoff、可成交价、新闻 PIT |
+| 14:30 决策模式 | 功能已实现，语义已收敛 | `/decision/1430`、canonical grade、research score、详情跳转 | **历史策略仍 not_qualified**；费用/滑点/事件回测/Shadow Run 未完成；页面仍独立壳 |
+| News + provenance layering | 已实现 | heuristic vs model source 明示、实时新闻生产记录 | 模型资格/长期稳定性可继续增强；AI 不能改动作 |
+| OCR 持仓截图 | 安全流程已实现 | MIME/像素/候选复核/确认前不写 | 真实 Paddle/model 资格仍受部署环境约束；不是核心 14:30 阻塞 |
+| Scheduler | 已实现并增强 miss/resilience | 30s tick、slot/misfire/coalescing、失败隔离 | 继续观察长期交易日运行和 provider 异常 |
+| 报告/审计 | 已实现 | provider audit、task、report hash | 长期归档/恢复演练可持续增强 |
+| 阿里云生产部署 | v0.8.0 有成功记录 | healthy API/scheduler/db、迁移、同步 | 本轮/未来每次变更仍需独立部署验证 |
+| 自动交易 | **明确不实现** | AGENTS 合同 | 不得由 Agent 擅自加入 |
 
-## 证据解释
+---
 
-“本地测试”只证明当前代码和合成/Mock 输入；它不升级为真实 Provider、生产 ECS、真实 OCR 或 calibrated 预测证明。任何 Mock、unavailable、未验证代理和缺失核心字段都保持 non-actionable。项目不提供投资建议。
+## 页面实现状态
 
-## ETF 14:30 Workbench
+| 页面/任务 | 当前路由 | 状态 | 技术债 |
+|---|---|---|---|
+| 决策 | `/` | 一等页面 | 可继续和 14:30 共用更多组件 |
+| 板块 | `/boards` | 一等页面 | 可增强多周期板块趋势 |
+| 持仓 | `/holdings` | 一等语义路由 | 底层仍复用 legacy `index.html` + route 激活 |
+| 研究 | `/research` | 一等语义路由 | 底层仍复用 legacy shell |
+| 新闻 | `/research/news` | 子路由 | 底层仍复用 legacy shell |
+| 系统 | `/system` | 工具/管理路由 | 底层仍复用 legacy shell |
+| 14:30 | `/decision/1430` | 决策二级模式 | 仍有独立 HTML/JS，尚未真正内嵌 Decision 同一组件树 |
+| ETF 详情 | `/etf/{code}` | 全局唯一详情 | 可加入持仓成本线/更强个人 context |
 
-| 能力 | 代码 | 真实资格 |
-|---|---|---|
-| 1/3/5/10 日研究预测 | 已实现 | 未校准 |
-| 多方法支撑压力 | 已实现 | 待触及率/假突破验证 |
-| 历史+未来情景蜡烛 | 已实现 | 情景非实际 |
-| point-in-time 构建器 | 已实现 | 待真实 5/15 分钟数据 |
-| systemd 14:30 timer | 已提供 | 待 ECS 验证 |
-| 完整缠论 | 未实现；仅近似 | 待 CZSC 对账 |
+---
+
+## 当前最重要的四个“未完成”
+
+1. **真实 14:30 point-in-time 历史验证**；
+2. **1/3/5/10 forecast 真实 OOS 校准**；
+3. **真实分钟 Provider / 5m/15m/30m/60m 资格**；
+4. **Shadow Run + 人工批准**。
+
+UI legacy 壳拆分属于下一层技术债。不要继续把主要精力用在增加页面/指标数量，而忽略上述证据闭环。
+
+详细步骤见 `ROADMAP_TO_FINAL.md`。
