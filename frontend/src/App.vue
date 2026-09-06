@@ -33,7 +33,7 @@ onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('worksp
 <template>
 <div v-if="!session.ready" class="boot-state" role="status">正在连接私有研究工作站…</div>
 <Login v-else-if="!session.authenticated"/>
-<div v-else class="workspace" :class="[`sidebar-${sidebar}`, { 'mobile-open': mobileOpen, 'reduce-motion': reduced }]" :key="session.generation">
+<div v-else class="workspace" :class="[`sidebar-${sidebar}`, { 'mobile-open': mobileOpen, 'reduce-motion': reduced }]" :key="`session-${session.generation}`">
   <a class="skip-link" href="#main-content">跳到主要内容</a>
   <button v-if="mobileOpen" class="sidebar-backdrop" aria-label="关闭导航" @click="mobileOpen = false"/>
   <aside class="sidebar" aria-label="主要导航">
