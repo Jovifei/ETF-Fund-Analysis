@@ -1,0 +1,71 @@
+name: v102-reviewed-integration
+on:
+  push:
+    branches: [fix/v1.0.2-overview-integration]
+    paths: [.reviewed-v102.json]
+permissions:
+  contents: read
+jobs:
+  integrate:
+    if: github.repository == 'Jovifei/ETF-Fund-Analysis'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate exact patch hash, ancestor and paths
+        run: |
+          python - <<'PY'
+          import base64,hashlib,json,pathlib,subprocess,zlib
+          manifest=json.loads(pathlib.Path('.reviewed-v102.json').read_text())
+          subprocess.run(['git','merge-base','--is-ancestor',manifest['base'],'HEAD'],check=True)
+          decompressor=zlib.decompressobj()
+          patch=decompressor.decompress(base64.b64decode(manifest['patch_zlib_base64'],validate=True),2_000_000)
+          assert decompressor.eof and not decompressor.unconsumed_tail and len(patch)<2_000_000
+          assert hashlib.sha256(patch).hexdigest()==manifest['sha256']
+          files=manifest['files']
+          assert files and all(not p.startswith('/') and '..' not in pathlib.PurePosixPath(p).parts and p.startswith(('backend/','frontend/','scripts/','docs/','config/','deploy/')) for p in files)
+          target=pathlib.Path('/tmp/reviewed.patch');target.write_bytes(patch)
+          subprocess.run(['git','apply','--check','--index',str(target)],check=True)
+          subprocess.run(['git','apply','--index',str(target)],check=True)
+          changed=subprocess.check_output(['git','diff','--cached','--name-only'],text=True).splitlines()
+          assert sorted(changed)==sorted(files),(changed,files)
+          subprocess.run(['git','diff','--cached','--check'],check=True)
+          PY
+      - name: Test the patched source before committing
+        run: |
+          pip install -e '.[dev,market]'
+          pytest backend/tests/test_v102_integration.py backend/tests/test_v101_data_access.py backend/tests/test_sector_snapshots.py backend/tests/test_auth_registration.py -q
+          python -m compileall -q backend/app scripts
+          python codex/skills/fund-research/scripts/check_no_secrets.py
+          if python -c "import json;raise SystemExit(json.load(open('.reviewed-v102.json'))['stage'] != 'backend')"; then
+            echo 'Backend integration tested; frontend integration follows separately.'
+          else
+            npm ci --ignore-scripts --prefix frontend
+            npm run typecheck --prefix frontend
+            npm run test --prefix frontend
+            npm run build --prefix frontend
+          fi
+      - name: Commit to this repair branch only, without force
+        env:
+          GH_WRITE_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python - <<'PY'
+          import json,subprocess
+          manifest=json.load(open('.reviewed-v102.json'))
+          subprocess.run(['git','commit','-m',manifest['message']],check=True)
+          PY
+          AUTH=$(printf 'x-access-token:%s' "$GH_WRITE_TOKEN" | base64 -w0)
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH" push origin HEAD:refs/heads/fix/v1.0.2-overview-integration
