@@ -48,6 +48,8 @@ npm run build --prefix frontend
 `init` 只允许新数据库，拒绝覆盖；`bootstrap-admin` 隐藏输入密码；`serve` 不自动迁移、不触发首次外网采集，只启动回环 API 和单工作器。关闭时保留数据库。`8081` 临时 demo 与这里 `8082` 不要混淆。
 现有数据库升级通过本人离线备份后运行 Alembic（本版 head 未变）；源文件内不要保留与这份本地私有配置冲突的生产 dotenv。
 
+本机 live runner 默认关闭公开注册。若需要在空的本机数据库创建第一个账户，可在仓库外私有 env 中显式设置 `REGISTRATION_ENABLED=true` 和非空 `REGISTRATION_INVITE_CODE`，重启本机 runner 后从 `/classic/etf-board` 的“创建账户”进入；邀请码只用于本机，不要与密码相同。账户创建完成后应移除这两项或改回 `false` 并重启，避免继续开放注册。正式 Docker/生产 Compose 不读取这两个本机 runner 开关，生产账户由管理员流程管理。
+
 浏览器登录后打开“设置 → 后端数据接入”：先检查有效 provider 与依赖，再点“更新跟踪池行情”。首次使用明确配置的 watchlist 作为研究池，无需先抓全市场目录；目录数据不自动让所有 ETF 持续计算。
 
 | 按钮 | 任务 |

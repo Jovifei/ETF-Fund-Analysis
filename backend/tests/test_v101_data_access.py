@@ -316,6 +316,19 @@ def test_live_launcher_ignores_unrelated_demo_environment(tmp_path,monkeypatch):
     assert root.is_dir() and 'mock' not in env['MARKET_PROVIDER']
 
 
+def test_live_launcher_allows_explicit_local_registration_only_with_invite(tmp_path):
+    import importlib.util
+    from pathlib import Path
+    spec=importlib.util.spec_from_file_location('v101_live_registration',Path(__file__).resolve().parents[2]/'scripts/run_workspace_live.py')
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    config=tmp_path/'private.env'
+    config.write_text('REGISTRATION_ENABLED=true\nREGISTRATION_INVITE_CODE=local-test-invite\n')
+    config.chmod(0o600)
+    env,_=module.prepare(config,tmp_path/'data')
+    assert env['REGISTRATION_ENABLED']=='true'
+    assert env['REGISTRATION_INVITE_CODE']=='local-test-invite'
+
+
 def test_price_only_history_can_be_repaired_when_full_volume_source_recovers(v101_db):
     from app.models import DailyBar,Instrument
     from app.providers.types import BarRecord

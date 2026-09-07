@@ -642,3 +642,4 @@ python codex/skills/fund-research/scripts/check_no_secrets.py .
 
 - 本机接收分支已完成源码、前端、迁移、PostgreSQL、容器镜像、Provider 小样本和离线浏览器验证；真实公共源仅有可用性/覆盖证据，不构成生产资格。
 - 生产备份、隔离 staging 恢复/迁移/单位核验、维护窗口和最终 HTTP/worker 验收均已完成；后续仅在新授权下启用真实数据重抓、分钟线、模型或定时复盘。
+- 本机登录修复：确认 8082 初始数据库无用户；为 live runner 增加显式、带邀请码的本地注册配置和回归测试，正式站注册仍保持关闭。

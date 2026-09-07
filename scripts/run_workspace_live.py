@@ -17,7 +17,8 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 ALLOWED = {"MARKET_PROVIDER", "TUSHARE_TOKEN", "TUSHARE_TIMEOUT_SECONDS", "AKSHARE_TIMEOUT_SECONDS",
     "NEWS_RSS_URLS", "NEWS_RSS_TIMEOUT_SECONDS", "MINUTE_BARS_ENABLED", "FTSHARE_ENABLED",
-    "FTSHARE_QUALIFICATION", "WORKSPACE_BRIDGE_ENABLED", "WORKSPACE_DAILY_REVIEW_ENABLED"}
+    "FTSHARE_QUALIFICATION", "WORKSPACE_BRIDGE_ENABLED", "WORKSPACE_DAILY_REVIEW_ENABLED",
+    "REGISTRATION_ENABLED", "REGISTRATION_INVITE_CODE"}
 
 
 def prepare(config: Path, data: Path):
@@ -36,6 +37,13 @@ def prepare(config: Path, data: Path):
     values = dotenv_values(config, interpolate=False)
     if set(values) - ALLOWED:
         raise ValueError("Unsupported private configuration keys; use workspace.live.env.example")
+    registration_raw = str(values.get("REGISTRATION_ENABLED") or "false").strip().lower()
+    if registration_raw not in {"true", "false"}:
+        raise ValueError("REGISTRATION_ENABLED must be true or false")
+    registration_enabled = registration_raw == "true"
+    registration_invite = str(values.get("REGISTRATION_INVITE_CODE") or "").strip()
+    if registration_enabled and not registration_invite:
+        raise ValueError("REGISTRATION_ENABLED=true requires REGISTRATION_INVITE_CODE")
     if values.get('MARKET_PROVIDER', 'public_composite') not in {'public_composite','composite','akshare','tushare'}:
         raise ValueError("Local LIVE mode requires an explicit real provider; mock is not allowed")
     data.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -45,7 +53,9 @@ def prepare(config: Path, data: Path):
     env.update({key: value or '' for key, value in values.items()})
     env.update(PYTHONPATH=str(ROOT/'backend'), APP_ENV='development', AUTH_ENABLED='true',
         AUTH_COOKIE_SECURE='false', AUTO_CREATE_SCHEMA='false', ALLOW_MOCK_FALLBACK='false',
-        REGISTRATION_ENABLED='false', LLM_ENABLED='false', ANALYSIS_ENABLED='false', OCR_MODE='disabled',
+        REGISTRATION_ENABLED='true' if registration_enabled else 'false',
+        REGISTRATION_INVITE_CODE=registration_invite if registration_enabled else '',
+        LLM_ENABLED='false', ANALYSIS_ENABLED='false', OCR_MODE='disabled',
         DATABASE_URL=f"sqlite:///{(data/'workspace.sqlite3').as_posix()}", REPORTS_DIR=str(data/'reports'),
         BACKUP_DIR=str(data/'backups'), WORKSPACE_UI_ENABLED='true', TZ='Asia/Shanghai')
     # This launcher is configured by the explicit file, not by an unrelated
