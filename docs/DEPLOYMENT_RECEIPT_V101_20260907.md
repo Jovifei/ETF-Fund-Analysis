@@ -37,7 +37,7 @@
 
 - 本地提交 `224b59fb4215c3aeb93790144996575500eb5817` 已推送到 `codex/v1.0.1-data-access`；`ci` 与 `workspace-ci` 均成功。`main`、已有 `codex/v1.0.1` 分支和 v1.0.0 标签未改写。
 - 生产数据库先用备份恢复到隔离 PostgreSQL，再由目标镜像执行 Alembic；生产 head 为 `d40609090002`。安全计数保留为 36 instruments、9851 daily bars、3 auth users、0 holdings、0 watchlist entries；OHLC 非法值 0、重复 instrument/date 0、成交量/额空值 0。
-- 目标镜像标签为 `etf-workspace:v1.0.1-20260907`，镜像 digest `sha256:041f4b32b46c7b3af3fc3af3842f283b914633e1abdb67115260e78073c9834d`。部署覆盖文件 `deploy/compose.v101.production.yml` 的主机 hash 为 `2f24c245454e76b0cb70b7f724dd825ad2dca8be05e743f45661a03041dd464b`。
+- 目标镜像标签为 `etf-workspace:v1.0.1-20260907`，镜像 digest `sha256:041f4b32b46c7b3af3fc3af3842f283b914633e1abdb67115260e78073c9834d`。部署覆盖文件 `deploy/compose.v101.production.yml` 的仓库/主机 hash 为 `102792def1359bb70d396783d02067b2a5cb27b572e0bb5d26499a0c3f15f57b`。
 - 生产 API 与单 worker 均为 healthy，API 8080 保持回环端口；旧 API 与旧 scheduler 已停止，未启动第二个 scheduler。运行中的主机 Nginx 未重载，正式 HTTPS health 与首页均返回 200。
 - 生产 PostgreSQL 备份 `fund_decision_20260907_181620.sql.gz` 保留在服务器，权限 0600、大小 6,873,325 bytes，SHA-256 `ea9c0fb369b7676db6c3cb976092d43635958426218e8224eabb158cc7eca347`；备份内容未读取或传出。配置、reports 和 Nginx 备份在 `backups/v101-predeploy-20260907/`。
 - 真实 Provider 资格仍未晋级：AKShare Sina 日线两标的可读但成交量缺失，新闻可读，目录/公开 quote unavailable；Tushare 配置存在但本次目录、日线、现价、新闻均未通过；FTShare 未启用。生产使用 `public_composite`、`ALLOW_MOCK_FALLBACK=false`，不会用 Mock 补齐或生成操作级信号。
