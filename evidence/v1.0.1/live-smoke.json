@@ -1,0 +1,64 @@
+{
+  "scope": "isolated_linux_persistent_local_http_not_user_windows_or_production",
+  "checks": [
+    {
+      "check": "init_alembic",
+      "passed": true
+    },
+    {
+      "check": "official_cli_hidden_bootstrap",
+      "passed": true
+    },
+    {
+      "check": "persistent_live_not_demo",
+      "passed": true
+    },
+    {
+      "check": "unauthenticated_data_rejected",
+      "passed": true
+    },
+    {
+      "check": "login_cookie",
+      "passed": true
+    },
+    {
+      "check": "read_only_unconfigured_status",
+      "passed": true
+    },
+    {
+      "check": "csrf_enforced",
+      "passed": true
+    },
+    {
+      "check": "/",
+      "passed": true
+    },
+    {
+      "check": "/matrix",
+      "passed": true
+    },
+    {
+      "check": "/classic/etf-board",
+      "passed": true
+    },
+    {
+      "check": "/settings",
+      "passed": true
+    },
+    {
+      "check": "logout_revokes_access",
+      "passed": true
+    },
+    {
+      "check": "deployment_audit_command",
+      "passed": true
+    },
+    {
+      "check": "stop_keeps_persistent_database",
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "model_called": false,
+  "external_provider_called": false
+}

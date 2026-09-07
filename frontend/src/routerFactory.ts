@@ -6,6 +6,7 @@ const router = createRouter({ history, scrollBehavior: () => ({ top: 0 }), route
   { path: '/', component: overview, meta: { title: '市场总览' } },
   { path: '/boards', component: overview, meta: { title: '行业与概念板块' } },
   { path: '/decision/1430', component: overview, meta: { title: '14:30 尾盘研究' } },
+  { path: '/matrix', component: () => import('./views/Matrix.vue'), meta: { title: 'ETF 指标总表' } },
   { path: '/analysis', component: () => import('./views/Catalog.vue'), meta: { title: 'ETF 分析' } },
   { path: '/etf/:code', component: () => import('./views/Detail.vue'), meta: { title: 'ETF 分析' } },
   { path: '/watchlist', component: () => import('./views/Watchlist.vue'), meta: { title: '我的自选' } },

@@ -28,38 +28,41 @@ def main():
     sys.path.insert(0,str(root/'backend'))
     with TemporaryDirectory(prefix='etf-workspace-demo-') as temp:
         os.environ.update(APP_ENV='test',AUTH_ENABLED='false',AUTH_COOKIE_SECURE='false',REGISTRATION_ENABLED='false',AUTO_CREATE_SCHEMA='true',MARKET_PROVIDER='mock',ALLOW_MOCK_FALLBACK='false',ANALYSIS_ENABLED='false',LLM_ENABLED='false',OCR_MODE='disabled',DATABASE_URL=f'sqlite:///{temp}/demo.sqlite3',REPORTS_DIR=f'{temp}/reports',WORKSPACE_UI_ENABLED='true',WORKSPACE_BRIDGE_ENABLED='false',WORKSPACE_DAILY_REVIEW_ENABLED='false')
-        from app.db.session import init_db,session_scope
+        from app.db.session import init_db,session_scope,get_engine
         from app.services.task_service import TaskService
         from app.services.decision_board_service import DecisionBoardService
         from app.main import app
-        init_db()
-        with session_scope() as db:
-            service=TaskService()
-            try:service.run(db,'bootstrap',lookback_days=420,report=False);DecisionBoardService().refresh(db)
-            finally:service.close()
-        if args.smoke:
-            from fastapi.testclient import TestClient
-            import re
-            checked=[]
-            with TestClient(app) as client:
-                for path in ('/','/etf/512480.SH','/holdings','/ai','/settings'):
-                    response=client.get(path)
-                    assert response.status_code==200 and '/workspace-assets/' in response.text
-                    assert "script-src 'self'" in response.headers.get('Content-Security-Policy','')
-                    for asset in re.findall(r'(?:src|href)="(/workspace-assets/[^\"]+)"',response.text):
-                        resource=client.get(asset)
-                        assert resource.status_code==200 and 'immutable' in resource.headers.get('Cache-Control','')
-                    checked.append(path)
-                assert client.get('/not-a-real-page').status_code==404
-                assert client.get('/workspace-assets/not-there.js').status_code==404
-                assert client.get('/api/workspace/not-an-api').status_code==404
-                assert client.get('/api/search/instruments?q=512480').json()['items']
-                assert client.get('/api/workspace/instruments/512480.SH/chart').json()['actionable'] is False
-            print(json.dumps({'status':'passed','mode':'isolated_mock_asgi_smoke','routes':checked,'models_called':False}))
-            return
-        print(f'Demo only: http://127.0.0.1:{args.port} — synthetic data, no model, no real holdings. Ctrl+C to stop.')
-        import uvicorn
-        uvicorn.run(app,host='127.0.0.1',port=args.port,log_level='warning')
+        try:
+            init_db()
+            with session_scope() as db:
+                service=TaskService()
+                try:service.run(db,'bootstrap',lookback_days=420,report=False);DecisionBoardService().refresh(db)
+                finally:service.close()
+            if args.smoke:
+                from fastapi.testclient import TestClient
+                import re
+                checked=[]
+                with TestClient(app) as client:
+                    for path in ('/','/etf/512480.SH','/holdings','/ai','/settings'):
+                        response=client.get(path)
+                        assert response.status_code==200 and '/workspace-assets/' in response.text
+                        assert "script-src 'self'" in response.headers.get('Content-Security-Policy','')
+                        for asset in re.findall(r'(?:src|href)="(/workspace-assets/[^\"]+)"',response.text):
+                            resource=client.get(asset)
+                            assert resource.status_code==200 and 'immutable' in resource.headers.get('Cache-Control','')
+                        checked.append(path)
+                    assert client.get('/not-a-real-page').status_code==404
+                    assert client.get('/workspace-assets/not-there.js').status_code==404
+                    assert client.get('/api/workspace/not-an-api').status_code==404
+                    assert client.get('/api/search/instruments?q=512480').json()['items']
+                    assert client.get('/api/workspace/instruments/512480.SH/chart').json()['actionable'] is False
+                print(json.dumps({'status':'passed','mode':'isolated_mock_asgi_smoke','routes':checked,'models_called':False}))
+                return
+            print(f'Demo only: http://127.0.0.1:{args.port} — synthetic data, no model, no real holdings. Ctrl+C to stop.')
+            import uvicorn
+            uvicorn.run(app,host='127.0.0.1',port=args.port,log_level='warning')
+        finally:
+            get_engine().dispose()
 
 
 if __name__=='__main__': main()

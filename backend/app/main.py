@@ -102,6 +102,12 @@ def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "decision_board_workbuddy.html", media_type="text/html; charset=utf-8")
 
 
+@app.get("/classic/etf-board", include_in_schema=False)
+def original_etf_matrix() -> FileResponse:
+    # Original high-density board remains usable alongside the approved Vue UI.
+    return FileResponse(STATIC_DIR / "decision_board_workbuddy.html", media_type="text/html; charset=utf-8")
+
+
 @app.get("/legacy", include_in_schema=False)
 def legacy() -> RedirectResponse:
     return RedirectResponse("/research", status_code=status.HTTP_307_TEMPORARY_REDIRECT)

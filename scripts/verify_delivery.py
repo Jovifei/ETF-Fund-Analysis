@@ -7,7 +7,8 @@ import sys
 
 def verify(root: Path) -> int:
     root = root.resolve()
-    manifest = json.loads((root/'DELIVERY_MANIFEST.json').read_text(encoding='utf-8'))
+    name = 'PACKAGE_MANIFEST_V101.json' if (root/'PACKAGE_MANIFEST_V101.json').is_file() else 'DELIVERY_MANIFEST.json'
+    manifest = json.loads((root/name).read_text(encoding='utf-8'))
     failed = []
     for entry in manifest['files']:
         rel = PurePosixPath(entry['path'])

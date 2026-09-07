@@ -18,6 +18,7 @@ from app.market_context.contracts import (
 from app.providers.base import MarketProvider, ProviderError
 from app.providers.types import BarRecord, InstrumentRecord, NewsRecord, QuoteRecord, SectorRecord
 from app.utils.numbers import finite_or_none
+from app.providers.bounded_sdk import BoundedSDK, first
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +32,10 @@ class AKShareProvider(MarketProvider):
         # optional live-data package. Production still imports the real client
         # and fails closed when it is missing; there is no mock fallback.
         if ak_client is None:
-            try:
-                import akshare as ak_client  # type: ignore
-            except ImportError as exc:
-                raise ProviderError("未安装 akshare；请安装 market 可选依赖") from exc
+            from importlib.util import find_spec
+            if find_spec("akshare") is None:
+                raise ProviderError("未安装 akshare；请安装 market 可选依赖")
+            ak_client = BoundedSDK("akshare", self.settings.akshare_timeout_seconds)
         self.ak = ak_client
         self.tz = ZoneInfo(self.settings.timezone_name)
         self._watchlist = self.settings.load_watchlist()["instruments"]
@@ -69,11 +70,14 @@ class AKShareProvider(MarketProvider):
 
     def fetch_daily_bars(self, ts_code: str, start_date: date, end_date: date) -> list[BarRecord]:
         symbol = ts_code.split(".")[0]
-        kind = next((item.get("kind", "ETF") for item in self._watchlist if item["symbol"] == symbol), "ETF")
+        kind = next((item.get("kind", "ETF") for item in self._watchlist if item["symbol"] == symbol), "LOF" if symbol.startswith(("16", "50")) else "ETF")
         try:
-            return self._fetch_daily_bars_em(symbol, kind, start_date, end_date, ts_code)
+            result = self._fetch_daily_bars_em(symbol, kind, start_date, end_date, ts_code)
+            if not result:
+                raise ProviderError("empty_history")
+            return result
         except Exception as exc:
-            logger.warning("AKShare EM history failed for %s, falling back to sina: %s", ts_code, exc)
+            logger.warning("AKShare EM history failed for %s, falling back to sina: %s", ts_code, type(exc).__name__)
             return self._fetch_daily_bars_sina(ts_code, symbol, start_date, end_date)
 
     def _fetch_daily_bars_em(
@@ -91,7 +95,7 @@ class AKShareProvider(MarketProvider):
         except TypeError:
             frame = function(symbol=symbol, period="daily", start_date=start_date.strftime("%Y%m%d"), end_date=end_date.strftime("%Y%m%d"))
         except Exception as exc:
-            raise ProviderError(f"AKShare history failed for {ts_code}: {exc}") from exc
+            raise ProviderError(f"AKShare history failed for {ts_code}: {type(exc).__name__}") from exc
         return self._parse_bars_frame(frame, ts_code)
 
     def _fetch_daily_bars_sina(
@@ -110,7 +114,7 @@ class AKShareProvider(MarketProvider):
         try:
             frame = function(symbol=f"{prefix}{symbol}")
         except Exception as exc:
-            raise ProviderError(f"AKShare sina history failed for {ts_code}: {exc}") from exc
+            raise ProviderError(f"AKShare sina history failed for {ts_code}: {type(exc).__name__}") from exc
         result: list[BarRecord] = []
         for row in self._records(frame):
             raw_date = row.get("date")
@@ -135,11 +139,11 @@ class AKShareProvider(MarketProvider):
                     low=low or 0,
                     close=close or 0,
                     pre_close=None,
-                    volume=finite_or_none(row.get("volume")),
+                    volume=None,  # Sina volume unit has not been cross-verified; retain price-only fallback.
                     amount=finite_or_none(row.get("amount")),
                     pct_change=None,
                     adjust="none",
-                    source=self.name,
+                    source="akshare:sina:v101",
                 )
             )
         result.sort(key=lambda item: item.trade_date)
@@ -171,11 +175,11 @@ class AKShareProvider(MarketProvider):
                     low=low or 0,
                     close=close or 0,
                     pre_close=None,
-                    volume=finite_or_none(row.get("成交量") or row.get("volume")),
+                    volume=(finite_or_none(first(row, "成交量", "volume")) * 100 if finite_or_none(first(row, "成交量", "volume")) is not None else None),
                     amount=finite_or_none(row.get("成交额") or row.get("amount")),
-                    pct_change=finite_or_none(row.get("涨跌幅") or row.get("pct_change")),
+                    pct_change=finite_or_none(first(row, "涨跌幅", "pct_change")),
                     adjust="none",
-                    source=self.name,
+                    source="akshare:em:v101",
                 )
             )
         result.sort(key=lambda item: item.trade_date)
@@ -188,14 +192,20 @@ class AKShareProvider(MarketProvider):
         wanted = {code.split(".")[0]: code for code in codes}
         rows: list[dict[str, Any]] = []
         errors: list[str] = []
-        for function_name in ("fund_etf_spot_em", "fund_lof_spot_em"):
+        if not codes:
+            return []
+        known = {item["symbol"]: item.get("kind", "ETF") for item in getattr(self, "_watchlist", ())}
+        kinds = {known.get(code[:6], "LOF" if code.startswith(("16", "50")) else "ETF") for code in codes}
+        for kind, function_name in (("ETF", "fund_etf_spot_em"), ("LOF", "fund_lof_spot_em")):
+            if kind not in kinds:
+                continue
             function = getattr(self.ak, function_name, None)
             if function is None:
                 continue
             try:
                 rows.extend(self._records(function()))
             except Exception as exc:
-                errors.append(f"{function_name}: {type(exc).__name__}: {exc}")
+                errors.append(f"{function_name}: {type(exc).__name__}")
         now = datetime.now(self.tz)
         result: list[QuoteRecord] = []
         for row in rows:
@@ -207,24 +217,34 @@ class AKShareProvider(MarketProvider):
             if price is None:
                 continue
             pre_close = finite_or_none(row.get("昨收") or row.get("pre_close"))
-            pct = finite_or_none(row.get("涨跌幅") or row.get("pct_change"))
+            pct = finite_or_none(first(row, "涨跌幅", "pct_change"))
             if pct is None and pre_close:
                 pct = (price / pre_close - 1) * 100
+            source_time = None
+            raw_time = first(row, "更新时间", "datetime")
+            if raw_time and len(str(raw_time)) > 10:
+                try:
+                    source_time = datetime.fromisoformat(str(raw_time))
+                    if source_time.tzinfo is None:
+                        source_time = source_time.replace(tzinfo=self.tz)
+                except ValueError:
+                    pass
             result.append(
                 QuoteRecord(
                     ts_code=ts_code,
-                    quote_time=now,
+                    quote_time=source_time or now,
                     price=price,
-                    open=finite_or_none(row.get("今开") or row.get("开盘")),
-                    high=finite_or_none(row.get("最高")),
-                    low=finite_or_none(row.get("最低")),
+                    open=finite_or_none(first(row, "开盘价", "今开", "开盘")),
+                    high=finite_or_none(first(row, "最高价", "最高")),
+                    low=finite_or_none(first(row, "最低价", "最低")),
                     pre_close=pre_close,
                     pct_change=pct,
-                    volume=finite_or_none(row.get("成交量")),
+                    volume=(finite_or_none(row.get("成交量")) * 100 if finite_or_none(row.get("成交量")) is not None else None),
                     amount=finite_or_none(row.get("成交额")),
-                    premium_rate=finite_or_none(row.get("溢价率")),
-                    source=self.name,
-                    is_realtime=True,
+                    premium_rate=finite_or_none(first(row, "基金折价率", "溢价率")),
+                    source="akshare:em:v101",
+                    is_realtime=False,
+                    degraded_reason="public_quote_not_qualified" if source_time else "source_timestamp_missing_observed_at_fetch",
                 )
             )
         if not result:
@@ -261,8 +281,8 @@ class AKShareProvider(MarketProvider):
             try:
                 frame = function()
             except Exception as exc:
-                errors.append(f"{source_key}: {exc}")
-                logger.warning("sector source %s failed: %s", source_key, exc)
+                errors.append(f"{source_key}: {type(exc).__name__}")
+                logger.warning("sector source %s failed: %s", source_key, type(exc).__name__)
                 continue
             result = self._parse_sector_frame(frame, target, name_field)
             if not result:
@@ -339,7 +359,7 @@ class AKShareProvider(MarketProvider):
                     logger.info("concept snapshots: %d rows (em)", len(result))
                     return result
             except Exception as exc:
-                logger.warning("concept snapshots em failed, falling back: %s", exc)
+                logger.warning("concept snapshots em failed, falling back: %s", type(exc).__name__)
         # 新浪概念降级（含板块涨跌幅 + 公司家数，无涨跌家数）
         sina = getattr(self.ak, "stock_sector_spot", None)
         if sina is not None:
@@ -350,7 +370,7 @@ class AKShareProvider(MarketProvider):
                     logger.info("concept snapshots: %d rows (sina)", len(parsed))
                     return parsed
             except Exception as exc:
-                logger.warning("concept snapshots sina failed, falling back to ths: %s", exc)
+                logger.warning("concept snapshots sina failed, falling back to ths: %s", type(exc).__name__)
         # 同花顺概念汇总降级（无涨跌家数、无涨跌幅）
         ths = getattr(self.ak, "stock_board_concept_summary_ths", None)
         if ths is None:
@@ -359,7 +379,7 @@ class AKShareProvider(MarketProvider):
         try:
             frame = ths()
         except Exception as exc:
-            logger.warning("concept snapshots ths failed: %s", exc)
+            logger.warning("concept snapshots ths failed: %s", type(exc).__name__)
             return []
         result: list[SectorRecord] = []
         for row in self._records(frame):
@@ -434,7 +454,7 @@ class AKShareProvider(MarketProvider):
                 try:
                     obs = self._fetch_index_observation(request, symbol, fetched_at)
                 except Exception as exc:
-                    logger.warning("market context index %s (%s) failed: %s", request.context_id, symbol, exc)
+                    logger.warning("market context index %s (%s) failed: %s", request.context_id, symbol, type(exc).__name__)
                     continue
                 if obs is not None:
                     observations.append(obs)
@@ -445,7 +465,7 @@ class AKShareProvider(MarketProvider):
                 try:
                     obs = self._fetch_proxy_observation(request, symbol, fetched_at)
                 except Exception as exc:
-                    logger.warning("market context proxy %s (%s) failed: %s", request.context_id, symbol, exc)
+                    logger.warning("market context proxy %s (%s) failed: %s", request.context_id, symbol, type(exc).__name__)
                     continue
                 if obs is not None:
                     observations.append(obs)
@@ -467,7 +487,7 @@ class AKShareProvider(MarketProvider):
         if not quotes:
             return None
         q = quotes[0]
-        if q.price is None:
+        if q.price is None or not q.is_realtime or q.degraded_reason or q.pct_change is None:
             return None
         source_ts = q.quote_time if q.quote_time is not None else fetched_at.replace(second=0, microsecond=0)
         # fetched_at 必须不早于 source_timestamp（契约校验）；ETF 行情 quote_time
@@ -516,7 +536,7 @@ class AKShareProvider(MarketProvider):
             else:
                 source_ts = datetime.strptime(str(source_date)[:10], "%Y-%m-%d").replace(tzinfo=self.tz)
         except Exception:
-            source_ts = fetched_at.replace(second=0, microsecond=0)
+            return None
         # 指数最新收盘即为观察值（点位），today_pct_change 缺省为 None 时用 0 占位
         # （新浪指数日线接口通常不含当日涨跌幅，消费侧 level 用 observed_value）。
         return MarketContextObservation(
@@ -557,7 +577,7 @@ class AKShareProvider(MarketProvider):
         try:
             frame = function()
         except Exception as exc:
-            logger.warning("market breadth (sina) fetch failed: %s", exc)
+            logger.warning("market breadth (sina) fetch failed: %s", type(exc).__name__)
             return None
         if frame is None or len(frame) == 0:
             logger.warning("market breadth (sina) returned empty")
@@ -604,7 +624,7 @@ class AKShareProvider(MarketProvider):
         try:
             df = self.ak.stock_info_a_code_name()
         except Exception as exc:
-            logger.warning("market breadth (tencent) code list failed: %s", exc)
+            logger.warning("market breadth (tencent) code list failed: %s", type(exc).__name__)
             return None
         if df is None or len(df) == 0:
             logger.warning("market breadth (tencent) code list empty")
@@ -623,7 +643,7 @@ class AKShareProvider(MarketProvider):
             try:
                 raw = urllib.request.urlopen(req, timeout=15).read().decode("gbk", "ignore")
             except Exception as exc:
-                logger.warning("market breadth (tencent) batch failed: %s", exc)
+                logger.warning("market breadth (tencent) batch failed: %s", type(exc).__name__)
                 continue
             for line in raw.split(";"):
                 line = line.strip()
@@ -684,7 +704,8 @@ class AKShareProvider(MarketProvider):
                         published = datetime.strptime(str(raw_time).strip(), "%Y-%m-%d %H:%M:%S").replace(tzinfo=self.tz)
                     except Exception:
                         pass
-                published = published or now
+                if published is None:
+                    continue
                 if published < cutoff:
                     continue
                 source_id = hashlib.sha256(f"em:{title}:{published.isoformat()}".encode()).hexdigest()[:32]
@@ -702,7 +723,7 @@ class AKShareProvider(MarketProvider):
                 logger.info("AKShare news (eastmoney) returned %d items", len(records))
                 return records
         except Exception as exc:
-            logger.warning("AKShare news (eastmoney) failed: %s", exc)
+            logger.warning("AKShare news (eastmoney) failed: %s", type(exc).__name__)
 
         # 2. 备选财联社 7x24 全球财经快讯 (stock_info_global_cls)
         try:
@@ -718,10 +739,11 @@ class AKShareProvider(MarketProvider):
                 published: datetime | None = None
                 if pub_date and pub_time:
                     try:
-                        published = datetime.combine(pub_date, pub_time).replace(tzinfo=self.tz)
+                        published = datetime.fromisoformat(f"{str(pub_date)[:10]} {str(pub_time)}").replace(tzinfo=self.tz)
                     except Exception:
                         pass
-                published = published or now
+                if published is None:
+                    continue
                 if published < cutoff:
                     continue
                 source_id = hashlib.sha256(f"cls:{display_title}:{published.isoformat()}".encode()).hexdigest()[:32]
@@ -739,6 +761,6 @@ class AKShareProvider(MarketProvider):
                 logger.info("AKShare news (cls) returned %d items", len(records))
                 return records
         except Exception as exc:
-            logger.warning("AKShare news (cls) failed: %s", exc)
+            logger.warning("AKShare news (cls) failed: %s", type(exc).__name__)
 
         return records

@@ -1,6 +1,6 @@
 [project]
 name = "china-fund-decision"
-version = "1.0.0"
+version = "1.0.1"
 description = "Private China ETF/LOF research dashboard with deterministic indicators and evidence-aware signals"
 requires-python = ">=3.11"
 license = {text = "MIT"}

@@ -1,3 +1,5 @@
+> **v1.0.1 数据接入交付：** 以已发布 v1.0.0 提交 `9a0ca181` 为基线，新增后端接入修复与保留的 ETF 指标总表。先读 [START_HERE.md](START_HERE.md)，本轮未操作生产、未发布 GitHub v1.0.1 标签。
+
 > **2026-09-06 P0–P4 完整源码交付更新**：当前工作站 rc.2 已包含 Vue UI、统一图表、持仓与研究桥接。先读 [START_HERE.md](START_HERE.md) 和 [当前验收](docs/DELIVERY_P0_P4.md)。下面保留原 main README 作为基础工程说明；不是本轮新增功能的完整清单，也不代表本包已部署生产。
 
 # 中国 ETF / LOF 私有决策看板

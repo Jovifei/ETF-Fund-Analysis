@@ -10,6 +10,7 @@ from app.core.config import Settings, get_settings
 from app.providers.base import CapabilityUnavailable, MarketProvider, ProviderError
 from app.providers.types import BarRecord, InstrumentRecord, NewsRecord, QuoteRecord
 from app.utils.numbers import finite_or_none
+from app.providers.bounded_sdk import BoundedSDK, first
 
 logger = logging.getLogger(__name__)
 
@@ -17,16 +18,12 @@ logger = logging.getLogger(__name__)
 class TushareProvider(MarketProvider):
     name = "tushare"
 
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(self, settings: Settings | None = None, *, pro_client=None) -> None:
         self.settings = settings or get_settings()
-        if not self.settings.tushare_token:
-            raise ProviderError("TUSHARE_TOKEN 未配置")
-        try:
-            import tushare as ts  # type: ignore
-        except ImportError as exc:
-            raise ProviderError("未安装 tushare；请安装 market 可选依赖") from exc
-        self.ts = ts
-        self.pro = ts.pro_api(self.settings.tushare_token)
+        if pro_client is None and not self.settings.tushare_token:
+            raise CapabilityUnavailable("credentials_missing")
+        self.ts = None
+        self.pro = pro_client if pro_client is not None else BoundedSDK("tushare", self.settings.tushare_timeout_seconds, self.settings.tushare_token)
         self.tz = ZoneInfo(self.settings.timezone_name)
         self._watchlist = self.settings.load_watchlist()["instruments"]
 
@@ -56,7 +53,7 @@ class TushareProvider(MarketProvider):
         try:
             frame = self.pro.fund_basic(market="E")
         except Exception as exc:  # 权限或网络问题按能力缺失处理
-            logger.warning("Tushare resolve_instrument unavailable: %s", exc)
+            logger.warning("Tushare resolve_instrument unavailable: %s", type(exc).__name__)
             return None
         for row in self._records(frame):
             ts_code = str(row.get("ts_code") or "").upper()
@@ -64,7 +61,9 @@ class TushareProvider(MarketProvider):
             if ts_code != needle and symbol != needle:
                 continue
             name = str(row.get("name") or "")
-            kind = "ETF" if "ETF" in name else ("LOF" if "LOF" in name else "ETF")
+            kind = "ETF" if "ETF" in name.upper() else ("LOF" if "LOF" in name.upper() else None)
+            if kind is None or ts_code.split(".")[-1] not in {"SH", "SZ"}:
+                return None
             return InstrumentRecord(
                 ts_code=ts_code,
                 symbol=symbol,
@@ -97,13 +96,13 @@ class TushareProvider(MarketProvider):
                 if code:
                     enrich[code] = row
         except Exception as exc:  # permission varies by account
-            logger.warning("Tushare fund_basic enrichment unavailable: %s", exc)
+            logger.warning("Tushare fund_basic enrichment unavailable: %s", type(exc).__name__)
 
         result: list[InstrumentRecord] = []
         for item in config_items:
             row = enrich.get(item["ts_code"].upper(), {})
             name = str(row.get("name") or item["name"])
-            exchange = str(row.get("market") or item["ts_code"].split(".")[-1])
+            exchange = item["ts_code"].split(".")[-1]
             metadata = {
                 "management": row.get("management"),
                 "custodian": row.get("custodian"),
@@ -139,14 +138,20 @@ class TushareProvider(MarketProvider):
                 end_date=self._date_text(end_date),
             )
         except Exception as exc:
-            raise ProviderError(f"Tushare fund_daily failed for {ts_code}: {exc}") from exc
+            raise ProviderError(f"Tushare fund_daily failed for {ts_code}: {type(exc).__name__}") from exc
         rows = self._records(frame)
+        if len(rows) >= 5000:
+            raise ProviderError("daily_response_may_be_truncated")
         result: list[BarRecord] = []
         for row in rows:
+            if row.get("ts_code") and str(row["ts_code"]).upper() != ts_code.upper():
+                raise ProviderError("history_identity_mismatch")
             raw_date = str(row.get("trade_date") or "")
             if len(raw_date) != 8:
                 continue
             trade_date = datetime.strptime(raw_date, "%Y%m%d").date()
+            if not start_date <= trade_date <= end_date:
+                continue
             close = finite_or_none(row.get("close"))
             open_price = finite_or_none(row.get("open"))
             high = finite_or_none(row.get("high"))
@@ -162,36 +167,64 @@ class TushareProvider(MarketProvider):
                     low=low or 0,
                     close=close or 0,
                     pre_close=finite_or_none(row.get("pre_close")),
-                    volume=finite_or_none(row.get("vol") or row.get("volume")),
-                    amount=finite_or_none(row.get("amount")),
-                    pct_change=finite_or_none(row.get("pct_chg") or row.get("pct_change")),
+                    volume=(finite_or_none(first(row, "vol", "volume")) * 100 if finite_or_none(first(row, "vol", "volume")) is not None else None),
+                    amount=(finite_or_none(row.get("amount")) * 1000 if finite_or_none(row.get("amount")) is not None else None),
+                    pct_change=finite_or_none(first(row, "pct_chg", "pct_change")),
                     adjust="none",
-                    source=self.name,
+                    source="tushare:fund_daily:v101",
                 )
             )
         result.sort(key=lambda item: item.trade_date)
         return result
 
+    def fetch_minute_bars(self, ts_code: str, interval: str, start_date: date, end_date: date) -> list[BarRecord]:
+        """Permission-dependent official ETF minutes; no synthetic daily fallback.
+
+        etf_mins uses shares/CNY already. Read-only history, not an assertion of
+        point-in-time availability or execution qualification.
+        """
+        if interval not in {"30m", "60m"}:
+            raise CapabilityUnavailable("minute_interval_not_enabled")
+        if (end_date - start_date).days > 30 or start_date > end_date:
+            raise ValueError("minute_request_window_must_be_0_to_30_days")
+        rows = self._records(self.pro.etf_mins(ts_code=ts_code, freq=interval.removesuffix("m") + "min",
+            start_date=start_date.isoformat() + " 09:00:00", end_date=end_date.isoformat() + " 15:30:00"))
+        if len(rows) >= 8000:
+            raise ProviderError("minute_response_may_be_truncated")
+        result = []
+        for row in rows:
+            if str(row.get("ts_code", "")).upper() != ts_code.upper():
+                raise ProviderError("minute_identity_mismatch")
+            observed = self._parse_datetime(row.get("trade_time"))
+            if observed is None:
+                raise ProviderError("minute_source_time_missing")
+            values = {key: finite_or_none(row.get(key)) for key in ("open", "high", "low", "close")}
+            if any(value is None for value in values.values()):
+                raise ProviderError("minute_ohlc_missing")
+            result.append(BarRecord(ts_code=ts_code, trade_date=observed, **values,
+                volume=finite_or_none(first(row, "vol", "volume")), amount=finite_or_none(row.get("amount")),
+                source="tushare:etf_mins:v101"))
+        return sorted(result, key=lambda item: item.trade_date)
+
     def _call_candidate(self, name: str, codes: list[str]) -> list[dict[str, Any]]:
-        function: Callable[..., Any] | None = getattr(self.pro, name, None) or getattr(self.ts, name, None)
-        if function is None:
+        # No speculative stock/legacy endpoints, no missing SH topic. Batch at
+        # most two exchange requests; filter wildcard results by exact identity.
+        if name != "rt_etf_k" or not codes:
             return []
-        params_variants = [
-            {"ts_code": ",".join(codes)},
-            {"ts_code": codes[0]} if len(codes) == 1 else {},
-            {"symbols": ",".join(code.split(".")[0] for code in codes)},
-        ]
-        for params in params_variants:
-            if not params:
+        rows = []
+        fields = "ts_code,name,pre_close,high,open,low,close,vol,amount,trade_time"
+        for exchange in ("SH", "SZ"):
+            group = [code for code in dict.fromkeys(codes) if code.endswith("." + exchange)]
+            if not group:
                 continue
+            params = {"ts_code": group[0] if len(group) == 1 else ("5*.SH" if exchange == "SH" else "1*.SZ"), "fields": fields}
+            if exchange == "SH":
+                params["topic"] = "HQ_FND_TICK"
             try:
-                frame = function(**params)
-                rows = self._records(frame)
-                if rows:
-                    return rows
+                rows.extend(self._records(self.pro.rt_etf_k(**params)))
             except Exception as exc:
-                logger.info("Tushare realtime candidate %s params=%s failed: %s", name, list(params), exc)
-        return []
+                logger.info("Tushare ETF realtime %s unavailable: %s", exchange, type(exc).__name__)
+        return rows
 
     @staticmethod
     def _row_code(row: dict[str, Any]) -> str:
@@ -218,17 +251,13 @@ class TushareProvider(MarketProvider):
             parsed = self._parse_datetime(row.get(key))
             if parsed is not None:
                 return parsed
-        if combined_time:
-            text = str(combined_time).strip()
-            for fmt in ("%H:%M:%S", "%H:%M"):
-                try:
-                    parsed_time = datetime.strptime(text, fmt).time()
-                    return datetime.combine(fallback.date(), parsed_time, tzinfo=self.tz)
-                except ValueError:
-                    continue
+        # A time-of-day cannot establish the date: never attach today's date
+        # to Friday's cached quote on a weekend or after a source failure.
+        if combined_time and len(str(combined_time).strip()) > 10:
+            return self._parse_datetime(combined_time)
         return None
 
-    def fetch_spot_quotes(self, codes: list[str]) -> list[QuoteRecord]:
+    def fetch_spot_quotes(self, codes: list[str], *, allow_daily_fallback: bool = True) -> list[QuoteRecord]:
         rows: list[dict[str, Any]] = []
         resolved_by: str | None = None
         for name in [item.strip() for item in self.settings.tushare_realtime_candidates.split(",") if item.strip()]:
@@ -242,10 +271,7 @@ class TushareProvider(MarketProvider):
         if rows:
             by_code = {self._row_code(row): row for row in rows if self._row_code(row)}
             for code in codes:
-                row = by_code.get(code.upper()) or next(
-                    (item for key, item in by_code.items() if key.split(".")[0] == code.split(".")[0]),
-                    None,
-                )
+                row = by_code.get(code.upper())
                 if not row:
                     continue
                 price = finite_or_none(
@@ -254,7 +280,7 @@ class TushareProvider(MarketProvider):
                 if price is None:
                     continue
                 pre_close = finite_or_none(row.get("pre_close") or row.get("昨收") or row.get("PRE_CLOSE"))
-                pct = finite_or_none(row.get("pct_chg") or row.get("pct_change") or row.get("涨跌幅"))
+                pct = finite_or_none(first(row, "pct_chg", "pct_change", "涨跌幅"))
                 if pct is None and pre_close:
                     pct = (price / pre_close - 1) * 100
                 source_time = self._quote_timestamp(row, now)
@@ -268,19 +294,22 @@ class TushareProvider(MarketProvider):
                         low=finite_or_none(row.get("low") or row.get("最低")),
                         pre_close=pre_close,
                         pct_change=pct,
-                        volume=finite_or_none(row.get("vol") or row.get("volume") or row.get("成交量")),
-                        amount=finite_or_none(row.get("amount") or row.get("成交额")),
+                        volume=finite_or_none(first(row, "vol", "volume", "成交量")),
+                        amount=finite_or_none(first(row, "amount", "成交额")),
                         premium_rate=finite_or_none(row.get("premium_rate") or row.get("溢价率")),
-                        source=f"{self.name}:{resolved_by}",
+                        source=f"{self.name}:{resolved_by}:v101",
                         is_realtime=source_time is not None,
                         degraded_reason=(
                             None if source_time is not None else
-                            "上游实时接口未提供可验证行情时间；不可作为盘中操作依据"
+                            "source_timestamp_missing_observed_at_fetch"
                         ),
                     )
                 )
         if quotes:
             return quotes
+
+        if not allow_daily_fallback:
+            raise CapabilityUnavailable("realtime_unavailable_try_next_provider")
 
         # Permission-safe degradation: latest official fund_daily close, explicitly marked non-realtime.
         degraded: list[QuoteRecord] = []
@@ -302,7 +331,7 @@ class TushareProvider(MarketProvider):
                     volume=latest.volume,
                     amount=latest.amount,
                     premium_rate=None,
-                    source=f"{self.name}:fund_daily",
+                    source="tushare:fund_daily:v101",
                     is_realtime=False,
                     degraded_reason="账户实时 ETF/LOF 接口不可用，退化为最近交易日日线收盘；不可作为盘中操作依据",
                 )
@@ -310,6 +339,10 @@ class TushareProvider(MarketProvider):
         if not degraded:
             raise CapabilityUnavailable("Tushare 实时与日线行情均不可用")
         return degraded
+
+    def fetch_current_quotes(self, codes: list[str]) -> list[QuoteRecord]:
+        """Composite must try another current source before any per-ETF daily I/O."""
+        return self.fetch_spot_quotes(codes, allow_daily_fallback=False)
 
     def fetch_news(self, since_hours: int = 24) -> list[NewsRecord]:
         now = datetime.now(self.tz)
@@ -338,7 +371,9 @@ class TushareProvider(MarketProvider):
                         if not title:
                             continue
                         raw_time = row.get("datetime") or row.get("pub_time") or row.get("date")
-                        published = self._parse_datetime(raw_time) or now
+                        published = self._parse_datetime(raw_time)
+                        if published is None or not start <= published <= now:
+                            continue
                         source_id = str(row.get("id") or row.get("news_id") or f"{name}-{published.timestamp()}-{idx}")
                         result.append(
                             NewsRecord(
@@ -354,8 +389,8 @@ class TushareProvider(MarketProvider):
                         logger.info("Tushare news %s returned %s in %.0fms", name, len(result), (time_module.perf_counter() - started) * 1000)
                         return result
                 except Exception as exc:
-                    errors.append(f"{name}: {type(exc).__name__}: {exc}")
-                    logger.info("Tushare news candidate %s failed: %s", name, exc)
+                    errors.append(f"{name}: {type(exc).__name__}")
+                    logger.info("Tushare news candidate %s failed: %s", name, type(exc).__name__)
         if not successful_call and errors:
             raise CapabilityUnavailable("Tushare 新闻接口均不可用；" + "; ".join(errors))
         return []
@@ -366,6 +401,12 @@ class TushareProvider(MarketProvider):
         if isinstance(value, datetime):
             return value.astimezone(self.tz) if value.tzinfo else value.replace(tzinfo=self.tz)
         text = str(value).strip()
+        if len(text) >= 19 and ("T" in text or "+" in text or text.endswith("Z")):
+            try:
+                parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+                return parsed.replace(tzinfo=self.tz) if parsed.tzinfo is None else parsed.astimezone(self.tz)
+            except ValueError:
+                pass
         for fmt in ("%Y-%m-%d %H:%M:%S", "%Y%m%d %H:%M:%S", "%Y%m%d%H%M%S", "%Y-%m-%d", "%Y%m%d"):
             try:
                 parsed = datetime.strptime(text, fmt)
@@ -383,5 +424,5 @@ class TushareProvider(MarketProvider):
             if rows:
                 return str(rows[0].get("is_open")) in {"1", "True", "true"}
         except Exception as exc:
-            logger.warning("Tushare trade_cal failed, weekday fallback: %s", exc)
+            logger.warning("Tushare trade_cal failed, weekday fallback: %s", type(exc).__name__)
         return day.weekday() < 5

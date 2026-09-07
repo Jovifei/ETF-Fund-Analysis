@@ -360,13 +360,14 @@ def test_akshare_sector_falls_back_to_ths():
 
 
 def test_akshare_sector_raises_when_all_sources_fail():
-    """两个源都失败才抛 ProviderError，且错误信息带上每个源的原因。"""
+    """v1.0.1: 每个源仅保留异常类别，不透传可能含凭据的原始错误。"""
     provider = _provider(em=RuntimeError("em-down"), ths=RuntimeError("ths-down"))
     with pytest.raises(ProviderError) as excinfo:
         provider.fetch_sector_snapshots()
     message = str(excinfo.value)
-    assert "em-down" in message
-    assert "ths-down" in message
+    assert "em: RuntimeError" in message
+    assert "ths: RuntimeError" in message
+    assert "em-down" not in message and "ths-down" not in message
 
 
 def _fake_code_df():
@@ -613,7 +614,7 @@ def test_akshare_fetch_market_context_index():
 
 
 def test_akshare_fetch_market_context_tradable_proxy():
-    """tradable_proxy 卡片应走 ETF 实时行情拉价格，并正确补全交易所后缀。"""
+    """v1.0.1: 没有源时间的 ETF 公开现价不得冒充 verified/fresh 上下文。"""
     from unittest.mock import MagicMock
     from datetime import datetime as dt
     from zoneinfo import ZoneInfo
@@ -640,12 +641,6 @@ def test_akshare_fetch_market_context_tradable_proxy():
     )
 
     obs = prov.fetch_market_context([proxy_item])
-    assert len(obs) == 1
-    o = obs[0]
-    assert o.context_id == "china-semiconductor-etf"
-    assert o.observed_value == 1.01
-    assert o.today_pct_change == -1.94
-    assert o.is_mock is False
-    assert o.freshness.value == "fresh"
+    assert obs == []  # source timestamp is absent; fetching now does not verify it
 
 

@@ -28,7 +28,7 @@ def enqueue(db: Session, payload: DataRequest, user_id: int | None) -> tuple[Wor
     count = db.scalar(select(func.count()).select_from(WorkspaceDataJob).where(WorkspaceDataJob.status.in_(("queued", "running")))) or 0
     if count >= 10:
         raise WorkspaceError(429, "data_queue_full")
-    if payload.task == "onboard" and not payload.codes:
+    if payload.task in {"onboard", "minutes"} and not payload.codes:
         raise WorkspaceError(422, "onboarding_requires_explicit_codes")
     row = WorkspaceDataJob(job_id=uuid4().hex, user_id=user_id, owner_scope=scope, idempotency_key=key, request_json=request)
     db.add(row)

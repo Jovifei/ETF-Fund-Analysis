@@ -1,0 +1,33 @@
+
+> etf-research-workspace@1.0.1 test
+> vitest run
+
+
+[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90m/mnt/data/etf_v101_work/repo/frontend[39m
+
+ [32m✓[39m tests/api.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m tests/format.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+[90mstderr[2m | tests/app.test.ts[2m > [22m[2mbootstrap branch transition[2m > [22m[2mreplaces the loading branch without duplicate keyed block identity
+[22m[39m[Vue Router warn]: No match found for location with path "/matrix"
+[Vue Router warn]: No match found for location with path "/analysis"
+[Vue Router warn]: No match found for location with path "/watchlist"
+[Vue Router warn]: No match found for location with path "/holdings"
+[Vue Router warn]: No match found for location with path "/ai"
+[Vue Router warn]: No match found for location with path "/review"
+[Vue Router warn]: No match found for location with path "/research/news"
+[Vue Router warn]: No match found for location with path "/factors"
+[Vue Router warn]: No match found for location with path "/history"
+[Vue Router warn]: No match found for location with path "/settings"
+[Vue Router warn]: No match found for location with path "/profile"
+[Vue Router warn]: No match found for location with path "/settings"
+[Vue Router warn]: No match found for location with path "/profile"
+
+ [32m✓[39m tests/app.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 100[2mms[22m[39m
+ [32m✓[39m tests/chart.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/session.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [32m✓[39m tests/navigation.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m6 passed[39m[22m[90m (6)[39m
+[2m      Tests [22m [1m[32m19 passed[39m[22m[90m (19)[39m
+[2m   Start at [22m 17:20:11
+[2m   Duration [22m 1.97s[2m (transform 416ms, setup 0ms, collect 990ms, tests 150ms, environment 2.38s, prepare 552ms)[22m

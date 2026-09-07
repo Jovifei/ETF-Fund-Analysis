@@ -28,6 +28,8 @@ def correlation_summary(panel, fields):
 
 
 def run(db, settings):
+    from app.providers.data_contract import require_current_history
+    require_current_history(db, settings)
     service = FactorAnalysisService(settings)
     panel = service._panel(db)
     if panel.empty:

@@ -58,9 +58,10 @@ def quote_view(quote, settings: Settings) -> dict:
     price = number(quote.price)
     if isinstance(quote.price, bool) or price is None or price <= 0:
         price, state = None, "invalid"
+    source_time_missing = str(quote.degraded_reason or "").startswith("source_timestamp_missing")
     return {
         "price": price, "change_ratio": number(quote.pct_change / 100) if quote.pct_change is not None else None,
-        "status": state, "source_time": iso(observed), "fetched_at": iso(quote.fetched_at),
+        "status": state, "source_time": None if source_time_missing else iso(observed), "fetched_at": iso(quote.fetched_at),
         "source": quote.source, "timestamp_verified": bool(quote.timestamp_verified),
         "is_realtime": bool(quote.is_realtime and state == "observed"), "is_mock": mock,
         "actionable": False,
@@ -86,7 +87,7 @@ def search_instruments(db: Session, settings: Settings, q: str, limit: int, user
 
 
 def compact_row(row: dict) -> dict:
-    keys = ("ts_code", "name", "kind", "theme_l1", "theme_l2", "grade", "grade_reason", "freshness", "data_status", "return_1d", "return_5d", "returns", "volume", "ma", "macd", "kdj", "rsi", "td", "indicator", "quote", "forecasts", "research_only")
+    keys = ("ts_code", "name", "kind", "theme_l1", "theme_l2", "grade", "grade_reason", "freshness", "data_status", "return_1d", "return_5d", "returns", "volume", "ma", "macd", "kdj", "rsi", "td", "sector", "chan", "indicator", "quote", "forecasts", "research_only")
     result = {key: row.get(key) for key in keys}
     history = row.get("history") or []
     result["price"] = number(history[-1].get("close")) if history else number((row.get("support_resistance") or {}).get("current_price"))
@@ -193,6 +194,14 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
     if any(any(number(row[key]) is None for key in ("open", "high", "low", "close")) or row["low"] > min(row["open"], row["close"]) or row["high"] < max(row["open"], row["close"]) for row in rows):
         return {"ts_code": code, "interval": interval, "available": False, "bars": [], "reason": "invalid_ohlc", "actionable": False}
     strategy = settings.load_strategy()
+    from app.providers.data_contract import LEGACY_SOURCES
+    legacy_units = settings.market_provider != "mock" and any(row["source"] in LEGACY_SOURCES for row in rows)
+    if legacy_units:
+        return {"ts_code": code, "interval": interval, "available": bool(rows),
+            "bars": [{**row, "volume": None, "amount": None, "indicators": {}} for row in rows[-limit:]],
+            "adjust": adjust, "currency": "CNY", "qualification": "legacy_units_unverified", "actionable": False,
+            "cost_overlay_allowed": adjust == "none", "sr_overlay_allowed": False, "support_resistance": None,
+            "indicator_note": "旧行情单位需要完整重抓；暂仅展示价格，不显示未修复量能、指标或支撑压力。"}
     series = cached_indicator_series(rows, strategy["indicator"])
     now = datetime.now(SHANGHAI)
     for row in series:

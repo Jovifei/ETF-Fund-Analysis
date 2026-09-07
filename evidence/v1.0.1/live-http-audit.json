@@ -1,0 +1,70 @@
+{
+  "as_of": "2026-09-06T17:07:57.792202+00:00",
+  "scope": "unauthenticated_http_smoke_only",
+  "checks": [
+    {
+      "name": "version",
+      "passed": true
+    },
+    {
+      "name": "/",
+      "passed": true,
+      "csp_present": true
+    },
+    {
+      "name": "built_asset",
+      "passed": true
+    },
+    {
+      "name": "built_asset",
+      "passed": true
+    },
+    {
+      "name": "/matrix",
+      "passed": true,
+      "csp_present": true
+    },
+    {
+      "name": "built_asset",
+      "passed": true
+    },
+    {
+      "name": "built_asset",
+      "passed": true
+    },
+    {
+      "name": "/classic/etf-board",
+      "passed": true,
+      "csp_present": true
+    },
+    {
+      "name": "/settings",
+      "passed": true,
+      "csp_present": true
+    },
+    {
+      "name": "built_asset",
+      "passed": true
+    },
+    {
+      "name": "built_asset",
+      "passed": true
+    },
+    {
+      "name": "no_api_spa_fallback",
+      "passed": true
+    }
+  ],
+  "version": "1.0.1",
+  "provider": "public_composite",
+  "auth_enabled": true,
+  "demo_only": false,
+  "passed": true,
+  "not_verified": [
+    "actual provider permissions and continuity",
+    "authenticated UI and user isolation",
+    "PostgreSQL migration and backup",
+    "production TLS and cookies"
+  ],
+  "mutations": false
+}

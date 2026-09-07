@@ -620,3 +620,25 @@ python codex/skills/fund-research/scripts/check_no_secrets.py .
 - [x] Derive report operational-detail inclusion from the persisted owner: system and active-admin reports allow it; member, unknown, and inactive-owner private reports deny it.
 - [x] Documentation: repair the HANDOFF migration chain with `e6f7a8b9c0d1` then `f7a8b9c0d1e2` before auth; align current strategy references to `signal-v0.7.0-research` in the related current-state architecture/implementation/deployment handoffs without changing labeled historical evidence.
 - [ ] Review: ownership = 22 passed (exit 0); auth + password = 55 passed, 1 PostgreSQL safety skip (exit 0); compileall/Node/scoped Ruff/diff check = 0. One full project-venv pytest was started sequentially and completed, but this execution environment truncated its result and did not retain an exit code, so it is not claimed as passed. Full-tree Ruff exits 1 on 86 pre-existing cross-module violations; scoped Ruff for this change passes. No commit, push, deployment, dotenv read, or production database access.
+# v1.0.1 接收、移植、测试与部署执行记录（2026-09-07）
+
+- [x] 校验 ZIP SHA256、目录安全和 `PACKAGE_MANIFEST_V101.json`。
+- [x] 保留原脏工作树；从精确 `9a0ca1812eda24acc390f1b3097662bfd615dfef` 建立隔离分支并移植包内容。
+- [x] 只读核对远端 main、v1.0.0、已有 v1.0.1 分支、开放 PR 与生产 SSH 入口。
+- [x] 在独立 Python 3.12 / Node 环境执行后端、前端、Alembic、PostgreSQL、Playwright、JS/Shell/Compose 和密钥门禁（Windows Bash 不可用，ShellCheck 改在隔离容器执行）。
+- [x] 真实 Provider 小样本：510300.SH、512480.SH；记录各能力、单位、时间、覆盖、入库和失败状态；缺量导致衍生任务诚实 partial。
+- [x] 检查旧生产数据备份/恢复/迁移/单位污染；生产 PostgreSQL 备份已完成并记录 hash，staging 恢复/迁移/单位核验仍是部署前门禁，未切换生产。
+- [ ] 审查 staged diff，提交功能分支并创建 PR；不自动合并 main、不移动标签。
+- [ ] 按 SSH 只读盘点结果形成生产 override；备份已完成，隔离 staging、镜像部署和维护窗口仍待完成。
+- [ ] 通过正式域名/API、认证/CSRF、页面、任务、重启保留和 10–15 分钟观察验收后更新部署收据。
+
+## 当前门禁
+
+- 生产 SSH 只读盘点已连通：远端当前 HEAD/Compose 与 ZIP 基线不一致，必须先三方对账。
+- 本地 v1.0.1 目标包尚未提交到功能分支；服务器不能直接从未验收的包切换。
+- 不读取或输出任何私有配置、Token、Cookie、密码、持仓和备份内容。
+
+## 本轮复核
+
+- 本机接收分支已完成源码、前端、迁移、PostgreSQL、容器镜像、Provider 小样本和离线浏览器验证；真实公共源仅有可用性/覆盖证据，不构成生产资格。
+- 生产备份已完成；在 CI、隔离 staging 恢复/迁移/单位核验和维护窗口前，不切换远端生产 API 或 scheduler。

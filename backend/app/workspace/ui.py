@@ -9,7 +9,7 @@ from starlette.responses import FileResponse, JSONResponse
 from app.workspace.config import workspace_settings
 
 DIST = Path(__file__).resolve().parents[1] / "workspace_dist"
-UI_PATHS = frozenset({"/", "/boards", "/analysis", "/watchlist", "/holdings", "/ai", "/research", "/research/news", "/review", "/factors", "/history", "/settings", "/profile", "/system", "/decision/1430"})
+UI_PATHS = frozenset({"/", "/matrix", "/boards", "/analysis", "/watchlist", "/holdings", "/ai", "/research", "/research/news", "/review", "/factors", "/history", "/settings", "/profile", "/system", "/decision/1430"})
 
 
 class WorkspaceMiddleware:

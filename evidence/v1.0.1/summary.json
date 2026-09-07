@@ -1,0 +1,22 @@
+{
+  "version": "1.0.1",
+  "base_commit": "9a0ca1812eda24acc390f1b3097662bfd615dfef",
+  "backend": {
+    "collected": 812,
+    "passed": 811,
+    "skipped": 1,
+    "failures": 0
+  },
+  "vue_unit_passed": 19,
+  "legacy_js_passed": 19,
+  "typecheck": true,
+  "build": true,
+  "alembic_head": "d40609090002",
+  "isolated_http_checks": 14,
+  "offline_browser_checks": 8,
+  "ordinary_browser_url_e2e": "blocked_by_managed_policy",
+  "user_windows_deployment": "not_observed",
+  "real_provider_permissions": "not_verified",
+  "remote_source_pushed": false,
+  "no_auto_trade": true
+}

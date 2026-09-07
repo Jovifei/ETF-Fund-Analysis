@@ -10,7 +10,7 @@ import type { Status } from './lib/types'
 import { olderThan } from './lib/format'
 const session = useSession(), route = useRoute(), sidebar = ref('expanded'), mobileOpen = ref(false), status = ref<Status | null>(null), notice = ref(''), reduced = ref(false)
 const groups = [
-  { title: '日常研究', items: [{ path: '/', label: '市场总览', icon: LayoutDashboard }, { path: '/analysis', label: 'ETF 分析', icon: ChartCandlestick }, { path: '/watchlist', label: '我的自选', icon: Star }, { path: '/holdings', label: '我的持仓', icon: BriefcaseBusiness }] },
+  { title: '日常研究', items: [{ path: '/', label: '市场总览', icon: LayoutDashboard }, { path: '/matrix', label: 'ETF 指标总表', icon: LayoutDashboard }, { path: '/analysis', label: 'ETF 分析', icon: ChartCandlestick }, { path: '/watchlist', label: '我的自选', icon: Star }, { path: '/holdings', label: '我的持仓', icon: BriefcaseBusiness }] },
   { title: '证据与分析', items: [{ path: '/ai', label: 'AI 研究', icon: Sparkles }, { path: '/review', label: '每日复盘', icon: BookOpen }, { path: '/research/news', label: '新闻线索', icon: Newspaper }, { path: '/factors', label: '因子研究', icon: Sigma }, { path: '/history', label: '研究档案', icon: Clock3 }] },
 ]
 function selected(path: string) { return path === '/' ? ['/', '/boards', '/decision/1430'].includes(route.path) : path === '/analysis' ? route.path === path || route.path.startsWith('/etf/') : route.path === path }

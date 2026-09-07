@@ -1,47 +1,49 @@
-# ETF Research 工作站：完整源码交付
+# v1.0.1 后端数据接入与原 ETF 面板：接收入口
 
-交付日期：2026-09-06。正式发布版本：`1.0.0`。
+交付日期：2026-09-07（Asia/Shanghai）。应用/工作站版本：1.0.1。
+基线是 **codex/v1.0.0 / 9a0ca1812eda24acc390f1b3097662bfd615dfef**，不是仍停留在旧版的 main。
+本包包含完整源码、数据库迁移、测试、已构建 Vue 前端和第三方许可；不含凭据、真实数据库、持仓、Git 历史、依赖目录或字体。
 
-这是完整项目源码包，不是只有 docs 的规划包，也不是需要另找原文件的增量补丁。
-包含原有后端、旧界面、Vue 新界面、数据库迁移、测试、Bridge、Vibe 产物适配、部署文件及**已构建的前端**。
-不包含 `.git`、真实数据库、真实持仓、认证文件、密钥、Python/Node 依赖目录或字体文件。
-本次 ZIP 交付没有再推送或合并 GitHub；由 Jovi 自行提交。
+**这是可接收的代码交付包，不是已在用户 Windows/ECS 上安装的服务，也不是已发布到 GitHub 的 v1.0.1 标签。**
+本轮仅预建了 `feat/v1.0.1-data-access` 分支（起点 9a0ca181）；应用修改由本包和增量补丁交付，尚未推送到该分支。
 
-## 先核验，再看界面
+## 第一步：不要覆盖旧工程
 
-在新目录解压，不要覆盖正在使用的工程或生产配置：
+在新目录解压并运行：
 
 ```powershell
-cd ETF-Fund-Analysis
 python scripts/verify_delivery.py
+```
+
+该命令检查 `PACKAGE_MANIFEST_V101.json`，不安装、不联网、不读数据库。
+原 `DELIVERY_MANIFEST.json` 仅保留原 P0–P4 ZIP 的历史清单；修改文件、重新构建或自行提交后不应继续用旧清单证明工作树未变化。
+
+## 第二步：这次要真实数据，不要继续跑 demo
+
+先读 [DATA_ACCESS_V101.md](docs/DATA_ACCESS_V101.md)。安装 Python 3.12 与市场依赖，把配置放在仓库外本人私有目录，选择 `composite`（本人 Tushare Token）或 `public_composite`（公开源）。Token 不提交、不粘贴聊天、不找历史 Git 凭据。
+本包已带构建前端，单纯启动不用 Node；自行改前端/从 Git 部署时需 Node 22.18+、`npm ci` 和 build。
+
+```powershell
 py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e "."
-.\.venv\Scripts\python.exe scripts/run_workspace_demo.py
+.\.venv\Scripts\python.exe -m pip install -e ".[market]"
+# 先将 deploy/workspace.live.env.example 复制到仓库外私有目录并由本人填写配置
+.\.venv\Scripts\python.exe scripts/run_workspace_live.py init --config E:\ETF-Private\workspace.env --data-dir E:\ETF-Private\data
+.\.venv\Scripts\python.exe scripts/run_workspace_live.py bootstrap-admin --config E:\ETF-Private\workspace.env --data-dir E:\ETF-Private\data
+.\.venv\Scripts\python.exe scripts/run_workspace_live.py serve --config E:\ETF-Private\workspace.env --data-dir E:\ETF-Private\data --port 8082
 ```
 
-macOS/Linux 对应：
+路径是可替换的例子。`init` 拒绝覆盖已有数据库；密码隐藏输入；serve 只监听 `127.0.0.1`，不自动采集或调用模型。停止保留数据。
+浏览器打开 `http://127.0.0.1:8082/` 登录，在设置页查看“后端数据接入”，点击“更新跟踪池行情”；目录、新闻、板块、分钟线为独立任务。先少量 ETF 验证，不开启全市场高频循环。
 
-```bash
-python3.12 -m venv .venv
-.venv/bin/python -m pip install -e .
-.venv/bin/python scripts/run_workspace_demo.py
-```
+`python scripts/run_workspace_demo.py` 的 8081 仍是临时 Mock 界面演示，不能用它替代以上持久数据服务。
 
-然后访问 `http://127.0.0.1:8081`。初次生成演示快照需要片刻；不需要模型登录或先安装 Node。
-脚本只绑定回环地址，使用临时模拟数据库；界面持续显示演示标识。关闭进程后演示持仓不保留。
-它拒绝在已有 `.env` / `deploy/.env.production` 的目录旁启动，不读取生产数据库。
-真实持仓与真实行情请使用独立、有认证的部署，不能把无认证演示端口暴露到公网。
+## 面板入口
 
-## 阅读顺序
+- `/matrix`：Vue 左栏内完整 ETF 指标总表。
+- `/classic/etf-board`：原版 WorkBuddy 风格 ETF 密集五档面板，保留原 HTML/CSS/JS。
+- 两者点击 ETF 都进入 `/etf/{ts_code}`，只读同一决策快照。
 
-1. [本轮实现、限制和验收](docs/DELIVERY_P0_P4.md)。
-2. [当前测试报告](docs/TEST_REPORT_20260906.md)。
-3. [本地/Docker 部署、Bridge 与 Vibe 接入](docs/LOCAL_WORKSPACE_DEPLOYMENT.md)。
-4. [自行提交到 Git 的安全步骤](docs/SELF_SUBMIT.md)。
-5. [planning-v2 唯一方案](docs/planning/WORKSPACE_PLANNING_V2.md)。
+## 阅读与交接
 
-## 不应误解为已完成的事项
-
-真实 Codex/Vibe 模型登录、真实上游完整研究、生产 Docker/PostgreSQL 与真实数据源联调尚未在本交付环境验收；标准 HTTP 浏览器端到端测试受当前受管浏览器访问策略限制。
-已完成的离线浏览器验收与 ASGI 路由测试分别记录，不能替代上述证据。
-历史 14:30 PIT、样本外校准、成交约束和长期 Shadow 仍需真实数据及时间积累，不因代码或截图完成而升级。
+[发布/部署审核](docs/V100_DEPLOYMENT_AUDIT_20260907.md) → [本版记录](docs/versions/V1.0.1.md) → [接入和启动](docs/DATA_ACCESS_V101.md) → [本版验证](docs/VALIDATION_V101.md) → [自行提交](docs/SELF_SUBMIT_V101.md)。
+旧交付说明在 `docs/archive/release-v1.0.0/`；旧测试报告证明旧版，不替代本版测试。

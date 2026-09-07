@@ -15,6 +15,7 @@ from app.models import AuthUser, Instrument, QuoteSnapshot, UserWatchlistEntry
 from app.services.holding_import_service import HoldingImportError, HoldingImportService
 from app.workspace import bridge_api, data_jobs, imports, jobs, read_model
 from app.workspace.config import workspace_settings
+from app.workspace.data_sources import configuration
 from app.workspace.external_research import ExternalPacket, ExternalImport, import_packet, preview
 from app.workspace.models import WorkspaceBridgeDevice, WorkspaceDataJob, WorkspaceImportBatch, WorkspacePreference, WorkspaceResearchJob
 from app.workspace.protocol import DataRequest, DeviceRequest, Preferences, ResearchRequest, ResearchResult, ReviewRequest, canonical_bytes, content_hash
@@ -39,7 +40,13 @@ def status(db: DB, settings: Config, user: User):
     cfg = workspace_settings()
     heartbeat = db.get(WorkspacePreference, "system:workspace-worker")
     strategy = settings.load_strategy()
-    return {"app_version": settings.app_version, "workspace_version": "1.0.0", "strategy_version": strategy.get("version"), "indicator_version": strategy.get("indicator_version"), "forecast_version": strategy.get("forecast_version"), "market_provider": settings.market_provider, "ui_enabled": cfg.ui_enabled, "bridge_enabled": cfg.bridge_enabled, "daily_review_enabled": cfg.daily_review_enabled, "worker": heartbeat.settings_json if heartbeat else None, "catalog_count": db.scalar(select(func.count()).select_from(Instrument).where(Instrument.kind.in_(("ETF", "LOF")))), "tracked_count": db.scalar(select(func.count()).select_from(Instrument).where(Instrument.enabled.is_(True))), "historical_1430_backtest": "not_qualified", "api_key_configuration": "disabled_pending_secure_secret_store", "automatic_orders": False}
+    return {"app_version": settings.app_version, "workspace_version": "1.0.1", "strategy_version": strategy.get("version"), "indicator_version": strategy.get("indicator_version"), "forecast_version": strategy.get("forecast_version"), "market_provider": configuration(db, settings)["effective_provider"], "ui_enabled": cfg.ui_enabled, "bridge_enabled": cfg.bridge_enabled, "daily_review_enabled": cfg.daily_review_enabled, "worker": heartbeat.settings_json if heartbeat else None, "catalog_count": db.scalar(select(func.count()).select_from(Instrument).where(Instrument.kind.in_(("ETF", "LOF")))), "tracked_count": db.scalar(select(func.count()).select_from(Instrument).where(Instrument.enabled.is_(True))), "historical_1430_backtest": "not_qualified", "api_key_configuration": "disabled_pending_secure_secret_store", "automatic_orders": False}
+
+
+@router.get("/data-sources")
+def data_sources(db: DB, settings: Config, user: Admin):
+    from app.workspace.data_sources import inspect_sources
+    return inspect_sources(db, settings)
 
 
 @router.get("/watchlist")

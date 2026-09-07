@@ -5,7 +5,7 @@ import math
 from datetime import date, datetime, timedelta
 from uuid import uuid4
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import and_, case, delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -14,6 +14,7 @@ from app.providers.base import MarketProvider, ProviderError
 from app.services.audit_service import AuditTimer, record_provider_audit
 from app.services.event_service import emit_event
 from app.utils.hashing import stable_hash
+from app.providers.data_contract import LEGACY_SOURCES, VERSION, HistoryContractError
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,7 @@ class MarketService:
             row.theme_l2 = item.theme_l2
             row.benchmark = item.benchmark
             row.enabled = item.enabled
-            row.metadata_json = item.metadata
+            row.metadata_json = {**(row.metadata_json or {}), **item.metadata}
         db.flush()
         emit_event(db, "instruments.updated", {"created": created, "updated": updated, "run_id": run_id})
         return {"run_id": run_id, "created": created, "updated": updated, "total": len(records)}
@@ -113,14 +114,21 @@ class MarketService:
             wanted = {code.upper() for code in codes}
             instruments = [item for item in instruments if item.ts_code.upper() in wanted or item.symbol in wanted]
         end_date = datetime.now(self.settings.timezone).date()
-        totals = {"inserted": 0, "updated": 0, "unchanged": 0, "instruments": 0, "failures": []}
+        if self.settings.market_provider != "mock":
+            from app.services.trading_calendar_service import TradingCalendarService
+            now = datetime.now(self.settings.timezone)
+            target = end_date - timedelta(days=1) if (now.hour, now.minute) < (15, 15) else end_date
+            end_date = TradingCalendarService(self.settings).effective_trade_date(target)
+        totals = {"inserted": 0, "updated": 0, "unchanged": 0, "instruments": 0, "price_only": 0, "failures": []}
         for instrument in instruments:
             start_date = end_date - timedelta(days=lookback_days)
-            earliest, latest = db.execute(
-                select(func.min(DailyBar.trade_date), func.max(DailyBar.trade_date))
+            earliest, latest, legacy_count = db.execute(
+                select(func.min(DailyBar.trade_date), func.max(DailyBar.trade_date), func.sum(case((or_(DailyBar.source.in_(LEGACY_SOURCES), and_(DailyBar.source == "akshare:sina:v101", DailyBar.volume.is_(None))), 1), else_=0)))
                 .where(DailyBar.instrument_id == instrument.id)
             ).one()
-            if earliest is not None and latest is not None and earliest <= start_date:
+            if legacy_count:
+                start_date = min(start_date, earliest)
+            elif earliest is not None and latest is not None and earliest <= start_date:
                 # Keep a correction overlap; extending history still backfills.
                 start_date = max(start_date, latest - timedelta(days=7))
             timer = AuditTimer()
@@ -128,6 +136,8 @@ class MarketService:
             records = []
             try:
                 records = list(self.provider.fetch_daily_bars(instrument.ts_code, start_date, end_date))
+                if not records:
+                    raise ProviderError("empty_history_no_refresh")
                 # Validate the complete batch before touching persisted history.
                 # Exact duplicates are idempotent; conflicting duplicates are
                 # not silently selected by whichever record happens to be last.
@@ -141,6 +151,10 @@ class MarketService:
                             DailyBar.trade_date >= start_date, DailyBar.trade_date <= end_date,
                         ))
                     }
+                    if legacy_count:
+                        old_keys = {key for key, value in existing.items() if value.source in LEGACY_SOURCES or (value.source == "akshare:sina:v101" and value.volume is None)}
+                        if not old_keys.issubset(batch) or any(value[0].source in LEGACY_SOURCES for value in batch.values()):
+                            raise HistoryContractError("legacy_refetch_incomplete_no_partial_unit_upgrade")
                     for key, (item, content_hash) in batch.items():
                         row = existing.get(key)
                         if row is not None and row.quality_hash == content_hash:
@@ -157,8 +171,10 @@ class MarketService:
                         for field in ("open", "high", "low", "close", "pre_close", "volume", "amount", "pct_change", "source"):
                             setattr(row, field, getattr(item, field))
                         row.quality_hash = content_hash
+                        row.fetched_at = datetime.now(self.settings.timezone)
                     db.flush()
                 totals["instruments"] += 1
+                totals["price_only"] += int(any(item.source == "akshare:sina:v101" and item.volume is None for item, _ in batch.values()))
                 for key in counts:
                     totals[key] += counts[key]
             except Exception as exc:
@@ -177,7 +193,7 @@ class MarketService:
                     )
         db.flush()
         emit_event(db, "bars.updated", {**totals, "run_id": run_id})
-        return {"run_id": run_id, "ingestion_policy": "daily-batch-v1", **totals}
+        return {"run_id": run_id, "ingestion_policy": "daily-batch-v1.0.1", "data_contract": VERSION, **totals}
 
     @staticmethod
     def _validated_bar_batch(records, ts_code: str, start_date: date, end_date: date) -> dict:
@@ -229,7 +245,7 @@ class MarketService:
         error: Exception | None = None
         records = []
         try:
-            records = self.provider.fetch_spot_quotes(list(by_code))
+            records = self._validated_quote_batch(self.provider.fetch_spot_quotes(list(by_code)), set(by_code))
         except Exception as exc:
             error = exc
             raise
@@ -310,6 +326,32 @@ class MarketService:
             "missing": len(missing_codes),
             "missing_codes": missing_codes,
         }
+
+    @staticmethod
+    def _validated_quote_batch(records, wanted: set[str]):
+        if len(records) > 20_000:
+            raise ProviderError("quote_batch_too_large")
+        seen = {}
+        for item in records:
+            if item.ts_code not in wanted:
+                continue
+            if not isinstance(item.quote_time, datetime):
+                raise ProviderError("quote_timestamp_missing")
+            values = [item.price, item.open, item.high, item.low, item.pre_close]
+            if item.price is None or any(v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v <= 0) for v in values):
+                raise ProviderError("quote_price_invalid")
+            if item.high is not None and item.low is not None and item.high < item.low:
+                raise ProviderError("quote_range_invalid")
+            if any(v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v < 0) for v in (item.volume, item.amount)):
+                raise ProviderError("quote_amount_invalid")
+            if any(v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)) for v in (item.pct_change, item.premium_rate)):
+                raise ProviderError("quote_ratio_invalid")
+            if not isinstance(item.source, str) or not 1 <= len(item.source) <= 32:
+                raise ProviderError("quote_source_invalid")
+            if item.ts_code in seen and seen[item.ts_code].to_dict() != item.to_dict():
+                raise ProviderError("quote_duplicate_conflict")
+            seen[item.ts_code] = item
+        return list(seen.values())
 
     def purge_old_quotes(self, db: Session, keep_days: int = 45) -> int:
         cutoff = datetime.now(self.settings.timezone) - timedelta(days=keep_days)

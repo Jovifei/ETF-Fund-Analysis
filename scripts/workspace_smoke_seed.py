@@ -15,6 +15,12 @@ def main():
     settings = get_settings()
     if not (settings.app_env == 'test' and settings.market_provider == 'mock' and not settings.auth_enabled and 'workspace-e2e' in settings.database_url and settings.database_url.startswith('sqlite:')):
         raise SystemExit('browser seed requires isolated test/mock SQLite workspace-e2e database')
+    database = Path(settings.database_url.removeprefix('sqlite:///'))
+    # Every Playwright run must start from a new isolated fixture.  Without
+    # this guard a rerun inherits a prior test's watchlist/holding revisions
+    # and makes later tests fail for stateful reasons.
+    for suffix in ('', '-journal', '-wal', '-shm'):
+        database.with_name(database.name + suffix).unlink(missing_ok=True)
     init_db()
     with session_scope() as db:
         service = TaskService(settings)

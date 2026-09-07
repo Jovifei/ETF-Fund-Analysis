@@ -1,0 +1,26 @@
+import { test, expect } from '@playwright/test'
+
+test('original ETF matrix, source status and light data queue share the canonical backend', async ({ page, request }, info) => {
+  const errors: string[] = []
+  page.on('pageerror', error => errors.push(error.message))
+  await page.goto('/matrix')
+  await expect(page.getByRole('heading', { name: 'ETF 指标总表', exact: true })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: 'MA 均线', exact: true })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: 'TD9', exact: true })).toBeVisible()
+  await expect(page.locator('tbody tr').first()).toBeVisible()
+  await page.screenshot({ path: info.outputPath('v101-matrix.png'), fullPage: true })
+  const board = await (await request.get('/api/workspace/overview?limit=500')).json()
+  expect(board.rows.length).toBeGreaterThan(0)
+  await page.getByRole('link', { name: '打开原版面板' }).click()
+  await expect(page.locator('script[src*="decision_board_workbuddy.js"]')).toHaveCount(1)
+  await page.screenshot({ path: info.outputPath('v101-classic.png'), fullPage: true })
+  await page.goto('/settings')
+  await expect(page.getByRole('heading', { name: '后端数据接入', exact: true })).toBeVisible()
+  await expect(page.getByTestId('data-connections')).toContainText('未配置 Token')
+  await page.screenshot({ path: info.outputPath('v101-data-connections.png'), fullPage: true })
+  await page.getByRole('button', { name: '更新跟踪池行情', exact: true }).click()
+  await expect(page.getByRole('status').filter({ hasText: '后台任务已排队' })).toBeVisible()
+  const jobs = await (await request.get('/api/workspace/data-jobs')).json()
+  expect(jobs.items.some((job: any) => job.task === 'prices' && job.status === 'queued')).toBeTruthy()
+  expect(errors).toEqual([])
+})

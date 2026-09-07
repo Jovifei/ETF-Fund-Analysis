@@ -14,8 +14,10 @@ import sys
 import time
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
+from uuid import uuid4
 
 from sqlalchemy import select, update
+from sqlalchemy.exc import OperationalError
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging
@@ -54,7 +56,7 @@ def sync_catalog(db, provider, *, enable_codes=()):
             error = exc
             raise
         finally:
-            record_provider_audit(db, operation="list_etf_catalog", provider=provider, result=records, error=error, latency_ms=timer.elapsed_ms)
+            record_provider_audit(db, run_id=uuid4().hex, operation="list_etf_catalog", provider=provider, result=records, error=error, latency_ms=timer.elapsed_ms)
     created = 0
     for record in records:
         row = known.get(record.ts_code)
@@ -84,9 +86,25 @@ def outcome_state(outcome: dict) -> str:
         return "failed"
     if state in {"partial", "incomplete", "skipped", "unavailable", "stale"}:
         return "partial"
-    if any(outcome.get(key) for key in ("failures", "errors", "failed_steps", "missing", "missing_codes", "skipped")):
+    if any(outcome.get(key) for key in ("failures", "error", "errors", "failed_steps", "missing", "missing_codes", "skipped", "degraded", "price_only")):
         return "partial"
     return "succeeded"
+
+
+def task_sequence(kind: str, codes: list[str], lookback: int) -> list[tuple[str, dict]]:
+    """Independent capabilities: slow catalogs/news cannot delay price publication."""
+    if kind in {"prices", "refresh", "onboard"}:
+        seq = [("refresh_bars", {"lookback_days": lookback, "codes": codes or None}),
+               ("refresh_indicators", {}), ("refresh_forecasts", {}),
+               ("refresh_quotes", {"codes": codes or None}), ("refresh_signals", {}),
+               ("refresh_decision_board", {})]
+        if kind == "refresh":
+            seq += [("refresh_sector_snapshots", {}), ("refresh_market_context", {}), ("refresh_news", {"since_hours": 72})]
+        return seq
+    return {"quotes": [("refresh_quotes", {"codes": codes or None}), ("refresh_decision_board", {})],
+            "news": [("refresh_news", {"since_hours": 72})],
+            "context": [("refresh_sector_snapshots", {}), ("refresh_market_context", {})],
+            "validate": [("validate_forecasts", {})], "shadow_audit": [("shadow_run_audit", {})]}.get(kind, [])
 
 
 def execute(job_id: str) -> int:
@@ -98,9 +116,12 @@ def execute(job_id: str) -> int:
         if row is None or row.status != "running":
             return 2
         request, owner_id = dict(row.request_json), row.user_id
-    tasks = TaskService(settings)
+        from app.services.runtime_service import RuntimeService
+        settings = RuntimeService(settings).resolve_settings(db).model_copy(update={"analysis_enabled": False, "llm_enabled": False})
+    tasks = None
     failed = False
     try:
+        tasks = TaskService(settings)
         kind = request["task"]
         if kind == "factors":
             with session_scope() as db:
@@ -110,7 +131,14 @@ def execute(job_id: str) -> int:
                 row.status = "succeeded" if report.get("status") == "diagnostic" else "partial"
                 row.finished_at = datetime.now(UTC)
             return 0
-        if kind in {"refresh", "onboard"}:
+        if kind in {"prices", "refresh", "quotes"}:
+            # Explicit user-owned config is the initial research pool; it is
+            # not claimed to be a provider-verified or full-market catalog.
+            with session_scope() as db:
+                if db.scalar(select(Instrument.id).where(Instrument.enabled.is_(True)).limit(1)) is None:
+                    from app.workspace.data_seed import seed_configured_universe
+                    seed_configured_universe(db, settings)
+        if kind in {"catalog", "onboard"}:
             try:
                 with session_scope() as db:
                     outcome = sync_catalog(db, tasks.provider, enable_codes=request.get("codes", []) if kind == "onboard" else ())
@@ -123,25 +151,19 @@ def execute(job_id: str) -> int:
                 failed = True
                 if kind == "onboard":
                     raise
-        if kind == "validate":
-            sequence = [("validate_forecasts", {})]
-        elif kind == "shadow_audit":
-            sequence = [("shadow_run_audit", {})]
-        elif kind in {"refresh", "onboard"}:
-            codes = request.get("codes") or None
-            sequence = [] if kind == "onboard" else [("sync_instruments", {})]
-            sequence += [
-                ("refresh_bars", {"lookback_days": request["lookback_days"], "codes": codes}),
-                ("refresh_indicators", {}), ("refresh_forecasts", {}),
-                ("refresh_quotes", {"codes": codes}), ("refresh_signals", {}),
-                ("refresh_sector_snapshots", {}), ("refresh_market_context", {}), ("refresh_news", {"since_hours": 72}),
-                ("refresh_decision_board", {}),
-            ]
+        if kind == "catalog":
+            sequence = []
+        elif kind == "minutes":
+            sequence = [("refresh_minute_bars", {"codes": request["codes"], "interval": request.get("interval", "30m")})]
         else:
-            raise ValueError("unsupported workspace task")
+            sequence = task_sequence(kind, request.get("codes", []), request["lookback_days"])
+            if not sequence:
+                raise ValueError("unsupported workspace task")
+        # No catalog bootstrap is needed when selected instruments are already
+        # known. The separate catalog task enrolls nothing by itself.
         bar_failed = False
         for task_name, kwargs in sequence:
-            if bar_failed and task_name in {"refresh_indicators", "refresh_forecasts"}:
+            if bar_failed and task_name in {"refresh_indicators", "refresh_forecasts", "refresh_signals", "refresh_decision_board"}:
                 steps.append({"task": task_name, "status": "skipped", "reason": "bar_refresh_failed_preserving_previous_snapshots"})
                 continue
             with session_scope() as db:
@@ -154,7 +176,7 @@ def execute(job_id: str) -> int:
                     outcome = tasks.run(db, task_name, **kwargs)
                 state = outcome_state(outcome)
                 partial = state != "succeeded"
-                summary = {key: value for key, value in outcome.items() if key in {"inserted", "updated", "unchanged", "instruments", "count", "status"} and isinstance(value, (int, float, bool, str))}
+                summary = {key: value for key, value in outcome.items() if key in {"inserted", "updated", "unchanged", "instruments", "count", "status", "received", "requested", "missing", "degraded", "realtime", "source_timestamp_verified"} and isinstance(value, (int, float, bool, str))}
                 steps.append({"task": task_name, "status": state, "summary": summary})
                 failed |= partial
                 if task_name == "refresh_bars" and partial:
@@ -178,7 +200,8 @@ def execute(job_id: str) -> int:
                 row.finished_at, row.result_json = datetime.now(UTC), {"steps": steps}
         return 1
     finally:
-        tasks.close()
+        if tasks is not None:
+            tasks.close()
 
 
 def heartbeat():
@@ -223,6 +246,42 @@ def enqueue_daily_reviews():
     return added
 
 
+def stop_job_process(process):
+    """Only terminate the process tree created for this owned data job."""
+    if process.poll() is not None:
+        return
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+    else:
+        os.killpg(process.pid, signal.SIGTERM)
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        if os.name != "nt":
+            os.killpg(process.pid, signal.SIGKILL)
+        else:
+            process.kill()
+        process.wait(timeout=5)
+
+
+def monitor_job(process, *, seconds=1800):
+    deadline, last_heartbeat = time.monotonic() + seconds, 0.0
+    try:
+        while process.poll() is None and not STOP and time.monotonic() < deadline:
+            if time.monotonic() - last_heartbeat > 15:
+                try:
+                    heartbeat()
+                except OperationalError:
+                    # A local SQLite task can hold the writer lock. A failed
+                    # heartbeat must never abandon its running child process.
+                    logger.warning("workspace heartbeat temporarily unavailable; job remains supervised")
+                last_heartbeat = time.monotonic()
+            time.sleep(1)
+    finally:
+        stop_job_process(process)
+
+
 def run_once() -> bool:
     heartbeat()
     enqueue_daily_reviews()
@@ -231,25 +290,7 @@ def run_once() -> bool:
     if job_id is None:
         return False
     process = subprocess.Popen([sys.executable, "-m", "app.workspace.worker", "--execute", job_id], start_new_session=os.name != "nt")
-    deadline, last_heartbeat = time.monotonic() + 1800, 0.0
-    while process.poll() is None and not STOP and time.monotonic() < deadline:
-        if time.monotonic() - last_heartbeat > 15:
-            heartbeat()
-            last_heartbeat = time.monotonic()
-        time.sleep(1)
-    if process.poll() is None:
-        if os.name != "nt":
-            os.killpg(process.pid, signal.SIGTERM)
-        else:
-            process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            if os.name != "nt":
-                os.killpg(process.pid, signal.SIGKILL)
-            else:
-                process.kill()
-            process.wait()
+    monitor_job(process)
     with session_scope() as db:
         row = db.get(WorkspaceDataJob, job_id)
         if row and row.status == "running":

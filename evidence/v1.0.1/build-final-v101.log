@@ -1,0 +1,31 @@
+
+> etf-research-workspace@1.0.1 build
+> vite build
+
+[36mvite v7.3.5 [32mbuilding client environment for production...[36m[39m
+transforming...
+[32m✓[39m 1632 modules transformed.
+rendering chunks...
+computing gzip size...
+[2m../backend/app/workspace_dist/[22m[32mindex.html                                                                      [39m[1m[2m  0.57 kB[22m[1m[22m[2m │ gzip:  0.43 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[35mMatrix-jERf6ukb.css                                            [39m[1m[2m  0.52 kB[22m[1m[22m[2m │ gzip:  0.28 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[35mindex-CzKPcqdk.css                                             [39m[1m[2m 21.18 kB[22m[1m[22m[2m │ gzip:  5.27 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[36m_plugin-vue_export-helper-DlAUqK2U.js                          [39m[1m[2m  0.09 kB[22m[1m[22m[2m │ gzip:  0.10 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[36mexternal-link-Dfjozsc4.js                                      [39m[1m[2m  0.25 kB[22m[1m[22m[2m │ gzip:  0.20 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[36mrefresh-cw-D7rjT3Ij.js                                         [39m[1m[2m  0.32 kB[22m[1m[22m[2m │ gzip:  0.23 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[36mupload-CkVm0rVE.js                                             [39m[1m[2m  0.33 kB[22m[1m[22m[2m │ gzip:  0.25 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[36mNotFound-IV1fA-r_.js                                           [39m[1m[2m  0.54 kB[22m[1m[22m[2m │ gzip:  0.46 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[36mResearch-CAKkrArm.js                                           [39m[1m[2m  1.21 kB[22m[1m[22m[2m │ gzip:  0.84 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[36mBadge.vue_vue_type_script_setup_true_lang-CgGhtFJT.js          [39m[1m[2m  2.13 kB[22m[1m[22m[2m │ gzip:  1.27 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[36mCatalog-mvuMzb0K.js                                            [39m[1m[2m  2.39 kB[22m[1m[22m[2m │ gzip:  1.40 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[36mNews-DRoqHeoM.js                                               [39m[1m[2m  2.46 kB[22m[1m[22m[2m │ gzip:  1.57 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[36mWatchlist-BlSUCCKF.js                                          [39m[1m[2m  2.55 kB[22m[1m[22m[2m │ gzip:  1.47 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[36mMatrix-rKC5cnZ_.js                                             [39m[1m[2m  6.15 kB[22m[1m[22m[2m │ gzip:  3.09 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[36mFactors-Ofw2rX0l.js                                            [39m[1m[2m  7.00 kB[22m[1m[22m[2m │ gzip:  3.27 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[36mOverview-CotYSFBD.js                                           [39m[1m[2m 11.62 kB[22m[1m[22m[2m │ gzip:  4.77 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[36mResearchPanel.vue_vue_type_script_setup_true_lang-BiyW1Zjp.js  [39m[1m[2m 14.99 kB[22m[1m[22m[2m │ gzip:  6.28 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[36mHoldings-DHVBaUVW.js                                           [39m[1m[2m 15.46 kB[22m[1m[22m[2m │ gzip:  5.97 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[36mSettings-CtW6lbme.js                                           [39m[1m[2m 16.52 kB[22m[1m[22m[2m │ gzip:  6.89 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[36mindex-ypBq_DWp.js                                              [39m[1m[2m121.15 kB[22m[1m[22m[2m │ gzip: 48.21 kB[22m
+[2m../backend/app/workspace_dist/[22m[2mworkspace-assets/[22m[36mDetail-DdlysGfO.js                                             [39m[1m[2m215.86 kB[22m[1m[22m[2m │ gzip: 57.92 kB[22m
+[32m✓ built in 2.77s[39m

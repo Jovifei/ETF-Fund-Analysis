@@ -1,0 +1,19 @@
+{
+  "validation_kind": "offline_browser_with_in_process_asgi",
+  "mock": true,
+  "models_called": false,
+  "network_navigation": false,
+  "production_http_e2e": "not_run_in_this_harness",
+  "checks": [
+    "real overview component consumes real ASGI mock snapshots",
+    "search/watchlist/detail/canvas zoom drag reset without model tasks",
+    "holding preview confirmation persisted and canonical chart shows cost",
+    "native-artifact preview and explicit unverified candidate import",
+    "v101 ETF matrix reuses canonical backend indicators",
+    "v101 source status and price task queue do not call a provider from the browser",
+    "factor templates and responsive mobile drawer",
+    "preserved original classic ETF matrix renders the same canonical ASGI snapshot"
+  ],
+  "page_errors": [],
+  "api_calls": 38
+}

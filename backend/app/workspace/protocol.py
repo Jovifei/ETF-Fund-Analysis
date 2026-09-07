@@ -102,7 +102,8 @@ class ReviewRequest(StrictModel):
 
 
 class DataRequest(StrictModel):
-    task: Literal["refresh", "onboard", "factors", "validate", "shadow_audit"]
+    task: Literal["refresh", "onboard", "factors", "validate", "shadow_audit", "prices", "quotes", "catalog", "news", "context", "minutes"]
+    interval: Literal["30m", "60m"] = "30m"
     codes: list[Code] = Field(default_factory=list, max_length=30)
     lookback_days: int = Field(default=420, ge=30, le=1800)
     request_key: str = Field(pattern=r"^[a-zA-Z0-9_-]{16,64}$")

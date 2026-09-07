@@ -24,6 +24,13 @@ x-app: &app
     MARKET_PROVIDER: ${MARKET_PROVIDER:-public_composite}
     ALLOW_MOCK_FALLBACK: "false"
     TUSHARE_TOKEN: ${TUSHARE_TOKEN:-}
+    TUSHARE_TIMEOUT_SECONDS: ${TUSHARE_TIMEOUT_SECONDS:-20}
+    AKSHARE_TIMEOUT_SECONDS: ${AKSHARE_TIMEOUT_SECONDS:-20}
+    NEWS_RSS_URLS: ${NEWS_RSS_URLS:-}
+    NEWS_RSS_TIMEOUT_SECONDS: ${NEWS_RSS_TIMEOUT_SECONDS:-20}
+    MINUTE_BARS_ENABLED: ${MINUTE_BARS_ENABLED:-false}
+    FTSHARE_ENABLED: ${FTSHARE_ENABLED:-false}
+    FTSHARE_QUALIFICATION: ${FTSHARE_QUALIFICATION:-unqualified}
     LLM_ENABLED: "false"
     ANALYSIS_ENABLED: "false"
     OCR_MODE: ${OCR_MODE:-disabled}
@@ -87,6 +94,8 @@ services:
       retries: 3
 
   scheduler:
+    # Explicit opt-in; avoids running the old high-frequency scheduler beside manual jobs.
+    profiles: [scheduled]
     <<: *app
     command: [python, -m, app.scheduler]
     depends_on:
