@@ -22,4 +22,14 @@ HttpOnly / SameSite Cookie + CSRF 是浏览器认证权威；不得在 localStor
 
 ZIP `EA1F2CDB8629C3E9598D1626A59FDDD03A5248E51F0D02CF22BB033B14334F49` 与预期一致；从 `9a0ca181` 建立 `codex/v1.0.1-data-access` 并移植 1.0.1 包。Windows 全量 pytest 为 812 收集、0 失败、5 个权限/外部 PostgreSQL 条件跳过；新增专题 28 通过；前端 19、Playwright 5、PostgreSQL 6、Docker 镜像 smoke 通过。Matrix 表头和浏览器 fixture 的两个必要修复已包含在工作树。
 
-远端只读盘点显示生产仍为 0.8.0 根 Compose、API 8080 与旧 scheduler，迁移头 `c2d3e4f5a6b7`，生产备份已由既有脚本完成并通过 SHA256/0600 校验；尚未向生产切换。未读取 `.env`、Token、Cookie、密码、持仓或备份内容。
+## 生产部署前快照（已完成）
+
+远端只读盘点当时显示生产为 0.8.0 根 Compose、API 8080 与旧 scheduler，迁移头 `c2d3e4f5a6b7`；生产备份已由既有脚本完成并通过 SHA256/0600 校验。以下“尚未切换”只描述该时点；最终状态见下一节。未读取 `.env`、Token、Cookie、密码、持仓或备份内容。
+
+## 生产部署完成（2026-09-07）
+
+上述段落是部署前快照。其后已完成：从备份恢复到隔离 PostgreSQL 并迁移到 `d40609090002`；提交 `224b59f` 推送到 `codex/v1.0.1-data-access`，`ci` 与 `workspace-ci` 成功；目标镜像 `etf-workspace:v1.0.1-20260907` 已加载。
+
+正式站点当前由 `deploy/compose.v101.production.yml` 运行 v1.0.1 API 与单 worker，内部/HTTPS health 均为 200，旧 API 与旧 scheduler 停止，Nginx 未重载。Provider 采用 `public_composite` 且 `ALLOW_MOCK_FALLBACK=false`；AKShare Sina 日线缺量、Tushare 权限探测未通过，故新衍生信号仍 fail-closed。不得把这些降级数据写成完整实时或 calibrated 资格。
+
+生产备份和配置归档保留在服务器 `backups/v101-predeploy-20260907/`；不要读取或回显其内容。回滚优先停止 v1.0.1 API/worker、恢复旧 API/scheduler，然后按备份与迁移审计决定是否恢复数据库；不要直接执行 `volume *= 100` 或删除旧报告。

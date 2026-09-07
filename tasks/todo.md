@@ -627,18 +627,18 @@ python codex/skills/fund-research/scripts/check_no_secrets.py .
 - [x] 只读核对远端 main、v1.0.0、已有 v1.0.1 分支、开放 PR 与生产 SSH 入口。
 - [x] 在独立 Python 3.12 / Node 环境执行后端、前端、Alembic、PostgreSQL、Playwright、JS/Shell/Compose 和密钥门禁（Windows Bash 不可用，ShellCheck 改在隔离容器执行）。
 - [x] 真实 Provider 小样本：510300.SH、512480.SH；记录各能力、单位、时间、覆盖、入库和失败状态；缺量导致衍生任务诚实 partial。
-- [x] 检查旧生产数据备份/恢复/迁移/单位污染；生产 PostgreSQL 备份已完成并记录 hash，staging 恢复/迁移/单位核验仍是部署前门禁，未切换生产。
-- [ ] 审查 staged diff，提交功能分支并创建 PR；不自动合并 main、不移动标签。
-- [ ] 按 SSH 只读盘点结果形成生产 override；备份已完成，隔离 staging、镜像部署和维护窗口仍待完成。
-- [ ] 通过正式域名/API、认证/CSRF、页面、任务、重启保留和 10–15 分钟观察验收后更新部署收据。
+- [x] 检查旧生产数据备份/恢复/迁移/单位污染；备份 hash、隔离 staging 恢复、Alembic、OHLC/重复键/空值检查通过，生产 head 为 `d40609090002`。
+- [x] 审查 staged diff，提交功能分支并推送 `224b59f`；`ci` 与 `workspace-ci` 成功；未自动合并 main、不移动标签。PR 创建链接因 GitHub CLI 未登录保留给用户。
+- [x] 按 SSH 只读盘点结果形成生产 override；固定镜像 digest，停止旧 API/scheduler，启用 v1.0.1 API+单 worker；未启动第二个 scheduler。
+- [x] 通过正式域名/API、认证/CSRF、页面、任务、重启保留和 worker health 验收并更新部署收据；认证账户未创建/重置，真实 Provider 资格仍未晋级。
 
 ## 当前门禁
 
-- 生产 SSH 只读盘点已连通：远端当前 HEAD/Compose 与 ZIP 基线不一致，必须先三方对账。
-- 本地 v1.0.1 目标包尚未提交到功能分支；服务器不能直接从未验收的包切换。
+- 生产 SSH 只读盘点已连通：远端当前 Git/Compose 与 ZIP 基线不一致；已通过备份、staging 和 CI 后采用独立 v1.0.1 override，未覆盖生产源码。
+- 生产当前由 v1.0.1 镜像/API/单 worker 提供服务；旧 API/scheduler 保持停止状态，数据库 head 已升级。
 - 不读取或输出任何私有配置、Token、Cookie、密码、持仓和备份内容。
 
 ## 本轮复核
 
 - 本机接收分支已完成源码、前端、迁移、PostgreSQL、容器镜像、Provider 小样本和离线浏览器验证；真实公共源仅有可用性/覆盖证据，不构成生产资格。
-- 生产备份已完成；在 CI、隔离 staging 恢复/迁移/单位核验和维护窗口前，不切换远端生产 API 或 scheduler。
+- 生产备份、隔离 staging 恢复/迁移/单位核验、维护窗口和最终 HTTP/worker 验收均已完成；后续仅在新授权下启用真实数据重抓、分钟线、模型或定时复盘。

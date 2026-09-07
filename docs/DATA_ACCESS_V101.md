@@ -95,6 +95,12 @@ Tushare 主链现价失败时直接尝试下一现价源，不对每一只 ETF �
 
 旧单位提示不能通过“忽略”按钮解除；补全历史重抓后才生成新衍生快照。无权限就保留 unavailable，不绕过付费、数据商或网站限制。
 
+## v1.0.1 生产部署收口（2026-09-07）
+
+生产已完成备份、隔离 staging 恢复与 Alembic、目标镜像切换和 HTTP/HTTPS 验收。运行配置使用 `public_composite`、`ALLOW_MOCK_FALLBACK=false`；API 与单 worker 均 healthy，旧 scheduler 停止，定时复盘、模型、OCR、分钟线仍关闭。生产数据库 head 为 `d40609090002`。
+
+本次远端探测只证明 AKShare Sina 价格日线与新闻可读；两只样本的成交量缺失，目录和公开 quote unavailable。Tushare Token 的存在不等于权限，本次目录、日线、现价和新闻均未通过。由于没有完整量价资格，系统不会用 0 填成交量、Mock 或模型推断来生成新的操作级信号。配置与回滚细节见 [部署收据](DEPLOYMENT_RECEIPT_V101_20260907.md) 和 [生产覆盖文件](../deploy/compose.production.v101.yml)。
+
 ## 本版没有接通的能力不是不存在的接口
 
 本版尚未闭环：真实基金净值/IOPV 与溢折价、ETF 穿透持仓、可靠机构持仓变化、5/15 分钟历史 PIT、独立研报全文采集及经校准上涨概率。它们不能由缺失字段、合成数据或模型推断补齐。后续需分别建立数据契约、授权、历史覆盖与验证，不因为 Tushare/AKShare 总体可读就一并标为可用。

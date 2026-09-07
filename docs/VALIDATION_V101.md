@@ -40,6 +40,13 @@
 先添加失败测试再修复。初次全量出现两个旧不安全语义断言：原始异常文本透传，以及无可靠源时间的 AK 代理被标 fresh。现改为更严格的脱敏/时间合同；相关测试继续存在。
 后续全量发现新交接文档遗漏生产认证参数，补回原硬合同后通过。收尾发现价格回退历史可能卡在增量窗口外、工作器心跳 DB 锁可能遗留任务进程、接入覆盖误称抓取时间为源时间，均补了回归测试并运行上述最终全量。
 
+## 生产部署复验（2026-09-07）
+
+- 提交 `224b59f` 推送到 `codex/v1.0.1-data-access` 后，GitHub `ci` 与 `workspace-ci` 均成功。生产备份先恢复到临时 PostgreSQL；目标镜像执行 Alembic 后，生产 head 为 `d40609090002`，核心安全计数仍为 36 instruments、9851 daily bars、3 users、0 holdings、0 watchlist entries。
+- 生产运行 `etf-workspace:v1.0.1-20260907`：API 与单 worker healthy，旧 API/旧 scheduler 停止；内部 health 与正式 HTTPS health 均返回 v1.0.1/production，`/`、`/matrix`、`/classic/etf-board`、`/settings` 为 200，未知页面/API 为 404。Nginx 未重载；其配置已备份，非 root SSH 用户的 `nginx -t` 因证书读取权限失败，不能据此宣称配置测试通过。
+- 生产覆盖文件不读取私有 env 内容，只引用 `/opt/china-fund-decision/.env`；镜像 digest、覆盖文件 hash、数据库备份 hash 和回滚路径见 [部署收据](DEPLOYMENT_RECEIPT_V101_20260907.md)。测试 staging 临时容器、卷、网络和传输包已清理。
+- 远端数据探测仍是资格否定证据：AKShare Sina 日线缺成交量，目录/公开 quote unavailable；Tushare 配置存在但本次能力调用未通过；FTShare 未启用。生产仍 `ALLOW_MOCK_FALLBACK=false`，没有因页面/部署通过而升级 actionable、实时、calibrated 或 PIT 资格。
+
 ## 证据文件
 
 本包的 `evidence/v1.0.1/` 保存本版 pytest XML、Vue/构建/旧 JS 输出、Alembic结果、脱敏 HTTP 检查、浏览器检查和公共探测结果；根 `evidence/` 原有文件属于 v1.0.0/原交付历史。

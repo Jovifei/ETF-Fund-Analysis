@@ -38,10 +38,10 @@ git diff --cached --stat
 git diff --cached --check
 # 人工核对 staged 内容，不含任何私人配置或运行数据，再执行：
 git commit -m "feat(v1.0.1): wire bounded data providers and preserve ETF indicator matrix"
-git push -u origin codex/v1.0.1
+git push -u origin codex/v1.0.1-data-access
 ```
 
-如需要将本轮预建的 `feat/v1.0.1-data-access` 用作目标分支，也先确认它仍在 9a0ca181，不能覆盖其他人新增提交。本轮未往该分支写入应用修改、未创建 v1.0.1 PR/tag/Release、未修改 main。
+本次实际接收使用 `codex/v1.0.1-data-access`，父提交为 `9a0ca181`，提交 `224b59f` 已推送；未覆盖已有 `codex/v1.0.1`，未移动 v1.0.1 标签/Release，未修改 main。命令行 `gh` 未登录，因此 PR 创建链接为 [GitHub PR 页面](https://github.com/Jovifei/ETF-Fund-Analysis/pull/new/codex/v1.0.1-data-access)，需由已登录的仓库维护者提交。
 
 `backend/app/workspace_dist/` 随完整包提供，Git 按原规则忽略。增量补丁不携带构建产物；CI/Docker 从锁文件构建。`PACKAGE_MANIFEST_V101.json` 证明完整 ZIP，不需要强行提交到 Git 后假装后续构建未改动文件。
 
@@ -51,4 +51,4 @@ git push -u origin codex/v1.0.1
 
 本版没有新增 Schema，head 仍为 d40609090002。真实数据部署前先备份与演练；旧单位日线只有完整重抓覆盖全部旧键才替换。
 一旦替换了单位，回退到 v1.0.0 时不能只回退代码并继续使用新单位数据库；应恢复升级前完整备份或保留 v1.0.1 数据层。
-云端测试通过不等于用户电脑/ECS 已部署。本轮不自动登录用户机器、不配置密钥、不启动计划任务、不升级研究资格。
+云端测试通过不等于 Provider 已获资格；本次已在 `aliyun-etf` 维护窗口完成 v1.0.1 镜像/API/worker 部署和 health/HTTPS 验收，但仍不自动登录账户、不配置密钥、不启动计划任务、不升级研究资格。生产回滚细节见 [部署收据](DEPLOYMENT_RECEIPT_V101_20260907.md)。

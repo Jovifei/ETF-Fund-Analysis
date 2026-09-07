@@ -1,12 +1,12 @@
-> **v1.0.1 当前入口：** [审核](V100_DEPLOYMENT_AUDIT_20260907.md) · [数据接入](DATA_ACCESS_V101.md) · [验证](VALIDATION_V101.md) · [接收/提交](SELF_SUBMIT_V101.md) · [版本记录](versions/V1.0.1.md)。完整包与补丁为当前交付，功能分支仅预建，尚未推送应用修改。
+> **v1.0.1 当前入口：** [审核](V100_DEPLOYMENT_AUDIT_20260907.md) · [数据接入](DATA_ACCESS_V101.md) · [验证](VALIDATION_V101.md) · [接收/提交](SELF_SUBMIT_V101.md) · [版本记录](versions/V1.0.1.md) · [部署收据](DEPLOYMENT_RECEIPT_V101_20260907.md)。应用分支已推送并通过 CI；生产部署状态与 Provider 资格分开记录。
 
 # 当前入口：v1.0.1
 
-[版本记录](versions/V1.0.1.md) · [v1.0.0部署审核](V100_DEPLOYMENT_AUDIT_20260907.md) · [真实数据接入](DATA_ACCESS_V101.md) · [本轮验证](VALIDATION_V101.md)。
+[版本记录](versions/V1.0.1.md) · [v1.0.0部署审核](V100_DEPLOYMENT_AUDIT_20260907.md) · [真实数据接入](DATA_ACCESS_V101.md) · [本轮验证](VALIDATION_V101.md) · [生产覆盖](../deploy/compose.production.v101.yml)。
 
 下方是原完整包交接，数字和“未推送”只描述当时，不覆盖当前版本记录。
 
-本次接收复验记录见 [部署收据](DEPLOYMENT_RECEIPT_V101_20260907.md)；它区分本地/隔离证据、服务器只读盘点和仍未通过的生产切换门禁。
+本次接收复验记录见 [部署收据](DEPLOYMENT_RECEIPT_V101_20260907.md)；它区分本地/隔离证据、部署前盘点、最终生产容器状态和仍未通过的 Provider/研究资格。
 
 # 文档入口与权威顺序（本次源码交付）
 
@@ -18,7 +18,7 @@
 6. [版本记录](versions/README.md)：每个发布版本的变更、验证与已知边界。
 
 根 START_HERE.md 是先看界面的入口，AGENTS.md仍为安全规则。代码和测试与当轮交付记录一起判断，不能只按文档日期猜测。
-当前main锚点3c7bdc7，交付包吸收7adf后追加修复；main/生产未由本轮修改。
+当前main锚点3c7bdc7，v1.0.1 分支从 9a0ca181 接收并推送；main 未合并。生产通过独立镜像/Compose override 切换，旧源码工作树和用户脏区未覆盖。
 
 ## 仍然有效的语义专题
 
