@@ -57,11 +57,13 @@ jobs:
           npm run test --prefix frontend
           npm run build --prefix frontend
           python -m compileall -q backend/app scripts
-      - name: Commit source changes and remove one-use transport
+      - name: Commit application files only
         run: |
-          git add backend/app frontend scripts deploy .gitignore .github/workflows/workspace-ci.yml
+          # The Actions token cannot edit workflows. Those changes and removal
+          # of this temporary workflow are handled by the authorized connector.
+          git restore --source=HEAD -- .github/workflows/workspace-ci.yml
+          git add backend/app frontend scripts deploy .gitignore
           git rm -r .integration/v102
-          git rm .github/workflows/apply-v102-integration.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'fix(v1.0.2): integrate original home template, account journeys and market discovery'
