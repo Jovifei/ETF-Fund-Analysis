@@ -678,6 +678,38 @@ class MarketContextService:
             result.append(public)
         return result
 
+    @classmethod
+    def history(cls, db: Session, context_id: str, limit: int = 60) -> dict[str, Any] | None:
+        """Return persisted, provenance-aware observations for one context card.
+
+        This is deliberately read-only: it never calls a provider and never
+        turns a missing/stale observation into a synthetic point.
+        """
+        registry = db.scalar(
+            select(MarketContextRegistry).where(MarketContextRegistry.context_id == context_id)
+        )
+        if registry is None:
+            return None
+        snapshots = db.scalars(
+            select(MarketContextSnapshot)
+            .where(MarketContextSnapshot.registry_id == registry.id)
+            .order_by(MarketContextSnapshot.source_timestamp.desc(), MarketContextSnapshot.id.desc())
+            .limit(max(1, min(int(limit), 250)))
+        ).all()
+        series = [
+            cls._observation_dict(snapshot)
+            for snapshot in reversed(snapshots)
+            if cls._snapshot_is_displayable(snapshot)
+        ]
+        return {
+            "context_id": registry.context_id,
+            "label": registry.label,
+            "context_kind": registry.context_kind,
+            "display_code": registry.display_code,
+            "is_tradable_proxy": bool(registry.is_tradable_proxy),
+            "series": series,
+        }
+
     latest = latest_view
 
 

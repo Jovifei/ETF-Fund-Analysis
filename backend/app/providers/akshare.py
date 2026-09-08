@@ -519,24 +519,29 @@ class AKShareProvider(MarketProvider):
             frame = function(symbol=symbol) if function is not None else None
         if frame is None or len(frame) == 0:
             return None
-        records = self._records(frame)
-        last = records[-1]
+        dated_records = []
+        for row in self._records(frame):
+            raw_date = row.get("date") or row.get("日期")
+            if hasattr(raw_date, "date") and not isinstance(raw_date, str):
+                raw_date = raw_date.date()
+            try:
+                day = datetime.strptime(str(raw_date)[:10], "%Y-%m-%d").date()
+            except (TypeError, ValueError):
+                continue
+            dated_records.append((day, row))
+        if not dated_records:
+            return None
+        source_day, last = max(dated_records, key=lambda item: item[0])
         close = finite_or_none(last.get("close") or last.get("收盘"))
         if close is None:
             return None
         pct = finite_or_none(last.get("pct_change") or last.get("涨跌幅"))
-        if pct is None and len(records) >= 2:
-            prev_close = finite_or_none(records[-2].get("close") or records[-2].get("收盘"))
+        previous = sorted(dated_records, key=lambda item: item[0])
+        if pct is None and len(previous) >= 2:
+            prev_close = finite_or_none(previous[-2][1].get("close") or previous[-2][1].get("收盘"))
             if prev_close:
                 pct = round((close - prev_close) / prev_close * 100, 4)
-        source_date = last.get("date") or last.get("日期")
-        try:
-            if hasattr(source_date, "date"):
-                source_ts = datetime.combine(source_date.date(), datetime.min.time(), tzinfo=self.tz)
-            else:
-                source_ts = datetime.strptime(str(source_date)[:10], "%Y-%m-%d").replace(tzinfo=self.tz)
-        except Exception:
-            return None
+        source_ts = datetime.combine(source_day, datetime.min.time(), tzinfo=self.tz)
         # 指数最新收盘即为观察值（点位），today_pct_change 缺省为 None 时用 0 占位
         # （新浪指数日线接口通常不含当日涨跌幅，消费侧 level 用 observed_value）。
         return MarketContextObservation(

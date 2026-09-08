@@ -479,6 +479,18 @@ def market_context(
     return {"latest_view": MarketContextService(provider=None, settings=settings).latest_view(db)}
 
 
+@private_router.get("/market-context/{context_id}/history")
+def market_context_history(
+    context_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    limit: int = Query(default=60, ge=2, le=250),
+) -> dict[str, Any]:
+    result = MarketContextService(provider=None).history(db, context_id, limit=limit)
+    if result is None:
+        raise HTTPException(status_code=404, detail="market context not found")
+    return result
+
+
 @private_router.get("/instruments/{ts_code}/bars")
 def bars(
     ts_code: str,

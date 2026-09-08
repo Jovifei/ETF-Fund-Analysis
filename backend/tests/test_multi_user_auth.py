@@ -47,6 +47,20 @@ def test_auth_user_normalizes_identifiers_and_enforces_unique_username(db_sessio
     db_session.rollback()
 
 
+def test_auth_service_promotes_existing_active_member_without_password_change(db_session) -> None:
+    from app.services.auth_service import AuthService
+
+    service = AuthService()
+    user = service.create_user(db_session, username="promote-member", password="correct horse battery staple")
+    before_hash = user.password_hash
+
+    promoted = service.promote_user(db_session, username="PROMOTE-MEMBER")
+
+    assert promoted.id == user.id
+    assert promoted.role == "admin"
+    assert promoted.password_hash == before_hash
+
+
 def test_auth_user_structurally_validates_password_hash_without_argon2_computation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

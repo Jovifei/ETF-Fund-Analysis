@@ -39,3 +39,17 @@ test('industry and concept remain visible without decision snapshots', async ({p
   await expect(page).toHaveURL(/\/#market-boards$/)
   await expect(page.locator('.sidebar')).toHaveCount(1)
 })
+
+test('market context cards expose persisted history and catalog rows open the same detail route', async ({page}) => {
+  await page.goto('/')
+  await expect(page.locator('.market-context-card').first()).toBeVisible()
+  await page.locator('.market-context-card').first().click()
+  await expect(page.locator('.market-context-detail')).toBeVisible()
+
+  await page.goto('/analysis?q=512480')
+  const row = page.locator('tbody tr').first()
+  await expect(row).toBeVisible()
+  const detailCode = await row.locator('a').first().getAttribute('href')
+  await row.click()
+  await expect(page).toHaveURL(new RegExp(`${detailCode?.replace('.', '\\.').replace('/', '\\/')}$`))
+})

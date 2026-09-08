@@ -560,8 +560,8 @@ def test_akshare_fetch_market_context_index():
     fake_ak = MagicMock()
     fake_ak.stock_zh_index_daily.return_value = _frame(
         [
-            {"date": "2026-08-29", "close": 3900.0},
             {"date": "2026-09-01", "close": 3941.39},
+            {"date": "2026-08-29", "close": 3900.0},
         ]
     )
     fake_ak.index_us_stock_sina.return_value = _frame(

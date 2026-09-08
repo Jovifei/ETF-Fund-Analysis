@@ -46,6 +46,16 @@ def test_registration_capabilities_are_safe_and_honest():
         app.dependency_overrides.clear()
 
 
+def test_market_context_history_is_bounded_and_read_only(bootstrapped):
+    with TestClient(app) as client:
+        response = client.get('/api/market-context/cn-csi300/history?limit=2')
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload['context_id'] == 'cn-csi300'
+        assert len(payload['series']) <= 2
+        assert all('source_timestamp' in item and 'observed_value' in item for item in payload['series'])
+
+
 def test_catalog_search_paginates_nontracked_nonindustry_etfs(bootstrapped):
     from app.workspace.read_model import search_instruments
     marker = 'catalog-' + uuid4().hex[:8]
@@ -62,6 +72,18 @@ def test_catalog_search_paginates_nontracked_nonindustry_etfs(bootstrapped):
         assert a['total'] == 7 and a['has_more'] is True
         assert set(x['ts_code'] for x in a['items']).isdisjoint(x['ts_code'] for x in b['items'])
         assert all(not x['enabled'] for x in a['items'])
+        db.rollback()
+
+
+def test_catalog_search_cross_border_alias_finds_overseas_etf_and_lof(bootstrapped):
+    from app.workspace.read_model import search_instruments
+    with session_scope() as db:
+        db.add(Instrument(ts_code='591998.SH', symbol='591998', name='纳斯达克测试基金', kind='ETF', enabled=False))
+        db.add(Instrument(ts_code='160999.SZ', symbol='160999', name='海外科技测试LOF', kind='LOF', enabled=False))
+        db.flush()
+        result = search_instruments(db, get_settings(), '跨境', 20, None, offset=0)
+        marker_rows = [row for row in result['items'] if '测试' in row['name']]
+        assert {row['kind'] for row in marker_rows} == {'ETF', 'LOF'}
         db.rollback()
 
 

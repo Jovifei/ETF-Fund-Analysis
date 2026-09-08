@@ -14,6 +14,7 @@ from app.services.auth_service import (
     AuthService,
     BootstrapAdminExistsError,
     LastActiveAdminError,
+    UserLifecycleError,
     UserNotFoundError,
     normalize_identifier,
 )
@@ -150,6 +151,24 @@ def auth_create_user(
             result = {"id": user.id, "username": user.username, "role": user.role, "status": user.status}
     except ValueError:
         typer.echo("account creation rejected")
+        raise typer.Exit(code=1) from None
+    typer.echo(json.dumps(result, ensure_ascii=False))
+
+
+@app.command("auth-promote-user")
+def auth_promote_user(
+    username: str = typer.Option(..., "--username"),
+    confirm: bool = typer.Option(False, "--confirm"),
+) -> None:
+    """Promote an existing active local account without changing its password."""
+    if not confirm:
+        typer.confirm("Promote this existing account to admin?", abort=True)
+    try:
+        with session_scope() as db:
+            user = AuthService().promote_user(db, username=username)
+            result = {"id": user.id, "username": user.username, "role": user.role, "status": user.status}
+    except (UserNotFoundError, UserLifecycleError):
+        typer.echo("account promotion rejected")
         raise typer.Exit(code=1) from None
     typer.echo(json.dumps(result, ensure_ascii=False))
 

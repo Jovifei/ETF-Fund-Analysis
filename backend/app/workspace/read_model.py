@@ -26,6 +26,12 @@ from app.workspace.config import workspace_settings
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
+_SEARCH_ALIASES = {
+    # Cross-border products are not consistently labeled with the word
+    # "跨境"; keep the category search bounded to the synchronized catalog.
+    "跨境": ("跨境", "港股", "恒生", "纳斯达克", "标普", "海外", "美国", "原油"),
+}
+
 
 def iso(value):
     return value.isoformat() if value is not None else None
@@ -72,7 +78,13 @@ def search_instruments(db: Session, settings: Settings, q: str, limit: int, user
     q = q.strip()
     query = select(Instrument).where(Instrument.kind.in_(("ETF", "LOF")))
     if q:
-        query = query.where(or_(Instrument.ts_code.contains(q.upper(), autoescape=True), Instrument.name.contains(q, autoescape=True), Instrument.theme_l1.contains(q, autoescape=True), Instrument.theme_l2.contains(q, autoescape=True)))
+        terms = _SEARCH_ALIASES.get(q, (q,))
+        query = query.where(or_(*[condition for term in terms for condition in (
+            Instrument.ts_code.contains(term.upper(), autoescape=True),
+            Instrument.name.contains(term, autoescape=True),
+            Instrument.theme_l1.contains(term, autoescape=True),
+            Instrument.theme_l2.contains(term, autoescape=True),
+        )]))
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     query = query.order_by(case((Instrument.ts_code == q.upper(), 0), (Instrument.symbol == q, 1), else_=2), Instrument.ts_code).offset(offset).limit(limit)
     instruments = list(db.scalars(query))
