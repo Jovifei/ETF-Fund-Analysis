@@ -32,6 +32,8 @@ test('real login, member creation, registration and logout do not expose a secon
   await page.getByLabel('账户',{exact:true}).fill('browser-member')
   await page.getByLabel('密码',{exact:true}).fill('test-only-member-pass')
   await page.getByRole('button',{name:'登录并进入总览'}).click()
+  // Await the session transition; navigation must not abort the login POST.
+  await expect(page.locator('.account-text')).toContainText('browser-member')
   await page.goto('/profile')
   await expect(page.locator('.account-text')).toContainText('browser-member')
   await expect(page.getByRole('heading',{name:'用户管理'})).toHaveCount(0)

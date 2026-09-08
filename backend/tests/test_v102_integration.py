@@ -17,7 +17,7 @@ from app.providers.catalog import catalog_records
 def test_aliases_lead_to_one_home_and_frame_reuses_original(monkeypatch):
     monkeypatch.setenv('WORKSPACE_UI_ENABLED', 'true')
     with TestClient(app) as client:
-        for path in ('/matrix', '/classic/etf-board'):
+        for path in ('/matrix', '/classic/etf-board', '/assets/decision_board_workbuddy.html'):
             response = client.get(path, follow_redirects=False)
             assert response.status_code == 307
             assert response.headers['location'] == '/#etf-decisions'
@@ -50,8 +50,12 @@ def test_catalog_search_paginates_nontracked_nonindustry_etfs(bootstrapped):
     from app.workspace.read_model import search_instruments
     marker = 'catalog-' + uuid4().hex[:8]
     with session_scope() as db:
-        for i in range(7):
-            db.add(Instrument(ts_code=f'59{uuid4().int%10000:04}.SH', symbol=f'59800{i}', name=f'{marker}货币{i}', kind='ETF', enabled=False))
+        available = [f'59{i:04}.SH' for i in range(9999, 9900, -1)]
+        known = set(db.scalars(select(Instrument.ts_code)))
+        codes = [code for code in available if code not in known][:7]
+        assert len(codes) == 7
+        for i, code in enumerate(codes):
+            db.add(Instrument(ts_code=code, symbol=code[:6], name=f'{marker}货币{i}', kind='ETF', enabled=False))
         db.flush()
         a = search_instruments(db, get_settings(), marker, 3, None, offset=0)
         b = search_instruments(db, get_settings(), marker, 3, None, offset=3)

@@ -53,7 +53,8 @@ class WorkspaceMiddleware:
 
             receive = replay
         if method in {"GET", "HEAD"} and workspace_settings().ui_enabled:
-            aliases = {"/matrix": "/#etf-decisions", "/classic/etf-board": "/#etf-decisions",
+            aliases = {"/assets/decision_board_workbuddy.html": "/#etf-decisions",
+                       "/assets/boards.html": "/#market-boards", "/matrix": "/#etf-decisions", "/classic/etf-board": "/#etf-decisions",
                        "/boards": "/#market-boards", "/decision/1430": "/?mode=1430#etf-decisions"}
             if path in aliases:
                 await RedirectResponse(aliases[path], status_code=307)(scope, receive, private_send)

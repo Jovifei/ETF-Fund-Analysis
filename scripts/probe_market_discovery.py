@@ -26,7 +26,7 @@ def main():
               'scope': 'single_runner_public_observation_not_qualification', 'capabilities': {}}
     provider = None
     try:
-        settings = Settings(_env_file=None, market_provider='akshare', tushare_token=None,
+        settings = Settings(_env_file=None, market_provider='akshare', tushare_token='',
                             akshare_timeout_seconds=8, allow_mock_fallback=False)
         provider = AKShareProvider(settings)
         calls = {'catalog': lambda: catalog_records(provider),
@@ -49,7 +49,10 @@ def main():
         report['initialization'] = {'status': 'unavailable', 'failure_class': type(exc).__name__}
     finally:
         if provider is not None:
-            provider.close()
+            try:
+                provider.close()
+            except Exception as exc:
+                report['cleanup_failure_class'] = type(exc).__name__
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
     print(json.dumps(report, ensure_ascii=False))
