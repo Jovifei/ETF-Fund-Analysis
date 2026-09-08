@@ -29,17 +29,49 @@ def _identity(raw):
 def _record(raw, title, kind, source, **metadata):
     code = _identity(raw)
     title = str(title or '').strip()
-    if not code or not title:
+    if not code or not title or title.lower() in {'nan', 'none', 'null'}:
         return None
     return InstrumentRecord(ts_code=code, symbol=code[:6], name=title[:128], kind=kind,
         exchange=code[-2:], enabled=False,
         metadata={'catalog_source':source, 'catalog_only':True, **metadata})
 
 
+def _composite_catalog(provider):
+    selected, coverage, partials = {}, {}, {}
+
+    def attempt(child):
+        rows = catalog_records(child)
+        for row in rows:
+            selected.setdefault(row.ts_code, row)
+        for kind, detail in getattr(rows, 'coverage', {}).items():
+            if kind not in coverage or detail.get('source'):
+                coverage[kind] = detail
+        result = CatalogRows(sorted(selected.values(), key=lambda row: row.ts_code), coverage=dict(coverage))
+        if not getattr(rows, 'coverage', {}) or (rows.coverage.get('ETF') or {}).get('source'):
+            return result
+        # A few names containing ETF are not a category catalog. Preserve the
+        # useful rows, but continue the existing audited provider fallback.
+        partials[child.name] = len(rows)
+        raise CapabilityUnavailable('ETF category catalog missing')
+
+    try:
+        return provider._invoke('list_etf_catalog', attempt)
+    except ProviderError:
+        if not selected:
+            raise
+        return CatalogRows(sorted(selected.values(), key=lambda row: row.ts_code), coverage=coverage)
+    finally:
+        for trace in provider.last_trace:
+            if trace.provider in partials:
+                trace.status = 'partial'
+                trace.record_count = partials[trace.provider]
+                trace.reason = 'ETF_category_missing_name_fallback_only'
+
+
 def catalog_records(provider) -> list[InstrumentRecord]:
     name = getattr(provider, 'name', '')
     if name == 'composite':
-        return provider._invoke('list_etf_catalog', catalog_records)
+        return _composite_catalog(provider)
     if name in {'mock', 'ftshare'}:
         return provider.list_instruments()
     result, coverage = [], {}
@@ -67,7 +99,7 @@ def catalog_records(provider) -> list[InstrumentRecord]:
             parsed = [_record(row.get('ts_code'), row.get('extname') or row.get('csname') or row.get('cname'), 'ETF', 'tushare:etf_basic', list_date=row.get('list_date'), index_name=row.get('index_name')) for row in rows]
             parsed = [row for row in parsed if row is not None]
             result.extend(parsed)
-            coverage['ETF'] = {'source':'tushare:etf_basic','count':len(parsed)}
+            coverage['ETF'] = {'source':'tushare:etf_basic' if parsed else None,'count':len(parsed)}
         except Exception as exc:
             coverage['ETF'] = {'source':None,'count':0,'errors':[type(exc).__name__]}
         try:
