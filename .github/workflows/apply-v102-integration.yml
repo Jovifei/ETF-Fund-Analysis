@@ -1,0 +1,68 @@
+name: apply-reviewed-v102-source
+on:
+  push:
+    branches: [fix/v102-home-template-20260908]
+    paths: ['.integration/v102/**']
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.repository == 'Jovifei/ETF-Fund-Analysis' && github.ref == 'refs/heads/fix/v102-home-template-20260908'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Materialize reviewed edits with preimage and postimage hashes
+        run: |
+          python - <<'PY'
+          import hashlib, json, subprocess
+          from pathlib import Path
+          allowed = {}
+          for part in sorted(Path('.integration/v102').glob('part*.json')):
+              data = json.loads(part.read_text())
+              assert not allowed.keys() & data.keys(), 'duplicate path'
+              allowed.update(data)
+          assert len(allowed) == 22, 'unexpected recipe size'
+          for name, item in allowed.items():
+              path = Path(name)
+              assert not path.is_absolute() and '..' not in path.parts and not path.is_symlink()
+              assert name.startswith(('backend/app/', 'frontend/', 'scripts/', 'deploy/')) or name in {'.gitignore','.github/workflows/workspace-ci.yml'}
+              text = path.read_bytes().decode('utf-8')
+              digest = lambda s: hashlib.sha256(s.encode('utf-8')).hexdigest()
+              assert digest(text) == item['before'], f'preimage mismatch: {name}'
+              previous = len(text)
+              for start, stop, value in reversed(item['edits']):
+                  assert 0 <= start <= stop <= previous, name
+                  text = text[:start] + value + text[stop:]
+                  previous = start
+              assert digest(text) == item['after'], f'postimage mismatch: {name}'
+              path.write_bytes(text.encode('utf-8'))
+              print('verified', name)
+          subprocess.run(['git','diff','--check'],check=True)
+          PY
+      - name: Verify source contracts before app commit
+        run: |
+          pip install -e '.[dev]'
+          npm ci --ignore-scripts --prefix frontend
+          pytest backend/tests/test_v102_integration.py -q
+          npm run typecheck --prefix frontend
+          npm run test --prefix frontend
+          npm run build --prefix frontend
+          python -m compileall -q backend/app scripts
+      - name: Commit source changes and remove one-use transport
+        run: |
+          git add backend/app frontend scripts deploy .gitignore .github/workflows/workspace-ci.yml
+          git rm -r .integration/v102
+          git rm .github/workflows/apply-v102-integration.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(v1.0.2): integrate original home template, account journeys and market discovery'
+          git push origin HEAD:refs/heads/fix/v102-home-template-20260908
