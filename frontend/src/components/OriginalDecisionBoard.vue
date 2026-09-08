@@ -3,23 +3,23 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuery } from '../lib/query'
 const router = useRouter(), frame = ref<HTMLIFrameElement | null>(null), height = ref(900)
-const horizon = ref(1), filter = ref(''), ready = ref(false)
+const horizon = ref(1), filter = ref(''), revision = ref(0), ready = ref(false)
 const q = useQuery<Record<string, unknown>>(() => `/api/decision-board?horizon=${horizon.value}`)
 function deliver() {
   if (ready.value) frame.value?.contentWindow?.postMessage({ type: 'etf-board:state', board: q.data.value,
-    horizon: horizon.value, filter: filter.value, error: q.error.value }, window.location.origin)
+    revision: revision.value, horizon: horizon.value, filter: filter.value, error: q.error.value }, window.location.origin)
 }
 function receive(event: MessageEvent) {
   if (event.origin !== window.location.origin || event.source !== frame.value?.contentWindow) return
   const value = event.data
   if (value?.type === 'etf-board:ready') { ready.value = true; deliver() }
   if (value?.type === 'etf-board:height' && Number.isFinite(value.height)) height.value = Math.max(240, Math.min(100000, value.height))
-  if (value?.type === 'etf-board:controls' && [1,3,5,10].includes(value.horizon)) {
-    horizon.value = value.horizon; filter.value = String(value.filter ?? '').slice(0,128)
+  if (value?.type === 'etf-board:controls' && [1,3,5,10].includes(value.horizon) && Number.isSafeInteger(value.revision) && value.revision >= revision.value) {
+    revision.value = value.revision; horizon.value = value.horizon; filter.value = String(value.filter ?? '').slice(0,128)
   }
   if (value?.type === 'etf-board:navigate' && typeof value.code === 'string' && /^\d{6}\.(SH|SZ|BJ)$/.test(value.code)) void router.push(`/etf/${value.code}`)
 }
-watch([q.data, q.error, horizon], deliver)
+watch([q.data, q.error, horizon, filter, revision], deliver)
 onMounted(() => window.addEventListener('message', receive))
 onBeforeUnmount(() => window.removeEventListener('message', receive))
 defineExpose({ reload: q.reload })
