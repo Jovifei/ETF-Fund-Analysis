@@ -68,19 +68,20 @@ def quote_view(quote, settings: Settings) -> dict:
     }
 
 
-def search_instruments(db: Session, settings: Settings, q: str, limit: int, user_id: int | None) -> dict:
+def search_instruments(db: Session, settings: Settings, q: str, limit: int, user_id: int | None, *, offset: int = 0) -> dict:
     q = q.strip()
     query = select(Instrument).where(Instrument.kind.in_(("ETF", "LOF")))
     if q:
         query = query.where(or_(Instrument.ts_code.contains(q.upper(), autoescape=True), Instrument.name.contains(q, autoescape=True), Instrument.theme_l1.contains(q, autoescape=True), Instrument.theme_l2.contains(q, autoescape=True)))
-    query = query.order_by(case((Instrument.ts_code == q.upper(), 0), (Instrument.symbol == q, 1), else_=2), Instrument.ts_code).limit(limit)
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    query = query.order_by(case((Instrument.ts_code == q.upper(), 0), (Instrument.symbol == q, 1), else_=2), Instrument.ts_code).offset(offset).limit(limit)
     instruments = list(db.scalars(query))
     ids = [row.id for row in instruments]
     quotes = latest_rows(db, QuoteSnapshot, ids, QuoteSnapshot.quote_time.desc())
     watched = set(db.scalars(select(UserWatchlistEntry.instrument_id).where(UserWatchlistEntry.user_id == user_id, UserWatchlistEntry.instrument_id.in_(ids)))) if ids else set()
     held = set(db.scalars(select(Holding.instrument_id).where(Holding.user_id == user_id, Holding.instrument_id.in_(ids)))) if ids else set()
     return {
-        "scope": "synced_catalog", "provider_called": False,
+        "scope": "synced_catalog", "provider_called": False, "total": total, "offset": offset, "limit": limit, "has_more": offset + len(instruments) < total,
         "items": [{"ts_code": row.ts_code, "name": row.name, "kind": row.kind, "theme": row.theme_l1, "theme_detail": row.theme_l2, "enabled": row.enabled, "quote": quote_view(quotes.get(row.id), settings), "watched": row.id in watched, "held": row.id in held} for row in instruments],
         "note": "仅搜索已同步证券目录。新增目录/历史数据由独立任务处理，不阻塞搜索。",
     }
@@ -274,7 +275,7 @@ def portfolio_risk(db: Session, settings: Settings, user_id: int | None) -> dict
 def sector_overview(db: Session, settings: Settings) -> dict:
     """Two bounded read-only SQL queries; no all-market grade/indicator hydration."""
     ranked = select(SectorSnapshot.id, func.row_number().over(partition_by=[SectorSnapshot.board_type, SectorSnapshot.sector_name], order_by=[SectorSnapshot.trade_date.desc(), SectorSnapshot.fetched_at.desc(), SectorSnapshot.id.desc()]).label("rn")).subquery()
-    rows = db.scalars(select(SectorSnapshot).join(ranked, ranked.c.id == SectorSnapshot.id).where(ranked.c.rn == 1).order_by(SectorSnapshot.board_type, SectorSnapshot.sector_name).limit(1000)).all()
+    rows = db.scalars(select(SectorSnapshot).join(ranked, ranked.c.id == SectorSnapshot.id).where(ranked.c.rn == 1).order_by(SectorSnapshot.board_type, SectorSnapshot.sector_name).limit(2000)).all()
     boards = []
     for row in rows:
         total = row.total_count or 0

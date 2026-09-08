@@ -45,3 +45,6 @@ bridge/claim.json
 .local/
 trial-runtime/
 .delivery-validation/
+
+frontend/test-results-auth/
+frontend/playwright-report-auth/

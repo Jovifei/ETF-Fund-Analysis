@@ -58,6 +58,7 @@ def sync_catalog(db, provider, *, enable_codes=()):
         finally:
             record_provider_audit(db, run_id=uuid4().hex, operation="list_etf_catalog", provider=provider, result=records, error=error, latency_ms=timer.elapsed_ms)
     created = 0
+    updated = 0
     for record in records:
         row = known.get(record.ts_code)
         if row is None:
@@ -66,6 +67,10 @@ def sync_catalog(db, provider, *, enable_codes=()):
             db.add(row)
             known[row.ts_code] = row
             created += 1
+        elif row.kind == record.kind:
+            row.name = record.name
+            row.metadata_json = {**(row.metadata_json or {}), **(record.metadata or {})}
+            updated += 1
     if any(known[code].kind not in {"ETF", "LOF"} for code in wanted & known.keys()):
         raise ValueError("only ETF/LOF can enter workspace research pool")
     if wanted - known.keys():
@@ -76,7 +81,19 @@ def sync_catalog(db, provider, *, enable_codes=()):
     for code in wanted:
         known[code].enabled = True
     db.flush()
-    return {"created": created, "catalog_count": len(known), "enabled_requested": len(wanted), "scope": "provider_returned_catalog_not_certified_complete"}
+    summary = {"created": created, "updated": updated, "catalog_count": len(known), "enabled_requested": len(wanted), "scope": "provider_returned_catalog_not_certified_complete", "coverage": getattr(records, "coverage", {}), "synced_at": datetime.now(UTC).isoformat()}
+    coverage = summary['coverage']
+    # Source fallback supports reading, not proof of all-market completeness.
+    if coverage:
+        category_missing = any(not value.get('source') for value in coverage.values())
+        summary['status'] = 'partial' if category_missing else 'succeeded'
+    if records:
+        saved = db.get(WorkspacePreference, "system:catalog-discovery")
+        if saved is None:
+            saved = WorkspacePreference(owner_scope="system:catalog-discovery", user_id=None)
+            db.add(saved)
+        saved.settings_json = summary
+    return summary
 
 
 def outcome_state(outcome: dict) -> str:
@@ -145,7 +162,8 @@ def execute(job_id: str) -> int:
                     if kind == "onboard":
                         for code in request["codes"]:
                             WatchlistService(settings).add(db, code=code, user_id=owner_id)
-                    steps.append({"task": "catalog", "status": "succeeded", "summary": outcome})
+                    steps.append({"task": "catalog", "status": outcome_state(outcome), "summary": outcome})
+                    failed |= outcome_state(outcome) != "succeeded"
             except Exception as exc:
                 steps.append({"task": "catalog", "status": "failed", "reason": type(exc).__name__})
                 failed = True
@@ -285,6 +303,10 @@ def monitor_job(process, *, seconds=1800):
 def run_once() -> bool:
     heartbeat()
     enqueue_daily_reviews()
+    if workspace_settings().discovery_enabled and get_settings().market_provider != "mock":
+        from app.workspace.discovery import enqueue as enqueue_discovery
+        with session_scope() as db:
+            enqueue_discovery(db)
     with session_scope() as db:
         job_id = data_jobs.claim(db)
     if job_id is None:

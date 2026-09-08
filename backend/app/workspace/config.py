@@ -7,6 +7,7 @@ class WorkspaceSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="WORKSPACE_", extra="ignore")
     ui_enabled: bool = False
+    discovery_enabled: bool = False
     daily_review_enabled: bool = False
     bridge_enabled: bool = False
     read_limit: int = Field(default=500, ge=20, le=2000)
