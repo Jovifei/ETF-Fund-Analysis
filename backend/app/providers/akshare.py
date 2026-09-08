@@ -328,7 +328,7 @@ class AKShareProvider(MarketProvider):
                     down_count=int(down_count),
                     flat_count=int(flat_count),
                     total_count=total,
-                    pct_change=finite_or_none(row.get("涨跌幅") or row.get("pct_change")),
+                    pct_change=finite_or_none(first(row, "涨跌幅", "pct_change")),
                     source=self.name,
                     board_type=board_type,
                 )

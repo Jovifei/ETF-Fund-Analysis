@@ -78,7 +78,9 @@ def test_1430_is_secondary_mode_and_uses_canonical_grade_words() -> None:
 def test_decision_and_1430_rows_open_the_global_etf_detail() -> None:
     decision = (STATIC / "decision_board_workbuddy.js").read_text(encoding="utf-8")
     tail = (STATIC / "etf_1430_workbench.js").read_text(encoding="utf-8")
-    assert "window.location.assign(`/etf/${encodeURIComponent(tr.dataset.code)}`)" in decision
+    assert "navigateEtf(tr.dataset.code)" in decision
+    assert "window.location.assign(`/etf/${encodeURIComponent(code)}`)" in decision
+    assert "window.parent.postMessage({type:'etf-board:navigate',code},window.location.origin)" in decision
     assert "window.location.assign(`/etf/${encodeURIComponent(row.dataset.code)}`)" in tail
 
 

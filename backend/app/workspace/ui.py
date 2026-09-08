@@ -4,12 +4,13 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from starlette.responses import FileResponse, JSONResponse
+from starlette.responses import FileResponse, JSONResponse, RedirectResponse
+from app.workspace.original_board import original_board_frame
 
 from app.workspace.config import workspace_settings
 
 DIST = Path(__file__).resolve().parents[1] / "workspace_dist"
-UI_PATHS = frozenset({"/", "/matrix", "/boards", "/analysis", "/watchlist", "/holdings", "/ai", "/research", "/research/news", "/review", "/factors", "/history", "/settings", "/profile", "/system", "/decision/1430"})
+UI_PATHS = frozenset({"/login", "/register", "/", "/matrix", "/boards", "/analysis", "/watchlist", "/holdings", "/ai", "/research", "/research/news", "/review", "/factors", "/history", "/settings", "/profile", "/system", "/decision/1430"})
 
 
 class WorkspaceMiddleware:
@@ -51,6 +52,16 @@ class WorkspaceMiddleware:
                 return await original_receive()
 
             receive = replay
+        if method in {"GET", "HEAD"} and workspace_settings().ui_enabled:
+            aliases = {"/assets/decision_board_workbuddy.html": "/#etf-decisions",
+                       "/assets/boards.html": "/#market-boards", "/matrix": "/#etf-decisions", "/classic/etf-board": "/#etf-decisions",
+                       "/boards": "/#market-boards", "/decision/1430": "/?mode=1430#etf-decisions"}
+            if path in aliases:
+                await RedirectResponse(aliases[path], status_code=307)(scope, receive, private_send)
+                return
+            if path == "/internal/decision-board-frame":
+                await original_board_frame()(scope, receive, private_send)
+                return
         if method in {"GET", "HEAD"} and path.startswith("/workspace-assets/"):
             root = DIST / "workspace-assets"
             candidate = (root / path.removeprefix("/workspace-assets/")).resolve()

@@ -387,13 +387,17 @@ class MarketService:
                 if not hasattr(self.provider, method_name):
                     raise ProviderError(f"provider 不支持 {method_name}")
                 result = getattr(self.provider, method_name)()
-                records = [result] if is_single else (result or [])
+                records = [result] if is_single and result is not None else ([] if is_single else (result or []))
             except Exception as exc:
                 errors.append(f"{board_type}:{type(exc).__name__}")
                 logger.warning("sector snapshot refresh [%s] failed (degraded to empty): %s", board_type, exc)
                 per_board[board_type] = {"inserted": 0, "error": type(exc).__name__}
                 continue
 
+            if not records:
+                errors.append(f"{board_type}:empty_response")
+                per_board[board_type] = {"inserted": 0, "error": "empty_response"}
+                continue
             board_inserted = 0
             for item in records:
                 existing = db.scalar(
@@ -454,4 +458,5 @@ class MarketService:
             "inserted": inserted,
             "boards": per_board,
             "error": (errors[0] if errors else None),
+            "status": "partial" if errors else "succeeded",
         }

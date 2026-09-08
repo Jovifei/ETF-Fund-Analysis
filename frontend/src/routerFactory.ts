@@ -2,11 +2,19 @@ import { createRouter, type RouterHistory } from 'vue-router'
 const overview = () => import('./views/Overview.vue')
 const archive = () => import('./views/Research.vue')
 export function makeRouter(history: RouterHistory) {
-const router = createRouter({ history, scrollBehavior: () => ({ top: 0 }), routes: [
+const router = createRouter({ history, scrollBehavior: (to, from, saved) => {
+  if (saved) return saved
+  if (to.hash && ['#etf-decisions','#market-boards'].includes(to.hash)) return { el: to.hash, top: 85 }
+  if (to.path === '/' && from.path.startsWith('/etf/')) return false
+  return { top: 0 }
+}, routes: [
   { path: '/', component: overview, meta: { title: '市场总览' } },
-  { path: '/boards', component: overview, meta: { title: '行业与概念板块' } },
-  { path: '/decision/1430', component: overview, meta: { title: '14:30 尾盘研究' } },
-  { path: '/matrix', component: () => import('./views/Matrix.vue'), meta: { title: 'ETF 指标总表' } },
+  { path: '/boards', redirect: '/#market-boards' },
+  { path: '/decision/1430', redirect: '/?mode=1430#etf-decisions' },
+  { path: '/matrix', redirect: '/#etf-decisions' },
+  { path: '/classic/etf-board', redirect: '/#etf-decisions' },
+  { path: '/login', component: () => import('./components/Login.vue'), meta: { title: '登录' } },
+  { path: '/register', component: () => import('./components/Login.vue'), meta: { title: '创建账户' } },
   { path: '/analysis', component: () => import('./views/Catalog.vue'), meta: { title: 'ETF 分析' } },
   { path: '/etf/:code', component: () => import('./views/Detail.vue'), meta: { title: 'ETF 分析' } },
   { path: '/watchlist', component: () => import('./views/Watchlist.vue'), meta: { title: '我的自选' } },

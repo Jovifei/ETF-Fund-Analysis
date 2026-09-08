@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.core.security import optional_current_user, require_private_access
+from app.core.security import optional_current_user, require_private_access, require_admin
 from app.db.session import get_db
 from app.models import AuthUser
 from app.workspace import read_model
@@ -21,9 +21,9 @@ User = Annotated[AuthUser | None, Depends(optional_current_user)]
 
 
 @private_router.get("/search/instruments")
-def search(db: DB, settings: Config, user: User, response: Response, q: str = Query(default="", max_length=64), limit: int = Query(default=20, ge=1, le=100)) -> dict:
+def search(db: DB, settings: Config, user: User, response: Response, q: str = Query(default="", max_length=64), limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0, le=10000)) -> dict:
     response.headers["Cache-Control"] = "private, no-store"
-    return read_model.search_instruments(db, settings, q, limit, user.id if user else None)
+    return read_model.search_instruments(db, settings, q, limit, user.id if user else None, offset=offset)
 
 
 @private_router.get("/workspace/overview")
@@ -73,5 +73,29 @@ private_router.include_router(actions_router)
 private_router.include_router(revision_router)
 # Machine credentials never inherit the legacy browser authentication path.
 router = APIRouter()
+
+
+@router.get("/api/auth/capabilities")
+def auth_capabilities(settings: Config, response: Response) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    return {"registration_enabled": bool(settings.auth_enabled and settings.registration_enabled and settings.registration_invite_code),
+            "invite_required": True, "self_registration_role": "member"}
+
+
+@private_router.get("/workspace/discovery")
+def discovery_state(db: DB, user: User) -> dict:
+    from app.workspace.discovery import state
+    return state(db)
+
+
+@private_router.post("/workspace/discovery/refresh", status_code=202)
+def discovery_refresh(db: DB, admin: Annotated[AuthUser | None, Depends(require_admin)]) -> dict:
+    from app.workspace.discovery import enqueue
+    result = enqueue(db, admin.id if admin else None, manual=True)
+    db.commit()
+    return result
+
+
+# Include after all decorators: FastAPI copies routes at include time.
 router.include_router(private_router)
 router.include_router(device_router)

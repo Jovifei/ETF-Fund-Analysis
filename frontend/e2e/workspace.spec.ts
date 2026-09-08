@@ -7,7 +7,7 @@ test('overview → search four actions → chart; navigation alone does not call
   page.on('request', r => { if (r.method() === 'POST' && r.url().includes('/research-jobs')) writes.push(r.url()) })
   await page.goto('/')
   await expect(page.getByRole('heading', { name: '市场总览', exact: true })).toBeVisible()
-  await expect(page.locator('tbody tr').first()).toBeVisible()
+  await expect(page.frameLocator('iframe[title="原版 ETF 决策快照"]').locator('.decision-data-row').first()).toBeVisible()
   await page.screenshot({ path: info.outputPath('overview.png'), fullPage: true })
   const search = page.getByRole('combobox', { name: '搜索 ETF 或 LOF' })
   await search.fill(code)

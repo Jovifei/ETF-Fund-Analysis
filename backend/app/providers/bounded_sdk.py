@@ -17,7 +17,7 @@ from app.providers.base import CapabilityUnavailable, ProviderError
 
 MAX_BYTES = 8_000_000
 TUSHARE_ENDPOINT = 'https://api.tushare.pro'
-TUSHARE_APIS = frozenset({'fund_basic','fund_daily','rt_etf_k','etf_mins','trade_cal','news','major_news','cctv_news'})
+TUSHARE_APIS = frozenset({'etf_basic','fund_basic','fund_daily','rt_etf_k','etf_mins','trade_cal','news','major_news','cctv_news'})
 AKSHARE_APIS = frozenset({
     'fund_etf_spot_em','fund_lof_spot_em','fund_etf_hist_em','fund_lof_hist_em','fund_etf_hist_sina',
     'fund_etf_hist_min_em','fund_lof_hist_min_em','fund_etf_category_sina','fund_etf_category_ths',
