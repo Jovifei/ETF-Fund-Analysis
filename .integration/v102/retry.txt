@@ -1,0 +1,1 @@
+Retry exact preimage/postimage-verified application edits only. Workflow updates remain connector-managed; no permission escalation.
