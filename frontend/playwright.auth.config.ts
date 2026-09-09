@@ -10,6 +10,7 @@ export default defineConfig({
     url:'http://127.0.0.1:18083/api/health',timeout:150000,reuseExistingServer:false,
     env:{...process.env as Record<string,string>,PYTHONPATH:path.resolve('../backend'),APP_ENV:'test',AUTH_ENABLED:'true',AUTH_COOKIE_SECURE:'false',
       MARKET_PROVIDER:'mock',AUTO_CREATE_SCHEMA:'true',ALLOW_MOCK_FALLBACK:'false',WORKSPACE_UI_ENABLED:'true',LLM_ENABLED:'false',ANALYSIS_ENABLED:'false',
+      WORKSPACE_AI_API_ENABLED:'true',WORKSPACE_AI_KEY_FILE:path.join(os.tmpdir(),'etf-auth-private','ai-test.key'),
       REGISTRATION_ENABLED:'true',REGISTRATION_INVITE_CODE:'browser-test-invite',LOG_LEVEL:'ERROR',
       DATABASE_URL:`sqlite:///${path.join(os.tmpdir(),'workspace-e2e-auth.sqlite3')}`,REPORTS_DIR:path.join(os.tmpdir(),'workspace-e2e-auth-reports')}}
 })

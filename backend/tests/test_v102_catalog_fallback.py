@@ -22,7 +22,10 @@ def test_name_only_catalog_continues_audited_fallback():
     assert all(row.enabled is False for row in rows)
     assert rows.coverage['ETF']['source']=='akshare:fund_etf_spot_em'
     assert provider.last_trace[0].status=='partial'
-    assert provider.last_trace[1].status=='fallback_used'
+    # v104 keeps trying subsequent category endpoints when the dedicated
+    # response is only a tiny sample: one ETF cannot certify full coverage.
+    assert provider.last_trace[1].status=='partial'
+    assert rows.coverage['ETF']['count']==1
 
 
 def test_name_fallback_is_preserved_but_never_certified_when_all_others_fail():

@@ -1,7 +1,19 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useQuery } from '../lib/query'
-const mode=ref('codex')
-const state=useQuery<{bridge_enabled:boolean;api_key_configuration:string}>('/api/workspace/status')
+import {ref} from 'vue'
+const mode=ref('api')
+const powershell=String.raw`# 在项目根目录的 PowerShell 执行；这是隔离的本地研究目录。
+$root = 'E:\AI_Tools\Other\ETF-Agent-Bridge'
+New-Item -ItemType Directory -Force "$root\runner-home\.codex" | Out-Null
+$env:HOME = "$root\runner-home"
+$env:USERPROFILE = "$root\runner-home"
+$env:CODEX_HOME = "$root\runner-home\.codex"
+codex login
+python bridge/etf_agent_bridge.py --root $root pair --origin http://127.0.0.1:8082
+python bridge/etf_agent_bridge.py --root $root doctor
+# 替换下面模型名为你账号有权使用的模型；只运行1个任务。
+python bridge/etf_agent_bridge.py --root $root work --model YOUR_MODEL_ID --max-jobs 1 --max-minutes 10`
 </script>
-<template><section class="card section" data-testid="ai-setup"><div class="card-header"><h2>接入与开始研究</h2><RouterLink class="button small" to="/settings">连接设置与设备配对</RouterLink></div><div class="card-body"><div class="toolbar"><button v-for="item in [{id:'codex',label:'本地 Codex'},{id:'vibe',label:'Vibe / 外部模型'},{id:'manual',label:'不配置 AI'}]" :key="item.id" class="button" :class="{primary:mode===item.id}" @click="mode=item.id">{{item.label}}</button></div><div v-if="mode==='codex'"><p>① 在你的电脑安装已审查版本的 Codex，使用桥接器独立 CODEX_HOME 完成官方登录。不要上传 auth.json，不复制全局登录文件。</p><p>② 按 docs/LOCAL_ACCEPTANCE_V103.md 检查 bridge doctor；管理员显式启用桥接后，在连接设置生成设备配对码。本地客户端主动连接网站，网站不访问你的 localhost。</p><p>③ 在下面建立证据包与任务。本地领取、按预算运行一次 Codex、提交候选结果；你审核后发布。打开本页不会调用模型。</p><p class="small-note">当前桥接：{{state.data.value?.bridge_enabled?'已允许设备连接（仍需本地登录与配对）':'未启用；仍可先导出证据包'}}。订阅登录成功不保证无限额度或定时任务资格。</p></div><div v-else-if="mode==='vibe'"><p>先使用 scripts/vibe_trial.py 在独立目录安装固定版本的 Vibe-Research；核对其体检、测试和 UI 后，在它自己的本地配置中连接模型。不要把外部程序连到本项目数据库。</p><p>完成研究后，按 docs/LOCAL_ACCEPTANCE_V103.md 导出原生研究产物，在下方“外部研究包”预览并导入，进入人工审核，不直接生成交易动作。</p><p class="notice warning-notice">本网站直接保存模型 API Key 的功能尚未开放（等待安全凭据存储）。不能把 Key 写入报告、普通设置或浏览器存储。“q code”尚未确认具体工具，不宣称已适配。</p></div><div v-else><p>价格图表、确定性指标、收藏、持仓和人工复盘均不需要 AI。可以手动整理研究结果并通过证据包导入审核。</p></div><p class="small-note">AI 只解释证据和风险，不计算指标、不修改当前五档决策、不自动下单。可用模式和依赖以仓库文档为准。</p></div></section></template>
+<template><section class="card section" data-testid="ai-setup-guide"><div class="card-header"><h2>如何开始 AI 研究</h2></div><div class="card-body"><div class="segmented"><button :class="{active:mode==='api'}" @click="mode='api'">模型 API</button><button :class="{active:mode==='codex'}" @click="mode='codex'">本地 Codex</button><button :class="{active:mode==='manual'}" @click="mode='manual'">不用 AI</button></div>
+<div v-if="mode==='api'"><ol><li>打开 <RouterLink to="/settings">设置与连接 → 模型 API 连接</RouterLink>，新增服务地址、Key与模型，设为本人默认配置。</li><li>勾选费用确认，测试一次；失败按提示检查服务权限、Key、模型和worker。</li><li>回 ETF 分析或每日复盘，点击“建立证据包与任务”。证据包就是这次分析使用的行情、指标、新闻清单，不是另一份模型配置。</li><li>选择任务，在“用已保存的模型分析这份证据”选择配置并确认费用。等待工作器返回报告，再审核。</li></ol><p>ETF与每日复盘使用同一份个人配置，不必重复填写。网页不会因为打开研究档案就再次调用模型。</p></div>
+<div v-else-if="mode==='codex'"><ol><li>本机安装官方 Codex CLI 和本项目依赖；使用独立目录，不能复制全局 auth.json。</li><li>API服务私人配置启用 <code>WORKSPACE_BRIDGE_ENABLED=true</code>，重启服务；网页“设置 → 隔离研究设备”生成一次性配对码。</li><li>在本机新 PowerShell 执行下方命令。官方登录由你本人完成；pair时在终端输入配对码。服务不在8082时改成你的实际HTTPS地址，不要关闭证书验证。</li><li>网页建立研究任务，然后执行一次work。报告回传后在研究任务查看和审核。doctor仅检查桥接，不等于模型账号已登录。</li></ol><pre class="report-text">{{powershell}}</pre><p>本项目会检查 Codex 版本与工具隔离。出现 unreviewed_codex_version 时按 bridge 文档审查版本，不删除门禁。每天自动运行应在一次真实任务验证后另行启用。</p><p>Vibe 的深度研究属于独立可选适配，先按 <code>docs/LOCAL_ACCEPTANCE_V103.md</code> 与实际安装脚本 --help 固定版本隔离验收，不直接给它生产数据库凭据。</p></div>
+<div v-else><p>图表、价格指标、自选、持仓与人工复盘都能直接使用。每日复盘先写自己的判断和后续结果，待验证的参数建议不自动进入生产。</p></div><p class="small-note">通常不需要另外搭建 MCP。本站已提供固定证据、任务领取与结果回传；需要让其他AI主动检索站内数据时，再增加经授权的只读接口。</p></div></section></template>

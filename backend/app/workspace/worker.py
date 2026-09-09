@@ -172,10 +172,18 @@ def execute(job_id: str) -> int:
         request, owner_id = dict(row.request_json), row.user_id
         from app.services.runtime_service import RuntimeService
         settings = RuntimeService(settings).resolve_settings(db).model_copy(update={"analysis_enabled": False, "llm_enabled": False})
+    if request.get("task") == "api_research":
+        from app.workspace.ai_profiles import execute_ticket
+        return execute_ticket(job_id)
     tasks = None
     failed = False
     try:
         kind = request["task"]
+        if owner_id and kind in {"factors", "research_outlook"}:
+            from app.models import AuthUser
+            from app.workspace.memberships import check_feature
+            with session_scope() as db:
+                check_feature(db, db.get(AuthUser, owner_id), "factor_research" if kind == "factors" else "monthly_research")
         from app.workspace.offline_tasks import CacheOnlyTaskService
         tasks = CacheOnlyTaskService(settings) if kind in {"recompute", "factors", "research_outlook"} else TaskService(settings)
         if kind == "research_outlook":

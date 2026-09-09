@@ -9,7 +9,8 @@ def status(db, settings):
     size=None
     try:
         if dialect=="postgresql":
-            size=int(db.scalar(text("SELECT pg_database_size(current_database())")))
+            with db.begin_nested():
+                size=int(db.scalar(text("SELECT pg_database_size(current_database())")))
         elif dialect=="sqlite":
             size=int(db.scalar(text("PRAGMA page_count")))*int(db.scalar(text("PRAGMA page_size")))
     except Exception:
@@ -27,12 +28,13 @@ def prepare_plan(db, *, limit=10, minimum_scale=0, include_unknown=True):
     # Catalog reads are cheap; rank by observed size/turnover, never fabricate AUM.
     known=dict(db.execute(select(DailyBar.instrument_id,func.count()).group_by(DailyBar.instrument_id)).all())
     items=list(db.scalars(select(Instrument).where(Instrument.kind=="ETF").limit(10000)))
+    from app.workspace.chart import number
     def key(item):
         meta=item.metadata_json or {}
-        return (float(meta.get("market_cap_cny") or 0), float(meta.get("turnover_cny") or 0))
+        return (number(meta.get("market_cap_cny")) or 0, number(meta.get("turnover_cny")) or 0)
     eligible=[]
     for item in items:
-        meta=item.metadata_json or {};scale=meta.get("market_cap_cny")
+        meta=item.metadata_json or {};scale=number(meta.get("market_cap_cny"))
         if known.get(item.id,0)>=250: continue
         if minimum_scale and (scale is None and not include_unknown or scale is not None and scale<minimum_scale): continue
         eligible.append(item)

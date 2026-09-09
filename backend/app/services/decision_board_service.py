@@ -536,6 +536,13 @@ class DecisionBoardService:
             "rsi": rsi,
             "chan": chan,
             "sector": metric(grade_row.get("sector"), {"label": "未验证 / 不可用", "status": "missing", "coverage_count": 0}),
+            "indicator_comparison": {
+                "as_of_date": indicator.as_of_date.isoformat() if indicator is not None else (display_history or {}).get("source_as_of"),
+                "previous_as_of_date": (previous_values or {}).get("_as_of_date"),
+                "basis": "previous_saved_confirmed_date_not_intraday_quote",
+                "values": {key: {"current": finite_or_none(values.get(key)), "previous": finite_or_none((previous_values or {}).get(key))}
+                           for key in ("volume_ratio", "ma20", "macd_dif", "kdj_j", "rsi14", "td_buy_setup", "td_sell_setup")},
+            },
             "indicator": {
                 "version": indicator.version if indicator is not None else None,
                 "as_of_date": indicator.as_of_date.isoformat() if indicator is not None else (display_history or {}).get("source_as_of"),
@@ -772,7 +779,7 @@ class DecisionBoardService:
                 .limit(1)
             )
             if row is not None and row.values_json:
-                previous[instrument_id] = dict(row.values_json)
+                previous[instrument_id] = {**dict(row.values_json), "_as_of_date": row.as_of_date.isoformat()}
         return previous
 
     @staticmethod

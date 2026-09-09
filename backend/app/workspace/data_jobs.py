@@ -16,6 +16,10 @@ def view(row: WorkspaceDataJob) -> dict:
 
 
 def enqueue(db: Session, payload: DataRequest, user_id: int | None) -> tuple[WorkspaceDataJob, bool]:
+    if user_id and payload.task in {"factors", "research_outlook"}:
+        from app.models import AuthUser
+        from app.workspace.memberships import check_feature
+        check_feature(db, db.get(AuthUser, user_id), "factor_research" if payload.task == "factors" else "monthly_research")
     scope = owner_scope(user_id)
     lock_owner(db, "workspace-data-queue")
     key = content_hash({"scope": scope, "key": payload.request_key})
@@ -39,6 +43,9 @@ def enqueue(db: Session, payload: DataRequest, user_id: int | None) -> tuple[Wor
 def claim(db: Session) -> str | None:
     lock_owner(db, "workspace-data-queue")
     now = datetime.now(UTC)
+    from app.workspace.models import WorkspaceResearchJob
+    expired_api_ids = select(WorkspaceDataJob.job_id).where(WorkspaceDataJob.status == "running", WorkspaceDataJob.lease_until < now, WorkspaceDataJob.request_json["task"].as_string() == "api_research")
+    db.execute(update(WorkspaceResearchJob).where(WorkspaceResearchJob.status == "running", WorkspaceResearchJob.lease_id.in_(expired_api_ids)).values(status="failed", failure_reason="api_worker_lease_expired"))
     db.execute(update(WorkspaceDataJob).where(WorkspaceDataJob.status == "running", WorkspaceDataJob.lease_until < now).values(status="failed", failure_reason="worker_lease_expired", finished_at=now))
     if db.scalar(select(WorkspaceDataJob.job_id).where(WorkspaceDataJob.status == "running").limit(1)):
         return None

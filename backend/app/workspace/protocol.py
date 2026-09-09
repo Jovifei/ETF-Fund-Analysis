@@ -49,7 +49,7 @@ class ResearchResult(StrictModel):
     schema_version: Literal["etf-research-result-v1"]
     job_id: JobId
     input_hash: Hash
-    producer: Literal["manual", "codex", "vibe", "claude"]
+    producer: Literal["manual", "codex", "vibe", "claude", "api"]
     producer_version: str = Field(min_length=1, max_length=96)
     model: str = Field(min_length=1, max_length=96)
     summary: BoundedText

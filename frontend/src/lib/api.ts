@@ -46,6 +46,9 @@ export function errorText(error: unknown): string {
   if (error instanceof DOMException && error.name === 'AbortError') return '请求已取消或超时，请重试。'
   if (error instanceof ApiError) {
     if (error.status === 401) return '登录已失效，请重新登录。'
+    if (error.code === 'plus_feature_required') return '管理员已将此研究功能设为 Plus 权益；请在个人中心查看账户分类。'
+    if (error.code === 'ai_endpoint_not_in_admin_allowlist') return '该模型服务地址尚未由管理员加入 HTTPS 域名白名单。'
+    if (error.code === 'ai_profile_revision_changed') return '模型配置已变更，本次旧任务没有使用新密钥执行。请检查配置后重新提交。'
     if (error.status === 403) return '没有权限，或会话校验失败。请刷新后重试。'
     if (error.status === 409) return `数据状态已变化，请刷新核对后重试（${error.code}）。`
     if (error.status === 429) return '任务或调用频率已达到上限，请稍后重试。'

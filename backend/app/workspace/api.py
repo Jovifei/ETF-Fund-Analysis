@@ -148,6 +148,15 @@ def research_outlook(db: DB, settings: Config, user: User, code: str|None=Query(
     return {'items':read(db,codes),'model_version':VERSION,'horizons':[1,5,20],'provider_called':False,'actionable':False}
 
 
+@private_router.get("/workspace/news-status")
+def news_status(db: DB, user: User):
+    from app.workspace.news_status import read
+    return read(db)
+
+from app.workspace.ai_api import router as ai_router, members as member_router
+private_router.include_router(ai_router)
+private_router.include_router(member_router)
+
 # Include after all decorators: FastAPI copies routes at include time.
 router.include_router(private_router)
 router.include_router(device_router)

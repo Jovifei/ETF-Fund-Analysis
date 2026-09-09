@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { api, errorText } from '../lib/api'
-import { useQuery } from '../lib/query'
-const users=useQuery<{id:number;username:string;role:string;status:string}[]>('/api/admin/users')
-const username=ref(''),email=ref(''),password=ref(''),confirm=ref(''),busy=ref(false),message=ref(''),error=ref('')
-async function create(){
-  error.value='';message.value=''
-  if(password.value!==confirm.value){error.value='两次密码不一致';return}
-  busy.value=true
-  try{await api('/api/admin/users',{method:'POST',body:{username:username.value.trim(),email:email.value.trim()||null,password:password.value,role:'member'}});message.value='成员账户已创建，可从登录页登录。';username.value='';email.value='';await users.reload()}
-  catch(e){error.value=errorText(e)}finally{password.value='';confirm.value='';busy.value=false}
-}
+import {ref,watch} from 'vue'
+import {api,errorText} from '../lib/api'
+import {useQuery} from '../lib/query'
+import {useSession} from '../stores/session'
+interface User {id:number;username:string;role:string;status:string;plan:'free'|'plus';removed?:boolean}
+interface Policy {enabled:boolean;plus_features:string[]}
+const session=useSession(),users=useQuery<{items:User[];policy:Policy}>('/api/workspace/members')
+const policy=ref<Policy>({enabled:false,plus_features:[]}),username=ref(''),email=ref(''),password=ref(''),confirmPassword=ref(''),busy=ref(false),message=ref(''),error=ref('')
+watch(users.data,r=>{if(r)policy.value={...r.policy,plus_features:[...r.policy.plus_features]}})
+async function act(fn:()=>Promise<void>){if(busy.value)return;busy.value=true;error.value='';message.value='';try{await fn()}catch(e){error.value=errorText(e)}finally{busy.value=false}}
+async function create(){if(password.value!==confirmPassword.value){error.value='两次密码不一致';return}await act(async()=>{try{await api('/api/admin/users',{method:'POST',body:{username:username.value.trim(),email:email.value.trim()||null,password:password.value,role:'member'}});message.value='成员账户已创建，可从登录页登录。';username.value='';email.value='';await users.reload()}finally{password.value='';confirmPassword.value=''}})}
+async function change(u:User,action:string,extra:Record<string,string>={}){const label:Record<string,string>={plan:'更改会员分类',role:'更改角色（会撤销其已有登录会话）',disable:'停用账户',reactivate:'重新启用账户',remove:'移除账户（可恢复，保留持仓和历史）',restore:'恢复已移除账户'};if(!window.confirm(`${label[action]}：${u.username}？`))return;await act(async()=>{await api('/api/workspace/members/'+u.id,{method:'POST',body:{action,...extra,confirm_username:u.username}});await users.reload();message.value='账户设置已记录审计。'})}
+async function savePolicy(){if(!window.confirm('修改权益策略？启用后普通成员对选中研究功能将收到权限提示，已有持仓和基本图表不受影响。'))return;await act(async()=>{await api('/api/workspace/membership-policy',{method:'PUT',body:policy.value});message.value='权益策略已保存；API和工作器执行同一权限检查。';await users.reload()})}
 </script>
-<template><section class="card section"><div class="card-header"><h2>用户管理</h2><small>仅管理员可见；新建成员不会改变当前登录</small></div><div class="card-body"><p v-if="error||users.error.value" role="alert">{{error||users.error.value}}</p><p v-if="message" role="status">{{message}}</p>
-<form class="form-grid" @submit.prevent="create"><label class="field">新成员用户名<input v-model="username" autocomplete="off" maxlength="128" required></label><label class="field">新成员邮箱（可选）<input v-model="email" type="email" maxlength="320" autocomplete="off"></label><label class="field">新成员密码<input v-model="password" type="password" autocomplete="new-password" minlength="6" maxlength="1024" required></label><label class="field">确认新成员密码<input v-model="confirm" type="password" autocomplete="new-password" maxlength="1024" required></label><button class="button primary" :disabled="busy">创建成员账户</button></form>
-<div class="table-scroll"><table><thead><tr><th>用户名</th><th>角色</th><th>状态</th></tr></thead><tbody><tr v-for="user in users.data.value" :key="user.id"><td>{{user.username}}</td><td>{{user.role}}</td><td>{{user.status}}</td></tr></tbody></table></div></div></section></template>
+<template><section class="card section"><div class="card-header"><h2>用户管理</h2><small>管理员操作均记录审计；移除不物理删除持仓</small></div><div class="card-body"><p v-if="error||users.error.value" role="alert">{{error||users.error.value}}</p><p v-if="message" role="status">{{message}}</p><form class="form-grid" @submit.prevent="create"><label class="field">新成员用户名<input v-model="username" autocomplete="off" maxlength="128" required></label><label class="field">新成员邮箱（可选）<input v-model="email" type="email" maxlength="320" autocomplete="off"></label><label class="field">新成员密码<input v-model="password" type="password" autocomplete="new-password" minlength="6" maxlength="1024" required></label><label class="field">确认新成员密码<input v-model="confirmPassword" type="password" autocomplete="new-password" maxlength="1024" required></label><button class="button primary" :disabled="busy">创建成员账户</button></form>
+<div class="table-scroll"><table><thead><tr><th>用户名</th><th>角色</th><th>会员</th><th>状态</th><th>管理</th></tr></thead><tbody><tr v-for="u in users.data.value?.items??[]" :key="u.id"><td>{{u.username}}</td><td>{{u.role==='admin'?'管理员':'成员'}}</td><td>{{u.plan==='plus'?'Plus':'普通'}}</td><td>{{u.removed?'已移除':u.status==='active'?'正常':'停用'}}</td><td><div class="actions"><button class="text-button" :disabled="busy" @click="change(u,'plan',{plan:u.plan==='plus'?'free':'plus'})">{{u.plan==='plus'?'设为普通':'设为Plus'}}</button><template v-if="u.username!==session.identifier"><button v-if="u.status==='active'" class="text-button" :disabled="busy" @click="change(u,'role',{role:u.role==='admin'?'member':'admin'})">{{u.role==='admin'?'降为成员':'提升管理员'}}</button><button v-if="!u.removed" class="text-button" :disabled="busy" @click="change(u,u.status==='active'?'disable':'reactivate')">{{u.status==='active'?'停用':'启用'}}</button><button class="text-button" :disabled="busy" @click="change(u,u.removed?'restore':'remove')">{{u.removed?'恢复账户':'移除账户'}}</button></template></div></td></tr></tbody></table></div>
+<details class="details-block"><summary>普通 / Plus 权益策略（默认不开启收费限制）</summary><p>这是权限分类，不包含支付、自动续费或收费承诺。基础行情、图表、收藏与持仓不设本期权益门槛。</p><label class="checkbox-label"><input v-model="policy.enabled" type="checkbox">启用下列研究功能的 Plus 限制</label><div class="actions"><label><input v-model="policy.plus_features" type="checkbox" value="api_research">模型 API 研究</label><label><input v-model="policy.plus_features" type="checkbox" value="factor_research">因子诊断</label><label><input v-model="policy.plus_features" type="checkbox" value="monthly_research">扩展日／周／月研究</label></div><button class="button" :disabled="busy" @click="savePolicy">保存权益策略</button></details></div></section></template>

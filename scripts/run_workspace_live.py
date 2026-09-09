@@ -18,7 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 ALLOWED = {"MARKET_PROVIDER", "TUSHARE_TOKEN", "TUSHARE_TIMEOUT_SECONDS", "AKSHARE_TIMEOUT_SECONDS",
     "NEWS_RSS_URLS", "NEWS_RSS_TIMEOUT_SECONDS", "MINUTE_BARS_ENABLED", "FTSHARE_ENABLED",
     "FTSHARE_QUALIFICATION", "WORKSPACE_BRIDGE_ENABLED", "WORKSPACE_DAILY_REVIEW_ENABLED", "WORKSPACE_DISCOVERY_ENABLED",
-    "REGISTRATION_ENABLED", "REGISTRATION_INVITE_CODE", "OCR_MODE", "OCR_LOCAL_MODEL_DIR"}
+    "REGISTRATION_ENABLED", "REGISTRATION_INVITE_CODE", "OCR_MODE", "OCR_LOCAL_MODEL_DIR",
+    "WORKSPACE_AI_API_ENABLED", "WORKSPACE_AI_KEY_FILE", "WORKSPACE_AI_ALLOWED_ORIGINS"}
 
 
 def prepare(config: Path, data: Path):
@@ -75,8 +76,12 @@ def prepare(config: Path, data: Path):
     env['MARKET_PROVIDER'] = values.get('MARKET_PROVIDER') or 'public_composite'
     for key, default in {'TUSHARE_TOKEN':'', 'NEWS_RSS_URLS':'', 'MINUTE_BARS_ENABLED':'false',
                          'FTSHARE_ENABLED':'false', 'FTSHARE_QUALIFICATION':'unverified',
-                         'WORKSPACE_BRIDGE_ENABLED':'false', 'WORKSPACE_DAILY_REVIEW_ENABLED':'false'}.items():
+                         'WORKSPACE_BRIDGE_ENABLED':'false', 'WORKSPACE_DAILY_REVIEW_ENABLED':'false', 'WORKSPACE_DISCOVERY_ENABLED':'false',
+                         'WORKSPACE_AI_API_ENABLED':'false','WORKSPACE_AI_KEY_FILE':'',
+                         'WORKSPACE_AI_ALLOWED_ORIGINS':'https://api.openai.com,https://api.deepseek.com'}.items():
         env[key] = values.get(key) or default
+    if env['WORKSPACE_AI_API_ENABLED'] not in {'true','false'}:
+        raise ValueError('WORKSPACE_AI_API_ENABLED requires explicit true or false')
     env['OCR_LOCAL_MODEL_DIR']=str(model_dir) if model_dir else str(data/'ocr-models')
     # Model credentials/old machine tokens have no role in this launcher.
     for key in ('PRIVATE_ACCESS_TOKEN','OPENAI_API_KEY','ANTHROPIC_API_KEY','DEEPSEEK_API_KEY'):

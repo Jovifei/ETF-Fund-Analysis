@@ -16,6 +16,12 @@ def main():
     database = Path(settings.database_url.removeprefix('sqlite:///'))
     for suffix in ('','-journal','-wal','-shm'):
         database.with_name(database.name + suffix).unlink(missing_ok=True)
+    # Test-only master key, never a deployment credential; no model is invoked.
+    import os
+    if os.environ.get('WORKSPACE_AI_API_ENABLED') == 'true':
+        from app.workspace.ai_secrets import create_master,key_path,master
+        if not key_path().exists(): create_master(key_path())
+        master()
     init_db()
     with session_scope() as db:
         # Public disposable test credential, not a deployment default.
