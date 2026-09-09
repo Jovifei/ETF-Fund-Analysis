@@ -10,6 +10,24 @@ test('index cards open actual cached OHLC candles, not point history',async({pag
  await page.screenshot({path:info.outputPath('v103-index-history.png'),fullPage:true})
 })
 
+test('unsupported index cards do not offer the A-share download action', async ({page}) => {
+ await page.route('**/api/market-context', async route => {
+  const response = await route.fetch()
+  const payload = await response.json()
+  payload.latest_view = [...(payload.latest_view ?? []), {
+   context_id:'us-sp500', label:'S&P 500', context_kind:'index', observed_value:5000,
+   today_pct_change:0, source_timestamp:'2026-09-08', source:'mock', freshness:'stale',
+   is_tradable_proxy:false
+  }]
+  await route.fulfill({response, json:payload})
+ })
+ await page.goto('/')
+ const unsupported = page.locator('.market-context-card').filter({hasText:'S&P 500'}).first()
+ await unsupported.click()
+ await expect(page.locator('.market-context-detail')).toContainText('当前版本仅支持三个 A 股指数历史下载')
+ await expect(page.getByRole('button',{name:'下载指数历史'})).toHaveCount(0)
+})
+
 test('favorites work in catalog and original decision template without navigation',async({page,request},info)=>{
  const code='512480.SH';const before=(await(await request.get('/api/workspace/watchlist')).json()).items.find((r:any)=>r.ts_code===code)
  if(before)await request.delete('/api/watchlist/entries/'+before.id)

@@ -160,6 +160,21 @@ class MarketService:
                         if row is not None and row.quality_hash == content_hash:
                             counts["unchanged"] += 1
                             continue
+                        # A lower-quality Sina fallback may fill a new date, but
+                        # must not replace an overlapping current-contract row
+                        # whose volume is already verified. Preserve the whole
+                        # existing row; never merge fields across sources.
+                        if (
+                            row is not None
+                            and item.source == "akshare:sina:v101"
+                            and item.volume is None
+                            and row.source not in LEGACY_SOURCES
+                            and "mock" not in row.source.lower()
+                            and row.volume is not None
+                            and row.volume >= 0
+                        ):
+                            counts["unchanged"] += 1
+                            continue
                         if row is None:
                             row = DailyBar(instrument_id=instrument.id, trade_date=item.trade_date,
                                            adjust=item.adjust)

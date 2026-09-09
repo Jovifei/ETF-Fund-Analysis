@@ -10,6 +10,7 @@ from app.providers.types import BarRecord
 from app.models import MarketContextRegistry
 from app.workspace.models import WorkspacePreference
 from app.workspace import index_history
+from app.workspace.worker import bounded_step_summary
 
 
 def test_index_decoder_rejects_close_only_or_wrong_identity():
@@ -56,3 +57,18 @@ def test_cache_is_durable_idempotent_and_failure_preserves_history(db_session):
     cache.settings_json={**cache.settings_json,'data_hash':'a'*64};db.flush()
     assert index_history.read(db,settings,ident)['available'] is False
     db.rollback()
+
+
+def test_worker_keeps_only_bounded_sanitized_index_failures():
+    outcome = {
+        'status': 'partial',
+        'instruments': 2,
+        'requested': 3,
+        'failures': [
+            {'context_id': 'cn-csi-all', 'reason': 'CapabilityUnavailable', 'raw': 'token=do-not-store'},
+            {'context_id': 'BAD/ID', 'reason': 'ProviderError: secret=do-not-store'},
+        ],
+    }
+    summary = bounded_step_summary(outcome)
+    assert summary['failures'] == [{'context_id': 'cn-csi-all', 'reason': 'CapabilityUnavailable'}]
+    assert 'raw' not in summary

@@ -353,6 +353,55 @@ def test_price_only_history_can_be_repaired_when_full_volume_source_recovers(v10
     require_current_history(v101_db,settings)
 
 
+def test_price_only_fallback_does_not_downgrade_complete_history_and_can_recover(v101_db):
+    from app.models import DailyBar, Instrument
+    from app.providers.types import BarRecord
+    from app.services.market_service import MarketService
+    from sqlalchemy import select
+
+    inst = Instrument(ts_code='512480.SH', symbol='512480', name='测试ETF', enabled=True)
+    v101_db.add(inst); v101_db.flush()
+    complete_day, fresh_day = date(2026, 9, 4), date(2026, 9, 5)
+    v101_db.add(DailyBar(
+        instrument_id=inst.id, trade_date=complete_day, adjust='none', open=1, high=2, low=1, close=1.2,
+        volume=2000, amount=2400, source='akshare:em:v101', quality_hash='complete-old',
+    )); v101_db.flush()
+    current = {'mode': 'sina'}
+
+    def fetch(code, start, end):
+        if current['mode'] == 'sina':
+            return [
+                BarRecord(ts_code=code, trade_date=complete_day, open=1, high=2, low=1, close=1.25,
+                          volume=None, amount=None, source='akshare:sina:v101'),
+                BarRecord(ts_code=code, trade_date=fresh_day, open=1, high=2, low=1, close=1.3,
+                          volume=None, amount=None, source='akshare:sina:v101'),
+            ]
+        return [
+            BarRecord(ts_code=code, trade_date=complete_day, open=1, high=2, low=1, close=1.25,
+                      volume=2100, amount=2500, source='akshare:em:v101'),
+            BarRecord(ts_code=code, trade_date=fresh_day, open=1, high=2, low=1, close=1.3,
+                      volume=2200, amount=2600, source='akshare:em:v101'),
+        ]
+
+    settings = Settings(_env_file=None).model_copy(update={'market_provider': 'akshare'})
+    provider = SimpleNamespace(name='akshare', fetch_daily_bars=fetch)
+    service = MarketService(provider, settings)
+    first = service.refresh_daily_bars(v101_db, lookback_days=420)
+    rows = {row.trade_date: row for row in v101_db.scalars(select(DailyBar)).all()}
+    assert not first['failures'] and first['price_only'] == 1
+    assert rows[complete_day].source == 'akshare:em:v101' and rows[complete_day].volume == 2000
+    assert rows[complete_day].close == 1.2 and rows[complete_day].amount == 2400
+    assert rows[complete_day].quality_hash == 'complete-old'
+    assert rows[fresh_day].source == 'akshare:sina:v101' and rows[fresh_day].volume is None
+
+    current['mode'] = 'em'
+    second = service.refresh_daily_bars(v101_db, lookback_days=420)
+    rows = {row.trade_date: row for row in v101_db.scalars(select(DailyBar)).all()}
+    assert not second['failures']
+    assert all(rows[day].source == 'akshare:em:v101' for day in (complete_day, fresh_day))
+    assert rows[complete_day].volume == 2100 and rows[fresh_day].volume == 2200
+
+
 def test_worker_keeps_supervising_job_when_sqlite_heartbeat_is_busy(monkeypatch):
     from app.workspace import worker
     from sqlalchemy.exc import OperationalError

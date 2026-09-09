@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -36,6 +37,13 @@ from app.workspace.protocol import ResearchRequest
 
 logger = logging.getLogger(__name__)
 STOP = False
+
+_SUMMARY_SCALARS = frozenset({
+    "inserted", "updated", "unchanged", "instruments", "count", "status", "received",
+    "requested", "missing", "degraded", "realtime", "source_timestamp_verified",
+})
+_CONTEXT_ID = re.compile(r"^[a-z][a-z0-9-]{0,95}$")
+_FAILURE_REASON = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 
 
 def _stop(*_):
@@ -106,6 +114,29 @@ def outcome_state(outcome: dict) -> str:
     if any(outcome.get(key) for key in ("failures", "error", "errors", "failed_steps", "missing", "missing_codes", "skipped", "degraded", "price_only")):
         return "partial"
     return "succeeded"
+
+
+def bounded_step_summary(outcome: dict) -> dict:
+    """Project task results without retaining untrusted provider details."""
+    summary = {
+        key: value
+        for key, value in outcome.items()
+        if key in _SUMMARY_SCALARS and isinstance(value, (int, float, bool, str))
+    }
+    failures = outcome.get("failures")
+    if isinstance(failures, list):
+        safe_failures = []
+        for item in failures[:32]:
+            if not isinstance(item, dict):
+                continue
+            context_id = item.get("context_id")
+            if not isinstance(context_id, str) or not _CONTEXT_ID.fullmatch(context_id):
+                continue
+            reason = item.get("reason")
+            safe_reason = reason if isinstance(reason, str) and _FAILURE_REASON.fullmatch(reason) else "ProviderError"
+            safe_failures.append({"context_id": context_id, "reason": safe_reason})
+        summary["failures"] = safe_failures
+    return summary
 
 
 def task_sequence(kind: str, codes: list[str], lookback: int) -> list[tuple[str, dict]]:
@@ -196,7 +227,7 @@ def execute(job_id: str) -> int:
                     outcome = tasks.run(db, task_name, **kwargs)
                 state = outcome_state(outcome)
                 partial = state != "succeeded"
-                summary = {key: value for key, value in outcome.items() if key in {"inserted", "updated", "unchanged", "instruments", "count", "status", "received", "requested", "missing", "degraded", "realtime", "source_timestamp_verified"} and isinstance(value, (int, float, bool, str))}
+                summary = bounded_step_summary(outcome)
                 steps.append({"task": task_name, "status": state, "summary": summary})
                 failed |= partial
             except Exception as exc:
