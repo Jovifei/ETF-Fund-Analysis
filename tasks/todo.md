@@ -683,3 +683,18 @@ Allowed code scope: MarketService history upsert, worker summary, Overview index
 - [x] Obsidian 项目目录 `03-项目记忆/etf-fund-analysis` 已创建，包含概览、工程关系、当前进度、关键决策和工作流 5 份笔记。
 - [x] `invoke-mirror.ps1` 在新鲜 DryRun 后成功 Apply，状态为 `MEMORY_UPDATED`，镜像根目录为 `05-工程文档`，状态文件已写入本机 memory state。
 - [x] 初次 checkpoint wrapper 的 expected-plan 冲突没有产生部分写入；随后按 Jovi 的明确授权执行有界 Apply，并完成独立复核。
+
+## 深化项目知识库 — 2026-09-09
+- [x] 盘点当前主线的产品边界、目录、运行组件、数据流、用户路由和版本演进事实。
+- [x] 盘点已完成能力、验证证据、部署状态、未完成门禁和明确不能宣称的内容。
+- [x] 盘点技术路线与可复用工程经验，区分当前运行事实、研究候选和未来路线。
+- [x] 整理开源仓库/公开项目借鉴清单，记录 revision、许可证、借鉴点、实际落点和隔离边界。
+- [x] 新增详细仓库知识文档，并更新 `docs/README.md` 导航。
+- [x] 扩展 Obsidian 项目记忆为分主题知识库，写入工程关系、技术路线、完成项、验证/部署、开源借鉴和可复用经验。
+- [x] 运行 checkpoint/mirror DryRun 与 Apply，完成 `load-memory.ps1`、`verify-memory.ps1`、Git 状态和远端提交复核。
+
+### 深化结果
+- 新增 `PROJECT_KNOWLEDGE_BASE_V103.md`、`TECHNICAL_ROUTE_V103.md`、`COMPLETION_AND_EVIDENCE_MATRIX_V103.md`、`OPEN_SOURCE_ADOPTION_REGISTER_V103.md` 四份长期知识文档。
+- Obsidian 五个核心槽位已扩展为详细的项目概览、工程关系、当前进度、关键决策和可复用工作流；官方 checkpoint wrapper 返回 `MEMORY_UPDATED`。
+- 文档镜像新鲜 DryRun 发现 6 个变更，官方 mirror wrapper 返回 `MEMORY_UPDATED`；目标目录为项目记忆下的 `05-工程文档`。
+- 本轮只修改文档与任务台账，没有修改业务代码、生产数据库、用户账户或原始脏工作树。

@@ -1,7 +1,7 @@
 # ETF-Fund-Analysis：项目制造过程与文档地图（v1.0.3）
 
 更新时间：2026-09-09  
-当前主线合并提交：`a158e674a1566b14b9dc2383a7b2f6bcd4cde1ad`  
+当前主线合并提交：`a158e674a1566b14b9dc2383a7b2f6bcd4cde1ad`；知识文档最新提交：`eccacdc1312740d1842c5e20d6ccbeb36be8bfe5`
 当前服务器应用提交：`c60a15788d5206a407fc6d8a4238137a9ee19b80`
 
 ## 这是什么项目
@@ -83,6 +83,10 @@ API、worker 和数据库必须使用同一版本合同。GET 页面只读取缓
 | `docs/OSS_APPLIED_V103.md` | 外部开源项目如何吸收以及未部署范围 | 开源落点 |
 | `docs/ALIYUN_DEPLOYMENT.md` | ECS、Compose、备份、反代和更新 | 通用部署手册 |
 | `docs/PROJECT_BUILD_AND_DOCUMENTATION_V103.md` | 本文：制造链路、证据层和文档地图 | 项目知识入口 |
+| `docs/PROJECT_KNOWLEDGE_BASE_V103.md` | 深化后的项目知识库总览 | 产品、系统、路线和长期接力 |
+| `docs/TECHNICAL_ROUTE_V103.md` | 端到端技术路线 | 请求、任务、缓存、计算、部署 |
+| `docs/COMPLETION_AND_EVIDENCE_MATRIX_V103.md` | 完成项与证据矩阵 | 已完成、部分通过、未通过 |
+| `docs/OPEN_SOURCE_ADOPTION_REGISTER_V103.md` | 开源借鉴登记册 | revision、许可证、落点与隔离 |
 | `docs/archive/pre-v103/` | v1.0.1 及更早时期原文 | 历史，不覆盖当前事实 |
 
 `docs/PRIVATE_REMOTE_DEPLOYMENT.md` 属于本机忽略的运维材料，不应提交、镜像或复制到 Obsidian；`.env`、Token、Cookie、密码、数据库 URI 和原始日志同样不进入知识文档。

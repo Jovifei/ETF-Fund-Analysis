@@ -1,6 +1,6 @@
 # 文档入口：v1.0.3 分支交付
 
-这是开发代码与接收文档入口，不是生产升级声明。基线204a31c；分支fix/v103-history-research-20260909，main未合并。
+这是开发代码与接收文档入口，不是生产升级声明。基线204a31c；v1.0.3 修复已合并到主线，当前主线知识文档提交为 `eccacdc`，服务器运行应用仍以 `c60a157` 收据为准。
 
 ## 当前实现与验收
 
@@ -10,6 +10,10 @@
 4. [历史展示与存储合同](HISTORY_STORAGE_V103.md)：已有K线不依赖新报价，逐标的门禁，归档不是自动同步。
 5. [开源吸收落点](OSS_APPLIED_V103.md)：用户选定项目、源码位置、本项目对应文件与未部署边界。
 6. [项目制造过程与文档地图](PROJECT_BUILD_AND_DOCUMENTATION_V103.md)：从需求、实现、接收、真实源试跑到部署合并的证据链，以及各文档的阅读顺序。
+7. [项目知识库总览](PROJECT_KNOWLEDGE_BASE_V103.md)：项目目标、制造过程、系统全貌、技术路线、完成能力和下一阶段。
+8. [技术路线与工程关系](TECHNICAL_ROUTE_V103.md)：浏览器、API、Provider、worker、数据库、指标、OCR、Bridge 和部署之间的调用关系。
+9. [完成项与证据矩阵](COMPLETION_AND_EVIDENCE_MATRIX_V103.md)：区分源码、隔离测试、真实公共源、生产现场和最终资格证据。
+10. [开源借鉴登记册](OPEN_SOURCE_ADOPTION_REGISTER_V103.md)：固定 revision、许可证、借鉴点、实际落点和隔离边界。
 
 固定接收SHA以最终交付Prompt/PR为准，不能把中间传输材料提交当成可部署应用。根AGENTS.md仍是安全合同。原WorkBuddy模板在总览中保留；预测期限仍1/3/5/10，不因应用升版而自动calibrated。
 
