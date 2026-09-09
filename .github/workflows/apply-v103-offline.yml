@@ -1,0 +1,51 @@
+name: apply-reviewed-v103-offline
+on:
+  push:
+    branches: [fix/v103-history-research-20260909]
+    paths: ['.github/workflows/apply-v103-offline.yml']
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.repository == 'Jovifei/ETF-Fund-Analysis' && github.ref == 'refs/heads/fix/v103-history-research-20260909'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply two exact reviewed offline contracts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+          digest=lambda s:hashlib.sha256(s.encode('utf-8')).hexdigest()
+          p=Path('backend/app/workspace/worker.py')
+          text=p.read_bytes().decode('utf-8')
+          assert digest(text)=='c6c965d4c825caa9a99150624c9fd64df574a9827a678058a8a6b6401d3dc127'
+          text=text.replace('        tasks = TaskService(settings)\n        kind = request["task"]\n', '        kind = request["task"]\n        from app.workspace.offline_tasks import CacheOnlyTaskService\n        tasks = CacheOnlyTaskService(settings) if kind in {"recompute", "factors"} else TaskService(settings)\n')
+          assert digest(text)=='980b6d299fbb32e23f41dd4edce81d61aad393a9bf4ec83b9460e235900a3ebc'
+          p.write_bytes(text.encode('utf-8'))
+          p=Path('backend/app/services/task_service.py')
+          text=p.read_bytes().decode('utf-8')
+          assert digest(text)=='3c3bce0dd238da3caf562387c9be60ffcd546de84f960c48e1c80c70b989dd90'
+          text=text.replace('            from app.workspace.index_history import refresh\n            return refresh', '            from app.workspace.index_history import refresh\n            self.market_context.sync_registry(db, run_id=run_id)\n            return refresh')
+          assert digest(text)=='eac0e235b3c8ddfd944060cfa2b3e695b36bbd609445a1c6a25b3eebb11c2675'
+          p.write_bytes(text.encode('utf-8'))
+          PY
+      - name: Verify offline and first-run behavior
+        run: |
+          pip install -e '.[dev]'
+          pytest backend/tests/test_v103_offline.py backend/tests/test_release_version.py backend/tests/test_v103_history.py -q
+          python -m compileall -q backend/app
+          git diff --check
+      - name: Commit application changes only
+        run: |
+          git add backend/app/workspace/worker.py backend/app/services/task_service.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: run cached diagnostics without credentials and initialize index history registry'
+          git push origin HEAD:refs/heads/fix/v103-history-research-20260909
