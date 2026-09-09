@@ -71,13 +71,17 @@ def sync_catalog(db, provider, *, enable_codes=()):
         row = known.get(record.ts_code)
         if row is None:
             theme, subtheme = classify_theme(record.name)
-            row = Instrument(ts_code=record.ts_code, symbol=record.symbol, name=record.name, kind=record.kind, exchange=record.exchange, theme_l1=record.theme_l1 or theme, theme_l2=record.theme_l2 or subtheme, enabled=False, metadata_json={**(record.metadata or {}), "catalog_only": True})
+            row = Instrument(ts_code=record.ts_code, symbol=record.symbol, name=record.name, kind=record.kind, exchange=record.exchange, theme_l1=record.theme_l1 or theme, theme_l2=record.theme_l2 or subtheme, enabled=False, benchmark=record.benchmark or (record.metadata or {}).get('index_name'), metadata_json={**(record.metadata or {}), "catalog_only": True})
             db.add(row)
             known[row.ts_code] = row
             created += 1
         elif row.kind == record.kind:
             row.name = record.name
-            row.metadata_json = {**(row.metadata_json or {}), **(record.metadata or {})}
+            row.metadata_json = {**(row.metadata_json or {}), **{k:v for k,v in (record.metadata or {}).items() if v is not None and v != ""}}
+            if record.metadata.get("index_name") and not row.benchmark:
+                row.benchmark = record.metadata["index_name"]
+            if row.theme_l2 in (None,"其他"):
+                row.theme_l1, row.theme_l2 = classify_theme(record.name)
             updated += 1
     if any(known[code].kind not in {"ETF", "LOF"} for code in wanted & known.keys()):
         raise ValueError("only ETF/LOF can enter workspace research pool")
@@ -141,7 +145,7 @@ def bounded_step_summary(outcome: dict) -> dict:
 
 def task_sequence(kind: str, codes: list[str], lookback: int) -> list[tuple[str, dict]]:
     """Independent capabilities: slow catalogs/news cannot delay price publication."""
-    if kind in {"prices", "refresh", "onboard"}:
+    if kind in {"prices", "refresh", "onboard", "prepare_history"}:
         seq = [("refresh_bars", {"lookback_days": lookback, "codes": codes or None}),
                ("refresh_indicators", {}), ("refresh_forecasts", {}),
                ("refresh_quotes", {"codes": codes or None}), ("refresh_signals", {}),
@@ -189,10 +193,10 @@ def execute(job_id: str) -> int:
                 if db.scalar(select(Instrument.id).where(Instrument.enabled.is_(True)).limit(1)) is None:
                     from app.workspace.data_seed import seed_configured_universe
                     seed_configured_universe(db, settings)
-        if kind in {"catalog", "onboard"}:
+        if kind in {"catalog", "onboard", "prepare_history"}:
             try:
                 with session_scope() as db:
-                    outcome = sync_catalog(db, tasks.provider, enable_codes=request.get("codes", []) if kind == "onboard" else ())
+                    outcome = sync_catalog(db, tasks.provider, enable_codes=request.get("codes", []) if kind in {"onboard", "prepare_history"} else ())
                     if kind == "onboard":
                         for code in request["codes"]:
                             WatchlistService(settings).add(db, code=code, user_id=owner_id)
@@ -201,7 +205,7 @@ def execute(job_id: str) -> int:
             except Exception as exc:
                 steps.append({"task": "catalog", "status": "failed", "reason": type(exc).__name__})
                 failed = True
-                if kind == "onboard":
+                if kind in {"onboard", "prepare_history"}:
                     raise
         if kind == "catalog":
             sequence = []

@@ -7,6 +7,8 @@ bounded SDK and composite trace; fallback does not imply complete coverage.
 from __future__ import annotations
 
 import re
+from app.providers.bounded_sdk import first
+from app.utils.numbers import finite_or_none
 from app.providers.base import CapabilityUnavailable, ProviderError
 from app.providers.types import InstrumentRecord
 
@@ -47,7 +49,7 @@ def _composite_catalog(provider):
             if kind not in coverage or detail.get('source'):
                 coverage[kind] = detail
         result = CatalogRows(sorted(selected.values(), key=lambda row: row.ts_code), coverage=dict(coverage))
-        if not getattr(rows, 'coverage', {}) or (rows.coverage.get('ETF') or {}).get('source'):
+        if not getattr(rows, 'coverage', {}) or ((rows.coverage.get('ETF') or {}).get('source') and (rows.coverage.get('ETF') or {}).get('status') != 'small_sample'):
             return result
         # A few names containing ETF are not a category catalog. Preserve the
         # useful rows, but continue the existing audited provider fallback.
@@ -78,20 +80,24 @@ def catalog_records(provider) -> list[InstrumentRecord]:
     if name == 'akshare':
         for kind, primary, category in [('ETF','fund_etf_spot_em','ETF基金'),('LOF','fund_lof_spot_em','LOF基金')]:
             errors = []
-            for function, params in [(primary,{}),('fund_etf_category_sina',{'symbol':category})]:
+            for function, params in [(primary,{}),('fund_etf_category_sina',{'symbol':category}),('fund_etf_category_ths',{'symbol':kind,'date':''})]:
                 try:
                     rows = provider._records(getattr(provider.ak,function)(**params))
-                    parsed = [_record(row.get('代码') or row.get('基金代码'), row.get('名称') or row.get('基金简称'), kind, f'akshare:{function}') for row in rows]
+                    parsed = [_record(first(row,'代码','基金代码'), first(row,'名称','基金简称','基金名称','name'), kind, f'akshare:{function}', market_cap_cny=finite_or_none(row.get('总市值')), turnover_cny=finite_or_none(row.get('成交额')), catalog_as_of=str(first(row,'数据日期','最新-交易日','查询日期') or ''), scale_basis='market_cap_not_NAV_AUM') for row in rows]
                     parsed = [row for row in parsed if row is not None]
                     if not parsed:
                         raise ProviderError('empty_catalog_category')
                     result.extend(parsed)
-                    coverage[kind] = {'source':f'akshare:{function}', 'count':len(parsed), 'fallback':function!=primary}
-                    break
+                    coverage[kind] = {'source':f'akshare:{function}', 'count':len(parsed), 'fallback':function!=primary, 'status':'observed' if len(parsed)>=(100 if kind=='ETF' else 25) else 'small_sample', 'attempt_errors':list(errors)}
+                    if len(parsed)>=(100 if kind=='ETF' else 25):
+                        break
                 except Exception as exc:
                     errors.append(type(exc).__name__)
             else:
-                coverage[kind] = {'source':None, 'count':0, 'errors':errors}
+                if kind not in coverage:
+                    coverage[kind] = {'source':None, 'count':0, 'errors':errors}
+                else:
+                    coverage[kind]['attempt_errors'] = errors
     elif name == 'tushare':
         # Dedicated endpoint includes funds whose short names contain no "ETF".
         try:
@@ -125,7 +131,15 @@ def catalog_records(provider) -> list[InstrumentRecord]:
         raise ProviderError('ETF catalog exceeds safety bound')
     seen = {}
     for row in result:
-        if row.ts_code in seen and (seen[row.ts_code].name,seen[row.ts_code].kind) != (row.name,row.kind):
-            raise ProviderError('ETF catalog contains conflicting identities')
+        if row.ts_code in seen:
+            if seen[row.ts_code].kind != row.kind:
+                raise ProviderError('ETF catalog contains conflicting identities')
+            # Same exchange code, different provider short names: retain first
+            # identity plus aliases. A spelling difference must not lose a catalog.
+            existing=seen[row.ts_code]
+            aliases=set(existing.metadata.get('name_aliases', []))
+            aliases.add(row.name)
+            existing.metadata['name_aliases']=sorted(aliases)[:8]
+            continue
         seen[row.ts_code] = row
     return CatalogRows(sorted(seen.values(),key=lambda item:item.ts_code), coverage=coverage)

@@ -21,9 +21,9 @@ User = Annotated[AuthUser | None, Depends(optional_current_user)]
 
 
 @private_router.get("/search/instruments")
-def search(db: DB, settings: Config, user: User, response: Response, q: str = Query(default="", max_length=64), limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0, le=10000)) -> dict:
+def search(db: DB, settings: Config, user: User, response: Response, q: str = Query(default="", max_length=64), limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0, le=10000), sort: Literal["relevance","scale","turnover"] = "relevance", min_scale: float = Query(default=0, ge=0, le=1e13), include_unknown: bool = True) -> dict:
     response.headers["Cache-Control"] = "private, no-store"
-    return read_model.search_instruments(db, settings, q, limit, user.id if user else None, offset=offset)
+    return read_model.search_instruments(db, settings, q, limit, user.id if user else None, offset=offset, sort=sort, min_scale=min_scale, include_unknown=include_unknown)
 
 
 @private_router.get("/workspace/overview")
@@ -124,6 +124,16 @@ def index_chart(context_id: str, db: DB, settings: Config, user: User,
         raise HTTPException(404, "index not registered")
     return result
 
+
+@private_router.get("/workspace/storage")
+def storage_status(db: DB, settings: Config, admin: Annotated[AuthUser | None, Depends(require_admin)]):
+    from app.workspace.storage import status
+    return status(db,settings)
+
+@private_router.get("/workspace/catalog-preparation")
+def history_preparation(db: DB, admin: Annotated[AuthUser | None, Depends(require_admin)], limit: int=Query(default=10,ge=1,le=30), minimum_scale: float=Query(default=0,ge=0,le=1e13), include_unknown: bool=True):
+    from app.workspace.storage import prepare_plan
+    return prepare_plan(db,limit=limit,minimum_scale=minimum_scale,include_unknown=include_unknown)
 
 # Include after all decorators: FastAPI copies routes at include time.
 router.include_router(private_router)
