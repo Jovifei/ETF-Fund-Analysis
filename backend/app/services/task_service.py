@@ -232,7 +232,7 @@ class TaskService:
 
     def _execute(self, db: Session, task_name: str, run_id: str, **kwargs) -> dict:
         self._bind_runtime_provider(db)
-        if task_name in {"refresh_indicators", "refresh_forecasts", "refresh_signals", "refresh_decision_board", "validate_forecasts", "calibrate_forecasts", "backtest_rotation", "backtest_ablation", "analyze_factors"}:
+        if task_name in {"validate_forecasts", "calibrate_forecasts", "backtest_rotation", "backtest_ablation", "analyze_factors"}:
             from app.providers.data_contract import require_current_history
             require_current_history(db, self.settings)
         if task_name == "sync_instruments":

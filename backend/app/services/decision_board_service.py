@@ -405,7 +405,19 @@ class DecisionBoardService:
 
     def _row(self, db: Session, generated_at: datetime, instrument, grade_row, indicator, previous_values, quote, forecasts, provisional) -> dict:
         grade_row = grade_row or {}
-        values = dict(indicator.values_json or {}) if indicator is not None else {}
+        from app.providers.data_contract import history_issues
+        blocked = history_issues(db, self.settings, [instrument.id]).get(instrument.id)
+        display_history = None
+        if blocked or indicator is None:
+            from app.workspace.read_model import chart_data
+            display_history = chart_data(db, self.settings, instrument.ts_code, "1d", 60)
+            indicator, forecasts, provisional = None, {}, None
+            bars = (display_history or {}).get("bars") or []
+            price_values = dict(bars[-1]["indicators"]) if bars else {}
+            grade_row = classify_row(price_values, pct_change=None, previous=None,
+                                     cfg=SignalGradeService(self.settings).config)
+            grade_row.update(grade="数据异常", grade_reason="历史价格展示；完整量价/指标资格尚未通过，不生成当前动作")
+        values = dict(indicator.values_json or {}) if indicator is not None else (price_values if display_history else {})
         freshness, data_status = self._status(indicator, quote, generated_at)
         source_verified = bool(quote and quote.timestamp_verified and quote.is_realtime and not quote.degraded_reason)
         provisional_status = self._provisional_status(db, instrument.id, provisional, generated_at)
@@ -427,6 +439,12 @@ class DecisionBoardService:
             }
             freshness, data_status = "stale", "provisional_unverified_research_only" if not provisional.timestamp_verified else "provisional_research_only"
         history, confirmed_levels = self._history_and_levels(db, instrument.id)
+        if display_history:
+            history = [{**bar, "is_forecast": False} for bar in display_history.get("bars", [])]
+            confirmed_levels = {}
+            freshness, data_status = "stale", "historical_price_only"
+            if quote is None and len(history) >= 2:
+                today_return = history[-1]["close"] / history[-2]["close"] - 1
         if provisional_status["used_for_derived_values"]:
             history = [
                 *history,
@@ -513,7 +531,8 @@ class DecisionBoardService:
             "sector": metric(grade_row.get("sector"), {"label": "未验证 / 不可用", "status": "missing", "coverage_count": 0}),
             "indicator": {
                 "version": indicator.version if indicator is not None else None,
-                "as_of_date": indicator.as_of_date.isoformat() if indicator is not None else None,
+                "as_of_date": indicator.as_of_date.isoformat() if indicator is not None else (display_history or {}).get("source_as_of"),
+                "display_basis": "historical_price_only" if display_history else "persisted_snapshot",
                 "data_quality": indicator.data_quality if indicator is not None else None,
                 "td_label": (grade_row.get("td") or {}).get("label", "—"),
                 "td_basis": "TD9 setup only; TD13 not implemented",
