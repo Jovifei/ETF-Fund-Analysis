@@ -15,3 +15,4 @@
 - 2026-09-09: Provider audit source labels are bounded data, not free-form endpoint names; keep them under the database field limit or a valid source will be rejected after retrieval.
 - 2026-09-09: Shared-signal completeness and research diagnostics are separate gates; allow current-contract price-only data into price-factor diagnostics, but preserve null volume coverage and never promote the result.
 - 2026-09-09: PaddleOCR 3.x local models need manifest-listed model names, ndarray input, and Windows oneDNN disabled; keep all decoding inside the bounded child and retain timeout cleanup.
+- 2026-09-09: 项目知识库不能只写接力摘要；当项目包含多轮版本、部署、真实源、研究资格和开源借鉴时，必须把产品边界、工程关系、技术路线、完成/未完成证据、可复用经验和 revision/许可证/实际落点分主题记录，并同步到仓库 docs 与 Obsidian 五个核心槽位。
