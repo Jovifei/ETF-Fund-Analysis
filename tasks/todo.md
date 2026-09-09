@@ -674,11 +674,12 @@ Allowed code scope: MarketService history upsert, worker summary, Overview index
 ## 项目知识文档与 Obsidian 同步 — 2026-09-09
 - [x] 新增项目制造过程与文档地图，覆盖当前实现、证据边界、部署回滚和未完成资格。
 - [x] 更新 `docs/README.md` 导航并校验相对链接。
-- [ ] 用 codex-memory checkpoint DryRun 生成持久知识；若项目槽位未映射，保持 `MEMORY_SYNC_BLOCKED`，不创建错误 Vault 项目。
-- [ ] 文档通过源文件/提交/测试/运行收据核对后，执行文档镜像 DryRun；只有 wrapper 返回成功才声称 Obsidian 已更新。
+- [x] 用 codex-memory checkpoint DryRun 生成持久知识；五个槽位的目标哈希可复现且不含敏感内容。
+- [x] Jovi 授权创建项目记忆目录后，执行有界 checkpoint Apply，写入 5 份项目知识笔记；`load-memory.ps1` 与 `verify-memory.ps1` 均返回 `PASS`。
+- [x] 文档通过源文件/提交/测试/运行收据核对后，执行文档镜像 DryRun；官方 mirror wrapper 返回 `MEMORY_UPDATED`，复制 78 个 Markdown 文件。
 
 ### 文档/记忆复核结果
 - [x] 仓库知识文档提交 `5d8d12a` 已推送到远端 `main`。
-- [x] checkpoint DryRun 计划稳定，五个槽位无敏感内容，目标哈希可复现。
-- [x] `invoke-checkpoint.ps1` Apply 按技能要求执行，但因 wrapper 的 expected-plan 校验返回 `MEMORY_SYNC_BLOCKED`；没有写入任何 Obsidian 文件。
-- [ ] Obsidian checkpoint 和文档镜像等待 memory wrapper 兼容性修复或显式项目映射；不得绕过 no-argument wrapper。
+- [x] Obsidian 项目目录 `03-项目记忆/etf-fund-analysis` 已创建，包含概览、工程关系、当前进度、关键决策和工作流 5 份笔记。
+- [x] `invoke-mirror.ps1` 在新鲜 DryRun 后成功 Apply，状态为 `MEMORY_UPDATED`，镜像根目录为 `05-工程文档`，状态文件已写入本机 memory state。
+- [x] 初次 checkpoint wrapper 的 expected-plan 冲突没有产生部分写入；随后按 Jovi 的明确授权执行有界 Apply，并完成独立复核。
