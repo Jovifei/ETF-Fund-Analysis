@@ -676,3 +676,9 @@ Allowed code scope: MarketService history upsert, worker summary, Overview index
 - [x] 更新 `docs/README.md` 导航并校验相对链接。
 - [ ] 用 codex-memory checkpoint DryRun 生成持久知识；若项目槽位未映射，保持 `MEMORY_SYNC_BLOCKED`，不创建错误 Vault 项目。
 - [ ] 文档通过源文件/提交/测试/运行收据核对后，执行文档镜像 DryRun；只有 wrapper 返回成功才声称 Obsidian 已更新。
+
+### 文档/记忆复核结果
+- [x] 仓库知识文档提交 `5d8d12a` 已推送到远端 `main`。
+- [x] checkpoint DryRun 计划稳定，五个槽位无敏感内容，目标哈希可复现。
+- [x] `invoke-checkpoint.ps1` Apply 按技能要求执行，但因 wrapper 的 expected-plan 校验返回 `MEMORY_SYNC_BLOCKED`；没有写入任何 Obsidian 文件。
+- [ ] Obsidian checkpoint 和文档镜像等待 memory wrapper 兼容性修复或显式项目映射；不得绕过 no-argument wrapper。
