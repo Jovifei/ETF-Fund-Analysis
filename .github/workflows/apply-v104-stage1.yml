@@ -2,7 +2,7 @@ name: apply-reviewed-v104-stage1
 on:
   push:
     branches: [feat/v104-market-workspace-20260909]
-    paths: ['.integration/v104-stage1.b64']
+    paths: ['.integration/v104-stage1/**']
 permissions:
   contents: write
 jobs:
@@ -20,10 +20,12 @@ jobs:
       - name: Apply reviewed bounded catalog patch
         run: |
           python - <<'PY'
-          import base64,gzip,hashlib,pathlib,subprocess
-          raw=pathlib.Path('.integration/v104-stage1.b64').read_text().strip()
-          assert len(raw)<100000
-          patch=gzip.decompress(base64.b64decode(raw,validate=True))
+          import base64,lzma,hashlib,pathlib,subprocess
+          folder=pathlib.Path('.integration/v104-stage1')
+          files=sorted(folder.glob('*.txt'));assert len(files)==5
+          raw=''.join(p.read_text().strip() for p in files)
+          assert len(raw)==12204
+          patch=lzma.decompress(base64.b64decode(raw,validate=True))
           assert len(patch)==32058
           assert hashlib.sha256(patch).hexdigest()=='9523d0aed320ec00886f3dfe13ebc6e32ffdb03ac281cc2f70c96b74ef6693ab'
           target=pathlib.Path('/tmp/v104-stage1.patch');target.write_bytes(patch)
@@ -39,7 +41,7 @@ jobs:
       - name: Commit reviewed application paths
         run: |
           git add config/sector_search_aliases.json backend/app/workspace backend/app/providers/catalog.py backend/tests/test_v104_discovery.py
-          git rm .integration/v104-stage1.b64
+          git rm -r .integration/v104-stage1
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'fix(v104): relate sector names to ETF catalog and expose bounded discovery status'
