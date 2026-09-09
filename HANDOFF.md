@@ -1,35 +1,25 @@
-# 接手入口：v1.0.1
+# 接手入口：v1.0.3
 
-先读 AGENTS.md、STATUS.md、docs/versions/V1.0.1.md、docs/DATA_ACCESS_V101.md、docs/VALIDATION_V101.md。
+读取AGENTS.md、STATUS.md、docs/README.md、docs/versions/V1.0.3.md和docs/LOCAL_ACCEPTANCE_V103.md。按固定应用提交接收，不从旧main重做或混用旧ZIP。
 
-1. 基线9a0ca181属于codex/v1.0.0，核对时尚未合并main。不要从旧main覆盖新工作站；不要混用PR26/27/28的未完历史头。
-2. 五档 current action、1/3/5/10 forecast、服务端确定性指标不变；数据单位变动有独立契约版本并进入config_hash。
-3. 不读取/回显/复制凭据，不从Git历史恢复Tushare Token，不用LLM取数/算指标/下单。仅本人私有环境配置。
-4. 更新真实数据先修复旧单位历史；没有完整覆盖不混合重算。GET只读，慢采集在有界单worker中执行。
-5. 界面已经审核：保留Vue壳，新增matrix及原版入口；没有图1新附件时不能自称像素对照通过。
-6. demo是临时Mock；live是真实provider+持久数据+认证+127.0.0.1，生产由独立Docker/PostgreSQL/TLS配置验收。不要把Git标签/CI当作用户机器部署证据。
+## 必须保持
 
-修改后跑pytest、compileall、Vue19+新增用例、typecheck/build、原JS单测、Alembic、secret scan和标准Playwright。最终云端完整证据见docs/VALIDATION_V101.md，不能从历史数字抄写。
+原版ETF决策快照嵌在市场总览，不替换成简表或另一主页。左栏/搜索/账户只有一套；原表、目录、详情的收藏使用同一自选服务，退出清空用户状态。
 
-## 浏览器认证与持久数据库
+有历史OHLC即允许独立展示，缺实时价格不能让整图空白。历史价格指标与量价/预测/当前动作资格分开。坏标的不阻断其他标的，坏单位不偷偷换算。盘中研究数据有独立时间依据，不能在历史回退时误清。
 
-正式部署维持 `AUTH_ENABLED=true`、`DATABASE_URL=<PostgreSQL URL>`、`AUTO_CREATE_SCHEMA=false`、`AUTH_COOKIE_SECURE=true`。
-数据库备份与 Alembic 完成后，在部署主机交互运行 `fund-decision auth-bootstrap-admin`。
-HttpOnly / SameSite Cookie + CSRF 是浏览器认证权威；不得在 localStorage 保存令牌或恢复旧 Bearer 登录路径。
-仅 `scripts/run_workspace_live.py` 的认证回环 HTTP 使用 `AUTH_COOKIE_SECURE=false`；它不是公网生产配置。
+指数缓存来自真实OHLC适配，不是ETF代理或点值复制；三指数首轮任务会初始化注册表。显式下载任务才取数；GET和recompute/factors不实例化外部SDK。未下载过的目录标的有历史补齐按钮，不制造数据。
 
-## 本次接收复验（2026-09-07）
+## 本地接收任务
 
-ZIP `EA1F2CDB8629C3E9598D1626A59FDDD03A5248E51F0D02CF22BB033B14334F49` 与预期一致；从 `9a0ca181` 建立 `codex/v1.0.1-data-access` 并移植 1.0.1 包。Windows 全量 pytest 为 812 收集、0 失败、5 个权限/外部 PostgreSQL 条件跳过；新增专题 28 通过；前端 19、Playwright 5、PostgreSQL 6、Docker 镜像 smoke 通过。Matrix 表头和浏览器 fixture 的两个必要修复已包含在工作树。
+保留原工程脏区、外部私有配置、原账户与持久库。在独立worktree/clone，先备份并在副本迁移，再测试。pytest临时库不得连真实数据；后端串行避免共享fixture冲突。
 
-## 生产部署前快照（已完成）
+按LOCAL_ACCEPTANCE_V103的L1–L5完成真实ETF与指数下载/重启缓存、原模板/收藏/图表、可选OCR、本人Codex或Vibe单次研究、手动复盘与因子诊断。不能用Mock或者健康心跳冒充真实接通。
 
-远端只读盘点当时显示生产为 0.8.0 根 Compose、API 8080 与旧 scheduler，迁移头 `c2d3e4f5a6b7`；生产备份已由既有脚本完成并通过 SHA256/0600 校验。以下“尚未切换”只描述该时点；最终状态见下一节。未读取 `.env`、Token、Cookie、密码、持仓或备份内容。
+API/worker同代码同库，重新构建Vue，不让旧挂载遮住新产物。现有管理员不重置。用户授权范围是本地部署；生产、合并main、改标签必须另行批准。
 
-## 生产部署完成（2026-09-07）
+## 明确未完成
 
-上述段落是部署前快照。其后已完成：从备份恢复到隔离 PostgreSQL 并迁移到 `d40609090002`；提交 `224b59f` 推送到 `codex/v1.0.1-data-access`，`ci` 与 `workspace-ci` 成功；目标镜像 `etf-workspace:v1.0.1-20260907` 已加载。
+网站直接API Key安全存储、行情包可信导入/自动双向同步、一个月预测、自动训练/上线参数均未实现。Vibe试部署器和报告导入既有，本轮补引导，尚无本人真实登录/研究产物。q code具体产品未知，不宣称适配。可选环境阻塞记录清楚，不降低门禁。
 
-正式站点当前由 `deploy/compose.v101.production.yml` 运行 v1.0.1 API 与单 worker，内部/HTTPS health 均为 200，旧 API 与旧 scheduler 停止，Nginx 未重载。Provider 采用 `public_composite` 且 `ALLOW_MOCK_FALLBACK=false`；AKShare Sina 日线缺量、Tushare 权限探测未通过，故新衍生信号仍 fail-closed。不得把这些降级数据写成完整实时或 calibrated 资格。
-
-生产备份和配置归档保留在服务器 `backups/v101-predeploy-20260907/`；不要读取或回显其内容。回滚优先停止 v1.0.1 API/worker、恢复旧 API/scheduler，然后按备份与迁移审计决定是否恢复数据库；不要直接执行 `volume *= 100` 或删除旧报告。
+历史原HANDOFF完整保存在docs/archive/pre-v103/HANDOFF.md；它的生产部署数字和时间仅是当时记录。新验证以docs/VALIDATION_V103.md及固定提交CI为准。
