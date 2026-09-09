@@ -171,6 +171,11 @@ async def require_private_access(
     if supplied and settings.legacy_bearer_configured and hmac.compare_digest(supplied, settings.private_access_token):
         if request.method in _UNSAFE_METHODS:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="database user session required")
+        from app.workspace.memberships import path_feature, policy
+        feature = path_feature(request.url.path)
+        cfg = policy(db)
+        if feature and cfg["enabled"] and feature in cfg["plus_features"]:
+            raise HTTPException(status_code=401, detail="database user session required")
         request.state.auth_via_session = False
         request.state.auth_user = None
         return
@@ -181,6 +186,13 @@ async def require_private_access(
             csrf_cookie = request.cookies.get(csrf_cookie_name(settings), "")
             if not csrf_token or not csrf_cookie or not hmac.compare_digest(csrf_token, csrf_cookie) or not AuthService().verify_csrf(db, session_token, csrf_token):
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CSRF 校验失败")
+        from app.workspace.memberships import check_feature, path_feature
+        from app.workspace.jobs import WorkspaceError
+        try:
+            feature = path_feature(request.url.path)
+            if feature: check_feature(db, user, feature)
+        except WorkspaceError as exc:
+            raise HTTPException(exc.status, exc.code) from None
         request.state.auth_via_session = True
         request.state.auth_identifier = user.username
         request.state.auth_user = user

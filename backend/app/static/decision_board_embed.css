@@ -4,3 +4,10 @@ html,body{margin:0;min-width:0;background:transparent}
 .report-title-row{display:none}
 body{overflow-y:hidden}
 .decision-table-wrap{overscroll-behavior-x:contain}
+
+/* v104: retain the original table; reduce favorite prominence, enlarge reasoning. */
+[data-favorite]{font-size:18px!important;line-height:1;min-width:28px;min-height:28px;padding:2px!important;border:0!important;background:transparent!important;color:var(--muted,#8da5b6)}
+[data-favorite][aria-pressed=true]{color:#52d6e8}
+[data-sort-daily]{font:inherit;color:inherit;border:0;background:transparent;padding:4px;cursor:pointer}
+.insight-card h3{font-size:17px}.insight-card li,.insight-card li small{font-size:14px;line-height:1.85}.insight-card ul{font-size:14px;line-height:1.85}
+.sector-lines{display:inline-flex;flex-direction:column;gap:1px;min-width:65px}.sector-down{border-top:1px solid #415365;padding-top:2px}.sector-ratio{font-size:11px}

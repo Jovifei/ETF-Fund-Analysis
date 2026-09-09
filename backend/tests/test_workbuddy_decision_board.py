@@ -7,7 +7,6 @@ from app.main import app
 REFERENCE_COLUMNS = (
     "标的",
     "今日涨幅",
-    "较昨日",
     "量能",
     "均线多空",
     "MACD",
@@ -71,6 +70,9 @@ def test_reference_board_assets_and_columns_are_same_origin() -> None:
     assert js.status_code == 200
     for label in REFERENCE_COLUMNS:
         assert label in js.text
+    # v104 explicitly removes the duplicate previous-day change column.
+    assert "<th>较昨日</th>" not in js.text
+    assert "sortDaily" in js.text
     assert "明日预测" in js.text
     assert "J 90~100" in js.text
     assert "J>100" in js.text

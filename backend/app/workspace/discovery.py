@@ -19,8 +19,11 @@ def state(db):
     counts = dict(db.execute(select(Instrument.kind,func.count()).where(Instrument.kind.in_(('ETF','LOF'))).group_by(Instrument.kind)).all())
     boards = dict(db.execute(select(SectorSnapshot.board_type,func.count(func.distinct(SectorSnapshot.sector_name))).group_by(SectorSnapshot.board_type)).all())
     saved = db.get(WorkspacePreference,'system:catalog-discovery')
+    worker = db.get(WorkspacePreference,'system:workspace-worker')
     return {'catalog_count':sum(counts.values()),'catalog_by_kind':counts,'boards_by_kind':boards,
-        'jobs':[{'task':row.request_json['task'],'status':row.status,'created_at':row.created_at.isoformat(),'finished_at':row.finished_at.isoformat() if row.finished_at else None} for row in jobs if row],
+        'jobs':[{'job_id':row.job_id,'task':row.request_json['task'],'status':row.status,'created_at':row.created_at.isoformat(),'finished_at':row.finished_at.isoformat() if row.finished_at else None,'current_step':(row.result_json or {}).get('current_step'),'steps':(row.result_json or {}).get('steps',[]),'failure_reason':row.failure_reason} for row in jobs if row],
+        'worker_last_seen_at':(worker.settings_json or {}).get('last_seen_at') if worker else None,
+        'catalog_warning':'目录仅为当前已入库样本；请检查目录任务和上游失败原因。' if counts.get('ETF',0)<100 else None,
         'catalog_sync':saved.settings_json if saved else None,
         'automatic_discovery':workspace_settings().discovery_enabled,'provider_called':False,'actionable':False}
 

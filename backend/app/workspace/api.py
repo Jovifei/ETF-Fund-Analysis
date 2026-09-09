@@ -21,9 +21,9 @@ User = Annotated[AuthUser | None, Depends(optional_current_user)]
 
 
 @private_router.get("/search/instruments")
-def search(db: DB, settings: Config, user: User, response: Response, q: str = Query(default="", max_length=64), limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0, le=10000)) -> dict:
+def search(db: DB, settings: Config, user: User, response: Response, q: str = Query(default="", max_length=64), limit: int = Query(default=20, ge=1, le=100), offset: int = Query(default=0, ge=0, le=10000), sort: Literal["relevance","scale","turnover"] = "relevance", min_scale: float = Query(default=0, ge=0, le=1e13), include_unknown: bool = True) -> dict:
     response.headers["Cache-Control"] = "private, no-store"
-    return read_model.search_instruments(db, settings, q, limit, user.id if user else None, offset=offset)
+    return read_model.search_instruments(db, settings, q, limit, user.id if user else None, offset=offset, sort=sort, min_scale=min_scale, include_unknown=include_unknown)
 
 
 @private_router.get("/workspace/overview")
@@ -42,10 +42,13 @@ def detail(code: str, db: DB, settings: Config, user: User) -> dict:
 
 
 @private_router.get("/workspace/instruments/{code}/chart")
-def chart(code: str, db: DB, settings: Config, user: User, interval: Literal["1d", "30m", "60m"] = "1d", limit: int = Query(default=260, ge=30, le=1500)) -> dict:
+def chart(code: str, db: DB, settings: Config, user: User, interval: Literal["1d", "1w", "1mo", "30m", "60m"] = "1d", limit: int = Query(default=260, ge=30, le=1500)) -> dict:
     result = read_model.chart_data(db, settings, code.upper(), interval, limit)
     if result is None:
         raise HTTPException(404, "ETF/LOF 不在已同步目录中")
+    if interval=="1d":
+        from app.workspace.candle_periods import transform_chart
+        result=transform_chart(result,interval,settings.load_strategy()["indicator"],limit)
     return result
 
 
@@ -117,13 +120,42 @@ def index_summaries(db: DB, settings: Config, user: User) -> dict:
 
 @private_router.get("/workspace/indexes/{context_id}/chart")
 def index_chart(context_id: str, db: DB, settings: Config, user: User,
-                limit: int = Query(default=500, ge=30, le=1500)):
+                limit: int = Query(default=500, ge=30, le=1500), interval: Literal["1d","1w","1mo"]="1d"):
     from app.workspace.index_history import read
-    result = read(db, settings, context_id, limit)
+    result = read(db, settings, context_id, 1500)
     if result is None:
         raise HTTPException(404, "index not registered")
-    return result
+    from app.workspace.candle_periods import transform_chart
+    return transform_chart(result,interval,settings.load_strategy()["indicator"],limit)
 
+
+@private_router.get("/workspace/storage")
+def storage_status(db: DB, settings: Config, admin: Annotated[AuthUser | None, Depends(require_admin)]):
+    from app.workspace.storage import status
+    return status(db,settings)
+
+@private_router.get("/workspace/catalog-preparation")
+def history_preparation(db: DB, admin: Annotated[AuthUser | None, Depends(require_admin)], limit: int=Query(default=10,ge=1,le=30), minimum_scale: float=Query(default=0,ge=0,le=1e13), include_unknown: bool=True):
+    from app.workspace.storage import prepare_plan
+    return prepare_plan(db,limit=limit,minimum_scale=minimum_scale,include_unknown=include_unknown)
+
+@private_router.get("/workspace/research-outlook")
+def research_outlook(db: DB, settings: Config, user: User, code: str|None=Query(default=None,pattern=r"^\d{6}\.(SH|SZ|BJ)$")):
+    from sqlalchemy import select
+    from app.models import Instrument
+    from app.workspace.research_outlook import read,VERSION
+    codes=[code] if code else list(db.scalars(select(Instrument.ts_code).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code).limit(200)))
+    return {'items':read(db,codes),'model_version':VERSION,'horizons':[1,5,20],'provider_called':False,'actionable':False}
+
+
+@private_router.get("/workspace/news-status")
+def news_status(db: DB, user: User):
+    from app.workspace.news_status import read
+    return read(db)
+
+from app.workspace.ai_api import router as ai_router, members as member_router
+private_router.include_router(ai_router)
+private_router.include_router(member_router)
 
 # Include after all decorators: FastAPI copies routes at include time.
 router.include_router(private_router)

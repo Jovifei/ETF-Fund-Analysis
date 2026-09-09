@@ -1,0 +1,37 @@
+name: public-data-v104-observation
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/v104-market-workspace-20260909]
+    paths: ['.github/workflows/public-data-v104.yml']
+permissions:
+  contents: read
+jobs:
+  observation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -e . akshare
+      - name: Observe bounded public capabilities without claiming qualification
+        env:
+          TUSHARE_TOKEN: ''
+          FTSHARE_ENABLED: 'false'
+          MARKET_PROVIDER: akshare
+          ALLOW_MOCK_FALLBACK: 'false'
+          WORKSPACE_AI_API_ENABLED: 'false'
+          LLM_ENABLED: 'false'
+          ANALYSIS_ENABLED: 'false'
+        run: python scripts/probe_market_discovery.py --output /tmp/market-discovery-v104.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-data-v104-${{ github.run_id }}
+          path: /tmp/market-discovery-v104.json
+          retention-days: 14

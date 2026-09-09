@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 from sqlalchemy import case, func, or_, select
+from app.workspace.catalog_search import search_terms, matching_reason
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
@@ -74,27 +75,36 @@ def quote_view(quote, settings: Settings) -> dict:
     }
 
 
-def search_instruments(db: Session, settings: Settings, q: str, limit: int, user_id: int | None, *, offset: int = 0) -> dict:
+def search_instruments(db: Session, settings: Settings, q: str, limit: int, user_id: int | None, *, offset: int = 0, sort: str = "relevance", min_scale: float = 0, include_unknown: bool = True) -> dict:
     q = q.strip()
     query = select(Instrument).where(Instrument.kind.in_(("ETF", "LOF")))
+    terms, match_context = search_terms(q)
     if q:
-        terms = _SEARCH_ALIASES.get(q, (q,))
         query = query.where(or_(*[condition for term in terms for condition in (
             Instrument.ts_code.contains(term.upper(), autoescape=True),
             Instrument.name.contains(term, autoescape=True),
             Instrument.theme_l1.contains(term, autoescape=True),
             Instrument.theme_l2.contains(term, autoescape=True),
+            Instrument.benchmark.contains(term, autoescape=True),
+            Instrument.metadata_json["index_name"].as_string().contains(term, autoescape=True),
         )]))
+    scale = Instrument.metadata_json["market_cap_cny"].as_float()
+    turnover = Instrument.metadata_json["turnover_cny"].as_float()
+    if min_scale > 0:
+        query = query.where(or_(scale >= min_scale, scale.is_(None)) if include_unknown else scale >= min_scale)
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
-    query = query.order_by(case((Instrument.ts_code == q.upper(), 0), (Instrument.symbol == q, 1), else_=2), Instrument.ts_code).offset(offset).limit(limit)
+    priority = [case((Instrument.ts_code == q.upper(), 0), (Instrument.symbol == q, 1), else_=2)]
+    if sort == "scale": priority += [scale.desc().nulls_last()]
+    elif sort == "turnover": priority += [turnover.desc().nulls_last()]
+    query = query.order_by(*priority, Instrument.ts_code).offset(offset).limit(limit)
     instruments = list(db.scalars(query))
     ids = [row.id for row in instruments]
     quotes = latest_rows(db, QuoteSnapshot, ids, QuoteSnapshot.quote_time.desc())
     watched = set(db.scalars(select(UserWatchlistEntry.instrument_id).where(UserWatchlistEntry.user_id == user_id, UserWatchlistEntry.instrument_id.in_(ids)))) if ids else set()
     held = set(db.scalars(select(Holding.instrument_id).where(Holding.user_id == user_id, Holding.instrument_id.in_(ids)))) if ids else set()
     return {
-        "scope": "synced_catalog", "provider_called": False, "total": total, "offset": offset, "limit": limit, "has_more": offset + len(instruments) < total,
-        "items": [{"ts_code": row.ts_code, "name": row.name, "kind": row.kind, "theme": row.theme_l1, "theme_detail": row.theme_l2, "enabled": row.enabled, "quote": quote_view(quotes.get(row.id), settings), "watched": row.id in watched, "held": row.id in held} for row in instruments],
+        "scope": "synced_catalog", "match_context": match_context, "provider_called": False, "total": total, "offset": offset, "limit": limit, "has_more": offset + len(instruments) < total,
+        "items": [{"ts_code": row.ts_code, "name": row.name, "kind": row.kind, "theme": row.theme_l1, "theme_detail": row.theme_l2, "enabled": row.enabled, "quote": quote_view(quotes.get(row.id), settings), "match_reason": matching_reason(row, terms), "market_cap_cny": (row.metadata_json or {}).get("market_cap_cny"), "turnover_cny": (row.metadata_json or {}).get("turnover_cny"), "metadata_as_of": (row.metadata_json or {}).get("catalog_as_of"), "watched": row.id in watched, "held": row.id in held} for row in instruments],
         "note": "仅搜索已同步证券目录。新增目录/历史数据由独立任务处理，不阻塞搜索。",
     }
 
@@ -204,6 +214,10 @@ def instrument_detail(db: Session, settings: Settings, code: str, user_id: int |
 
 
 def chart_data(db: Session, settings: Settings, code: str, interval: str, limit: int) -> dict | None:
+    if interval in ("1w", "1mo"):
+        from app.workspace.candle_periods import transform_chart
+        raw=chart_data(db,settings,code,"1d",workspace_settings().chart_history_limit)
+        return transform_chart(raw,interval,settings.load_strategy()["indicator"],limit) if raw else None
     inst = db.scalar(select(Instrument).where(Instrument.ts_code == code, Instrument.kind.in_(("ETF", "LOF"))))
     if inst is None:
         return None

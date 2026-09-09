@@ -31,7 +31,7 @@ jobs:
       - name: Dependency security gate
         run: npm audit --audit-level=high --prefix frontend
       - name: Workspace backend contracts
-        run: pytest backend/tests/test_workspace*.py backend/tests/test_delivery*.py backend/tests/test_v101*.py backend/tests/test_v102*.py backend/tests/test_v103*.py -q
+        run: pytest backend/tests/test_workspace*.py backend/tests/test_delivery*.py backend/tests/test_v101*.py backend/tests/test_v102*.py backend/tests/test_v103*.py backend/tests/test_v104*.py -q
       - name: TypeScript check
         run: npm run typecheck --prefix frontend
       - name: Vue unit tests
