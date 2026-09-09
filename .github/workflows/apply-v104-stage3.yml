@@ -1,0 +1,64 @@
+name: apply-reviewed-v104-stage3
+on:
+  push:
+    branches: [feat/v104-market-workspace-20260909]
+    paths: ['.integration/v104-stage3/**']
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.repository == 'Jovifei/ETF-Fund-Analysis' && github.ref == 'refs/heads/feat/v104-market-workspace-20260909'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Materialize checksum-bound AI, member and data feedback changes
+        run: |
+          python - <<'PY'
+          import base64,lzma,hashlib,pathlib,json,subprocess
+          files=sorted(pathlib.Path('.integration/v104-stage3').glob('*.txt'));assert len(files)==21
+          raw=''.join(p.read_text().strip() for p in files);assert len(raw)==61288
+          payload=lzma.decompress(base64.b64decode(raw,validate=True));assert len(payload)==144731
+          assert hashlib.sha256(payload).hexdigest()=='e6f9830a2adfd87c2283ee157fc2e5c8b489fd4be0a39d8a618ed1368a28f592'
+          recipe=json.loads(payload);assert len(recipe)==52
+          for name,v in recipe.items():
+              path=pathlib.Path(name)
+              assert name.startswith(('backend/app/','backend/tests/','frontend/','scripts/','deploy/','docs/')) or name in {'pyproject.toml','STATUS.md','HANDOFF.md'}
+              assert not path.is_absolute() and '..' not in path.parts and not path.is_symlink()
+              text=path.read_bytes().decode() if path.exists() else ''
+              digest=lambda s:hashlib.sha256(s.encode()).hexdigest()
+              assert digest(text)==v['before'],name
+              previous=len(text)
+              for start,stop,value in reversed(v['edits']):
+                  assert 0<=start<=stop<=previous
+                  text=text[:start]+value+text[stop:];previous=start
+              assert digest(text)==v['after'],name
+              path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(text.encode())
+          subprocess.run(['git','diff','--check'],check=True)
+          PY
+      - name: Test credentials, billing consent, membership and preserved templates
+        run: |
+          pip install -e '.[dev]'
+          pytest backend/tests/test_v104_ai_profiles.py backend/tests/test_v104_discovery.py backend/tests/test_v104_chart_periods.py backend/tests/test_v104_outlook.py backend/tests/test_v102_catalog_fallback.py backend/tests/test_workbuddy_decision_board.py backend/tests/test_password_auth.py -q
+          npm ci --prefix frontend
+          npm run typecheck --prefix frontend
+          npm run test --prefix frontend
+          npm run build --prefix frontend
+          node --check backend/app/static/decision_board_workbuddy.js
+          python -m compileall -q backend/app scripts
+      - name: Commit tested application changes
+        run: |
+          git add backend/app backend/tests frontend scripts deploy docs pyproject.toml STATUS.md HANDOFF.md
+          git rm -r .integration/v104-stage3
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat(v104): encrypted reusable AI connections, accountable research tasks and reversible member tiers'
+          git push origin HEAD:refs/heads/feat/v104-market-workspace-20260909
