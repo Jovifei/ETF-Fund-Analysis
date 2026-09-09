@@ -643,3 +643,21 @@ python codex/skills/fund-research/scripts/check_no_secrets.py .
 - 本机接收分支已完成源码、前端、迁移、PostgreSQL、容器镜像、Provider 小样本和离线浏览器验证；真实公共源仅有可用性/覆盖证据，不构成生产资格。
 - 生产备份、隔离 staging 恢复/迁移/单位核验、维护窗口和最终 HTTP/worker 验收均已完成；后续仅在新授权下启用真实数据重抓、分钟线、模型或定时复盘。
 - 本机登录修复：确认 8082 初始数据库无用户；为 live runner 增加显式、带邀请码的本地注册配置和回归测试，正式站注册仍保持关闭。
+
+## v1.0.3 local acceptance repairs — 2026-09-09
+Baseline: 9439563dafc35d7410f9dde39253478a321c96ef. Separate review branch; original fixed-SHA receive tree remains unchanged.
+- [x] Reproduce overlapping Sina price-only history replacing complete cached EM rows; preserve the existing complete row without mixing source fields.
+- [x] Restrict the index download affordance to the three supported A-share indexes and explain unsupported OHLC capability.
+- [x] Preserve bounded sanitized per-index failures in task summaries.
+- [x] RED/GREEN targeted regression, parent diff review, frontend typecheck/24 tests/build/12 ordinary + 1 authenticated Playwright.
+- [x] Parent full backend regression, final source scan/compile/diff, explicit source/test commits a628004 and 49ab0ce.
+- [x] Recheck private-state protection and restore pre-receive consistent backup before replaying the fixed local acceptance pipeline; retain the entire original trial DB separately.
+- [x] Record actual public-source results and unavailable capabilities; qualification unchanged. See docs/LOCAL_ACCEPTANCE_RECEIPT_V103_20260909.md.
+
+Allowed code scope: MarketService history upsert, worker summary, Overview index action, and corresponding regressions. No formula/unit version change, credentials, production server, main merge, tags or model calls. Rollback keeps both consistent DB snapshots and the exact fixed-SHA checkout.
+
+### Final review evidence
+- [x] Sector duplicate/conflict RED/GREEN and parent source review; final full pytest 842 passed, 5 platform/database skips. Latest actual sector run succeeded (90 industry, 175 concept, 1 breadth); original failing batch's exact key was not retained.
+- [x] Final running SHA49ab0ce on loopback8082; API/worker same code and original persistent DB; ordinary app source unchanged after final tests.
+- [x] Provider values, archive hashes, restart cache proof, synthetic-account real-cache screenshots and optional-model blockers recorded in sanitized receipt.
+- [ ] User's original admin session UI acceptance and one official-login/budgeted model run remain pending; no approval inferred from silence.
