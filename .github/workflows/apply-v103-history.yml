@@ -1,0 +1,47 @@
+name: apply-reviewed-v103-history
+on:
+  push:
+    branches: [fix/v103-history-research-20260909]
+    paths: ['.integration/v103-history.b64']
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.repository == 'Jovifei/ETF-Fund-Analysis' && github.ref == 'refs/heads/fix/v103-history-research-20260909'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply exact reviewed source patch
+        run: |
+          python - <<'PY'
+          import base64, gzip, hashlib, pathlib, subprocess
+          source = pathlib.Path('.integration/v103-history.b64')
+          if not source.exists():
+              raise SystemExit('reviewed payload missing')
+          patch = gzip.decompress(base64.b64decode(source.read_text(), validate=True))
+          assert hashlib.sha256(patch).hexdigest() == '56f99a174bc4a1be022c1ee15ffa79975a1e92dba84ac0de776b41ee572185ca'
+          target = pathlib.Path('/tmp/reviewed-history.patch')
+          target.write_bytes(patch)
+          subprocess.run(['git','apply','--check',str(target)],check=True)
+          subprocess.run(['git','apply',str(target)],check=True)
+          subprocess.run(['git','diff','--check'],check=True)
+          PY
+      - name: Test history display and per-instrument gates
+        run: |
+          pip install -e '.[dev]'
+          pytest backend/tests/test_v103_history.py backend/tests/test_v101_data_access.py -q
+          python -m compileall -q backend/app
+      - name: Commit application files only
+        run: |
+          git add backend/app backend/tests/test_v103_history.py backend/tests/test_v101_data_access.py docs/versions/V1.0.3.md
+          git rm .integration/v103-history.b64 .integration/v103/phase1.0
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(history): isolate incomplete instruments and display cached price indicators'
+          git push origin HEAD:refs/heads/fix/v103-history-research-20260909
