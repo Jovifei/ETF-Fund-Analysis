@@ -48,6 +48,16 @@ class MockProvider(MarketProvider):
             )
         return result
 
+    def fetch_index_bars(self, symbol: str, start_date: date, end_date: date) -> list[BarRecord]:
+        """Synthetic OHLC for isolated UI tests only, explicitly source=mock:index."""
+        from app.providers.index_history import INDEX_CODES
+        if symbol not in INDEX_CODES:
+            raise ProviderError("unsupported mock index")
+        records = self.fetch_daily_bars(symbol, start_date, end_date)
+        return [BarRecord(ts_code=symbol, trade_date=row.trade_date,
+            open=row.open*1000, high=row.high*1000, low=row.low*1000, close=row.close*1000,
+            volume=row.volume, amount=row.amount, source="mock:index") for row in records]
+
     def fetch_minute_bars(self, ts_code: str, interval: str, start_date: date, end_date: date) -> list[BarRecord]:
         """确定性合成分钟 bar（演示/测试专用，source=mock:minute）。"""
         if interval not in {"5m", "15m", "30m", "60m"}:

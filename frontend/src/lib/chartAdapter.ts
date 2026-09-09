@@ -33,7 +33,7 @@ export class ChartAdapter {
     this.chart = chart
     chart.setPriceVolumePrecision(3, 0)
     chart.applyNewData(projectBars(data.bars), false)
-    chart.createIndicator({ name: 'VOL', calcParams: [] }, false, { height: 65 })
+    if (data.bars.some(bar => bar.volume != null)) chart.createIndicator({ name: 'VOL', calcParams: [] }, false, { height: 65 })
     if (data.interval === '1d') for (const def of definitions) chart.createIndicator(def.name, true, def.height ? { id: def.name, height: def.height } : { id: 'candle_pane' })
     const lastTime = projectBars(data.bars.slice(-1))[0]?.timestamp
     if (lastTime) {

@@ -17,6 +17,8 @@ window.addEventListener('message',event=>{
     document.querySelector('#horizonSelect').value=String(state.horizon);
     document.querySelector('#searchInput').value=state.filter;
   }
+  state.favorites=Array.isArray(value.favorites)?value.favorites.filter(x=>/^\d{6}\.(SH|SZ|BJ)$/.test(x)):[];
+  state.favoriteBusy=Array.isArray(value.favoriteBusy)?value.favoriteBusy:[];
   if(value.board&&Array.isArray(value.board.rows)){
     state.board=value.board;state.connectionError=false;renderAll();
   }else if(value.error){

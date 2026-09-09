@@ -27,23 +27,27 @@ def correlation_summary(panel, fields):
     return [[number(value) for value in row] for row in mean], counts.tolist()
 
 
-def run(db, settings):
+def run(db, settings, *, selected=None):
     from app.providers.data_contract import require_current_history
     require_current_history(db, settings)
+    configured = settings.load_strategy().get("factor_analysis", {}).get("factors", DEFAULT_FACTORS)
+    if selected and (len(selected) > 12 or set(selected) - set(configured)):
+        raise ValueError("factor_selection_not_in_registry")
     service = FactorAnalysisService(settings)
     panel = service._panel(db)
     if panel.empty:
         return {"status": "unavailable", "reason": "insufficient_history", "metrics": [], "actionable": False}
     configured = service.strategy.get("factor_analysis", {}).get("factors", DEFAULT_FACTORS)
-    names = [name for name in configured if name in panel.columns]
+    names = [name for name in (selected or configured) if name in panel.columns]
     horizons = aligned_research_horizons(service.strategy)
     metrics = [factor_metric(panel, name, horizon).model_dump() for name in names for horizon in horizons]
-    fields = [name for name in MATRIX_FIELDS if name in names]
+    fields = list(names)[:12] if selected else [name for name in MATRIX_FIELDS if name in names]
     correlations, counts = correlation_summary(panel, fields)
     return {
         "diagnostics_version": "workspace-factor-v1.1-pairwise",
         "status": "diagnostic", "generated_at": datetime.now(UTC).isoformat(),
         "source_as_of": str(panel.trade_date.max()), "strategy_version": service.strategy["version"],
+        "selection": list(selected or []), "missing_selected": [name for name in (selected or []) if name not in panel.columns],
         "horizons": list(horizons), "name_count": len(names), "validated_count": None,
         "metrics": metrics, "correlation_fields": fields,
         "correlations": correlations, "correlation_dates": counts,

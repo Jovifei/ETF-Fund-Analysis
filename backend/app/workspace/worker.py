@@ -116,11 +116,13 @@ def task_sequence(kind: str, codes: list[str], lookback: int) -> list[tuple[str,
                ("refresh_quotes", {"codes": codes or None}), ("refresh_signals", {}),
                ("refresh_decision_board", {})]
         if kind == "refresh":
-            seq += [("refresh_sector_snapshots", {}), ("refresh_market_context", {}), ("refresh_news", {"since_hours": 72})]
+            seq += [("refresh_sector_snapshots", {}), ("refresh_market_context", {}), ("refresh_index_history", {}), ("refresh_news", {"since_hours": 72})]
         return seq
-    return {"quotes": [("refresh_quotes", {"codes": codes or None}), ("refresh_decision_board", {})],
+    return {"recompute": [("refresh_indicators", {}), ("refresh_forecasts", {}), ("refresh_signals", {}), ("refresh_decision_board", {})],
+            "quotes": [("refresh_quotes", {"codes": codes or None}), ("refresh_decision_board", {})],
             "news": [("refresh_news", {"since_hours": 72})],
-            "context": [("refresh_sector_snapshots", {}), ("refresh_market_context", {})],
+            "context": [("refresh_sector_snapshots", {}), ("refresh_market_context", {}), ("refresh_index_history", {})],
+            "index_history": [("refresh_index_history", {"lookback_days": lookback})],
             "validate": [("validate_forecasts", {})], "shadow_audit": [("shadow_run_audit", {})]}.get(kind, [])
 
 
@@ -142,7 +144,7 @@ def execute(job_id: str) -> int:
         kind = request["task"]
         if kind == "factors":
             with session_scope() as db:
-                report = factor_diagnostics.run(db, settings)
+                report = factor_diagnostics.run(db, settings, selected=request.get("factor_names", []))
                 row = db.get(WorkspaceDataJob, job_id)
                 row.result_json = {"factor_report": report, "steps": []}
                 row.status = "succeeded" if report.get("status") == "diagnostic" else "partial"

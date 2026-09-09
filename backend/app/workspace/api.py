@@ -71,6 +71,8 @@ def factors(db: DB, settings: Config, user: User) -> dict:
 
 private_router.include_router(actions_router)
 private_router.include_router(revision_router)
+from app.workspace.journal import router as journal_router
+private_router.include_router(journal_router)
 # Machine credentials never inherit the legacy browser authentication path.
 router = APIRouter()
 
@@ -93,6 +95,33 @@ def discovery_refresh(db: DB, admin: Annotated[AuthUser | None, Depends(require_
     from app.workspace.discovery import enqueue
     result = enqueue(db, admin.id if admin else None, manual=True)
     db.commit()
+    return result
+
+
+@private_router.get("/workspace/indexes")
+def index_summaries(db: DB, settings: Config, user: User) -> dict:
+    from app.workspace import index_history
+    from app.models import MarketContextRegistry
+    from sqlalchemy import select
+    rows=db.scalars(select(MarketContextRegistry).where(MarketContextRegistry.context_kind=='index',MarketContextRegistry.enabled.is_(True))).all()
+    items=[]
+    for row in rows:
+        value=index_history.read(db,settings,row.context_id,limit=1)
+        if value and value['available']:
+            items.append({'context_id':row.context_id,'label':row.label,'context_kind':'index',
+                'observed_value':value['summary']['price'], 'today_pct_change':None if value['summary']['change_ratio'] is None else value['summary']['change_ratio']*100,
+                'source_timestamp':value['source_as_of'],'source':value['bars'][-1].get('source'),
+                'freshness':'historical','is_partial':value['summary']['is_partial'],'is_tradable_proxy':False})
+    return {'items':items,'provider_called':False,'actionable':False}
+
+
+@private_router.get("/workspace/indexes/{context_id}/chart")
+def index_chart(context_id: str, db: DB, settings: Config, user: User,
+                limit: int = Query(default=500, ge=30, le=1500)):
+    from app.workspace.index_history import read
+    result = read(db, settings, context_id, limit)
+    if result is None:
+        raise HTTPException(404, "index not registered")
     return result
 
 

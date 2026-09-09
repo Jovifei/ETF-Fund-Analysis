@@ -145,6 +145,7 @@ class TaskService:
         return (
             "sync_instruments",
             "refresh_market_context",
+            "refresh_index_history",
             "refresh_bars",
             "refresh_minute_bars",
             "refresh_quotes",
@@ -235,6 +236,9 @@ class TaskService:
         if task_name in {"validate_forecasts", "calibrate_forecasts", "backtest_rotation", "backtest_ablation", "analyze_factors"}:
             from app.providers.data_contract import require_current_history
             require_current_history(db, self.settings)
+        if task_name == "refresh_index_history":
+            from app.workspace.index_history import refresh
+            return refresh(db, self.settings, self.provider, run_id, kwargs.get("lookback_days", 1200))
         if task_name == "sync_instruments":
             return self.market.sync_instruments(db, codes=kwargs.get("codes"), run_id=run_id)
         if task_name == "refresh_market_context":

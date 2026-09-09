@@ -46,6 +46,10 @@ class AKShareProvider(MarketProvider):
             return []
         return frame.to_dict(orient="records") if hasattr(frame, "to_dict") else list(frame)
 
+    def fetch_index_bars(self, symbol, start_date, end_date):
+        from app.providers.index_history import akshare_index
+        return akshare_index(self, symbol, start_date, end_date)
+
     def list_instruments(self, codes: list[str] | None = None) -> list[InstrumentRecord]:
         selected = {c.upper() for c in codes} if codes else None
         result: list[InstrumentRecord] = []

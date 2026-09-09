@@ -26,6 +26,7 @@ def main():
         service = TaskService(settings)
         try:
             service.run(db, 'bootstrap', lookback_days=420, report=False)
+            service.run(db, 'refresh_index_history', lookback_days=420, report=False)
             DecisionBoardService(settings).refresh(db)
         finally:
             service.close()

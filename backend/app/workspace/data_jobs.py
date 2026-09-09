@@ -22,7 +22,7 @@ def enqueue(db: Session, payload: DataRequest, user_id: int | None) -> tuple[Wor
     request = payload.model_dump(exclude={"request_key"})
     existing = db.scalar(select(WorkspaceDataJob).where(WorkspaceDataJob.idempotency_key == key))
     if existing:
-        if existing.request_json != request:
+        if {"factor_names": [], **existing.request_json} != request:
             raise WorkspaceError(409, "data_idempotency_conflict")
         return existing, False
     count = db.scalar(select(func.count()).select_from(WorkspaceDataJob).where(WorkspaceDataJob.status.in_(("queued", "running")))) or 0

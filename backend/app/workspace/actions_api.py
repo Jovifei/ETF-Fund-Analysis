@@ -40,7 +40,7 @@ def status(db: DB, settings: Config, user: User):
     cfg = workspace_settings()
     heartbeat = db.get(WorkspacePreference, "system:workspace-worker")
     strategy = settings.load_strategy()
-    return {"app_version": settings.app_version, "workspace_version": "1.0.1", "strategy_version": strategy.get("version"), "indicator_version": strategy.get("indicator_version"), "forecast_version": strategy.get("forecast_version"), "market_provider": configuration(db, settings)["effective_provider"], "ui_enabled": cfg.ui_enabled, "bridge_enabled": cfg.bridge_enabled, "daily_review_enabled": cfg.daily_review_enabled, "worker": heartbeat.settings_json if heartbeat else None, "catalog_count": db.scalar(select(func.count()).select_from(Instrument).where(Instrument.kind.in_(("ETF", "LOF")))), "tracked_count": db.scalar(select(func.count()).select_from(Instrument).where(Instrument.enabled.is_(True))), "historical_1430_backtest": "not_qualified", "api_key_configuration": "disabled_pending_secure_secret_store", "automatic_orders": False}
+    return {"app_version": settings.app_version, "workspace_version": "1.0.3", "strategy_version": strategy.get("version"), "indicator_version": strategy.get("indicator_version"), "forecast_version": strategy.get("forecast_version"), "market_provider": configuration(db, settings)["effective_provider"], "ui_enabled": cfg.ui_enabled, "bridge_enabled": cfg.bridge_enabled, "daily_review_enabled": cfg.daily_review_enabled, "worker": heartbeat.settings_json if heartbeat else None, "catalog_count": db.scalar(select(func.count()).select_from(Instrument).where(Instrument.kind.in_(("ETF", "LOF")))), "tracked_count": db.scalar(select(func.count()).select_from(Instrument).where(Instrument.enabled.is_(True))), "historical_1430_backtest": "not_qualified", "api_key_configuration": "disabled_pending_secure_secret_store", "automatic_orders": False}
 
 
 @router.get("/data-sources")
@@ -254,7 +254,12 @@ def list_data_jobs(db: DB, user: User):
 
 
 @router.post("/data-jobs", status_code=202)
-def enqueue_data(payload: DataRequest, db: DB, admin: Admin):
+def enqueue_data(payload: DataRequest, db: DB, admin: Admin, settings: Config):
+    if payload.factor_names:
+        from app.services.factor_analysis_service import DEFAULT_FACTORS
+        configured=settings.load_strategy().get("factor_analysis",{}).get("factors",DEFAULT_FACTORS)
+        if set(payload.factor_names)-set(configured):
+            raise HTTPException(422,"factor_selection_not_in_registry")
     row, created = data_jobs.enqueue(db, payload, admin.id if admin else None)
     db.commit()
     return {"job": data_jobs.view(row), "created": created, "provider_called": False}

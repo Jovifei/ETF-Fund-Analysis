@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ALLOWED = {"MARKET_PROVIDER", "TUSHARE_TOKEN", "TUSHARE_TIMEOUT_SECONDS", "AKSHARE_TIMEOUT_SECONDS",
     "NEWS_RSS_URLS", "NEWS_RSS_TIMEOUT_SECONDS", "MINUTE_BARS_ENABLED", "FTSHARE_ENABLED",
     "FTSHARE_QUALIFICATION", "WORKSPACE_BRIDGE_ENABLED", "WORKSPACE_DAILY_REVIEW_ENABLED", "WORKSPACE_DISCOVERY_ENABLED",
-    "REGISTRATION_ENABLED", "REGISTRATION_INVITE_CODE"}
+    "REGISTRATION_ENABLED", "REGISTRATION_INVITE_CODE", "OCR_MODE", "OCR_LOCAL_MODEL_DIR"}
 
 
 def prepare(config: Path, data: Path):
@@ -46,6 +46,17 @@ def prepare(config: Path, data: Path):
         raise ValueError("REGISTRATION_ENABLED=true requires REGISTRATION_INVITE_CODE")
     if values.get('MARKET_PROVIDER', 'public_composite') not in {'public_composite','composite','akshare','tushare'}:
         raise ValueError("Local LIVE mode requires an explicit real provider; mock is not allowed")
+    ocr_mode=str(values.get('OCR_MODE') or 'disabled').strip()
+    if ocr_mode not in {'disabled','local_paddle'}:
+        raise ValueError('Local runner supports disabled or local_paddle OCR only')
+    model_dir=None
+    if ocr_mode=='local_paddle':
+        model_dir=Path(str(values.get('OCR_LOCAL_MODEL_DIR') or '')).expanduser()
+        if not model_dir.is_absolute() or any(p.is_symlink() for p in (model_dir,*model_dir.parents)):
+            raise ValueError('OCR requires an absolute, non-symbolic model directory')
+        model_dir=model_dir.resolve()
+        if not model_dir.is_dir() or model_dir.is_relative_to(ROOT):
+            raise ValueError('Install reviewed OCR models outside the repository first')
     data.mkdir(parents=True, exist_ok=True, mode=0o700)
     if os.name != 'nt' and data.stat().st_mode & 0o077:
         raise ValueError("Private data directory requires mode 0700")
@@ -55,7 +66,8 @@ def prepare(config: Path, data: Path):
         AUTH_COOKIE_SECURE='false', AUTO_CREATE_SCHEMA='false', ALLOW_MOCK_FALLBACK='false',
         REGISTRATION_ENABLED='true' if registration_enabled else 'false',
         REGISTRATION_INVITE_CODE=registration_invite if registration_enabled else '',
-        LLM_ENABLED='false', ANALYSIS_ENABLED='false', OCR_MODE='disabled',
+        LLM_ENABLED='false', ANALYSIS_ENABLED='false', OCR_MODE=ocr_mode, OCR_CLOUD_REVIEW_ENABLED='false',
+        OCR_TRANSIENT_ROOT=str(data/'ocr-transient'),
         DATABASE_URL=f"sqlite:///{(data/'workspace.sqlite3').as_posix()}", REPORTS_DIR=str(data/'reports'),
         BACKUP_DIR=str(data/'backups'), WORKSPACE_UI_ENABLED='true', TZ='Asia/Shanghai')
     # This launcher is configured by the explicit file, not by an unrelated
@@ -65,6 +77,7 @@ def prepare(config: Path, data: Path):
                          'FTSHARE_ENABLED':'false', 'FTSHARE_QUALIFICATION':'unverified',
                          'WORKSPACE_BRIDGE_ENABLED':'false', 'WORKSPACE_DAILY_REVIEW_ENABLED':'false'}.items():
         env[key] = values.get(key) or default
+    env['OCR_LOCAL_MODEL_DIR']=str(model_dir) if model_dir else str(data/'ocr-models')
     # Model credentials/old machine tokens have no role in this launcher.
     for key in ('PRIVATE_ACCESS_TOKEN','OPENAI_API_KEY','ANTHROPIC_API_KEY','DEEPSEEK_API_KEY'):
         env[key]=''

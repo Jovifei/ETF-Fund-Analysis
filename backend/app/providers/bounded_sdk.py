@@ -17,13 +17,13 @@ from app.providers.base import CapabilityUnavailable, ProviderError
 
 MAX_BYTES = 8_000_000
 TUSHARE_ENDPOINT = 'https://api.tushare.pro'
-TUSHARE_APIS = frozenset({'etf_basic','fund_basic','fund_daily','rt_etf_k','etf_mins','trade_cal','news','major_news','cctv_news'})
+TUSHARE_APIS = frozenset({'index_daily','etf_basic','fund_basic','fund_daily','rt_etf_k','etf_mins','trade_cal','news','major_news','cctv_news'})
 AKSHARE_APIS = frozenset({
     'fund_etf_spot_em','fund_lof_spot_em','fund_etf_hist_em','fund_lof_hist_em','fund_etf_hist_sina',
     'fund_etf_hist_min_em','fund_lof_hist_min_em','fund_etf_category_sina','fund_etf_category_ths',
     'stock_board_industry_name_em','stock_board_industry_summary_ths','stock_board_concept_name_em',
     'stock_sector_spot','stock_board_concept_summary_ths','stock_zh_a_spot_em','stock_zh_a_spot','stock_info_a_code_name','stock_zh_index_daily',
-    'index_us_stock_sina','stock_news_em','stock_info_global_em','stock_info_global_sina',
+    'stock_zh_index_daily_em','index_us_stock_sina','stock_news_em','stock_info_global_em','stock_info_global_sina',
     'stock_info_global_cls','stock_info_global_ths',
 })
 

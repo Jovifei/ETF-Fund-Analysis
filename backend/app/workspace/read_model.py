@@ -195,9 +195,9 @@ def instrument_detail(db: Session, settings: Settings, code: str, user_id: int |
         "decision": compact_row(row) if row else None, "snapshot_id": (row or {}).get("snapshot_id"),
         "decision_time": (row or {}).get("generated_at"), "quote": view_quote,
         "history_issue": issue, "indicator_basis": "persisted_snapshot" if indicator and not issue else "historical_price_display",
-        "indicator_values": display_values, "indicator_version": indicator.version if indicator else None,
+        "indicator_values": display_values, "indicator_version": indicator.version if indicator and not issue else settings.load_strategy()["indicator_version"],
         "indicator_as_of": iso(indicator.as_of_date) if indicator and not issue else (last or {}).get("date"), "forecasts": forecast_rows,
-        "support_resistance": SupportResistanceService(settings).latest(db, inst.id),
+        "support_resistance": None if issue else SupportResistanceService(settings).latest(db, inst.id),
         "forecast_scenario": (row or {}).get("forecast_scenario"), "holding": personal,
         "actionable": False, "research_only": True,
     }
