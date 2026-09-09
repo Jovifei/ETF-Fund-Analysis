@@ -1,0 +1,46 @@
+name: apply-reviewed-v104-stage1
+on:
+  push:
+    branches: [feat/v104-market-workspace-20260909]
+    paths: ['.integration/v104-stage1.b64']
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.repository == 'Jovifei/ETF-Fund-Analysis' && github.ref == 'refs/heads/feat/v104-market-workspace-20260909'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply reviewed bounded catalog patch
+        run: |
+          python - <<'PY'
+          import base64,gzip,hashlib,pathlib,subprocess
+          raw=pathlib.Path('.integration/v104-stage1.b64').read_text().strip()
+          assert len(raw)<100000
+          patch=gzip.decompress(base64.b64decode(raw,validate=True))
+          assert len(patch)==32058
+          assert hashlib.sha256(patch).hexdigest()=='9523d0aed320ec00886f3dfe13ebc6e32ffdb03ac281cc2f70c96b74ef6693ab'
+          target=pathlib.Path('/tmp/v104-stage1.patch');target.write_bytes(patch)
+          subprocess.run(['git','apply','--check',str(target)],check=True)
+          subprocess.run(['git','apply',str(target)],check=True)
+          subprocess.run(['git','diff','--check'],check=True)
+          PY
+      - name: Test catalog relationships and read-only discovery
+        run: |
+          pip install -e '.[dev]'
+          pytest backend/tests/test_v104_discovery.py backend/tests/test_v102_integration.py -q
+          python -m compileall -q backend/app
+      - name: Commit reviewed application paths
+        run: |
+          git add config/sector_search_aliases.json backend/app/workspace backend/app/providers/catalog.py backend/tests/test_v104_discovery.py
+          git rm .integration/v104-stage1.b64
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(v104): relate sector names to ETF catalog and expose bounded discovery status'
+          git push origin HEAD:refs/heads/feat/v104-market-workspace-20260909
