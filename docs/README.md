@@ -9,6 +9,7 @@
 3. [本地接收L1–L5](LOCAL_ACCEPTANCE_V103.md)：原持久数据、真实行情、图表、收藏、OCR、Codex/Vibe、复盘及归档。
 4. [历史展示与存储合同](HISTORY_STORAGE_V103.md)：已有K线不依赖新报价，逐标的门禁，归档不是自动同步。
 5. [开源吸收落点](OSS_APPLIED_V103.md)：用户选定项目、源码位置、本项目对应文件与未部署边界。
+6. [项目制造过程与文档地图](PROJECT_BUILD_AND_DOCUMENTATION_V103.md)：从需求、实现、接收、真实源试跑到部署合并的证据链，以及各文档的阅读顺序。
 
 固定接收SHA以最终交付Prompt/PR为准，不能把中间传输材料提交当成可部署应用。根AGENTS.md仍是安全合同。原WorkBuddy模板在总览中保留；预测期限仍1/3/5/10，不因应用升版而自动calibrated。
 

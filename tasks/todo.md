@@ -670,3 +670,9 @@ Allowed code scope: MarketService history upsert, worker summary, Overview index
 - [x] Retry factor diagnostics: price-only instruments allowed for price factors; volume factor coverage remains 0 and report stays `not_qualified`.
 - [x] Fix local PaddleOCR v5 manifest/model-name/input compatibility; synthetic image recognized ETF code, shares, and cost; timeout cleanup passed.
 - [ ] Vibe upstream Windows qualification remains blocked by upstream symlink/path tests; official Codex login, pairing, and one model-budgeted run require Jovi's own interactive login.
+
+## 项目知识文档与 Obsidian 同步 — 2026-09-09
+- [x] 新增项目制造过程与文档地图，覆盖当前实现、证据边界、部署回滚和未完成资格。
+- [x] 更新 `docs/README.md` 导航并校验相对链接。
+- [ ] 用 codex-memory checkpoint DryRun 生成持久知识；若项目槽位未映射，保持 `MEMORY_SYNC_BLOCKED`，不创建错误 Vault 项目。
+- [ ] 文档通过源文件/提交/测试/运行收据核对后，执行文档镜像 DryRun；只有 wrapper 返回成功才声称 Obsidian 已更新。
