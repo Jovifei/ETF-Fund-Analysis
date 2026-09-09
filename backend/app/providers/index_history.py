@@ -58,7 +58,12 @@ def akshare_index(provider, symbol, start, end):
     ]
     for name, params in attempts:
         try:
-            source = params.pop('source', f'akshare:index:{name}:v103')
+            source = params.pop('source', {
+                'index_zh_a_hist': 'akshare:index:zh-a-v103',
+                'stock_zh_index_daily_em': 'akshare:index:em-v103',
+                'stock_zh_index_daily_tx': 'akshare:index:tx-v103',
+                'stock_zh_index_daily': 'akshare:index:sina-v103',
+            }[name])
             frame = getattr(provider.ak, name)(**params)
             rows = provider._records(frame)
             if len(rows) > 20000:
