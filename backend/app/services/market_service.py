@@ -396,6 +396,8 @@ class MarketService:
 
         per_board: dict[str, dict[str, int | str | None]] = {}
         inserted = 0
+        duplicate_records = 0
+        conflict_keys = 0
         errors: list[str] = []
         for method_name, board_type, is_single in board_specs:
             try:
@@ -406,13 +408,39 @@ class MarketService:
             except Exception as exc:
                 errors.append(f"{board_type}:{type(exc).__name__}")
                 logger.warning("sector snapshot refresh [%s] failed (degraded to empty): %s", board_type, exc)
-                per_board[board_type] = {"inserted": 0, "error": type(exc).__name__}
+                per_board[board_type] = {
+                    "inserted": 0, "error": type(exc).__name__,
+                    "duplicate_records": 0, "conflict_keys": 0,
+                }
                 continue
 
             if not records:
                 errors.append(f"{board_type}:empty_response")
-                per_board[board_type] = {"inserted": 0, "error": "empty_response"}
+                per_board[board_type] = {
+                    "inserted": 0, "error": "empty_response",
+                    "duplicate_records": 0, "conflict_keys": 0,
+                }
                 continue
+
+            grouped: dict[tuple, list] = {}
+            for item in records:
+                key = (item.sector_name, item.trade_date, item.source, item.board_type)
+                grouped.setdefault(key, []).append(item)
+            normalized = []
+            board_duplicates = 0
+            board_conflicts = 0
+            for values in grouped.values():
+                first = values[0]
+                if all(item.to_dict() == first.to_dict() for item in values[1:]):
+                    normalized.append(first)
+                    board_duplicates += len(values) - 1
+                else:
+                    board_conflicts += 1
+            if board_conflicts:
+                errors.append(f"{board_type}:conflicting_duplicate_keys")
+            records = normalized
+            duplicate_records += board_duplicates
+            conflict_keys += board_conflicts
             board_inserted = 0
             for item in records:
                 existing = db.scalar(
@@ -450,7 +478,12 @@ class MarketService:
                     )
                 board_inserted += 1
             inserted += board_inserted
-            per_board[board_type] = {"inserted": board_inserted, "error": None}
+            per_board[board_type] = {
+                "inserted": board_inserted,
+                "error": "conflicting_duplicate_keys" if board_conflicts else None,
+                "duplicate_records": board_duplicates,
+                "conflict_keys": board_conflicts,
+            }
 
         db.flush()
         emit_event(
@@ -471,6 +504,8 @@ class MarketService:
         return {
             "run_id": run_id,
             "inserted": inserted,
+            "duplicate_records": duplicate_records,
+            "conflict_keys": conflict_keys,
             "boards": per_board,
             "error": (errors[0] if errors else None),
             "status": "partial" if errors else "succeeded",

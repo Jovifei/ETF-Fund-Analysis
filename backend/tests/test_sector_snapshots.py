@@ -173,6 +173,53 @@ def test_market_service_refresh_all_three_boards(bootstrapped, db_session):
     assert boards == {"industry", "concept", "market"}
 
 
+def test_sector_refresh_deduplicates_exact_full_keys_and_reports_count(bootstrapped, db_session):
+    from dataclasses import replace
+    row = SectorRecord(
+        sector_name="重复行业", trade_date=date(2026, 8, 31), up_count=10,
+        down_count=2, flat_count=1, total_count=13, pct_change=1.0,
+        source="akshare", board_type="industry",
+    )
+
+    class _DuplicateProvider(_FakeAllBoardsProvider):
+        def fetch_sector_snapshots(self, trade_date=None):
+            return [row, replace(row)]
+
+    result = MarketService(_DuplicateProvider(), persist_provider_audits=False).refresh_sector_snapshots(db_session)
+    assert result["status"] == "succeeded"
+    assert result["duplicate_records"] == 1 and result["conflict_keys"] == 0
+    assert result["boards"]["industry"]["inserted"] == 1
+    assert result["boards"]["industry"]["duplicate_records"] == 1
+    assert db_session.query(SectorSnapshot).filter_by(sector_name="重复行业").count() == 1
+
+
+def test_sector_refresh_conflicting_full_keys_keep_cache_and_mark_partial(bootstrapped, db_session):
+    key_date = date(2026, 8, 31)
+    existing = SectorSnapshot(
+        sector_name="冲突行业", trade_date=key_date, up_count=99, down_count=1,
+        flat_count=0, total_count=100, pct_change=9.9, source="akshare",
+        board_type="industry", quality_hash="existing-cache",
+    )
+    db_session.add(existing); db_session.flush()
+    conflict_a = SectorRecord("冲突行业", key_date, 10, 2, 0, 12, 1.0, "akshare", "industry")
+    conflict_b = SectorRecord("冲突行业", key_date, 11, 1, 0, 12, 1.1, "akshare", "industry")
+    valid = SectorRecord("保留行业", key_date, 8, 2, 0, 10, 0.8, "akshare", "industry")
+
+    class _ConflictingProvider(_FakeAllBoardsProvider):
+        def fetch_sector_snapshots(self, trade_date=None):
+            return [conflict_a, conflict_b, valid]
+
+    result = MarketService(_ConflictingProvider(), persist_provider_audits=False).refresh_sector_snapshots(db_session)
+    saved = db_session.query(SectorSnapshot).filter_by(sector_name="冲突行业").one()
+    assert result["status"] == "partial"
+    assert result["conflict_keys"] == 1 and result["duplicate_records"] == 0
+    assert result["boards"]["industry"]["error"] == "conflicting_duplicate_keys"
+    assert result["boards"]["industry"]["conflict_keys"] == 1
+    assert saved.up_count == 99 and saved.down_count == 1
+    assert saved.quality_hash == "existing-cache" and saved.pct_change == 9.9
+    assert db_session.query(SectorSnapshot).filter_by(sector_name="保留行业").one().up_count == 8
+
+
 def test_sector_state_filters_by_board_type(bootstrapped, db_session):
     """_sector_state 必须按 board_type 精准隔离：行业命中不污染概念。"""
     from app.models import SectorSnapshot as SS
