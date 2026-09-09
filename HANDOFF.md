@@ -18,6 +18,12 @@
 
 API/worker同代码同库，重新构建Vue，不让旧挂载遮住新产物。现有管理员不重置。用户授权范围是本地部署；生产、合并main、改标签必须另行批准。
 
+## 浏览器认证与持久数据库合同
+
+真实部署维持 `AUTH_ENABLED=true`、`DATABASE_URL=<私有持久数据库连接>`、`AUTO_CREATE_SCHEMA=false`。生产HTTPS使用 `AUTH_COOKIE_SECURE=true`；仅本机回环HTTP的live runner允许Secure=false，不得带入生产配置。
+
+数据库由Alembic迁移；确认是空库且尚无管理员时，使用 `fund-decision auth-bootstrap-admin` 交互隐藏输入初始化，不覆盖已有账户。浏览器使用HttpOnly/SameSite Cookie与CSRF，不能把API凭据写入localStorage或恢复旧Bearer登录。生产部署仍需用户另行授权。
+
 ## 明确未完成
 
 网站直接API Key安全存储、行情包可信导入/自动双向同步、一个月预测、自动训练/上线参数均未实现。Vibe试部署器和报告导入既有，本轮补引导，尚无本人真实登录/研究产物。q code具体产品未知，不宣称适配。可选环境阻塞记录清楚，不降低门禁。

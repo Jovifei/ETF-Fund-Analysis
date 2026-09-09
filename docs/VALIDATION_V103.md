@@ -1,14 +1,23 @@
 # v1.0.3 验证与证据边界
 
-此文是交付前的测试记录，最终CI结果以固定应用提交关联的Actions及交付收据为准；不把历史绿色构建当成新提交全绿。
+最终结果以固定交付提交关联的Actions及交付收据为准，不能拿祖先提交全绿替代新提交验收。
 
-## 已执行
+## 过程记录
 
 - Stage1：历史隔离与v1.0.1数据专题34项通过。
-- 前端：8个Vitest文件24项通过、typecheck、生产构建通过（本容器Node22.16，低于推荐patch；正式CI使用满足engines的Node22）。
-- 全量回归曾发现原盘中研究状态被历史回退误清，已修复；重跑后仅剩旧版本断言失败，839通过/1跳过/1失败。版本测试已改为同时核对pyproject、Settings、前端package与lock为1.0.3，单独回归通过。
-- 新增离线任务与首次指数注册表2项回归通过；避免没有Token时连已存历史都不能重算。
-- 本容器Chromium在导航时被策略拒绝ERR_BLOCKED_BY_ADMINISTRATOR，不能把本机E2E标通过；同一真实HTTP Playwright套件提交workspace-ci执行，不删除或跳过断言。
+- 本机前端：8个Vitest文件24项、typecheck、build通过；容器Node22.16低于推荐patch，正式CI使用满足engines的Node22.23.2。
+- 全量回归先发现原盘中研究状态被历史回退误清，已修复；版本测试由旧1.0.1断言改为核对pyproject/Settings/前端package与lock同时为1.0.3。
+- 新增离线任务与首次指数注册表2项通过。缓存重算不因缺Token实例化上游SDK。
+- 本机Chromium在URL导航时被策略拒绝ERR_BLOCKED_BY_ADMINISTRATOR，没有绕过策略或删测试，转云端真实HTTP Playwright。
+
+## b0e5f82b 云端验收
+
+固定提交：b0e5f82bd8f4716e69836108ce45940305779ff3。
+workspace-ci https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/34300195856 成功：专题、audit、类型、24项Vitest、build、普通浏览器11项和认证1项全部通过。报告stats无跳过、无flaky；截图包括真实原模板内收藏、指数蜡烛图、AI连接指引。
+
+原完整ci https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/34300195829 失败：843项中841通过/1跳过/1失败。唯一失败是根HANDOFF重整后遗漏了显式认证部署键，不是业务用例失败。已恢复AUTH_ENABLED、DATABASE_URL、AUTO_CREATE_SCHEMA、Secure Cookie和仅空库bootstrap说明；保留原测试并再次运行全套CI。该旧失败记录不能写成全绿。
+
+工作站证据artifact 10084683589 SHA256=764cec792005f90cecaba41f3392b9f5a5fa595a799a194622318a25e3193488。原artifact为PR测试合并树a3df3620，head对应b0e5f82b；三处关键应用文件哈希与已审查source一致，一次性传输材料与apply工作流已清除。
 
 ## 最终CI门禁
 
