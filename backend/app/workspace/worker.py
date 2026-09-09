@@ -116,11 +116,13 @@ def task_sequence(kind: str, codes: list[str], lookback: int) -> list[tuple[str,
                ("refresh_quotes", {"codes": codes or None}), ("refresh_signals", {}),
                ("refresh_decision_board", {})]
         if kind == "refresh":
-            seq += [("refresh_sector_snapshots", {}), ("refresh_market_context", {}), ("refresh_news", {"since_hours": 72})]
+            seq += [("refresh_sector_snapshots", {}), ("refresh_market_context", {}), ("refresh_index_history", {}), ("refresh_news", {"since_hours": 72})]
         return seq
-    return {"quotes": [("refresh_quotes", {"codes": codes or None}), ("refresh_decision_board", {})],
+    return {"recompute": [("refresh_indicators", {}), ("refresh_forecasts", {}), ("refresh_signals", {}), ("refresh_decision_board", {})],
+            "quotes": [("refresh_quotes", {"codes": codes or None}), ("refresh_decision_board", {})],
             "news": [("refresh_news", {"since_hours": 72})],
-            "context": [("refresh_sector_snapshots", {}), ("refresh_market_context", {})],
+            "context": [("refresh_sector_snapshots", {}), ("refresh_market_context", {}), ("refresh_index_history", {})],
+            "index_history": [("refresh_index_history", {"lookback_days": lookback})],
             "validate": [("validate_forecasts", {})], "shadow_audit": [("shadow_run_audit", {})]}.get(kind, [])
 
 
@@ -138,11 +140,12 @@ def execute(job_id: str) -> int:
     tasks = None
     failed = False
     try:
-        tasks = TaskService(settings)
         kind = request["task"]
+        from app.workspace.offline_tasks import CacheOnlyTaskService
+        tasks = CacheOnlyTaskService(settings) if kind in {"recompute", "factors"} else TaskService(settings)
         if kind == "factors":
             with session_scope() as db:
-                report = factor_diagnostics.run(db, settings)
+                report = factor_diagnostics.run(db, settings, selected=request.get("factor_names", []))
                 row = db.get(WorkspaceDataJob, job_id)
                 row.result_json = {"factor_report": report, "steps": []}
                 row.status = "succeeded" if report.get("status") == "diagnostic" else "partial"
@@ -179,11 +182,10 @@ def execute(job_id: str) -> int:
                 raise ValueError("unsupported workspace task")
         # No catalog bootstrap is needed when selected instruments are already
         # known. The separate catalog task enrolls nothing by itself.
-        bar_failed = False
         for task_name, kwargs in sequence:
-            if bar_failed and task_name in {"refresh_indicators", "refresh_forecasts", "refresh_signals", "refresh_decision_board"}:
-                steps.append({"task": task_name, "status": "skipped", "reason": "bar_refresh_failed_preserving_previous_snapshots"})
-                continue
+            # Each service now gates individual instruments. A failed download
+            # keeps old bars with their old source date; it does not hide good
+            # instruments or price-only historical charts from this batch.
             with session_scope() as db:
                 row = db.get(WorkspaceDataJob, job_id)
                 if row.status != "running":
@@ -197,11 +199,8 @@ def execute(job_id: str) -> int:
                 summary = {key: value for key, value in outcome.items() if key in {"inserted", "updated", "unchanged", "instruments", "count", "status", "received", "requested", "missing", "degraded", "realtime", "source_timestamp_verified"} and isinstance(value, (int, float, bool, str))}
                 steps.append({"task": task_name, "status": state, "summary": summary})
                 failed |= partial
-                if task_name == "refresh_bars" and partial:
-                    bar_failed = True
             except Exception as exc:
                 failed = True
-                bar_failed |= task_name == "refresh_bars"
                 steps.append({"task": task_name, "status": "failed", "reason": type(exc).__name__})
         with session_scope() as db:
             row = db.get(WorkspaceDataJob, job_id)

@@ -79,6 +79,9 @@ class CompositeProvider(MarketProvider):
         self.last_trace: list[ProviderTrace] = []
         self._closed = False
 
+    def fetch_index_bars(self, symbol, start_date, end_date):
+        return self._invoke("fetch_index_bars", lambda p: p.fetch_index_bars(symbol, start_date, end_date))
+
     def close(self) -> None:
         if self._closed:
             return

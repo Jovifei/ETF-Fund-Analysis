@@ -81,6 +81,10 @@ class TushareProvider(MarketProvider):
             )
         return None
 
+    def fetch_index_bars(self, symbol, start_date, end_date):
+        from app.providers.index_history import tushare_index
+        return tushare_index(self, symbol, start_date, end_date)
+
     def list_instruments(self, codes: list[str] | None = None) -> list[InstrumentRecord]:
         selected = {c.upper() for c in codes} if codes else None
         config_items = [

@@ -175,14 +175,29 @@ def instrument_detail(db: Session, settings: Settings, code: str, user_id: int |
         if item:
             forecast_rows[str(horizon)] = {name: getattr(item, name) for name in ("p_up", "expected_return", "q10", "q50", "q90", "sample_count", "confidence", "calibration_status", "model_version", "config_hash", "terminal_price_q10", "terminal_price_q50", "terminal_price_q90")}
             forecast_rows[str(horizon)]["as_of_date"] = iso(item.as_of_date)
+    from app.providers.data_contract import history_issues
+    issue = history_issues(db, settings, [inst.id]).get(inst.id)
+    view_quote = quote_view(quote, settings)
+    display_chart = chart_data(db, settings, code, "1d", 60)
+    last = ((display_chart or {}).get("bars") or [None])[-1]
+    display_values = indicator.values_json if indicator and not issue else {}
+    if not display_values and last:
+        display_values = last["indicators"]
+    if view_quote["price"] is None and last:
+        view_quote = {**view_quote, "price": last["close"], "status": "historical_close",
+                      "source": last["source"], "source_time": last["date"],
+                      "price_basis": "historical_close", "is_realtime": False}
+    if issue:
+        forecast_rows = {}
     personal = next((item for item in holdings_view(db, settings, user_id)["items"] if item["ts_code"] == code), None)
     return {
         "instrument": {"ts_code": code, "name": inst.name, "kind": inst.kind, "theme_l1": inst.theme_l1, "theme_l2": inst.theme_l2, "benchmark": inst.benchmark},
         "decision": compact_row(row) if row else None, "snapshot_id": (row or {}).get("snapshot_id"),
-        "decision_time": (row or {}).get("generated_at"), "quote": quote_view(quote, settings),
-        "indicator_values": indicator.values_json if indicator else {}, "indicator_version": indicator.version if indicator else None,
-        "indicator_as_of": iso(indicator.as_of_date) if indicator else None, "forecasts": forecast_rows,
-        "support_resistance": SupportResistanceService(settings).latest(db, inst.id),
+        "decision_time": (row or {}).get("generated_at"), "quote": view_quote,
+        "history_issue": issue, "indicator_basis": "persisted_snapshot" if indicator and not issue else "historical_price_display",
+        "indicator_values": display_values, "indicator_version": indicator.version if indicator and not issue else settings.load_strategy()["indicator_version"],
+        "indicator_as_of": iso(indicator.as_of_date) if indicator and not issue else (last or {}).get("date"), "forecasts": forecast_rows,
+        "support_resistance": None if issue else SupportResistanceService(settings).latest(db, inst.id),
         "forecast_scenario": (row or {}).get("forecast_scenario"), "holding": personal,
         "actionable": False, "research_only": True,
     }
@@ -210,11 +225,9 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
     from app.providers.data_contract import LEGACY_SOURCES
     legacy_units = settings.market_provider != "mock" and any(row["source"] in LEGACY_SOURCES for row in rows)
     if legacy_units:
-        return {"ts_code": code, "interval": interval, "available": bool(rows),
-            "bars": [{**row, "volume": None, "amount": None, "indicators": {}} for row in rows[-limit:]],
-            "adjust": adjust, "currency": "CNY", "qualification": "legacy_units_unverified", "actionable": False,
-            "cost_overlay_allowed": adjust == "none", "sr_overlay_allowed": False, "support_resistance": None,
-            "indicator_note": "旧行情单位需要完整重抓；暂仅展示价格，不显示未修复量能、指标或支撑压力。"}
+        # Core chart fields are price-derived only. Do not publish volume-based
+        # outputs or change the persisted shared indicator/strategy snapshots.
+        rows = [{**row, "volume": None, "amount": None} for row in rows]
     series = cached_indicator_series(rows, strategy["indicator"])
     now = datetime.now(SHANGHAI)
     for row in series:
@@ -227,15 +240,18 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
         matches = all(abs(float(values[key]) - series[-1]["indicators"][key]) <= (0.011 if key.startswith(("kdj", "rsi")) else 0.00011) for key in comparable) if comparable else None
     mock = settings.market_provider == "mock" or any("mock" in str(row["source"]).lower() for row in rows)
     sr = SupportResistanceService(settings).latest(db, inst.id)
+    price_only = legacy_units or any(row["volume"] is None for row in rows)
+    if price_only:
+        sr = None
     return {
         "ts_code": code, "interval": interval, "available": bool(series), "bars": series[-limit:],
         "adjust": adjust, "currency": "CNY", "source_bars": len(rows), "history_truncated": truncated,
         "indicator_version": strategy["indicator_version"], "indicator_basis": "shared_python_core_formulas_full_available_history",
         "core_snapshot_match": matches, "source_as_of": rows[-1]["date"] if rows else None,
-        "qualification": "mock" if mock else "research_only", "actionable": False,
+        "qualification": "mock" if mock else "legacy_units_unverified" if legacy_units else "historical_price_only" if price_only else "research_only", "actionable": False,
         "cost_overlay_allowed": adjust == "none", "sr_overlay_allowed": len(adjustments) == 1 and bool(sr),
         "support_resistance": sr if len(adjustments) == 1 else None,
-        "indicator_note": "图表由服务端统一公式生成；支撑压力为当前快照，不是历史当时已知的点位。",
+        "indicator_note": "历史价格指标可展示；量能缺失或旧单位未验证，禁止生成操作级信号。" if price_only else "图表由服务端统一公式生成；支撑压力为当前快照，不是历史当时已知的点位。",
     }
 
 

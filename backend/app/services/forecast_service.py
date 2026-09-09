@@ -299,7 +299,11 @@ class ForecastService:
     def _frames(self, db: Session, instruments: list[Instrument]) -> dict[int, pd.DataFrame]:
         frames: dict[int, pd.DataFrame] = {}
         panel: list[pd.DataFrame] = []
+        from app.providers.data_contract import history_issues
+        issues = history_issues(db, self.settings, [item.id for item in instruments])
         for instrument in instruments:
+            if instrument.id in issues:
+                continue
             rows = db.scalars(
                 select(DailyBar)
                 .where(DailyBar.instrument_id == instrument.id)

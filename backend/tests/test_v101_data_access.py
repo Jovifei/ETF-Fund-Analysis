@@ -160,7 +160,10 @@ def test_legacy_chart_does_not_display_unrepaired_volume(v101_db):
     data=chart_data(v101_db,Settings(_env_file=None).model_copy(update={'market_provider':'akshare'}),inst.ts_code,'1d',260)
     assert data['available'] and data['qualification']=='legacy_units_unverified'
     assert data['bars'][0]['close']==1.2 and data['bars'][0]['volume'] is None
-    assert not data['sr_overlay_allowed'] and data['bars'][0]['indicators']=={}
+    assert not data['sr_overlay_allowed']
+    # v1.0.3 price-only chart values are allowed; unit-dependent outputs remain absent.
+    assert 'volume_ratio' not in data['bars'][0]['indicators']
+    assert data['bars'][0]['indicators']['ma20'] is None
 
 
 def test_tushare_minute_wires_official_freq_and_canonical_units():

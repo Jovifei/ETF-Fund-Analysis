@@ -5,6 +5,8 @@ import { useRouter } from 'vue-router'
 import { api, errorText } from '../lib/api'
 import { pct, direction } from '../lib/format'
 import type { SearchItem } from '../lib/types'
+import {useFavorites} from '../stores/favorites'
+const favorites=useFavorites()
 const router = useRouter(), root = ref<HTMLElement | null>(null), query = ref(''), open = ref(false), rows = ref<SearchItem[]>([]), loading = ref(false), error = ref(''), message = ref(''), active = ref(0), saving = ref('')
 let controller: AbortController | null = null, timer: ReturnType<typeof setTimeout> | undefined, sequence = 0
 watch(query, () => {
@@ -21,7 +23,7 @@ watch(query, () => {
 })
 function close() { open.value = false }
 function go(row: SearchItem, action: string) { close(); if (action === 'chart') void router.push(`/etf/${row.ts_code}`); else if (action === 'holding') void router.push({ path: '/holdings', query: { code: row.ts_code } }); else void router.push({ path: '/ai', query: { code: row.ts_code } }) }
-async function addWatch(row: SearchItem) { if (saving.value) return; saving.value = row.ts_code; try { await api('/api/watchlist/entries', { method: 'POST', body: { code: row.ts_code } }); row.watched = true; message.value = `${row.name}已加入自选，未修改持仓。` } catch (e) { error.value = errorText(e) } finally { saving.value = '' } }
+async function addWatch(row: SearchItem) { if (saving.value) return; saving.value = row.ts_code; try { await api('/api/watchlist/entries', { method: 'POST', body: { code: row.ts_code } }); row.watched = true; await favorites.reload(); message.value = `${row.name}已加入自选，未修改持仓。` } catch (e) { error.value = errorText(e) } finally { saving.value = '' } }
 function key(event: KeyboardEvent) {
   if (event.key === 'Escape') close()
   if (event.target instanceof HTMLInputElement && event.key === 'ArrowDown') { event.preventDefault(); open.value = true; active.value = Math.min(Math.max(0, rows.value.length - 1), active.value + 1) }

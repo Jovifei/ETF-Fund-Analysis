@@ -102,11 +102,21 @@ class ReviewRequest(StrictModel):
 
 
 class DataRequest(StrictModel):
-    task: Literal["refresh", "onboard", "factors", "validate", "shadow_audit", "prices", "quotes", "catalog", "news", "context", "minutes"]
+    task: Literal["refresh", "onboard", "factors", "validate", "shadow_audit", "prices", "quotes", "catalog", "news", "context", "minutes", "index_history", "recompute"]
+    factor_names: list[Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_]{1,64}$")]] = Field(default_factory=list, max_length=12)
     interval: Literal["30m", "60m"] = "30m"
     codes: list[Code] = Field(default_factory=list, max_length=30)
     lookback_days: int = Field(default=420, ge=30, le=1800)
     request_key: str = Field(pattern=r"^[a-zA-Z0-9_-]{16,64}$")
+
+
+    @model_validator(mode="after")
+    def factor_selection(self):
+        if self.factor_names and self.task != "factors":
+            raise ValueError("factor_names only accepted for factors tasks")
+        if len(set(self.factor_names)) != len(self.factor_names):
+            raise ValueError("duplicate factors rejected")
+        return self
 
 
 class Preferences(StrictModel):
