@@ -1,0 +1,39 @@
+name: v101-public-data-probe
+on:
+  push:
+    branches: [feat/v1.0.1-data-access]
+    paths:
+      - 'backend/app/providers/**'
+      - 'scripts/probe_data_sources_v101.py'
+      - '.github/workflows/data-probe-v101.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-observations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install adapter dependencies
+        run: pip install -e . akshare feedparser
+      - name: Read bounded public samples, never qualify or write a database
+        env:
+          MARKET_PROVIDER: public_composite
+          TUSHARE_TOKEN: ''
+          FTSHARE_ENABLED: 'false'
+          ANALYSIS_ENABLED: 'false'
+          LLM_ENABLED: 'false'
+        run: python scripts/probe_data_sources_v101.py --public-only --timeout 8 --include-catalog --include-news --output /tmp/data-probe-v101.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: data-probe-v101-${{ github.run_id }}
+          path: /tmp/data-probe-v101.json
+          retention-days: 14

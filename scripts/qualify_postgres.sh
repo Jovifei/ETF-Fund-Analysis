@@ -61,8 +61,8 @@ PG_IMAGE="postgres:16-alpine"
 HOST_PORT="15432"
 PG_USER="qualify"
 PG_DB="fund_qualify"
-EXPECTED_HEAD="f1a2b3c4d5e6"
-DOWNGRADE_REV="e7f8a9b0c1d2"
+EXPECTED_HEAD="d40609090002"
+DOWNGRADE_REV="c2d3e4f5a6b7"
 PROD_DB_NAME="fund_decision"   # docker-compose.yml POSTGRES_DB default
 REPORT_DIR="deployment_reports"
 READY_TIMEOUT_SECONDS=60
@@ -554,6 +554,8 @@ verify_integrity_step() {
 # Reporting
 # --------------------------------------------------------------------------
 # shellcheck disable=SC2317 # invoked through report/EXIT paths
+# Invoked through the EXIT trap below; shellcheck cannot infer that indirect call.
+# shellcheck disable=SC2329
 write_json() {
     local total_ms result
     total_ms=$(( $(now_ms) - RUN_START ))
@@ -577,6 +579,8 @@ write_json() {
 }
 
 # shellcheck disable=SC2317 # invoked through report/EXIT paths
+# Invoked through the EXIT trap below; shellcheck cannot infer that indirect call.
+# shellcheck disable=SC2329
 print_summary() {
     local total_ms
     total_ms=$(( $(now_ms) - RUN_START ))
@@ -602,6 +606,8 @@ print_summary() {
 }
 
 # shellcheck disable=SC2317 # invoked through report/EXIT paths
+# Invoked through the EXIT trap below; shellcheck cannot infer that indirect call.
+# shellcheck disable=SC2329
 on_exit() {
     FINAL_RC=$?
     trap - EXIT

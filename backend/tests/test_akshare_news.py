@@ -9,8 +9,8 @@ from app.providers.akshare import AKShareProvider
 
 
 def test_akshare_fetch_news_eastmoney():
-    provider = AKShareProvider(Settings(_env_file=None))
     mock_ak = MagicMock()
+    provider = AKShareProvider(Settings(_env_file=None), ak_client=mock_ak)
     df = pd.DataFrame([
         {
             "标题": "利好！多只宽基ETF持续放量",
@@ -20,7 +20,6 @@ def test_akshare_fetch_news_eastmoney():
         }
     ])
     mock_ak.stock_info_global_em.return_value = df
-    provider.ak = mock_ak
 
     records = provider.fetch_news(since_hours=24)
     assert len(records) == 1
@@ -32,8 +31,8 @@ def test_akshare_fetch_news_eastmoney():
 
 
 def test_akshare_fetch_news_cls_fallback():
-    provider = AKShareProvider(Settings(_env_file=None))
     mock_ak = MagicMock()
+    provider = AKShareProvider(Settings(_env_file=None), ak_client=mock_ak)
     # Eastmoney throws exception, CLS succeeds
     mock_ak.stock_info_global_em.side_effect = RuntimeError("EM timeout")
     df_cls = pd.DataFrame([
@@ -45,7 +44,6 @@ def test_akshare_fetch_news_cls_fallback():
         }
     ])
     mock_ak.stock_info_global_cls.return_value = df_cls
-    provider.ak = mock_ak
 
     records = provider.fetch_news(since_hours=24)
     assert len(records) == 1

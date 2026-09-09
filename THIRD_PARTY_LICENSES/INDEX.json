@@ -1,0 +1,207 @@
+[
+  {
+    "package": "@babel/helper-string-parser",
+    "version": "7.29.7",
+    "license_file": "babel__helper-string-parser__LICENSE.txt"
+  },
+  {
+    "package": "@babel/helper-validator-identifier",
+    "version": "7.29.7",
+    "license_file": "babel__helper-validator-identifier__LICENSE.txt"
+  },
+  {
+    "package": "@babel/parser",
+    "version": "7.29.8",
+    "license_file": "babel__parser__LICENSE.txt"
+  },
+  {
+    "package": "@babel/types",
+    "version": "7.29.8",
+    "license_file": "babel__types__LICENSE.txt"
+  },
+  {
+    "package": "@jridgewell/sourcemap-codec",
+    "version": "1.6.0",
+    "license_file": "jridgewell__sourcemap-codec__LICENSE.txt"
+  },
+  {
+    "package": "@vue/compiler-core",
+    "version": "3.5.21",
+    "license_file": "vue__compiler-core__LICENSE.txt"
+  },
+  {
+    "package": "@vue/compiler-core/node_modules/entities",
+    "version": "4.5.0",
+    "license_file": "vue__compiler-core__node_modules__entities__LICENSE.txt"
+  },
+  {
+    "package": "@vue/compiler-core/node_modules/estree-walker",
+    "version": "2.0.2",
+    "license_file": "vue__compiler-core__node_modules__estree-walker__LICENSE.txt"
+  },
+  {
+    "package": "@vue/compiler-dom",
+    "version": "3.5.21",
+    "license_file": "vue__compiler-dom__LICENSE.txt"
+  },
+  {
+    "package": "@vue/compiler-sfc",
+    "version": "3.5.21",
+    "license_file": "vue__compiler-sfc__LICENSE.txt"
+  },
+  {
+    "package": "@vue/compiler-sfc/node_modules/estree-walker",
+    "version": "2.0.2",
+    "license_file": "vue__compiler-sfc__node_modules__estree-walker__LICENSE.txt"
+  },
+  {
+    "package": "@vue/compiler-ssr",
+    "version": "3.5.21",
+    "license_file": "vue__compiler-ssr__LICENSE.txt"
+  },
+  {
+    "package": "@vue/devtools-api",
+    "version": "7.7.10",
+    "license_file": "vue__devtools-api__LICENSE.txt"
+  },
+  {
+    "package": "@vue/devtools-kit",
+    "version": "7.7.10",
+    "license_file": "vue__devtools-kit__LICENSE.txt"
+  },
+  {
+    "package": "@vue/devtools-shared",
+    "version": "7.7.10",
+    "license_file": "vue__devtools-shared__LICENSE.txt"
+  },
+  {
+    "package": "@vue/reactivity",
+    "version": "3.5.21",
+    "license_file": "vue__reactivity__LICENSE.txt"
+  },
+  {
+    "package": "@vue/runtime-core",
+    "version": "3.5.21",
+    "license_file": "vue__runtime-core__LICENSE.txt"
+  },
+  {
+    "package": "@vue/runtime-dom",
+    "version": "3.5.21",
+    "license_file": "vue__runtime-dom__LICENSE.txt"
+  },
+  {
+    "package": "@vue/server-renderer",
+    "version": "3.5.21",
+    "license_file": "vue__server-renderer__LICENSE.txt"
+  },
+  {
+    "package": "@vue/shared",
+    "version": "3.5.21",
+    "license_file": "vue__shared__LICENSE.txt"
+  },
+  {
+    "package": "birpc",
+    "version": "2.9.0",
+    "license_file": "birpc__LICENSE.txt"
+  },
+  {
+    "package": "copy-anything",
+    "version": "4.1.0",
+    "license_file": "copy-anything__LICENSE.txt"
+  },
+  {
+    "package": "csstype",
+    "version": "3.2.3",
+    "license_file": "csstype__LICENSE.txt"
+  },
+  {
+    "package": "hookable",
+    "version": "5.5.3",
+    "license_file": "hookable__LICENSE.md.txt"
+  },
+  {
+    "package": "klinecharts",
+    "version": "9.8.12",
+    "license_file": "klinecharts__NOTICE.txt"
+  },
+  {
+    "package": "klinecharts",
+    "version": "9.8.12",
+    "license_file": "klinecharts__LICENSE.txt"
+  },
+  {
+    "package": "lucide-vue-next",
+    "version": "0.468.0",
+    "license_file": "lucide-vue-next__LICENSE.txt"
+  },
+  {
+    "package": "magic-string",
+    "version": "0.30.21",
+    "license_file": "magic-string__LICENSE.txt"
+  },
+  {
+    "package": "mitt",
+    "version": "3.0.1",
+    "license_file": "mitt__LICENSE.txt"
+  },
+  {
+    "package": "nanoid",
+    "version": "3.3.18",
+    "license_file": "nanoid__LICENSE.txt"
+  },
+  {
+    "package": "perfect-debounce",
+    "version": "1.0.0",
+    "license_file": "perfect-debounce__LICENSE.txt"
+  },
+  {
+    "package": "picocolors",
+    "version": "1.1.1",
+    "license_file": "picocolors__LICENSE.txt"
+  },
+  {
+    "package": "pinia",
+    "version": "3.0.3",
+    "license_file": "pinia__LICENSE.txt"
+  },
+  {
+    "package": "postcss",
+    "version": "8.5.28",
+    "license_file": "postcss__LICENSE.txt"
+  },
+  {
+    "package": "rfdc",
+    "version": "1.4.1",
+    "license_file": "rfdc__LICENSE.txt"
+  },
+  {
+    "package": "source-map-js",
+    "version": "1.2.1",
+    "license_file": "source-map-js__LICENSE.txt"
+  },
+  {
+    "package": "speakingurl",
+    "version": "14.0.1",
+    "license_file": "speakingurl__LICENSE.txt"
+  },
+  {
+    "package": "superjson",
+    "version": "2.2.6",
+    "license_file": "superjson__LICENSE.txt"
+  },
+  {
+    "package": "typescript",
+    "version": "5.9.2",
+    "license_file": "typescript__LICENSE.txt.txt"
+  },
+  {
+    "package": "vue",
+    "version": "3.5.21",
+    "license_file": "vue__LICENSE.txt"
+  },
+  {
+    "package": "vue-router",
+    "version": "4.5.1",
+    "license_file": "vue-router__LICENSE.txt"
+  }
+]

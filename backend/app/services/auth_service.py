@@ -97,6 +97,18 @@ class AuthService:
     def list_users(self, db: Session) -> list[AuthUser]:
         return list(db.scalars(select(AuthUser).order_by(AuthUser.username)))
 
+    def promote_user(self, db: Session, *, username: str) -> AuthUser:
+        """Promote one existing active account without changing credentials."""
+        self._acquire_bootstrap_guard(db)
+        user = db.scalar(select(AuthUser).where(AuthUser.username == normalize_identifier(username)))
+        if user is None:
+            raise UserNotFoundError("account not found")
+        if user.status != "active":
+            raise UserLifecycleError("disabled account cannot be promoted")
+        user.role = "admin"
+        db.flush()
+        return user
+
     def disable_user(self, db: Session, user_id: int) -> AuthUser:
         # The active-admin count and status transition must share the same
         # database serialization boundary.  PostgreSQL locks this singleton

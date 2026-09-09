@@ -1,0 +1,43 @@
+{
+  "schema_version": "data-probe-v1.0.1",
+  "as_of": "2026-09-06T17:19:51.930077+00:00",
+  "scope": "read_only_samples_not_service_sla",
+  "source_version": "1.0.1",
+  "public_only": true,
+  "probe_complete": true,
+  "all_requested_readable": false,
+  "probes": [
+    {
+      "provider": "akshare",
+      "operation": "all",
+      "status": "unavailable",
+      "reason": "ProviderError",
+      "called": false
+    },
+    {
+      "provider": "tushare",
+      "operation": "all",
+      "status": "not_configured",
+      "reason": "credentials_missing",
+      "called": false
+    },
+    {
+      "provider": "ftshare",
+      "operation": "all",
+      "status": "not_probed",
+      "reason": "qualification_unchanged",
+      "called": false
+    },
+    {
+      "provider": "rss",
+      "operation": "news",
+      "status": "not_probed",
+      "reason": "use_explicit_private_feed_configuration",
+      "called": false
+    }
+  ],
+  "database_written": false,
+  "credentials_exported": false,
+  "qualification_changed": false,
+  "actionable": false
+}

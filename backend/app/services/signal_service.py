@@ -348,6 +348,8 @@ class SignalService:
         now = datetime.now(self.settings.timezone)
         instruments = db.scalars(select(Instrument).where(Instrument.enabled.is_(True))).all()
 
+        from app.providers.data_contract import history_issues
+        blocked = history_issues(db, self.settings, [item.id for item in instruments])
         latest_quotes: dict[int, QuoteSnapshot] = {}
         latest_indicators: dict[int, IndicatorSnapshot] = {}
         latest_forecasts: dict[int, dict[int, ForecastSnapshot]] = {}
@@ -367,14 +369,14 @@ class SignalService:
                 .order_by(IndicatorSnapshot.as_of_date.desc(), IndicatorSnapshot.generated_at.desc())
                 .limit(1)
             )
-            if indicator:
+            if indicator and instrument.id not in blocked:
                 latest_indicators[instrument.id] = indicator
             forecasts = db.scalars(
                 select(ForecastSnapshot)
                 .where(ForecastSnapshot.instrument_id == instrument.id)
                 .order_by(ForecastSnapshot.as_of_date.desc(), ForecastSnapshot.generated_at.desc())
             ).all()
-            latest_forecasts[instrument.id] = self._latest_by_horizon(list(forecasts))
+            latest_forecasts[instrument.id] = {} if instrument.id in blocked else self._latest_by_horizon(list(forecasts))
             previous = db.scalar(
                 select(SignalSnapshot)
                 .where(SignalSnapshot.instrument_id == instrument.id)

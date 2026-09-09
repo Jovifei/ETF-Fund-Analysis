@@ -51,6 +51,10 @@ class PreflightService:
         if at.tzinfo is None:
             at = at.replace(tzinfo=self.settings.timezone)
         missing_core: list[str] = []
+        from app.providers.data_contract import history_issues
+        issue = history_issues(db, self.settings, [instrument.id]).get(instrument.id)
+        if issue:
+            missing_core.append(issue)
         missing_optional: list[str] = []
         warnings: list[str] = []
 

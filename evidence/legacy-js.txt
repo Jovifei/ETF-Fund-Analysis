@@ -1,0 +1,124 @@
+TAP version 13
+# Subtest: KDJ follows reference thresholds exactly
+ok 1 - KDJ follows reference thresholds exactly
+  ---
+  duration_ms: 17.776713
+  type: 'test'
+  ...
+# Subtest: KDJ death cross has priority over J range
+ok 2 - KDJ death cross has priority over J range
+  ---
+  duration_ms: 0.894249
+  type: 'test'
+  ...
+# Subtest: score uses six documented components and stays bounded
+ok 3 - score uses six documented components and stays bounded
+  ---
+  duration_ms: 1.474306
+  type: 'test'
+  ...
+# Subtest: sub-40 confidence is ignored while confidence 40 remains a weak signal
+ok 4 - sub-40 confidence is ignored while confidence 40 remains a weak signal
+  ---
+  duration_ms: 0.7287
+  type: 'test'
+  ...
+# Subtest: snapshot connection state expires old data and exposes poll failures
+ok 5 - snapshot connection state expires old data and exposes poll failures
+  ---
+  duration_ms: 0.754289
+  type: 'test'
+  ...
+# Subtest: mock and stale data are heavily discounted
+ok 6 - mock and stale data are heavily discounted
+  ---
+  duration_ms: 0.568087
+  type: 'test'
+  ...
+# Subtest: percentage contract uses decimal ratios exactly once
+ok 7 - percentage contract uses decimal ratios exactly once
+  ---
+  duration_ms: 0.67538
+  type: 'test'
+  ...
+# Subtest: score color follows Chinese market red-strong green-risk convention
+ok 8 - score color follows Chinese market red-strong green-risk convention
+  ---
+  duration_ms: 0.598343
+  type: 'test'
+  ...
+# Subtest: relative direction arrows follow company screenshot semantics
+ok 9 - relative direction arrows follow company screenshot semantics
+  ---
+  duration_ms: 0.843153
+  type: 'test'
+  ...
+# Subtest: confidence interpretation matches reference bands
+ok 10 - confidence interpretation matches reference bands
+  ---
+  duration_ms: 0.876493
+  type: 'test'
+  ...
+# Subtest: main source contains the exact thirteen company-reference columns
+ok 11 - main source contains the exact thirteen company-reference columns
+  ---
+  duration_ms: 0.193913
+  type: 'test'
+  ...
+# Subtest: main table keeps score inside instrument cell instead of a separate score column
+ok 12 - main table keeps score inside instrument cell instead of a separate score column
+  ---
+  duration_ms: 0.107272
+  type: 'test'
+  ...
+# Subtest: uncalibrated p_up is labelled as historical neighbor frequency
+ok 13 - uncalibrated p_up is labelled as historical neighbor frequency
+  ---
+  duration_ms: 0.59621
+  type: 'test'
+  ...
+# Subtest: forecast score shrinks weak uncalibrated evidence toward neutral
+ok 14 - forecast score shrinks weak uncalibrated evidence toward neutral
+  ---
+  duration_ms: 0.61664
+  type: 'test'
+  ...
+# Subtest: auth exposes registration and tab switching
+ok 15 - auth exposes registration and tab switching
+  ---
+  duration_ms: 0.533475
+  type: 'test'
+  ...
+# Subtest: old research hashes resolve to the intended first-class task route
+ok 16 - old research hashes resolve to the intended first-class task route
+  ---
+  duration_ms: 0.818926
+  type: 'test'
+  ...
+# Subtest: first-class task paths win over unrelated hashes
+ok 17 - first-class task paths win over unrelated hashes
+  ---
+  duration_ms: 0.118389
+  type: 'test'
+  ...
+# Subtest: legacy hash destinations canonicalize to clean task URLs
+ok 18 - legacy hash destinations canonicalize to clean task URLs
+  ---
+  duration_ms: 0.100271
+  type: 'test'
+  ...
+# Subtest: research ETF surfaces share the single global detail route
+ok 19 - research ETF surfaces share the single global detail route
+  ---
+  duration_ms: 0.637352
+  type: 'test'
+  ...
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 77.309372

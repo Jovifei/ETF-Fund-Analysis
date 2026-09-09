@@ -63,7 +63,7 @@ class Settings(BaseSettings):
 
     app_name: str = "中国 ETF/LOF 私有决策看板"
     app_env: Literal["development", "test", "production"] = "development"
-    app_version: str = "0.8.0"
+    app_version: str = "1.0.3"
     timezone_name: str = Field(default="Asia/Shanghai", alias="TZ")
 
     database_url: str = "sqlite:///./fund_decision.sqlite3"
@@ -98,9 +98,10 @@ class Settings(BaseSettings):
 
     market_provider: Literal["mock", "tushare", "akshare", "ftshare", "public_composite", "composite"] = "mock"
     allow_mock_fallback: bool = False
-    tushare_token: str = ""
+    tushare_token: str = Field(default="", repr=False, exclude=True)
+    tushare_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
     tushare_realtime_candidates: str = "rt_etf_k,realtime_quote,rt_k"
-    akshare_timeout_seconds: float = 25.0
+    akshare_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
     # FTShare is an explicitly opt-in, read-only public source.  Bounds keep a
     # malformed or unexpectedly large upstream response from becoming a local
     # resource exhaustion vector.

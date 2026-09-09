@@ -1,0 +1,118 @@
+# Reviewed v1.0.1 production override used on the deployment host.
+# The env file is deliberately external and must never be committed.
+name: etf-workspace-v101-production
+
+services:
+  api:
+    image: etf-workspace:v1.0.1-20260907
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+      - /var/lib/china-fund-decision/ocr-transient:size=256m,mode=0700,uid=10001,gid=10001
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    env_file: [/opt/china-fund-decision/.env]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-fundapp}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/${POSTGRES_DB:-fund_decision}
+      APP_NAME: 中国 ETF/LOF 私有决策看板
+      APP_ENV: production
+      APP_VERSION: "1.0.1"
+      AUTH_ENABLED: "true"
+      AUTH_COOKIE_SECURE: "true"
+      AUTO_CREATE_SCHEMA: "false"
+      REGISTRATION_ENABLED: "false"
+      MARKET_PROVIDER: public_composite
+      ALLOW_MOCK_FALLBACK: "false"
+      TUSHARE_TOKEN: ${TUSHARE_TOKEN:-}
+      TUSHARE_TIMEOUT_SECONDS: ${TUSHARE_TIMEOUT_SECONDS:-20}
+      AKSHARE_TIMEOUT_SECONDS: ${AKSHARE_TIMEOUT_SECONDS:-20}
+      NEWS_RSS_URLS: ${NEWS_RSS_URLS:-}
+      NEWS_RSS_TIMEOUT_SECONDS: ${NEWS_RSS_TIMEOUT_SECONDS:-20}
+      MINUTE_BARS_ENABLED: ${MINUTE_BARS_ENABLED:-false}
+      FTSHARE_ENABLED: ${FTSHARE_ENABLED:-false}
+      FTSHARE_QUALIFICATION: ${FTSHARE_QUALIFICATION:-unqualified}
+      LLM_ENABLED: "false"
+      ANALYSIS_ENABLED: "false"
+      OCR_MODE: disabled
+      OCR_TRANSIENT_ROOT: /var/lib/china-fund-decision/ocr-transient
+      REPORTS_DIR: /app/reports
+      BACKUP_DIR: /app/backups
+      WORKSPACE_UI_ENABLED: "true"
+      WORKSPACE_BRIDGE_ENABLED: "false"
+      WORKSPACE_DAILY_REVIEW_ENABLED: "false"
+      TZ: Asia/Shanghai
+    command: [sh, -c, "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    ports: ["127.0.0.1:8080:8000"]
+    volumes:
+      - /opt/china-fund-decision/reports:/app/reports
+      - /opt/china-fund-decision/backups:/app/backups
+    networks: [backend]
+    healthcheck:
+      test: [CMD, curl, -fsS, http://127.0.0.1:8000/api/health]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+      retries: 10
+
+  worker:
+    image: etf-workspace:v1.0.1-20260907
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+      - /var/lib/china-fund-decision/ocr-transient:size=256m,mode=0700,uid=10001,gid=10001
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    env_file: [/opt/china-fund-decision/.env]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-fundapp}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/${POSTGRES_DB:-fund_decision}
+      APP_NAME: 中国 ETF/LOF 私有决策看板
+      APP_ENV: production
+      APP_VERSION: "1.0.1"
+      AUTH_ENABLED: "true"
+      AUTH_COOKIE_SECURE: "true"
+      AUTO_CREATE_SCHEMA: "false"
+      REGISTRATION_ENABLED: "false"
+      MARKET_PROVIDER: public_composite
+      ALLOW_MOCK_FALLBACK: "false"
+      TUSHARE_TOKEN: ${TUSHARE_TOKEN:-}
+      TUSHARE_TIMEOUT_SECONDS: ${TUSHARE_TIMEOUT_SECONDS:-20}
+      AKSHARE_TIMEOUT_SECONDS: ${AKSHARE_TIMEOUT_SECONDS:-20}
+      NEWS_RSS_URLS: ${NEWS_RSS_URLS:-}
+      NEWS_RSS_TIMEOUT_SECONDS: ${NEWS_RSS_TIMEOUT_SECONDS:-20}
+      MINUTE_BARS_ENABLED: ${MINUTE_BARS_ENABLED:-false}
+      FTSHARE_ENABLED: ${FTSHARE_ENABLED:-false}
+      FTSHARE_QUALIFICATION: ${FTSHARE_QUALIFICATION:-unqualified}
+      LLM_ENABLED: "false"
+      ANALYSIS_ENABLED: "false"
+      OCR_MODE: disabled
+      OCR_TRANSIENT_ROOT: /var/lib/china-fund-decision/ocr-transient
+      REPORTS_DIR: /app/reports
+      BACKUP_DIR: /app/backups
+      WORKSPACE_UI_ENABLED: "true"
+      WORKSPACE_BRIDGE_ENABLED: "false"
+      WORKSPACE_DAILY_REVIEW_ENABLED: "false"
+      TZ: Asia/Shanghai
+    command: [python, -m, app.workspace.worker]
+    volumes:
+      - /opt/china-fund-decision/reports:/app/reports
+      - /opt/china-fund-decision/backups:/app/backups
+    networks: [backend]
+    depends_on:
+      api: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, python, scripts/workspace_worker_health.py]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+networks:
+  backend:
+    external: true
+    name: china-fund-decision_backend

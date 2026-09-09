@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from app.core.config import Settings, get_settings
 from app.providers.akshare import AKShareProvider
 from app.providers.base import CapabilityUnavailable, MarketProvider, ProviderError
@@ -10,18 +12,27 @@ from app.providers.rss_news import RssNewsProvider
 from app.providers.tushare import TushareProvider
 
 
+def _with_news(provider, settings):
+    if settings.news_rss_url_list:
+        try:
+            return CompositeProvider([provider, RssNewsProvider(settings)])
+        except Exception as exc:
+            logging.getLogger(__name__).warning("RSS initialization unavailable: %s", type(exc).__name__)
+    return provider
+
+
 def build_provider(settings: Settings | None = None) -> MarketProvider:
     settings = settings or get_settings()
     if settings.market_provider == "mock":
         return MockProvider(settings)
     if settings.market_provider == "tushare":
-        return TushareProvider(settings)
+        return _with_news(TushareProvider(settings), settings)
     if settings.market_provider == "akshare":
-        return AKShareProvider(settings)
+        return _with_news(AKShareProvider(settings), settings)
     if settings.market_provider == "ftshare":
         if not (settings.ftshare_enabled and settings.ftshare_qualification == "qualified"):
             raise CapabilityUnavailable("FTShare provider is disabled or unqualified")
-        return FTShareProvider(settings)
+        return _with_news(FTShareProvider(settings), settings)
 
     providers: list[MarketProvider] = []
     errors: list[str] = []

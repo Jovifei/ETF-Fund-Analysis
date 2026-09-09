@@ -620,3 +620,53 @@ python codex/skills/fund-research/scripts/check_no_secrets.py .
 - [x] Derive report operational-detail inclusion from the persisted owner: system and active-admin reports allow it; member, unknown, and inactive-owner private reports deny it.
 - [x] Documentation: repair the HANDOFF migration chain with `e6f7a8b9c0d1` then `f7a8b9c0d1e2` before auth; align current strategy references to `signal-v0.7.0-research` in the related current-state architecture/implementation/deployment handoffs without changing labeled historical evidence.
 - [ ] Review: ownership = 22 passed (exit 0); auth + password = 55 passed, 1 PostgreSQL safety skip (exit 0); compileall/Node/scoped Ruff/diff check = 0. One full project-venv pytest was started sequentially and completed, but this execution environment truncated its result and did not retain an exit code, so it is not claimed as passed. Full-tree Ruff exits 1 on 86 pre-existing cross-module violations; scoped Ruff for this change passes. No commit, push, deployment, dotenv read, or production database access.
+# v1.0.1 接收、移植、测试与部署执行记录（2026-09-07）
+
+- [x] 校验 ZIP SHA256、目录安全和 `PACKAGE_MANIFEST_V101.json`。
+- [x] 保留原脏工作树；从精确 `9a0ca1812eda24acc390f1b3097662bfd615dfef` 建立隔离分支并移植包内容。
+- [x] 只读核对远端 main、v1.0.0、已有 v1.0.1 分支、开放 PR 与生产 SSH 入口。
+- [x] 在独立 Python 3.12 / Node 环境执行后端、前端、Alembic、PostgreSQL、Playwright、JS/Shell/Compose 和密钥门禁（Windows Bash 不可用，ShellCheck 改在隔离容器执行）。
+- [x] 真实 Provider 小样本：510300.SH、512480.SH；记录各能力、单位、时间、覆盖、入库和失败状态；缺量导致衍生任务诚实 partial。
+- [x] 检查旧生产数据备份/恢复/迁移/单位污染；备份 hash、隔离 staging 恢复、Alembic、OHLC/重复键/空值检查通过，生产 head 为 `d40609090002`。
+- [x] 审查 staged diff，提交功能分支并推送 `224b59f`；`ci` 与 `workspace-ci` 成功；未自动合并 main、不移动标签。PR 创建链接因 GitHub CLI 未登录保留给用户。
+- [x] 按 SSH 只读盘点结果形成生产 override；固定镜像 digest，停止旧 API/scheduler，启用 v1.0.1 API+单 worker；未启动第二个 scheduler。
+- [x] 通过正式域名/API、认证/CSRF、页面、任务、重启保留和 worker health 验收并更新部署收据；认证账户未创建/重置，真实 Provider 资格仍未晋级。
+
+## 当前门禁
+
+- 生产 SSH 只读盘点已连通：远端当前 Git/Compose 与 ZIP 基线不一致；已通过备份、staging 和 CI 后采用独立 v1.0.1 override，未覆盖生产源码。
+- 生产当前由 v1.0.1 镜像/API/单 worker 提供服务；旧 API/scheduler 保持停止状态，数据库 head 已升级。
+- 不读取或输出任何私有配置、Token、Cookie、密码、持仓和备份内容。
+
+## 本轮复核
+
+- 本机接收分支已完成源码、前端、迁移、PostgreSQL、容器镜像、Provider 小样本和离线浏览器验证；真实公共源仅有可用性/覆盖证据，不构成生产资格。
+- 生产备份、隔离 staging 恢复/迁移/单位核验、维护窗口和最终 HTTP/worker 验收均已完成；后续仅在新授权下启用真实数据重抓、分钟线、模型或定时复盘。
+- 本机登录修复：确认 8082 初始数据库无用户；为 live runner 增加显式、带邀请码的本地注册配置和回归测试，正式站注册仍保持关闭。
+
+## v1.0.3 local acceptance repairs — 2026-09-09
+Baseline: 9439563dafc35d7410f9dde39253478a321c96ef. Separate review branch; original fixed-SHA receive tree remains unchanged.
+- [x] Reproduce overlapping Sina price-only history replacing complete cached EM rows; preserve the existing complete row without mixing source fields.
+- [x] Restrict the index download affordance to the three supported A-share indexes and explain unsupported OHLC capability.
+- [x] Preserve bounded sanitized per-index failures in task summaries.
+- [x] RED/GREEN targeted regression, parent diff review, frontend typecheck/24 tests/build/12 ordinary + 1 authenticated Playwright.
+- [x] Parent full backend regression, final source scan/compile/diff, explicit source/test commits a628004 and 49ab0ce.
+- [x] Recheck private-state protection and restore pre-receive consistent backup before replaying the fixed local acceptance pipeline; retain the entire original trial DB separately.
+- [x] Record actual public-source results and unavailable capabilities; qualification unchanged. See docs/LOCAL_ACCEPTANCE_RECEIPT_V103_20260909.md.
+
+Allowed code scope: MarketService history upsert, worker summary, Overview index action, and corresponding regressions. No formula/unit version change, credentials, production server, main merge, tags or model calls. Rollback keeps both consistent DB snapshots and the exact fixed-SHA checkout.
+
+### Final review evidence
+- [x] Sector duplicate/conflict RED/GREEN and parent source review; final full pytest 842 passed, 5 platform/database skips. Latest actual sector run succeeded (90 industry, 175 concept, 1 breadth); original failing batch's exact key was not retained.
+- [x] Final running SHA49ab0ce on loopback8082; API/worker same code and original persistent DB; ordinary app source unchanged after final tests.
+- [x] Provider values, archive hashes, restart cache proof, synthetic-account real-cache screenshots and optional-model blockers recorded in sanitized receipt.
+- [ ] User's original admin session UI acceptance and one official-login/budgeted model run remain pending; no approval inferred from silence.
+
+## v1.0.3 follow-up fixes and deployment — 2026-09-09
+- [x] Push review branch `codex/v103-local-review-20260909` through `1558ad5`, `90225ac`, and `c60a157`.
+- [x] Deploy current SHA to `etf.joviluma.com`; preserve PostgreSQL backup and old image rollback tag; API/worker health verified.
+- [x] Retry index history after bounded-source fix: Shanghai, CSI300, and CSI-all each 1,196 OHLC rows through `2026-09-08`.
+- [x] Retry two ETF history: each 1,196 rows through `2026-09-08`; Sina volume remains missing and does not become actionable.
+- [x] Retry factor diagnostics: price-only instruments allowed for price factors; volume factor coverage remains 0 and report stays `not_qualified`.
+- [x] Fix local PaddleOCR v5 manifest/model-name/input compatibility; synthetic image recognized ETF code, shares, and cost; timeout cleanup passed.
+- [ ] Vibe upstream Windows qualification remains blocked by upstream symlink/path tests; official Codex login, pairing, and one model-budgeted run require Jovi's own interactive login.

@@ -132,7 +132,11 @@ def test_summary_fronts_and_research_only_flag(bootstrapped, db_session):
     summary = payload["summary"]
     assert summary["total"] == len(payload["current_states"])
     assert summary["total"] >= signal_total
-    assert summary["opportunity"] == len(payload["fronts"]["opportunity"])
+    # Summary covers the whole universe, while every front is top-N.
+    # Do not accidentally require the mock market to have at most ten opportunities.
+    assert len(payload["fronts"]["opportunity"]) == min(
+        summary["opportunity"], int(SignalCenterService().config.get("front_size", 10))
+    )
     assert summary["risk"] >= len(payload["fronts"]["risk"])  # 前排只取前 N
     assert summary["take_profit"] >= len(payload["fronts"]["take_profit"])
 
@@ -396,3 +400,14 @@ def test_signal_grade_fallback_is_canonical_without_decision_snapshot(bootstrapp
     high = SignalCenterService().build(db_session, coefficient=1.5)
     assert low["summary"]["opportunity"] == high["summary"]["opportunity"]
     assert low["summary"]["risk"] == high["summary"]["risk"]
+
+
+def test_front_limit_does_not_rewrite_market_totals(bootstrapped, db_session):
+    service = SignalCenterService()
+    baseline = service.build(db_session)
+    for size in (0, 1, 3):
+        service.config["front_size"] = size
+        limited = service.build(db_session)
+        assert limited["summary"] == baseline["summary"]
+        for category in ("opportunity", "risk", "take_profit"):
+            assert len(limited["fronts"][category]) == min(size, limited["summary"][category])

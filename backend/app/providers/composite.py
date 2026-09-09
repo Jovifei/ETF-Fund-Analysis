@@ -79,6 +79,9 @@ class CompositeProvider(MarketProvider):
         self.last_trace: list[ProviderTrace] = []
         self._closed = False
 
+    def fetch_index_bars(self, symbol, start_date, end_date):
+        return self._invoke("fetch_index_bars", lambda p: p.fetch_index_bars(symbol, start_date, end_date))
+
     def close(self) -> None:
         if self._closed:
             return
@@ -172,6 +175,7 @@ class CompositeProvider(MarketProvider):
             return []
 
         selected: dict[str, T] = {}
+        daily_fallbacks: dict[str, T] = {}
         errors: list[str] = []
         unsupported = 0
         successful_calls = 0
@@ -196,6 +200,9 @@ class CompositeProvider(MarketProvider):
                         # Unexpected/extraneous provider rows never widen the
                         # caller's requested universe and never overwrite an
                         # earlier provider's record.
+                        continue
+                    if operation == "fetch_spot_quotes" and str(getattr(row, "source", "")).startswith("tushare:fund_daily"):
+                        daily_fallbacks.setdefault(key, row)
                         continue
                     selected[key] = row
                     accepted += 1
@@ -250,6 +257,8 @@ class CompositeProvider(MarketProvider):
                 )
                 logger.warning("Provider %s operation %s failed: %s", provider.name, operation, label)
 
+        for code, row in daily_fallbacks.items():
+            selected.setdefault(code, row)
         if selected:
             return [selected[code] for code in requested if code in selected]
         if unsupported == len(self.providers):
@@ -274,11 +283,14 @@ class CompositeProvider(MarketProvider):
             lambda provider: provider.fetch_daily_bars(ts_code, start_date, end_date),
         )
 
+    def fetch_minute_bars(self, ts_code: str, interval: str, start_date: date, end_date: date) -> list[BarRecord]:
+        return self._invoke("fetch_minute_bars", lambda provider: provider.fetch_minute_bars(ts_code, interval, start_date, end_date))
+
     def fetch_spot_quotes(self, codes: list[str]) -> list[QuoteRecord]:
         return self._invoke_by_requested_code(
             "fetch_spot_quotes",
             codes,
-            lambda provider, missing: provider.fetch_spot_quotes(missing),
+            lambda provider, missing: getattr(provider, "fetch_current_quotes", provider.fetch_spot_quotes)(missing),
             lambda item: {item.ts_code},
         )
 

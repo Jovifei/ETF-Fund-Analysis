@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import date, datetime
+import time
+from datetime import UTC, date, datetime
 from email.utils import parsedate_to_datetime
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
@@ -29,6 +30,8 @@ class RssNewsProvider(MarketProvider):
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
         self.urls = self.settings.news_rss_url_list
+        if len(self.urls) > 10:
+            raise ProviderError("RSS feed count exceeds 10")
         if not self.urls:
             raise ProviderError("NEWS_RSS_URLS 未配置")
         try:
@@ -39,8 +42,8 @@ class RssNewsProvider(MarketProvider):
         self.tz = ZoneInfo(self.settings.timezone_name)
         for raw in self.urls:
             parsed = urlparse(raw)
-            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-                raise ProviderError(f"非法 RSS URL：{raw}")
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password:
+                raise ProviderError("RSS URL rejected")
 
     def list_instruments(self, codes: list[str] | None = None) -> list[InstrumentRecord]:
         raise CapabilityUnavailable("RSS provider 不提供标的列表")
@@ -51,7 +54,7 @@ class RssNewsProvider(MarketProvider):
     def fetch_spot_quotes(self, codes: list[str]) -> list[QuoteRecord]:
         raise CapabilityUnavailable("RSS provider 不提供行情")
 
-    def _published_at(self, entry: dict) -> datetime:
+    def _published_at(self, entry: dict) -> datetime | None:
         value = entry.get("published") or entry.get("updated") or entry.get("created")
         if value:
             try:
@@ -61,13 +64,20 @@ class RssNewsProvider(MarketProvider):
                 return parsed.astimezone(self.tz)
             except (TypeError, ValueError, OverflowError):
                 pass
+        if value:
+            try:
+                parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+                if parsed.tzinfo is not None:
+                    return parsed.astimezone(self.tz)
+            except ValueError:
+                pass
         parsed_tuple = entry.get("published_parsed") or entry.get("updated_parsed")
         if parsed_tuple:
             try:
-                return datetime(*parsed_tuple[:6], tzinfo=self.tz)
+                return datetime(*parsed_tuple[:6], tzinfo=UTC).astimezone(self.tz)
             except (TypeError, ValueError):
                 pass
-        return datetime.now(self.tz)
+        return None
 
     def fetch_news(self, since_hours: int = 24) -> list[NewsRecord]:
         now = datetime.now(self.tz)
@@ -78,20 +88,26 @@ class RssNewsProvider(MarketProvider):
             "User-Agent": "china-fund-decision/0.2 (+private research; RSS reader)",
             "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
         }
-        with httpx.Client(timeout=self.settings.news_rss_timeout_seconds, follow_redirects=True) as client:
+        with httpx.Client(timeout=self.settings.news_rss_timeout_seconds, follow_redirects=True, max_redirects=3) as client:
             for url in self.urls:
                 try:
-                    response = client.get(url, headers=headers)
-                    response.raise_for_status()
-                    parsed = self.feedparser.parse(response.content)
+                    started = time.monotonic()
+                    content = bytearray()
+                    with client.stream("GET", url, headers=headers) as response:
+                        response.raise_for_status()
+                        for chunk in response.iter_bytes():
+                            content.extend(chunk)
+                            if len(content) > 2_000_000 or time.monotonic() - started > self.settings.news_rss_timeout_seconds:
+                                raise ProviderError("rss_size_or_deadline_exceeded")
+                    parsed = self.feedparser.parse(bytes(content))
                     feed_title = str(parsed.feed.get("title") or urlparse(url).netloc)
-                    for entry in parsed.entries:
+                    for entry in parsed.entries[:500]:
                         item = dict(entry)
                         title = str(item.get("title") or "").strip()
                         if not title:
                             continue
                         published_at = self._published_at(item)
-                        if published_at.timestamp() < cutoff:
+                        if published_at is None or not cutoff <= published_at.timestamp() <= now.timestamp():
                             continue
                         link = str(item.get("link") or "").strip() or None
                         summary = str(item.get("summary") or item.get("description") or "").strip() or None
@@ -108,7 +124,7 @@ class RssNewsProvider(MarketProvider):
                             )
                         )
                 except Exception as exc:  # one failed feed must not suppress the others
-                    message = f"{url}: {type(exc).__name__}: {exc}"
+                    message = type(exc).__name__
                     errors.append(message)
                     logger.warning("RSS feed failed: %s", message)
         if not records and errors and len(errors) == len(self.urls):

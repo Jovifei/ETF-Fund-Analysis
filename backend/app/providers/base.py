@@ -53,6 +53,9 @@ class MarketProvider(ABC):
     def fetch_spot_quotes(self, codes: list[str]) -> list[QuoteRecord]:
         raise NotImplementedError
 
+    def fetch_index_bars(self, symbol: str, start_date: date, end_date: date) -> list[BarRecord]:
+        raise CapabilityUnavailable("index OHLC unavailable")
+
     def fetch_news(self, since_hours: int = 24) -> list[NewsRecord]:
         return []
 

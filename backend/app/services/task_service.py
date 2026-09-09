@@ -145,7 +145,9 @@ class TaskService:
         return (
             "sync_instruments",
             "refresh_market_context",
+            "refresh_index_history",
             "refresh_bars",
+            "refresh_minute_bars",
             "refresh_quotes",
             "refresh_indicators",
             "refresh_forecasts",
@@ -231,6 +233,13 @@ class TaskService:
 
     def _execute(self, db: Session, task_name: str, run_id: str, **kwargs) -> dict:
         self._bind_runtime_provider(db)
+        if task_name in {"validate_forecasts", "calibrate_forecasts", "backtest_rotation", "backtest_ablation", "analyze_factors"}:
+            from app.providers.data_contract import require_current_history
+            require_current_history(db, self.settings)
+        if task_name == "refresh_index_history":
+            from app.workspace.index_history import refresh
+            self.market_context.sync_registry(db, run_id=run_id)
+            return refresh(db, self.settings, self.provider, run_id, kwargs.get("lookback_days", 1200))
         if task_name == "sync_instruments":
             return self.market.sync_instruments(db, codes=kwargs.get("codes"), run_id=run_id)
         if task_name == "refresh_market_context":
@@ -245,6 +254,10 @@ class TaskService:
                 codes=kwargs.get("codes"),
                 run_id=run_id,
             )
+        if task_name == "refresh_minute_bars":
+            from app.services.market_bar_service import MarketBarService
+            return MarketBarService(self.settings, self.provider).sync_minute_bars(
+                db, codes=kwargs.get("codes"), interval=kwargs.get("interval", "30m"), run_id=run_id)
         if task_name == "refresh_quotes":
             self._ensure_instruments(db, run_id)
             return self.market.refresh_quotes(db, codes=kwargs.get("codes"), run_id=run_id)
@@ -325,6 +338,8 @@ class TaskService:
                 lookback_days=int(kwargs.get("lookback_days", 900)),
                 run_id=run_id,
             )
+            from app.providers.data_contract import require_current_history
+            require_current_history(db, self.settings)
             results["refresh_indicators"] = self.indicators.refresh_all(db, run_id=run_id)
             results["refresh_forecasts"] = self.forecasts.refresh_all(db, run_id=run_id)
             try:

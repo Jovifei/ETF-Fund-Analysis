@@ -163,6 +163,21 @@ def test_paddle_requires_strict_local_manifest_and_nonempty_det_rec_artifacts(tm
     }
 
 
+def test_paddle_accepts_v5_json_yaml_local_model_manifest(tmp_path: Path) -> None:
+    image = _image_bytes("PNG")
+    files = {}
+    for component in ("det", "rec"):
+        directory = tmp_path / component
+        directory.mkdir()
+        files[component] = []
+        for suffix in (".json", ".yml", ".pdiparams"):
+            path = directory / f"inference{suffix}"
+            path.write_bytes(component.encode() + suffix.encode())
+            files[component].append({"path": f"{component}/{path.name}", "size": path.stat().st_size, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
+    (tmp_path / "manifest.json").write_text(json.dumps({"version": "paddle-local-v1", "det": {"files": files["det"]}, "rec": {"files": files["rec"]}}), encoding="utf-8")
+    assert PaddleOCRAdapter(model_dir=tmp_path)._qualified_model_dir() is not None
+
+
 def test_paddle_hard_timeout_terminates_spawned_worker(tmp_path: Path) -> None:
     image = _image_bytes("PNG")
     files = {}

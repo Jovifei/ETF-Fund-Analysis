@@ -1,0 +1,27 @@
+
+> etf-research-workspace@0.9.0-rc.2 build
+> vite build
+
+vite v7.3.5 building client environment for production...
+transforming...
+✓ 1627 modules transformed.
+rendering chunks...
+computing gzip size...
+../backend/app/workspace_dist/index.html                                                                        0.57 kB │ gzip:  0.43 kB
+../backend/app/workspace_dist/workspace-assets/index-CzKPcqdk.css                                              21.18 kB │ gzip:  5.27 kB
+../backend/app/workspace_dist/workspace-assets/refresh-cw-BMGoPCFP.js                                           0.32 kB │ gzip:  0.23 kB
+../backend/app/workspace_dist/workspace-assets/upload-CLjqKuG7.js                                               0.33 kB │ gzip:  0.25 kB
+../backend/app/workspace_dist/workspace-assets/NotFound-BWIbEvy9.js                                             0.56 kB │ gzip:  0.47 kB
+../backend/app/workspace_dist/workspace-assets/Research-S1W-JgT9.js                                             1.21 kB │ gzip:  0.84 kB
+../backend/app/workspace_dist/workspace-assets/Badge.vue_vue_type_script_setup_true_lang-CcfuQRdK.js            2.13 kB │ gzip:  1.27 kB
+../backend/app/workspace_dist/workspace-assets/Catalog-Cvt54gWO.js                                              2.39 kB │ gzip:  1.40 kB
+../backend/app/workspace_dist/workspace-assets/Watchlist-BY9OA9n-.js                                            2.55 kB │ gzip:  1.47 kB
+../backend/app/workspace_dist/workspace-assets/News-DO4mamDx.js                                                 2.61 kB │ gzip:  1.67 kB
+../backend/app/workspace_dist/workspace-assets/Factors-BIHCxCkU.js                                              7.00 kB │ gzip:  3.27 kB
+../backend/app/workspace_dist/workspace-assets/Overview-DAk8W9qN.js                                            11.53 kB │ gzip:  4.74 kB
+../backend/app/workspace_dist/workspace-assets/Settings-BnN1QmQa.js                                            11.56 kB │ gzip:  5.10 kB
+../backend/app/workspace_dist/workspace-assets/ResearchPanel.vue_vue_type_script_setup_true_lang-CSIdM9JS.js   14.99 kB │ gzip:  6.28 kB
+../backend/app/workspace_dist/workspace-assets/Holdings-Cj4qvk8U.js                                            15.46 kB │ gzip:  5.97 kB
+../backend/app/workspace_dist/workspace-assets/index-Djv0X8Lf.js                                              120.72 kB │ gzip: 48.07 kB
+../backend/app/workspace_dist/workspace-assets/Detail-JYR8jz03.js                                             215.86 kB │ gzip: 57.92 kB
+✓ built in 2.49s

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import logging
+import math
 from datetime import date, datetime, timedelta
 from uuid import uuid4
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import and_, case, delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -13,6 +14,7 @@ from app.providers.base import MarketProvider, ProviderError
 from app.services.audit_service import AuditTimer, record_provider_audit
 from app.services.event_service import emit_event
 from app.utils.hashing import stable_hash
+from app.providers.data_contract import LEGACY_SOURCES, VERSION, HistoryContractError
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +94,7 @@ class MarketService:
             row.theme_l2 = item.theme_l2
             row.benchmark = item.benchmark
             row.enabled = item.enabled
-            row.metadata_json = item.metadata
+            row.metadata_json = {**(row.metadata_json or {}), **item.metadata}
         db.flush()
         emit_event(db, "instruments.updated", {"created": created, "updated": updated, "run_id": run_id})
         return {"run_id": run_id, "created": created, "updated": updated, "total": len(records)}
@@ -112,62 +114,87 @@ class MarketService:
             wanted = {code.upper() for code in codes}
             instruments = [item for item in instruments if item.ts_code.upper() in wanted or item.symbol in wanted]
         end_date = datetime.now(self.settings.timezone).date()
-        totals = {"inserted": 0, "updated": 0, "instruments": 0, "failures": []}
+        if self.settings.market_provider != "mock":
+            from app.services.trading_calendar_service import TradingCalendarService
+            now = datetime.now(self.settings.timezone)
+            target = end_date - timedelta(days=1) if (now.hour, now.minute) < (15, 15) else end_date
+            end_date = TradingCalendarService(self.settings).effective_trade_date(target)
+        totals = {"inserted": 0, "updated": 0, "unchanged": 0, "instruments": 0, "price_only": 0, "failures": []}
         for instrument in instruments:
             start_date = end_date - timedelta(days=lookback_days)
-            earliest = db.scalar(
-                select(func.min(DailyBar.trade_date)).where(DailyBar.instrument_id == instrument.id)
-            )
-            latest = db.scalar(
-                select(func.max(DailyBar.trade_date)).where(DailyBar.instrument_id == instrument.id)
-            )
-            if earliest is not None and latest is not None and earliest <= start_date:
-                # History already covers the requested lookback; refresh a short overlap only.
+            earliest, latest, legacy_count = db.execute(
+                select(func.min(DailyBar.trade_date), func.max(DailyBar.trade_date), func.sum(case((or_(DailyBar.source.in_(LEGACY_SOURCES), and_(DailyBar.source == "akshare:sina:v101", DailyBar.volume.is_(None))), 1), else_=0)))
+                .where(DailyBar.instrument_id == instrument.id)
+            ).one()
+            if legacy_count:
+                start_date = min(start_date, earliest)
+            elif earliest is not None and latest is not None and earliest <= start_date:
+                # Keep a correction overlap; extending history still backfills.
                 start_date = max(start_date, latest - timedelta(days=7))
             timer = AuditTimer()
             error: Exception | None = None
             records = []
             try:
-                records = self.provider.fetch_daily_bars(instrument.ts_code, start_date, end_date)
-                totals["instruments"] += 1
-                for item in records:
-                    row = db.scalar(
-                        select(DailyBar).where(
+                records = list(self.provider.fetch_daily_bars(instrument.ts_code, start_date, end_date))
+                if not records:
+                    raise ProviderError("empty_history_no_refresh")
+                # Validate the complete batch before touching persisted history.
+                # Exact duplicates are idempotent; conflicting duplicates are
+                # not silently selected by whichever record happens to be last.
+                batch = self._validated_bar_batch(records, instrument.ts_code, start_date, end_date)
+                counts = {"inserted": 0, "updated": 0, "unchanged": 0}
+                with db.begin_nested():
+                    existing = {
+                        (row.trade_date, row.adjust): row
+                        for row in db.scalars(select(DailyBar).where(
                             DailyBar.instrument_id == instrument.id,
-                            DailyBar.trade_date == item.trade_date,
-                            DailyBar.adjust == item.adjust,
-                        )
-                    )
-                    payload = item.to_dict()
-                    if row is None:
-                        row = DailyBar(
-                            instrument_id=instrument.id,
-                            trade_date=item.trade_date,
-                            open=item.open,
-                            high=item.high,
-                            low=item.low,
-                            close=item.close,
-                            adjust=item.adjust,
-                            source=item.source,
-                            quality_hash=stable_hash(payload),
-                        )
-                        db.add(row)
-                        totals["inserted"] += 1
-                    else:
-                        totals["updated"] += 1
-                    row.open = item.open
-                    row.high = item.high
-                    row.low = item.low
-                    row.close = item.close
-                    row.pre_close = item.pre_close
-                    row.volume = item.volume
-                    row.amount = item.amount
-                    row.pct_change = item.pct_change
-                    row.source = item.source
-                    row.quality_hash = stable_hash(payload)
+                            DailyBar.trade_date >= start_date, DailyBar.trade_date <= end_date,
+                        ))
+                    }
+                    if legacy_count:
+                        old_keys = {key for key, value in existing.items() if value.source in LEGACY_SOURCES or (value.source == "akshare:sina:v101" and value.volume is None)}
+                        if not old_keys.issubset(batch) or any(value[0].source in LEGACY_SOURCES for value in batch.values()):
+                            raise HistoryContractError("legacy_refetch_incomplete_no_partial_unit_upgrade")
+                    for key, (item, content_hash) in batch.items():
+                        row = existing.get(key)
+                        if row is not None and row.quality_hash == content_hash:
+                            counts["unchanged"] += 1
+                            continue
+                        # A lower-quality Sina fallback may fill a new date, but
+                        # must not replace an overlapping current-contract row
+                        # whose volume is already verified. Preserve the whole
+                        # existing row; never merge fields across sources.
+                        if (
+                            row is not None
+                            and item.source == "akshare:sina:v101"
+                            and item.volume is None
+                            and row.source not in LEGACY_SOURCES
+                            and "mock" not in row.source.lower()
+                            and row.volume is not None
+                            and row.volume >= 0
+                        ):
+                            counts["unchanged"] += 1
+                            continue
+                        if row is None:
+                            row = DailyBar(instrument_id=instrument.id, trade_date=item.trade_date,
+                                           adjust=item.adjust)
+                            db.add(row)
+                            existing[key] = row
+                            counts["inserted"] += 1
+                        else:
+                            counts["updated"] += 1
+                        for field in ("open", "high", "low", "close", "pre_close", "volume", "amount", "pct_change", "source"):
+                            setattr(row, field, getattr(item, field))
+                        row.quality_hash = content_hash
+                        row.fetched_at = datetime.now(self.settings.timezone)
+                    db.flush()
+                totals["instruments"] += 1
+                totals["price_only"] += int(any(item.source == "akshare:sina:v101" and item.volume is None for item, _ in batch.values()))
+                for key in counts:
+                    totals[key] += counts[key]
             except Exception as exc:
                 error = exc
-                totals["failures"].append({"ts_code": instrument.ts_code, "error": f"{type(exc).__name__}: {exc}"})
+                totals["failures"].append({"ts_code": instrument.ts_code, "error": type(exc).__name__})
             finally:
                 if self.persist_provider_audits:
                     record_provider_audit(
@@ -181,7 +208,38 @@ class MarketService:
                     )
         db.flush()
         emit_event(db, "bars.updated", {**totals, "run_id": run_id})
-        return {"run_id": run_id, **totals}
+        return {"run_id": run_id, "ingestion_policy": "daily-batch-v1.0.1", "data_contract": VERSION, **totals}
+
+    @staticmethod
+    def _validated_bar_batch(records, ts_code: str, start_date: date, end_date: date) -> dict:
+        """Bound and validate provider records without changing price/indicator formulas."""
+        if len(records) > 50_000:
+            raise ProviderError("daily history batch exceeds the bounded record limit")
+        batch = {}
+        for item in records:
+            if item.ts_code != ts_code or not isinstance(item.trade_date, date) or isinstance(item.trade_date, datetime):
+                raise ProviderError("daily history identity mismatch")
+            if not start_date <= item.trade_date <= end_date:
+                raise ProviderError("daily history outside requested window")
+            if not isinstance(item.adjust, str) or not item.adjust or len(item.adjust) > 8:
+                raise ProviderError("daily history adjustment is invalid")
+            if not isinstance(item.source, str) or not item.source or len(item.source) > 32:
+                raise ProviderError("daily history source is invalid")
+            prices = [item.open, item.high, item.low, item.close]
+            if any(isinstance(v, bool) or v is None or not math.isfinite(float(v)) or float(v) <= 0 for v in prices):
+                raise ProviderError("daily history price is invalid")
+            if not item.low <= min(item.open, item.close) <= max(item.open, item.close) <= item.high:
+                raise ProviderError("daily history OHLC bounds are inconsistent")
+            for name in ("pre_close", "volume", "amount", "pct_change"):
+                value = getattr(item, name)
+                if value is not None and (isinstance(value, bool) or not math.isfinite(float(value))
+                                          or (name != "pct_change" and float(value) < 0)):
+                    raise ProviderError("daily history numeric field is invalid")
+            key, digest = (item.trade_date, item.adjust), stable_hash(item.to_dict())
+            if key in batch and batch[key][1] != digest:
+                raise ProviderError("daily history contains conflicting duplicate observations")
+            batch[key] = (item, digest)
+        return batch
 
     def refresh_quotes(
         self,
@@ -202,7 +260,7 @@ class MarketService:
         error: Exception | None = None
         records = []
         try:
-            records = self.provider.fetch_spot_quotes(list(by_code))
+            records = self._validated_quote_batch(self.provider.fetch_spot_quotes(list(by_code)), set(by_code))
         except Exception as exc:
             error = exc
             raise
@@ -284,6 +342,32 @@ class MarketService:
             "missing_codes": missing_codes,
         }
 
+    @staticmethod
+    def _validated_quote_batch(records, wanted: set[str]):
+        if len(records) > 20_000:
+            raise ProviderError("quote_batch_too_large")
+        seen = {}
+        for item in records:
+            if item.ts_code not in wanted:
+                continue
+            if not isinstance(item.quote_time, datetime):
+                raise ProviderError("quote_timestamp_missing")
+            values = [item.price, item.open, item.high, item.low, item.pre_close]
+            if item.price is None or any(v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v <= 0) for v in values):
+                raise ProviderError("quote_price_invalid")
+            if item.high is not None and item.low is not None and item.high < item.low:
+                raise ProviderError("quote_range_invalid")
+            if any(v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v < 0) for v in (item.volume, item.amount)):
+                raise ProviderError("quote_amount_invalid")
+            if any(v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)) for v in (item.pct_change, item.premium_rate)):
+                raise ProviderError("quote_ratio_invalid")
+            if not isinstance(item.source, str) or not 1 <= len(item.source) <= 32:
+                raise ProviderError("quote_source_invalid")
+            if item.ts_code in seen and seen[item.ts_code].to_dict() != item.to_dict():
+                raise ProviderError("quote_duplicate_conflict")
+            seen[item.ts_code] = item
+        return list(seen.values())
+
     def purge_old_quotes(self, db: Session, keep_days: int = 45) -> int:
         cutoff = datetime.now(self.settings.timezone) - timedelta(days=keep_days)
         result = db.execute(delete(QuoteSnapshot).where(QuoteSnapshot.quote_time < cutoff))
@@ -312,19 +396,51 @@ class MarketService:
 
         per_board: dict[str, dict[str, int | str | None]] = {}
         inserted = 0
+        duplicate_records = 0
+        conflict_keys = 0
         errors: list[str] = []
         for method_name, board_type, is_single in board_specs:
             try:
                 if not hasattr(self.provider, method_name):
                     raise ProviderError(f"provider 不支持 {method_name}")
                 result = getattr(self.provider, method_name)()
-                records = [result] if is_single else (result or [])
+                records = [result] if is_single and result is not None else ([] if is_single else (result or []))
             except Exception as exc:
                 errors.append(f"{board_type}:{type(exc).__name__}")
                 logger.warning("sector snapshot refresh [%s] failed (degraded to empty): %s", board_type, exc)
-                per_board[board_type] = {"inserted": 0, "error": type(exc).__name__}
+                per_board[board_type] = {
+                    "inserted": 0, "error": type(exc).__name__,
+                    "duplicate_records": 0, "conflict_keys": 0,
+                }
                 continue
 
+            if not records:
+                errors.append(f"{board_type}:empty_response")
+                per_board[board_type] = {
+                    "inserted": 0, "error": "empty_response",
+                    "duplicate_records": 0, "conflict_keys": 0,
+                }
+                continue
+
+            grouped: dict[tuple, list] = {}
+            for item in records:
+                key = (item.sector_name, item.trade_date, item.source, item.board_type)
+                grouped.setdefault(key, []).append(item)
+            normalized = []
+            board_duplicates = 0
+            board_conflicts = 0
+            for values in grouped.values():
+                first = values[0]
+                if all(item.to_dict() == first.to_dict() for item in values[1:]):
+                    normalized.append(first)
+                    board_duplicates += len(values) - 1
+                else:
+                    board_conflicts += 1
+            if board_conflicts:
+                errors.append(f"{board_type}:conflicting_duplicate_keys")
+            records = normalized
+            duplicate_records += board_duplicates
+            conflict_keys += board_conflicts
             board_inserted = 0
             for item in records:
                 existing = db.scalar(
@@ -362,7 +478,12 @@ class MarketService:
                     )
                 board_inserted += 1
             inserted += board_inserted
-            per_board[board_type] = {"inserted": board_inserted, "error": None}
+            per_board[board_type] = {
+                "inserted": board_inserted,
+                "error": "conflicting_duplicate_keys" if board_conflicts else None,
+                "duplicate_records": board_duplicates,
+                "conflict_keys": board_conflicts,
+            }
 
         db.flush()
         emit_event(
@@ -383,6 +504,9 @@ class MarketService:
         return {
             "run_id": run_id,
             "inserted": inserted,
+            "duplicate_records": duplicate_records,
+            "conflict_keys": conflict_keys,
             "boards": per_board,
             "error": (errors[0] if errors else None),
+            "status": "partial" if errors else "succeeded",
         }

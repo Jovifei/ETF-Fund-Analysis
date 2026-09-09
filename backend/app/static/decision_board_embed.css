@@ -1,0 +1,6 @@
+/* Shell-only adaptation. The original report/table styles are unchanged. */
+html,body{margin:0;min-width:0;background:transparent}
+.report-shell{max-width:none;margin:0;padding:12px}
+.report-title-row{display:none}
+body{overflow-y:hidden}
+.decision-table-wrap{overscroll-behavior-x:contain}

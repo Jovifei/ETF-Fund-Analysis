@@ -173,6 +173,53 @@ def test_market_service_refresh_all_three_boards(bootstrapped, db_session):
     assert boards == {"industry", "concept", "market"}
 
 
+def test_sector_refresh_deduplicates_exact_full_keys_and_reports_count(bootstrapped, db_session):
+    from dataclasses import replace
+    row = SectorRecord(
+        sector_name="重复行业", trade_date=date(2026, 8, 31), up_count=10,
+        down_count=2, flat_count=1, total_count=13, pct_change=1.0,
+        source="akshare", board_type="industry",
+    )
+
+    class _DuplicateProvider(_FakeAllBoardsProvider):
+        def fetch_sector_snapshots(self, trade_date=None):
+            return [row, replace(row)]
+
+    result = MarketService(_DuplicateProvider(), persist_provider_audits=False).refresh_sector_snapshots(db_session)
+    assert result["status"] == "succeeded"
+    assert result["duplicate_records"] == 1 and result["conflict_keys"] == 0
+    assert result["boards"]["industry"]["inserted"] == 1
+    assert result["boards"]["industry"]["duplicate_records"] == 1
+    assert db_session.query(SectorSnapshot).filter_by(sector_name="重复行业").count() == 1
+
+
+def test_sector_refresh_conflicting_full_keys_keep_cache_and_mark_partial(bootstrapped, db_session):
+    key_date = date(2026, 8, 31)
+    existing = SectorSnapshot(
+        sector_name="冲突行业", trade_date=key_date, up_count=99, down_count=1,
+        flat_count=0, total_count=100, pct_change=9.9, source="akshare",
+        board_type="industry", quality_hash="existing-cache",
+    )
+    db_session.add(existing); db_session.flush()
+    conflict_a = SectorRecord("冲突行业", key_date, 10, 2, 0, 12, 1.0, "akshare", "industry")
+    conflict_b = SectorRecord("冲突行业", key_date, 11, 1, 0, 12, 1.1, "akshare", "industry")
+    valid = SectorRecord("保留行业", key_date, 8, 2, 0, 10, 0.8, "akshare", "industry")
+
+    class _ConflictingProvider(_FakeAllBoardsProvider):
+        def fetch_sector_snapshots(self, trade_date=None):
+            return [conflict_a, conflict_b, valid]
+
+    result = MarketService(_ConflictingProvider(), persist_provider_audits=False).refresh_sector_snapshots(db_session)
+    saved = db_session.query(SectorSnapshot).filter_by(sector_name="冲突行业").one()
+    assert result["status"] == "partial"
+    assert result["conflict_keys"] == 1 and result["duplicate_records"] == 0
+    assert result["boards"]["industry"]["error"] == "conflicting_duplicate_keys"
+    assert result["boards"]["industry"]["conflict_keys"] == 1
+    assert saved.up_count == 99 and saved.down_count == 1
+    assert saved.quality_hash == "existing-cache" and saved.pct_change == 9.9
+    assert db_session.query(SectorSnapshot).filter_by(sector_name="保留行业").one().up_count == 8
+
+
 def test_sector_state_filters_by_board_type(bootstrapped, db_session):
     """_sector_state 必须按 board_type 精准隔离：行业命中不污染概念。"""
     from app.models import SectorSnapshot as SS
@@ -334,9 +381,7 @@ class _FakeAk:
 
 
 def _provider(em=None, ths=None) -> AKShareProvider:
-    provider = AKShareProvider()
-    provider.ak = _FakeAk(em=em, ths=ths)
-    return provider
+    return AKShareProvider(ak_client=_FakeAk(em=em, ths=ths))
 
 
 def test_akshare_sector_uses_eastmoney_when_available():
@@ -362,13 +407,14 @@ def test_akshare_sector_falls_back_to_ths():
 
 
 def test_akshare_sector_raises_when_all_sources_fail():
-    """两个源都失败才抛 ProviderError，且错误信息带上每个源的原因。"""
+    """v1.0.1: 每个源仅保留异常类别，不透传可能含凭据的原始错误。"""
     provider = _provider(em=RuntimeError("em-down"), ths=RuntimeError("ths-down"))
     with pytest.raises(ProviderError) as excinfo:
         provider.fetch_sector_snapshots()
     message = str(excinfo.value)
-    assert "em-down" in message
-    assert "ths-down" in message
+    assert "em: RuntimeError" in message
+    assert "ths: RuntimeError" in message
+    assert "em-down" not in message and "ths-down" not in message
 
 
 def _fake_code_df():
@@ -561,8 +607,8 @@ def test_akshare_fetch_market_context_index():
     fake_ak = MagicMock()
     fake_ak.stock_zh_index_daily.return_value = _frame(
         [
-            {"date": "2026-08-29", "close": 3900.0},
             {"date": "2026-09-01", "close": 3941.39},
+            {"date": "2026-08-29", "close": 3900.0},
         ]
     )
     fake_ak.index_us_stock_sina.return_value = _frame(
@@ -615,7 +661,7 @@ def test_akshare_fetch_market_context_index():
 
 
 def test_akshare_fetch_market_context_tradable_proxy():
-    """tradable_proxy 卡片应走 ETF 实时行情拉价格，并正确补全交易所后缀。"""
+    """v1.0.1: 没有源时间的 ETF 公开现价不得冒充 verified/fresh 上下文。"""
     from unittest.mock import MagicMock
     from datetime import datetime as dt
     from zoneinfo import ZoneInfo
@@ -642,12 +688,6 @@ def test_akshare_fetch_market_context_tradable_proxy():
     )
 
     obs = prov.fetch_market_context([proxy_item])
-    assert len(obs) == 1
-    o = obs[0]
-    assert o.context_id == "china-semiconductor-etf"
-    assert o.observed_value == 1.01
-    assert o.today_pct_change == -1.94
-    assert o.is_mock is False
-    assert o.freshness.value == "fresh"
+    assert obs == []  # source timestamp is absent; fetching now does not verify it
 
 

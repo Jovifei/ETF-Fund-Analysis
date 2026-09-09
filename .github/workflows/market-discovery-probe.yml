@@ -1,0 +1,36 @@
+name: public-market-discovery-observation
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/v102-home-template-20260908]
+    paths: ['scripts/probe_market_discovery.py', '.github/workflows/market-discovery-probe.yml']
+permissions:
+  contents: read
+jobs:
+  observation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -e . akshare
+      - name: Observe bounded public capabilities, not qualification
+        env:
+          TUSHARE_TOKEN: ''
+          FTSHARE_ENABLED: 'false'
+          MARKET_PROVIDER: akshare
+          ALLOW_MOCK_FALLBACK: 'false'
+          LLM_ENABLED: 'false'
+          ANALYSIS_ENABLED: 'false'
+        run: python scripts/probe_market_discovery.py --output /tmp/market-discovery.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: market-discovery-observation-${{ github.run_id }}
+          path: /tmp/market-discovery.json
+          retention-days: 14
