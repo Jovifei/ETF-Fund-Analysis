@@ -140,8 +140,9 @@ def execute(job_id: str) -> int:
     tasks = None
     failed = False
     try:
-        tasks = TaskService(settings)
         kind = request["task"]
+        from app.workspace.offline_tasks import CacheOnlyTaskService
+        tasks = CacheOnlyTaskService(settings) if kind in {"recompute", "factors"} else TaskService(settings)
         if kind == "factors":
             with session_scope() as db:
                 report = factor_diagnostics.run(db, settings, selected=request.get("factor_names", []))

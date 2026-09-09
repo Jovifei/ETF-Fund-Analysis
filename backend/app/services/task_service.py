@@ -238,6 +238,7 @@ class TaskService:
             require_current_history(db, self.settings)
         if task_name == "refresh_index_history":
             from app.workspace.index_history import refresh
+            self.market_context.sync_registry(db, run_id=run_id)
             return refresh(db, self.settings, self.provider, run_id, kwargs.get("lookback_days", 1200))
         if task_name == "sync_instruments":
             return self.market.sync_instruments(db, codes=kwargs.get("codes"), run_id=run_id)
