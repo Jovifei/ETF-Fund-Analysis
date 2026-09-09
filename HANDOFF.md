@@ -1,5 +1,11 @@
 # 接手入口：v1.0.3
 
+## 最新部署接力（2026-09-09）
+
+当前服务器 commit 为 `c60a15788d5206a407fc6d8a4238137a9ee19b80`，公网 `https://etf.joviluma.com` 的 API/worker 已健康运行。三只指数缓存各 1,196 根；两只 ETF 已重抓到 1,196 根，但 Sina 来源无成交量，因此只允许价格类指标。缺量因子诊断现在返回研究报告并明确 `qualification=not_qualified`，不会改策略。OCR v5 合成图已识别代码/份额/成本；Vibe Windows 上游测试和真人 Codex 任务仍未通过。
+
+部署保留旧镜像回滚 tag和 2026-09-09 PostgreSQL 备份。后续不要在服务器直接 build；当前使用旧运行时镜像加当前 SHA 的只读源码挂载，更新时先备份并保留 staging 目录。
+
 读取AGENTS.md、STATUS.md、docs/README.md、docs/versions/V1.0.3.md和docs/LOCAL_ACCEPTANCE_V103.md。按固定应用提交接收，不从旧main重做或混用旧ZIP。
 
 ## 必须保持

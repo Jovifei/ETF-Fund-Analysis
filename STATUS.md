@@ -1,5 +1,12 @@
 # 当前开发：v1.0.3 历史与研究入口修复
 
+## 2026-09-09 部署状态
+
+- 服务器已运行审核分支 `codex/v103-local-review-20260909` 的 `c60a15788d5206a407fc6d8a4238137a9ee19b80`；API/worker healthy，公网 health 返回 v1.0.3。
+- 服务器保留旧镜像回滚 tag和 PostgreSQL 备份；生产仍为 `public_composite`、`ALLOW_MOCK_FALLBACK=false`、模型/OCR关闭。
+- 中证全指已通过 `akshare:index:tx-v103` 补齐 1,196 根；缺量 ETF 仅展示价格指标，因子诊断保持研究态、不可操作。
+- OCR v5 本地合成图已通过适配器验证；Vibe 上游 Windows 资格和真人模型仍待独立用户登录/环境门禁。
+
 基线204a31cbc0214a6e80389224c238bc897b2279af（codex/parallel-v102-gapfix-20260908），分支fix/v103-history-research-20260909。应用/前端版本1.0.3；不得把旧main当作已包含工作站。未合并main、未移动旧标签、未执行本版生产部署。
 
 已提交应用阶段：aabc390c历史逐标的隔离；cec11c6b指数缓存/收藏/人工复盘/因子选择/归档；4bb08a77原盘中状态兼容；0ecbad7d无凭据缓存重算与首次指数注册表。最终交付固定SHA见PR与接收Prompt，不能部署只包含传输材料的中间提交。

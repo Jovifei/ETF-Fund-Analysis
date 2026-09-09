@@ -6,8 +6,8 @@
 
 - 用户指定固定应用提交：`9439563dafc35d7410f9dde39253478a321c96ef`，基线 `204a31cbc0214a6e80389224c238bc897b2279af`；祖先关系已验证。
 - 固定接收目录：`E:/Claude_allow/Download/ETF-Fund-Analysis-v103-receive-20260909`，应用源码保持指定提交；只增加工作记录/本收据。
-- 必要修复单独提交：`a628004236f19cd31bf1d69a6e8e101567e60fff`（完整行情缓存保护、指数入口与失败摘要），`49ab0ce9d29405e0d4735e41e9ccc642d7904784`（板块重复/冲突记录隔离）。
-- **当前本机运行应用 SHA：`49ab0ce9d29405e0d4735e41e9ccc642d7904784`**；审核分支 `codex/v103-local-review-20260909`。两个修复提交仅在本机，未推送、未合并 main、未改标签、未部署服务器。
+- 必要修复提交：`a628004236f19cd31bf1d69a6e8e101567e60fff`（完整行情缓存保护、指数入口与失败摘要）、`49ab0ce9d29405e0d4735e41e9ccc642d7904784`（板块重复/冲突记录隔离）、`90225ac9cd075775f443f52f18aa94074c5f53e7`（中证全指端点、缺量因子诊断、PaddleOCR v5）、`c60a15788d5206a407fc6d8a4238137a9ee19b80`（有界指数来源标识）。
+- **当前服务器与审核分支运行应用 SHA：`c60a15788d5206a407fc6d8a4238137a9ee19b80`**；分支 `codex/v103-local-review-20260909` 已推送。服务器使用旧已审计运行时镜像作为基底，挂载该 SHA 的只读源码和前端产物；旧镜像 tag 与 PostgreSQL 备份保留回滚。
 - 运行目录：`E:/Claude_allow/Download/ETF-Fund-Analysis-v103-review-20260909`；URL：<http://127.0.0.1:8082/>。
 - Python 3.12.10，Node 24.18.0，npm 11.16.0；独立安装 `.[dev,market]` 与锁文件 `npm ci`。最终后端使用同一新 Python 环境和明确指向运行目录的 PYTHONPATH。
 - 应用版本 1.0.3；策略 `signal-v0.7.1-research`，指标 `indicator-v0.5.1`，预测 `similarity-corridor-v0.7.1-horizon-aligned`，数据口径 `cn-fund-shares-cny-v1.0.1`；均未修改公式、单位、权重、期限或资格。
@@ -28,7 +28,7 @@
 |---|---|
 | 固定 SHA 全量 pytest | 838 passed，5 条件跳过，exit 0 |
 | 固定 SHA v103 专项 | 15 passed，exit 0 |
-| 最终修复全量 pytest | 842 passed，5 条件跳过，exit 0 |
+| 最终修复全量 pytest | 845 passed，5 条件跳过，exit 0 |
 | Vue | 24 单元测试、typecheck、生产 build 通过 |
 | workspace-ci 普通/认证 Playwright | 修复后 12 + 1 通过；均为隔离 Mock 夹具 |
 | 真实行情缓存回放浏览器 | 11/11 通过，合成账户，0 page errors，0 外部请求 |
@@ -47,7 +47,7 @@
 | 512480.SH | 282 根完整 `akshare:em:v101` + 1 根 `akshare:sina:v101` | 截至 2026-09-08；旧完整行全部保留，只新日期缺量 |
 | 上证 cn-shanghai-composite | 799 根真实 `akshare:index:v103` OHLC | 至 2026-09-09；当天为未收盘日线，不当作实时或确定收盘 |
 | 沪深300 cn-csi300 | 799 根真实 `akshare:index:v103` OHLC | 同上；开高低收存在真实差异，未复制收盘点值 |
-| 中证全指 cn-csi-all | 0 根 | EM 路径 ProviderError；Sina 返回 1180 根但最新仅 2016-06-13，目标时间窗内为 0；最终 CapabilityUnavailable |
+| 中证全指 cn-csi-all | 1,196 根真实 OHLC | 修复后通过 AKShare 腾讯历史端点，来源 `akshare:index:tx-v103`，截至 2026-09-08 |
 | 当前目录 | 1,986：EM ETF 1,604 + Sina LOF 382 | 2026-09-09 重跑更新 1,986；没有将目录全量加入研究池 |
 | 行业/概念/全市场 | 最后一次任务分别处理 90 / 175 / 1，status=succeeded | 源日期 2026-09-09；条数不代表每个板块字段完整或交易所全量 |
 | 实时报价 | 当前同步失败，ProviderError | 未取得新的可靠实时时间戳；历史收盘展示独立可用 |
@@ -71,7 +71,7 @@ API/worker 已重启。在只对本任务进程设置不可达外部 HTTP 代理
 
 `market-archive-reviewed` 导出 566 条 ETF 日线 + 2 个指数缓存；gzip 47,849 bytes，SHA256 校验通过；重复目录拒绝且原文件哈希不变。仅公共行情，无账户、持仓、凭据。仅为归档，不是已实现的生产重导入或双向同步。
 
-最终数据库 3940352 bytes（约 3.76 MiB），接收前 2,031,616 bytes。没有磁盘不足的证据。
+最终数据库 3940352 bytes（约 3.76 MiB），接收前 2,031,616 bytes。服务器磁盘仍有约 9.9 GiB 可用；没有磁盘不足的证据。
 
 ## L2：浏览器证据
 
@@ -109,9 +109,20 @@ Bridge doctor exit 0、Windows DPAPI、paired=false。独立安装官方 `@opena
 
 ## 下一步
 
-刷新 <http://127.0.0.1:8082/>，由本人使用原管理员账号登录，继续验证真人会话中的原模板、收藏与详情入口。不要把密码发到聊天。中证全指/实时源、完整量能、OCR 兼容、Vibe Windows 资格及单次模型试点分别保持未通过/待本人动作，不阻断已验证的历史价格展示。
+刷新 <http://127.0.0.1:8082/>，由本人使用原管理员账号登录，继续验证真人会话中的原模板、收藏与详情入口。不要把密码发到聊天。实时源、完整量能、Vibe Windows 资格及单次模型试点分别保持未通过/待本人动作，不阻断已验证的历史价格展示。
 
 本次应用修复只提交本地审核分支。详细日志、原始数据库与模型产物在仓库外私有目录；本文件只保留净化摘要。
+
+## 服务器部署与重试结果（2026-09-09）
+
+- 远端分支：`origin/codex/v103-local-review-20260909`；服务器 `/opt/china-fund-decision` 当前 commit 为 `c60a15788d5206a407fc6d8a4238137a9ee19b80`。
+- 公网 `https://etf.joviluma.com/api/health` 返回 `version=1.0.3`、`environment=production`、`provider=public_composite`、`auth_enabled=true`；API 与 worker 均 healthy。
+- 服务器保留旧镜像回滚 tag `etf-workspace:v1.0.1-20260907-pre-v103`，部署前备份 `fund_decision_20260909_132252.sql.gz`，6,893,018 bytes、权限 600。
+- 两只 ETF 生产重抓结果：`510300.SH` 与 `512480.SH` 各 1,196 根，2021-10-08 至 2026-09-08，来源 `akshare:sina:v101`，成交量均缺失；历史价格指标可读，量价与 actionable 继续阻断。
+- 三只指数缓存均为 1,196 根，来源 `akshare:index:tx-v103`，截至 2026-09-08；`refresh_index_history` 最终 `succeeded / instruments=3 / failures=[]`。
+- 服务器因子诊断重试返回 `status=diagnostic`、`instruments=2`、`price_only_instruments=2`、`qualification=not_qualified`、`actionable=false`；`return_20d` 可计算，`volume_ratio` 覆盖率为 0，不生成策略信号。
+- 服务器远端镜像完整构建因 `apt-get update` 网络阻塞未采用；部署使用旧依赖镜像作为基底叠加当前 SHA 源码和已验证 Vue 产物，代码未引入新第三方依赖。
+- 仍未完成：Vibe Windows 上游资格、本人官方 Codex 登录/配对/单次真人模型任务；没有复制 auth、调用模型或启用付费 API。
 
 ## 未通过项的复现入口
 

@@ -661,3 +661,12 @@ Allowed code scope: MarketService history upsert, worker summary, Overview index
 - [x] Final running SHA49ab0ce on loopback8082; API/worker same code and original persistent DB; ordinary app source unchanged after final tests.
 - [x] Provider values, archive hashes, restart cache proof, synthetic-account real-cache screenshots and optional-model blockers recorded in sanitized receipt.
 - [ ] User's original admin session UI acceptance and one official-login/budgeted model run remain pending; no approval inferred from silence.
+
+## v1.0.3 follow-up fixes and deployment — 2026-09-09
+- [x] Push review branch `codex/v103-local-review-20260909` through `1558ad5`, `90225ac`, and `c60a157`.
+- [x] Deploy current SHA to `etf.joviluma.com`; preserve PostgreSQL backup and old image rollback tag; API/worker health verified.
+- [x] Retry index history after bounded-source fix: Shanghai, CSI300, and CSI-all each 1,196 OHLC rows through `2026-09-08`.
+- [x] Retry two ETF history: each 1,196 rows through `2026-09-08`; Sina volume remains missing and does not become actionable.
+- [x] Retry factor diagnostics: price-only instruments allowed for price factors; volume factor coverage remains 0 and report stays `not_qualified`.
+- [x] Fix local PaddleOCR v5 manifest/model-name/input compatibility; synthetic image recognized ETF code, shares, and cost; timeout cleanup passed.
+- [ ] Vibe upstream Windows qualification remains blocked by upstream symlink/path tests; official Codex login, pairing, and one model-budgeted run require Jovi's own interactive login.

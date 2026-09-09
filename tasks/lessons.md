@@ -12,3 +12,6 @@
 - 2026-09-01: 排序同档必须提供数值次级键（量比、均线箭头、TD9 计数），并用实际 read/API snapshot payload 验证 horizon 切换，不能只测试纯辅助函数。
 - 2026-09-01: Provider percentage-points 与内部 decimal-ratio 必须在边界显式转换一次；任务入队、时效、新鲜度和事件都要以多 session/时间边界测试，而不能只凭单进程顺序假设。
 - 2026-09-01: 免费档加入备用 Provider 时，必须同时验证工厂顺序和 RuntimeService/TaskService 对持久化 Token 的实际绑定；只测直接 Settings token 会漏掉 UI 配置无法进入执行链的问题。
+- 2026-09-09: Provider audit source labels are bounded data, not free-form endpoint names; keep them under the database field limit or a valid source will be rejected after retrieval.
+- 2026-09-09: Shared-signal completeness and research diagnostics are separate gates; allow current-contract price-only data into price-factor diagnostics, but preserve null volume coverage and never promote the result.
+- 2026-09-09: PaddleOCR 3.x local models need manifest-listed model names, ndarray input, and Windows oneDNN disabled; keep all decoding inside the bounded child and retain timeout cleanup.
