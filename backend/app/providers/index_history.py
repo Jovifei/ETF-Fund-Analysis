@@ -43,18 +43,27 @@ def decode(rows, symbol, start, end, source, *, tushare=False):
 def akshare_index(provider, symbol, start, end):
     if symbol not in INDEX_CODES:
         raise CapabilityUnavailable('index_not_supported')
+    # Eastmoney's A-share index history endpoint uses the bare index code and
+    # returns full OHLC.  Keep it ahead of the older Sina endpoint, which can
+    # return a truncated historical series for 000985.
     attempts = [
+        ('index_zh_a_hist', {'symbol': INDEX_CODES[symbol].split('.')[0], 'period': 'daily',
+            'start_date': start.strftime('%Y%m%d'), 'end_date': end.strftime('%Y%m%d'),
+            'source': 'akshare:index:zh-a-v103'}),
         ('stock_zh_index_daily_em', {'symbol': 'csi000985' if symbol=='sh000985' else symbol,
             'start_date':start.strftime('%Y%m%d'), 'end_date':end.strftime('%Y%m%d')}),
+        ('stock_zh_index_daily_tx', {'symbol': symbol, 'start_date': start.strftime('%Y%m%d'),
+            'end_date': end.strftime('%Y%m%d')}),
         ('stock_zh_index_daily', {'symbol':symbol}),
     ]
     for name, params in attempts:
         try:
+            source = params.pop('source', f'akshare:index:{name}:v103')
             frame = getattr(provider.ak, name)(**params)
             rows = provider._records(frame)
             if len(rows) > 20000:
                 raise ProviderError('index_history_too_large')
-            result = decode(rows, symbol, start, end, 'akshare:index:v103')
+            result = decode(rows, symbol, start, end, source)
             if result:
                 return result
         except (Exception,):

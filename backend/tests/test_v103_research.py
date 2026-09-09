@@ -29,6 +29,40 @@ def test_factor_names_only_for_diagnostics_and_legacy_idempotency(db_session):
     db_session.rollback()
 
 
+def test_factor_diagnostics_keeps_price_only_history_read_only(db_session):
+    from app.core.config import get_settings
+    from app.models import DailyBar, Instrument
+    from app.workspace.factor_diagnostics import run
+
+    code = "598" + uuid4().hex[:3].upper() + ".SH"
+    instrument = Instrument(ts_code=code, symbol=code[:6], name="price-only factor fixture", kind="ETF", enabled=True)
+    db_session.add(instrument)
+    db_session.flush()
+    for offset in range(180):
+        close = 2.0 + offset * 0.01
+        db_session.add(DailyBar(
+            instrument_id=instrument.id,
+            trade_date=date(2025, 1, 1) + timedelta(days=offset),
+            open=close,
+            high=close + 0.02,
+            low=close - 0.02,
+            close=close + 0.01,
+            volume=None,
+            amount=None,
+            source="akshare:sina:v101",
+            adjust="none",
+            quality_hash=str(offset),
+        ))
+    db_session.flush()
+    settings = get_settings().model_copy(update={"market_provider": "public_composite"})
+    report = run(db_session, settings, selected=["return_20d"])
+    assert report["status"] == "diagnostic"
+    assert report["actionable"] is False
+    assert report["price_only_instruments"] >= 1
+    assert report["metrics"] and report["metrics"][0]["factor"] == "return_20d"
+    db_session.rollback()
+
+
 def test_review_notes_are_private_revision_checked_and_not_strategy_edits(bootstrapped):
     # Existing user ids are not invented; test auth-disabled local owner first.
     day='2025-01-02'

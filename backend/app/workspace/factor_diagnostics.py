@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import numpy as np
+from sqlalchemy import select
 
 from app.services.factor_analysis_service import DEFAULT_FACTORS, FactorAnalysisService, factor_metric
 from app.utils.horizons import aligned_research_horizons
@@ -28,13 +29,23 @@ def correlation_summary(panel, fields):
 
 
 def run(db, settings, *, selected=None):
-    from app.providers.data_contract import require_current_history
-    require_current_history(db, settings)
+    from app.models import Instrument
+    from app.providers.data_contract import history_issues
+    # The shared signal engine still requires complete, current history. This
+    # research-only view is narrower: exclude legacy units and invalid OHLC,
+    # but allow current-contract price-only rows and expose null volume-factor
+    # coverage instead of blocking all diagnostics.
+    issues = history_issues(db, settings)
+    blocked_reasons = {"legacy_units_unverified", "ambiguous_price_basis", "invalid_ohlc"}
+    eligible_ids = {
+        row.id for row in db.scalars(select(Instrument).where(Instrument.enabled.is_(True)))
+        if issues.get(row.id) not in blocked_reasons
+    }
     configured = settings.load_strategy().get("factor_analysis", {}).get("factors", DEFAULT_FACTORS)
     if selected and (len(selected) > 12 or set(selected) - set(configured)):
         raise ValueError("factor_selection_not_in_registry")
     service = FactorAnalysisService(settings)
-    panel = service._panel(db)
+    panel = service._panel(db, instrument_ids=eligible_ids)
     if panel.empty:
         return {"status": "unavailable", "reason": "insufficient_history", "metrics": [], "actionable": False}
     configured = service.strategy.get("factor_analysis", {}).get("factors", DEFAULT_FACTORS)
@@ -53,5 +64,6 @@ def run(db, settings, *, selected=None):
         "correlations": correlations, "correlation_dates": counts,
         "correlation_method": "mean_date_local_spearman_min_4_instruments", "instruments": int(panel.ts_code.nunique()),
         "actionable": False, "qualification": "mock" if settings.market_provider == "mock" else "not_qualified",
-        "limitations": ["诊断不是样本外验证", "相关性不代表因果或增量收益", "基线日线可见性与可成交性尚未封版", "不会修改策略权重或启用因子"],
+        "price_only_instruments": sum(reason == "volume_missing_for_shared_signals" for reason in issues.values()),
+        "limitations": ["诊断不是样本外验证", "相关性不代表因果或增量收益", "基线日线可见性与可成交性尚未封版", "缺量标的仅参与价格因子，量价因子覆盖率保持为空", "不会修改策略权重或启用因子"],
     }

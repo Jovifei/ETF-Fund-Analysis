@@ -30,6 +30,29 @@ def test_tushare_index_identity_units_and_dates():
     assert bar.volume==300 and bar.amount==5000 and bar.trade_date==date(2026,9,1)
 
 
+def test_akshare_index_uses_full_ohlc_fallback_before_truncated_sina():
+    calls = []
+
+    class FakeSDK:
+        def index_zh_a_hist(self, **kwargs):
+            calls.append(("index_zh_a_hist", kwargs))
+            return [{"日期": "20260901", "开盘": 3000, "最高": 3020, "最低": 2990, "收盘": 3001}]
+
+        def stock_zh_index_daily_em(self, **kwargs):
+            raise AssertionError("full OHLC fallback should have succeeded first")
+
+        def stock_zh_index_daily_tx(self, **kwargs):
+            raise AssertionError("truncated fallback should not be called")
+
+        def stock_zh_index_daily(self, **kwargs):
+            raise AssertionError("old Sina fallback should not be called")
+
+    provider = SimpleNamespace(ak=FakeSDK(), _records=lambda value: value)
+    bars = akshare_index(provider, "sh000985", date(2026, 1, 1), date(2026, 9, 8))
+    assert len(bars) == 1 and bars[0].open == 3000 and bars[0].source == "akshare:index:zh-a-v103"
+    assert calls[0][1]["symbol"] == "000985"
+
+
 def test_cache_is_durable_idempotent_and_failure_preserves_history(db_session):
     db=db_session; ident='test-index-'+uuid4().hex[:8]
     registry=MarketContextRegistry(context_id=ident,label='测试指数',region='CN',context_kind='index',

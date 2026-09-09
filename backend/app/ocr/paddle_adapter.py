@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import json
 import multiprocessing
+import re
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
@@ -18,7 +19,10 @@ def _manifest_relative(value: object, component: str) -> str | None:
     path = PurePosixPath(value)
     if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts) or path.parts[0:1] != (component,) or len(path.parts) != 2:
         return None
-    if path.name not in {"inference.pdmodel", "inference.pdiparams", "inference.pdparams"}:
+    if path.name not in {
+        "inference.pdmodel", "inference.pdiparams", "inference.pdparams",
+        "inference.json", "inference.yml", "inference.yaml",
+    }:
         return None
     return value
 
@@ -43,6 +47,32 @@ def _safe_box(value: object) -> tuple[tuple[float, float], ...] | None:
         return None
 
 
+_MODEL_NAME_RE = re.compile(r"model_name\s*:\s*([A-Za-z0-9_.-]{1,96})\b")
+
+
+def _model_name_for_dir(directory: Path) -> str | None:
+    """Read a bounded PaddleX model name from a manifest-listed config."""
+    for name in ("inference.yml", "inference.yaml", "inference.json"):
+        path = directory / name
+        if not path.is_file() or path.is_symlink() or path.stat().st_size > 256 * 1024:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            continue
+        match = _MODEL_NAME_RE.search(text)
+        if match:
+            return match.group(1)
+        try:
+            payload = json.loads(text)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        value = payload.get("Global", {}).get("model_name") if isinstance(payload, dict) else None
+        if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_.-]{1,96}", value):
+            return value
+    return None
+
+
 def _paddle_worker(conn: Any, model_dir: str, payload: bytes) -> None:
     """Spawn-safe worker. Only bounded primitive result data crosses IPC."""
     try:
@@ -51,7 +81,15 @@ def _paddle_worker(conn: Any, model_dir: str, payload: bytes) -> None:
         if isinstance(engine, OCRUnavailable):
             conn.send({"status": "unavailable", "reason": engine.reason.value})
             return
-        result = engine.predict(payload)
+        # PaddleOCR 3.x accepts a filesystem path or ndarray, not raw bytes.
+        # Decode inside the bounded child so image bytes never leave the
+        # existing transient/import boundary.
+        from io import BytesIO
+        import numpy as np
+        from PIL import Image
+
+        image = np.asarray(Image.open(BytesIO(payload)).convert("RGB"))
+        result = engine.predict(image)
         lines: list[dict[str, Any]] = []
         total_chars = 0
         page_count = 0
@@ -61,7 +99,13 @@ def _paddle_worker(conn: Any, model_dir: str, payload: bytes) -> None:
             if page_count > 64:
                 conn.send({"status": "unavailable", "reason": "output_limit_exceeded"})
                 return
-            page_payload = page if isinstance(page, dict) else getattr(page, "json", lambda: {})()
+            if isinstance(page, dict):
+                page_payload = page
+            else:
+                raw_json = getattr(page, "json", {})
+                page_payload = raw_json() if callable(raw_json) else raw_json
+                if isinstance(page_payload, dict) and isinstance(page_payload.get("res"), dict):
+                    page_payload = page_payload["res"]
             texts = page_payload.get("rec_texts", ()) if isinstance(page_payload, dict) else ()
             scores = page_payload.get("rec_scores", ()) if isinstance(page_payload, dict) else ()
             boxes = page_payload.get("rec_boxes", page_payload.get("rec_polys", ())) if isinstance(page_payload, dict) else ()
@@ -357,7 +401,18 @@ class PaddleOCRAdapter:
                 "use_doc_orientation_classify": False,
                 "use_doc_unwarping": False,
                 "use_textline_orientation": False,
+                # PaddleOCR 3.x may select oneDNN by default on Windows;
+                # PP-OCRv5 local models currently fail there with an
+                # unsupported PIR attribute. Plain Paddle CPU is deterministic
+                # and keeps the model inside the bounded worker.
+                "enable_mkldnn": False,
             }
+            det_name = _model_name_for_dir(component_dirs["det"])
+            rec_name = _model_name_for_dir(component_dirs["rec"])
+            if det_name:
+                kwargs["text_detection_model_name"] = det_name
+            if rec_name:
+                kwargs["text_recognition_model_name"] = rec_name
             if "cls" in component_dirs:
                 kwargs["textline_orientation_model_dir"] = str(component_dirs["cls"])
             self._engine = paddleocr.PaddleOCR(**kwargs)

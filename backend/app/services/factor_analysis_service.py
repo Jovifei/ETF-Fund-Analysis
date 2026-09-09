@@ -380,9 +380,12 @@ class FactorAnalysisService:
         self.settings = settings or get_settings()
         self.strategy = self.settings.load_strategy()
 
-    def _panel(self, db: Session) -> pd.DataFrame:
+    def _panel(self, db: Session, *, instrument_ids: set[int] | None = None) -> pd.DataFrame:
+        query = select(Instrument).where(Instrument.enabled.is_(True))
+        if instrument_ids is not None:
+            query = query.where(Instrument.id.in_(instrument_ids))
         instruments = db.scalars(
-            select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code)
+            query.order_by(Instrument.ts_code)
         ).all()
         frames: list[pd.DataFrame] = []
         for instrument in instruments:
@@ -401,8 +404,11 @@ class FactorAnalysisService:
                         "high": row.high,
                         "low": row.low,
                         "close": row.close,
-                        "volume": row.volume or 0,
-                        "amount": row.amount or 0,
+                        # Preserve missing volume/amount as missing. Price-only
+                        # diagnostics may use the close series, while volume
+                        # factors must report honest null coverage.
+                        "volume": row.volume if row.volume is not None else np.nan,
+                        "amount": row.amount if row.amount is not None else np.nan,
                     }
                     for row in rows
                 ]
