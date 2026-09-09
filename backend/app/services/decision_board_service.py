@@ -411,7 +411,9 @@ class DecisionBoardService:
         if blocked or indicator is None:
             from app.workspace.read_model import chart_data
             display_history = chart_data(db, self.settings, instrument.ts_code, "1d", 60)
-            indicator, forecasts, provisional = None, {}, None
+            indicator = None
+            if blocked:
+                forecasts = {}
             bars = (display_history or {}).get("bars") or []
             price_values = dict(bars[-1]["indicators"]) if bars else {}
             grade_row = classify_row(price_values, pct_change=None, previous=None,
@@ -420,7 +422,11 @@ class DecisionBoardService:
         values = dict(indicator.values_json or {}) if indicator is not None else (price_values if display_history else {})
         freshness, data_status = self._status(indicator, quote, generated_at)
         source_verified = bool(quote and quote.timestamp_verified and quote.is_realtime and not quote.degraded_reason)
-        provisional_status = self._provisional_status(db, instrument.id, provisional, generated_at)
+        # Missing settled indicators do not erase independently timestamped
+        # intraday research input. Incompatible history still fails closed.
+        provisional_status = ({"status": "blocked_history_contract",
+            "used_for_derived_values": False, "reason": blocked}
+            if blocked else self._provisional_status(db, instrument.id, provisional, generated_at))
         forecast_map = {str(horizon): self._forecast_payload(forecasts.get(horizon)) for horizon in HORIZONS}
         today_return = percent_points_to_ratio(quote.pct_change) if quote is not None else finite_or_none(values.get("return_1d"))
         previous_confirmed_return = self._latest_confirmed_daily_return(db, instrument.id)
@@ -442,8 +448,9 @@ class DecisionBoardService:
         if display_history:
             history = [{**bar, "is_forecast": False} for bar in display_history.get("bars", [])]
             confirmed_levels = {}
-            freshness, data_status = "stale", "historical_price_only"
-            if quote is None and len(history) >= 2:
+            if not provisional_status["used_for_derived_values"]:
+                freshness, data_status = "stale", "historical_price_only"
+            if not provisional_status["used_for_derived_values"] and quote is None and len(history) >= 2:
                 today_return = history[-1]["close"] / history[-2]["close"] - 1
         if provisional_status["used_for_derived_values"]:
             history = [
