@@ -15,7 +15,7 @@ import pandas as pd
 
 from app.utils.indicators import calculate_indicators
 
-CORE_FIELDS = ("ma5", "ma10", "ma20", "ma30", "ma60", "macd_dif", "macd_dea", "macd_hist", "kdj_k", "kdj_d", "kdj_j", "rsi6", "rsi12", "rsi14", "td_buy_setup", "td_sell_setup")
+CORE_FIELDS = ("ma5", "ma10", "ma20", "ma30", "ma60", "macd_dif", "macd_dea", "macd_hist", "kdj_k", "kdj_d", "kdj_j", "rsi6", "rsi12", "rsi14", "td_buy_setup", "td_sell_setup", "atr", "atr_pct", "boll_upper", "boll_mid", "boll_lower")
 
 
 def number(value):

@@ -177,7 +177,15 @@ def execute(job_id: str) -> int:
     try:
         kind = request["task"]
         from app.workspace.offline_tasks import CacheOnlyTaskService
-        tasks = CacheOnlyTaskService(settings) if kind in {"recompute", "factors"} else TaskService(settings)
+        tasks = CacheOnlyTaskService(settings) if kind in {"recompute", "factors", "research_outlook"} else TaskService(settings)
+        if kind == "research_outlook":
+            from app.workspace.research_outlook import refresh
+            with session_scope() as db:
+                report=refresh(db,settings,request.get('codes',[]))
+                row=db.get(WorkspaceDataJob,job_id)
+                row.result_json={'steps':[{'task':'research_outlook','status':report['status'],'summary':report}], 'models_called':False}
+                row.status=report['status'];row.finished_at=datetime.now(UTC)
+            return 0
         if kind == "factors":
             with session_scope() as db:
                 report = factor_diagnostics.run(db, settings, selected=request.get("factor_names", []))

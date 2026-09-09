@@ -214,6 +214,10 @@ def instrument_detail(db: Session, settings: Settings, code: str, user_id: int |
 
 
 def chart_data(db: Session, settings: Settings, code: str, interval: str, limit: int) -> dict | None:
+    if interval in ("1w", "1mo"):
+        from app.workspace.candle_periods import transform_chart
+        raw=chart_data(db,settings,code,"1d",workspace_settings().chart_history_limit)
+        return transform_chart(raw,interval,settings.load_strategy()["indicator"],limit) if raw else None
     inst = db.scalar(select(Instrument).where(Instrument.ts_code == code, Instrument.kind.in_(("ETF", "LOF"))))
     if inst is None:
         return None

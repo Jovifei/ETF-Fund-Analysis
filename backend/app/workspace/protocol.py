@@ -102,7 +102,7 @@ class ReviewRequest(StrictModel):
 
 
 class DataRequest(StrictModel):
-    task: Literal["refresh", "onboard", "factors", "validate", "shadow_audit", "prices", "quotes", "catalog", "news", "context", "minutes", "index_history", "recompute", "prepare_history"]
+    task: Literal["refresh", "onboard", "factors", "validate", "shadow_audit", "prices", "quotes", "catalog", "news", "context", "minutes", "index_history", "recompute", "prepare_history", "research_outlook"]
     factor_names: list[Annotated[str, StringConstraints(pattern=r"^[a-zA-Z0-9_]{1,64}$")]] = Field(default_factory=list, max_length=12)
     interval: Literal["30m", "60m"] = "30m"
     codes: list[Code] = Field(default_factory=list, max_length=30)
