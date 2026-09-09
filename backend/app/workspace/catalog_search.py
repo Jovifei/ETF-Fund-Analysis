@@ -22,6 +22,7 @@ def search_terms(query):
     terms = list(dict.fromkeys([query, *values]))[:16]
     return terms, {"query": query, "terms": terms, "version": version,
         "method": "sector_alias" if cleaned in aliases else "literal",
+        "expanded": cleaned in aliases and terms != [query],
         "note": "按名称、主题和跟踪指数关联，不代表成分股重叠或同一指数；请核对基金跟踪标的。"}
 
 def matching_reason(inst, terms):
