@@ -26,6 +26,7 @@ Jovi 在本轮明确授权修复数据刷新问题并部署到 `https://etf.jovi
 ## 数据刷新证据
 
 - scheduler 在 14:29:55 执行 `refresh_quotes`，14:30:19 成功结束；`requested=35`、`received=35`、失败为空，provider audit 为 `akshare/fetch_spot_quotes/ok`。
+- 连续性复核显示 14:35、14:40、14:45 的决策板刷新均成功，14:35/14:40/14:45 的 `fetch_spot_quotes` provider audit 均为 `ok`；最新检查时两只 ETF 报价已到 14:45 左右。
 - `510300.SH` 最新报价时间为 14:30:07，`512480.SH` 为 14:30:01；两者均写入生产 PostgreSQL。AKShare 的公开时间戳尚未完成实时资格认证，记录保留 `is_realtime=false` 和 `public_quote_not_qualified`，页面不会误报为实时。
 - 受审计 `TaskService` 任务 `refresh_bars` 只针对两只 ETF 执行，14:32:41–14:32:52 完成，`inserted=2`、`failures=[]`；两只 ETF 均为 1,197 根日线，日期 2021-10-08 至 2026-09-09。东财历史调用失败后按既有契约使用 Sina 价格回退，成交量保持缺失，未补零。
 - 三个指数缓存（上证、沪深300、中证全指）均为 1,197 根 OHLC，`source_as_of=2026-09-09`；中证全指没有复制 ETF 或点值，仍按真实 OHLC 缓存和资格边界展示。

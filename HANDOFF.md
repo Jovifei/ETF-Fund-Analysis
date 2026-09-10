@@ -4,7 +4,7 @@
 
 ## 当前公网状态（2026-09-10）
 
-公网 `https://etf.joviluma.com` 已切换到 `3e4b9fa` / v1.0.4。API、worker healthy，scheduler running；生产配置为 `public_composite`、`ALLOW_MOCK_FALLBACK=false`、认证开启。AKShare 分页现货接口的 bounded timeout 已设为 60 秒，scheduler 已成功写入当日两只 ETF 的报价。
+公网 `https://etf.joviluma.com` 已切换到 `3e4b9fa` / v1.0.4。API、worker healthy，scheduler running；生产配置为 `public_composite`、`ALLOW_MOCK_FALLBACK=false`、认证开启。AKShare 分页现货接口的 bounded timeout 已设为 60 秒，scheduler 在 14:35、14:40、14:45 连续成功写入当日两只 ETF 的报价。
 
 生产库备份、旧源目录和回滚 Compose 已保留。两只 ETF 日线目前各 1,197 根至 2026-09-09；三只指数缓存各 1,197 根 OHLC 至 2026-09-09。AKShare 时间戳尚未完成实时资格认证，Sina 回退成交量缺失，因子/预测仍不能晋级 actionable。部署、任务和 hash 证据见 [`docs/PRODUCTION_DEPLOYMENT_RECEIPT_V104_20260910.md`](docs/PRODUCTION_DEPLOYMENT_RECEIPT_V104_20260910.md)。
 

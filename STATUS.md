@@ -5,7 +5,7 @@
 ## 2026-09-10 公网生产状态（当前）
 
 - 公网 `https://etf.joviluma.com` 已运行提交 `3e4b9fa` 对应的 v1.0.4；API 与 worker healthy，scheduler running，公网 health 返回 `version=1.0.4`、`provider=public_composite`、认证开启。
-- 本轮数据刷新修复把 AKShare bounded timeout 从 20 秒提高到 60 秒。scheduler 的全量 `refresh_quotes` 已成功写入 35 个启用标的；`510300.SH`、`512480.SH` 均有 2026-09-10 14:30 左右报价，按未完成实时资格契约标为非实时/待核实。
+- 本轮数据刷新修复把 AKShare bounded timeout 从 20 秒提高到 60 秒。scheduler 的全量 `refresh_quotes` 已成功写入 35 个启用标的，并在 14:35、14:40、14:45 连续复核成功；`510300.SH`、`512480.SH` 最新检查时均有 2026-09-10 14:45 左右报价，按未完成实时资格契约标为非实时/待核实。
 - 受审计补历史任务使两只 ETF 各 1,197 根日线到 2026-09-09；三只指数缓存各 1,197 根 OHLC 到 2026-09-09。成交量缺失、实时资格和研究因子门禁保持原状态。
 - 生产 PostgreSQL 备份、旧 v1.0.4 源目录、旧镜像和回滚 Compose 均保留。完整记录见 `docs/PRODUCTION_DEPLOYMENT_RECEIPT_V104_20260910.md`。
 
