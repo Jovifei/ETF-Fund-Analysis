@@ -682,6 +682,7 @@ Allowed code scope: MarketService history upsert, worker summary, Overview index
 - [x] 按 v1.0.4 合同完成本地真实目录/板块/两只 ETF/有限历史准备、图表/原模板/研究/账户边界验证；真实数据失败保留来源与原因，不使用 Mock 冒充。
 - [x] AI 未完成仓库外主密钥配置，按未确认费用边界保持关闭；没有复制 auth.json 或调用模型。
 - [x] 形成本地部署收据、截图、持久重启证明和剩余边界；不合并 main、不移动标签、不部署服务器。
+- [x] 2026-09-10 12:58 对两只 ETF 再次重试 `quotes`；仍 `partial/TaskExecutionError`，保留旧日线和失败状态，不伪造今日数据。
 
 ### v1.0.4 结果
 - `docs/LOCAL_ACCEPTANCE_RECEIPT_V104_20260910.md` 汇总固定 SHA、CI、修复、真实任务、页面、账户、重启和环境限制。
