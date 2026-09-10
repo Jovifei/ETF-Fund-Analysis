@@ -738,3 +738,12 @@ Allowed code scope: MarketService history upsert, worker summary, Overview index
 - [ ] 备份原持久库到新的证据目录，在副本中逐字段核对目录、板块、两只 ETF、三指数、新闻、API 和页面。
 - [ ] 处理必要 R1–R6 缺陷时，每组单独提交、先复现后修复；R7、生产部署、main 合并、标签移动均保持未执行。
 - [ ] 本地持久服务重启后核对 schema、条数、日期、来源、失败审计、原 WorkBuddy 模板和截图，形成 v105 接收收据。
+
+### v105 Review（2026-09-11）
+
+- [x] ZIP SHA、verify_bundle、固定基线、补丁 apply-check、SOURCE_CHANGESET 归一化 SHA 全部通过；原工程未触碰。
+- [x] 包内第一阶段提交 `6e1c0c2`；R1 `e072718`、R2 `9b0822e`/`8ba2df7`、R3 `5a900f7`/`04c4ca4`；任务台账 `652f2c7`。
+- [x] Python3.12 全量 pytest 无失败；v105 专项23；Vue28/typecheck/build；旧JS20；compileall、secret scan、diff check；普通 Playwright17/17、认证2/2。
+- [x] 临时 SQLite Alembic upgrade/check/head 通过；原副本 Backup API、真实 AKShare 目录/板块/ETF/指数/新闻任务、字段/单位/时间/来源和页面证据已保留。
+- [x] v105 API/worker 使用同一副本重启后 health、完整性、条数和日期保留；scheduler 单实例现场尝试出现 SQLite 并发写锁，已停止并记录为剩余项。
+- [ ] 专用 PostgreSQL16、Node22、Docker、Windows DPAPI、完整实时/量价资格和生产部署仍未执行；R7 完整缠论/自动同步保持未实现。
