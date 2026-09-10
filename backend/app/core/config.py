@@ -101,7 +101,9 @@ class Settings(BaseSettings):
     tushare_token: str = Field(default="", repr=False, exclude=True)
     tushare_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
     tushare_realtime_candidates: str = "rt_etf_k,realtime_quote,rt_k"
-    akshare_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
+    # ETF spot data is a paginated public response; the bounded child process
+    # needs enough budget for all pages plus startup and serialization.
+    akshare_timeout_seconds: float = Field(default=60.0, gt=0, le=120)
     # FTShare is an explicitly opt-in, read-only public source.  Bounds keep a
     # malformed or unexpectedly large upstream response from becoming a local
     # resource exhaustion vector.

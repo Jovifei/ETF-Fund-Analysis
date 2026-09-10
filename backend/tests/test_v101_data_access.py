@@ -82,6 +82,10 @@ def test_network_timeout_is_hard_and_process_is_reaped():
     assert time.monotonic()-started < 5
     assert {p.pid for p in multiprocessing.active_children()}==before
 
+
+def test_default_akshare_budget_covers_paged_public_spot_endpoint():
+    assert Settings(_env_file=None).akshare_timeout_seconds == 60
+
 @pytest.fixture
 def v101_db():
     from sqlalchemy import create_engine
