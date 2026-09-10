@@ -1,6 +1,6 @@
 # 文档入口：v1.0.4 增量分支
 
-优先阅读 [v1.0.4版本](versions/V1.0.4.md)、[用户操作](USER_GUIDE_V104.md)、[AI安全](AI_CONNECTION_SECURITY_V104.md)、[本地验收](LOCAL_ACCEPTANCE_V104.md)、[开源落点](OSS_APPLIED_V104.md)、[过程](PROCESS_LOG_V104.md)。生产状态仍以目标环境部署收据为准，以下保留v1.0.3完整知识入口。
+优先阅读 [v1.0.4版本](versions/V1.0.4.md)、[用户操作](USER_GUIDE_V104.md)、[AI安全](AI_CONNECTION_SECURITY_V104.md)、[本地验收](LOCAL_ACCEPTANCE_V104.md)、[开源落点](OSS_APPLIED_V104.md)、[过程](PROCESS_LOG_V104.md)、[本地接收收据](LOCAL_ACCEPTANCE_RECEIPT_V104_20260910.md)。生产状态仍以目标环境部署收据为准；本轮只做本地持久部署，不表示生产上线。
 
 # 文档入口：v1.0.3 分支交付
 
@@ -18,6 +18,11 @@
 8. [技术路线与工程关系](TECHNICAL_ROUTE_V103.md)：浏览器、API、Provider、worker、数据库、指标、OCR、Bridge 和部署之间的调用关系。
 9. [完成项与证据矩阵](COMPLETION_AND_EVIDENCE_MATRIX_V103.md)：区分源码、隔离测试、真实公共源、生产现场和最终资格证据。
 10. [开源借鉴登记册](OPEN_SOURCE_ADOPTION_REGISTER_V103.md)：固定 revision、许可证、借鉴点、实际落点和隔离边界。
+
+## v1.0.4 本地接收结果
+
+- 固定接收：`910e77fc866f123e0d18103048243513e3edb666`；本地新闻修复审核分支：`codex/v104-news-time-review-20260910`，提交 `b8112d4`。
+- [v1.0.4 本地接收、修复与持久部署收据](LOCAL_ACCEPTANCE_RECEIPT_V104_20260910.md)：CI 复核、新闻时间修复、真实目录/板块/ETF/新闻任务、页面截图、重启证明和剩余边界。
 
 固定接收SHA以最终交付Prompt/PR为准，不能把中间传输材料提交当成可部署应用。根AGENTS.md仍是安全合同。原WorkBuddy模板在总览中保留；预测期限仍1/3/5/10，不因应用升版而自动calibrated。
 

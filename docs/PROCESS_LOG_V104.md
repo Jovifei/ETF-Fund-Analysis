@@ -9,3 +9,9 @@
 5. GitHub写入曾被大段传输截断，预设hash门禁拒绝应用；改分块校验并通过测试后生成实际源码提交。临时传输文件/应用工作流必须在最终树清除。传输提交不是应用完成证据。
 
 最终测试结果、固定SHA与本地Prompt在PR收据追加；本文件中“已实现”不等于真实数据权限或部署成功。保留原STATUS/HANDOFF/知识库，不重新压缩历史证据。
+
+## 2026-09-10 接收与本地持久部署
+
+固定接收 `910e77fc866f123e0d18103048243513e3edb666` 在独立 clone 完成。远端 `workspace-ci` 成功，完整 `ci` 的旧静态列断言失败；本地审核分支提交 `b8112d4` 完成 RED/GREEN 修复。新闻状态的 SQLite naive publication 现在按市场时区解释，数据库默认 fetched_at 单独按 UTC 解释，前端列表 stamp、年龄标签和筛选共用同一解析器。
+
+本地副本使用原持久库的 SQLite Backup API 备份，真实 akshare 目录实际 ETF 1,658、LOF 382；行业/概念/全市场任务为 partial/snapshot 保留；两只 ETF 各 1,197 根；10 只有限准备写入 137 根；新闻写入 200 条。API/worker、页面、账户边界、重启和 SQLite integrity 均已核对。Docker/PostgreSQL 只记录环境不可用，未把它们写成通过。

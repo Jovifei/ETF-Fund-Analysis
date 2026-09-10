@@ -2,6 +2,15 @@
 
 当前功能分支基于main 57470ea，见docs/versions/V1.0.4.md、docs/USER_GUIDE_V104.md和docs/LOCAL_ACCEPTANCE_V104.md。先核对固定SHA与CI，再加载原私有配置/原库副本。不删除以下历史记录，不把分支实现当生产已升级。模型API默认关闭，启用必须初始化独立密钥和本人确认费用。
 
+## 2026-09-10 本地接收与持久部署
+
+- 固定接收 `910e77fc866f123e0d18103048243513e3edb666` 已在独立 clone 验证基线 `57470eabcad35a6038574e893e7245f0d1adb387` 为祖先；原工程脏区未触碰。
+- 远端固定 SHA 的 `workspace-ci` 成功，`public-data-v104-observation` 成功；完整 `ci` 的旧 JS 合同测试失败已在本地复现并由 `b8112d4` 修复，未合并 main、未推送审核修复、未部署服务器。
+- 本地持久副本 URL 为 `http://127.0.0.1:8082`，运行 v1.0.4 / `akshare` / 数据库认证；目录实际为 ETF 1,658、LOF 382，行业 90、概念 614、全市场 1。
+- 两只 ETF 各 1,197 根日线至 2026-09-09；有限准备任务选择 10 只、实际写入 137 根；报价任务因上游不可用保持失败/partial，不提升实时或 actionable 资格。
+- 新闻任务实际写入 200 条 `akshare:eastmoney`；publication 使用市场时区、fetched 使用 UTC；缺失/未来时间显示待核实。完整收据见 `docs/LOCAL_ACCEPTANCE_RECEIPT_V104_20260910.md`。
+- 本地副本重启前后 schema、目录、目标 ETF bars、板块统计和 integrity 均一致；Docker daemon 不可用，临时 PostgreSQL/镜像 build/container smoke 未宣称通过。
+
 # 当前开发：v1.0.3 历史与研究入口修复
 
 ## 2026-09-09 部署状态

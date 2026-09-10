@@ -2,6 +2,16 @@
 
 当前功能分支基于main 57470ea，见docs/versions/V1.0.4.md、docs/USER_GUIDE_V104.md和docs/LOCAL_ACCEPTANCE_V104.md。先核对固定SHA与CI，再加载原私有配置/原库副本。不删除以下历史记录，不把分支实现当生产已升级。模型API默认关闭，启用必须初始化独立密钥和本人确认费用。
 
+## v1.0.4 本地接收完成（2026-09-10）
+
+固定接收 `910e77fc866f123e0d18103048243513e3edb666` 已在独立 clone 完成复测。本地审核修复分支为 `codex/v104-news-time-review-20260910`，提交 `b8112d4`，只修复新闻 publication/fetched 时区解释、前端时间筛选/显示和一条过时的 WorkBuddy 列测试合同。
+
+本地持久副本运行于 `http://127.0.0.1:8082`，数据目录在仓库外，使用 SQLite Backup API 从原持久库副本生成；API 和 worker 由同一源版本启动。目录、板块、两只 ETF、10 只有限准备、新闻、页面、账户边界和重启保留均有净化收据，见 `docs/LOCAL_ACCEPTANCE_RECEIPT_V104_20260910.md`。
+
+远端固定 SHA 的 `workspace-ci` 和公开数据观察成功；完整 `ci` 失败原因为旧静态 JS 测试仍要求 v1.0.3 已删除的“较昨日”列，本地已 RED/GREEN 修复，但审核分支未自动推送或触发远端重跑。Docker daemon 不可用，PostgreSQL 容器、生产镜像和服务器部署保持未验证。
+
+不要把本地 8082 当生产站，不要复制隔离测试账号或外部配置，不要在服务器直接 build。AI 主密钥、API Key、Windows DPAPI、Codex/Vibe 登录、真实 OCR、实时/分钟 Provider、中证全指近期数据、量价资格和最终 14:30 研究门禁仍待独立授权和证据。
+
 # 接手入口：v1.0.3
 
 ## 最新部署接力（2026-09-09）
