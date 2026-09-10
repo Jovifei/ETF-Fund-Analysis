@@ -1,3 +1,5 @@
+> **当前ZIP接力入口（未发布）**：[V105本地交接与验收](HANDOFF_V105_LOCAL_PACKAGE.md)。源版本仍1.0.4；第一阶段工作稿未推送。旧版本报告不作为本包测试证明。
+
 # 文档入口：v1.0.4 增量分支
 
 优先阅读 [v1.0.4版本](versions/V1.0.4.md)、[用户操作](USER_GUIDE_V104.md)、[AI安全](AI_CONNECTION_SECURITY_V104.md)、[本地验收](LOCAL_ACCEPTANCE_V104.md)、[开源落点](OSS_APPLIED_V104.md)、[过程](PROCESS_LOG_V104.md)、[本地接收收据](LOCAL_ACCEPTANCE_RECEIPT_V104_20260910.md)、[公网生产部署收据](PRODUCTION_DEPLOYMENT_RECEIPT_V104_20260910.md)。当前公网状态以生产部署收据为准；历史本地接收段落保留当时边界。

@@ -405,6 +405,8 @@ class DecisionBoardService:
 
     def _row(self, db: Session, generated_at: datetime, instrument, grade_row, indicator, previous_values, quote, forecasts, provisional) -> dict:
         grade_row = grade_row or {}
+        independent_sector = grade_row.get("sector")
+        comparison_basis = "previous_saved_confirmed_date_not_intraday_quote"
         from app.providers.data_contract import history_issues
         blocked = history_issues(db, self.settings, [instrument.id]).get(instrument.id)
         display_history = None
@@ -416,8 +418,14 @@ class DecisionBoardService:
                 forecasts = {}
             bars = (display_history or {}).get("bars") or []
             price_values = dict(bars[-1]["indicators"]) if bars else {}
+            # Current/previous must come from one series and one formula/price basis.
+            previous_values = ({**dict(bars[-2]["indicators"]), "_as_of_date": bars[-2]["date"]}
+                               if len(bars) >= 2 else None)
+            comparison_basis = "adjacent_historical_bars_display_only"
             grade_row = classify_row(price_values, pct_change=None, previous=None,
                                      cfg=SignalGradeService(self.settings).config)
+            if independent_sector is not None:
+                grade_row["sector"] = independent_sector
             grade_row.update(grade="数据异常", grade_reason="历史价格展示；完整量价/指标资格尚未通过，不生成当前动作")
         values = dict(indicator.values_json or {}) if indicator is not None else (price_values if display_history else {})
         freshness, data_status = self._status(indicator, quote, generated_at)
@@ -539,7 +547,7 @@ class DecisionBoardService:
             "indicator_comparison": {
                 "as_of_date": indicator.as_of_date.isoformat() if indicator is not None else (display_history or {}).get("source_as_of"),
                 "previous_as_of_date": (previous_values or {}).get("_as_of_date"),
-                "basis": "previous_saved_confirmed_date_not_intraday_quote",
+                "basis": comparison_basis,
                 "values": {key: {"current": finite_or_none(values.get(key)), "previous": finite_or_none((previous_values or {}).get(key))}
                            for key in ("volume_ratio", "ma20", "macd_dif", "kdj_j", "rsi14", "td_buy_setup", "td_sell_setup")},
             },

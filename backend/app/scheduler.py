@@ -181,6 +181,8 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
     calendar_decision = TradingCalendarService(settings, provider).decision(now.date())
     is_trade_day = calendar_decision.is_trade_day
     phase = clock.phase(now, is_trade_day)
+    from app.workspace.refresh_policy import balanced_plan, daily_due
+    balanced = balanced_plan(now, is_trade_day=is_trade_day) if settings.balanced_refresh_enabled else None
     executed: list[str] = []
     failures: list[dict[str, str]] = []
 
@@ -198,7 +200,12 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
         # The first scheduler tick builds the minimum research dataset. A
         # provider failure is durable in TaskRun and must not permanently stop
         # the daemon from reaching later independent work.
-        if _last_success(db, "sync_instruments") is None:
+        if (_last_success(db, "sync_instruments") is None and
+            (balanced is None or _due(_last_attempt_or_success(db, "sync_instruments"), now, 60))) or (
+            balanced is not None and 8 <= now.hour < 22 and daily_due(
+                _last_success(db, "sync_instruments"), _last_attempt_or_success(db, "sync_instruments"), now
+            )
+        ):
             _run_guarded(
                 tasks,
                 db,
@@ -214,6 +221,9 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
             if phase == MarketPhase.LUNCH
             else intervals["news_refresh_minutes"]
         )
+
+        if balanced is not None:
+            quote_minutes, signal_minutes, news_minutes = balanced.quote_minutes, balanced.signal_minutes, balanced.news_minutes
 
         # Critical path first. Coalesce a short scheduler delay to the latest
         # unclaimed decision slot before optional market-context/news work.
@@ -257,7 +267,7 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
         # refresh already fetches quotes itself, so avoid a duplicate provider
         # call while an exact/recent slot or queued manual refresh is active.
         if (
-            clock.price_session_open(now, is_trade_day)
+            (balanced.market_open if balanced is not None else clock.price_session_open(now, is_trade_day))
             and not board_refresh_window
             and _due(_last_attempt_or_success(db, "refresh_quotes"), now, quote_minutes)
         ):
@@ -270,8 +280,12 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
             )
 
         # Market context is optional and cannot block the quote/decision path.
-        market_context_minutes = int(settings.market_context_refresh_minutes)
-        if _due(
+        market_context_minutes = balanced.context_minutes if balanced else int(settings.market_context_refresh_minutes)
+        context_window = balanced is None or balanced.market_open or (
+            balanced.after_close and daily_due(_last_success(db, "refresh_market_context"),
+                                               _last_attempt_or_success(db, "refresh_market_context"), now)
+        )
+        if context_window and _due(
             _last_attempt_or_success(db, "refresh_market_context"), now, market_context_minutes
         ):
             _run_guarded(
@@ -282,13 +296,15 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
                 failures=failures,
             )
 
-        after_close_due = phase == MarketPhase.AFTER_CLOSE and _due(
+        after_close_due = (balanced.after_close and daily_due(
+            _last_success(db, "refresh_bars"), _last_attempt_or_success(db, "refresh_bars"), now
+        )) if balanced is not None else (phase == MarketPhase.AFTER_CLOSE and _due(
             _last_success(db, "refresh_bars"), now, 12 * 60
-        )
+        ))
 
         if (
             not after_close_due
-            and clock.signals_allowed(now, is_trade_day)
+            and (balanced.market_open if balanced is not None else clock.signals_allowed(now, is_trade_day))
             and _due(_last_success(db, "refresh_signals"), now, signal_minutes)
         ):
             # Intraday indicators still use the most recently settled daily bars;
@@ -322,6 +338,17 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
                     failures=failures,
                     **kwargs,
                 )
+
+        # Balanced mode adds board updates between close chains and daily index history.
+        # TaskService remains the only writer/lock authority; this is not a second daemon.
+        if balanced is not None:
+            if ((balanced.market_open and _due(_last_attempt_or_success(db, "refresh_sector_snapshots"), now, 30))
+                or (balanced.after_close and daily_due(_last_success(db, "refresh_sector_snapshots"),
+                    _last_attempt_or_success(db, "refresh_sector_snapshots"), now))):
+                _run_guarded(tasks, db, "refresh_sector_snapshots", executed=executed, failures=failures)
+            if balanced.after_close and daily_due(_last_success(db, "refresh_index_history"),
+                                                   _last_attempt_or_success(db, "refresh_index_history"), now):
+                _run_guarded(tasks, db, "refresh_index_history", executed=executed, failures=failures)
 
         # News is additive/optional. Gate by the latest terminal attempt so an
         # upstream outage is retried at the configured cadence instead of every

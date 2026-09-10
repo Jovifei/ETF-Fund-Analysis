@@ -173,6 +173,8 @@ class Settings(BaseSettings):
     market_context_refresh_minutes: int = 15
     scheduler_tick_seconds: int = 30
     scheduler_enabled: bool = True
+    # Disabled until the deployment's single scheduler and provider budgets are audited.
+    balanced_refresh_enabled: bool = Field(default=False, validation_alias="BALANCED_REFRESH_ENABLED")
 
     llm_enabled: bool = False
     llm_api_base: str = "https://api.openai.com/v1"

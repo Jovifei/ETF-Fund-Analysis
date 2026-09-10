@@ -157,6 +157,28 @@ from app.workspace.ai_api import router as ai_router, members as member_router
 private_router.include_router(ai_router)
 private_router.include_router(member_router)
 
+@private_router.get("/workspace/market-context")
+def context_read_view(db: DB, settings: Config, response: Response, user: User) -> dict:
+    from datetime import datetime
+    from app.services.market_context_service import MarketContextService
+    from app.workspace.display_freshness import context_display
+    now = datetime.now(settings.timezone)
+    rows = MarketContextService(provider=None, settings=settings).latest_view(db)
+    result = [{**row, "display_time": context_display(
+        row.get("observation"), now=now, context_kind=row["context_kind"], timezone=settings.timezone
+    )} for row in rows]
+    response.headers["Cache-Control"] = "private, no-store"
+    return {"latest_view": result, "as_of": now.isoformat(), "provider_called": False}
+
+
+@private_router.get("/workspace/data-health")
+def data_health(db: DB, settings: Config, response: Response,
+                admin: Annotated[AuthUser | None, Depends(require_admin)]) -> dict:
+    from app.workspace.data_health import read
+    response.headers["Cache-Control"] = "private, no-store"
+    return read(db, settings)
+
+
 # Include after all decorators: FastAPI copies routes at include time.
 router.include_router(private_router)
 router.include_router(device_router)
