@@ -136,6 +136,7 @@ GitHub 网页运行记录显示：
 - `index_history` 明确重试一次后仍 `requested=3`、成功 2、`cn-csi-all=CapabilityUnavailable`；没有复制点位或 ETF 作为 OHLC。
 - `news` 显式任务 `succeeded`，插入 200 条 `akshare:eastmoney`；news-status 返回最新发布时间 `2026-09-10T09:13:23+08:00`、抓取时间 `2026-09-10T01:17:02+00:00`、年龄 0.1 小时、`within_24h`。状态读取本身 `provider_called=false`，符合“GET 不抓取”。
 - 2026-09-10 12:58（Asia/Shanghai）再次对两只 ETF 执行 `quotes` 重试，仍为 `partial`：`refresh_quotes=TaskExecutionError`，决策板步骤完成但没有新报价；日线仍以最近已完成交易日为准。
+- 生产刷新修复后，本机外部 live env 同步为 `AKSHARE_TIMEOUT_SECONDS=60` 并重启；14:54–14:55 受审计 `refresh_quotes` 对两只 ETF 返回 `inserted=2`、`received=2`、`missing=0`，本机 SQLite 完整性仍为 `ok`。旧 12:58 失败记录保留，不覆盖历史证据。
 
 ## 7. 页面与账户验收
 

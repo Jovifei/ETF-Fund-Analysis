@@ -20,6 +20,7 @@
 - 新闻任务实际写入 200 条 `akshare:eastmoney`；publication 使用市场时区、fetched 使用 UTC；缺失/未来时间显示待核实。完整收据见 `docs/LOCAL_ACCEPTANCE_RECEIPT_V104_20260910.md`。
 - 本地副本重启前后 schema、目录、目标 ETF bars、板块统计和 integrity 均一致；Docker daemon 不可用，临时 PostgreSQL/镜像 build/container smoke 未宣称通过。
 - 2026-09-10 12:58 再次执行两只 ETF 的 `quotes` 重试仍为 `TaskExecutionError/partial`；本地最新日线为 2026-09-09，今天日线尚未形成且当前公共报价能力不可用。
+- 生产修复后，本机 8082 的外部 live env 已同步为 60 秒并重启；14:54–14:55 对两只 ETF 的受审计报价重试返回 2/2，旧失败记录保留为历史证据。
 
 # 当前开发：v1.0.3 历史与研究入口修复
 
