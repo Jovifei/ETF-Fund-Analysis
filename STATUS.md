@@ -2,6 +2,15 @@
 
 当前功能分支基于main 57470ea，见docs/versions/V1.0.4.md、docs/USER_GUIDE_V104.md和docs/LOCAL_ACCEPTANCE_V104.md。先核对固定SHA与CI，再加载原私有配置/原库副本。不删除以下历史记录，不把分支实现当生产已升级。模型API默认关闭，启用必须初始化独立密钥和本人确认费用。
 
+## 2026-09-10 公网生产状态（当前）
+
+- 公网 `https://etf.joviluma.com` 已运行提交 `3e4b9fa` 对应的 v1.0.4；API 与 worker healthy，scheduler running，公网 health 返回 `version=1.0.4`、`provider=public_composite`、认证开启。
+- 本轮数据刷新修复把 AKShare bounded timeout 从 20 秒提高到 60 秒。scheduler 的全量 `refresh_quotes` 已成功写入 35 个启用标的；`510300.SH`、`512480.SH` 均有 2026-09-10 14:30 左右报价，按未完成实时资格契约标为非实时/待核实。
+- 受审计补历史任务使两只 ETF 各 1,197 根日线到 2026-09-09；三只指数缓存各 1,197 根 OHLC 到 2026-09-09。成交量缺失、实时资格和研究因子门禁保持原状态。
+- 生产 PostgreSQL 备份、旧 v1.0.4 源目录、旧镜像和回滚 Compose 均保留。完整记录见 `docs/PRODUCTION_DEPLOYMENT_RECEIPT_V104_20260910.md`。
+
+旧段落中的“未部署服务器”是部署前的历史记录，以本节为当前事实源；本轮未合并 `main`。
+
 ## 2026-09-10 本地接收与持久部署
 
 - 固定接收 `910e77fc866f123e0d18103048243513e3edb666` 已在独立 clone 验证基线 `57470eabcad35a6038574e893e7245f0d1adb387` 为祖先；原工程脏区未触碰。

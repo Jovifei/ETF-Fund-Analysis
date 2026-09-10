@@ -715,3 +715,17 @@ Allowed code scope: MarketService history upsert, worker summary, Overview index
 - Obsidian 五个核心槽位已扩展为详细的项目概览、工程关系、当前进度、关键决策和可复用工作流；官方 checkpoint wrapper 返回 `MEMORY_UPDATED`。
 - 文档镜像新鲜 DryRun 发现 6 个变更，官方 mirror wrapper 返回 `MEMORY_UPDATED`；目标目录为项目记忆下的 `05-工程文档`。
 - 本轮只修改文档与任务台账，没有修改业务代码、生产数据库、用户账户或原始脏工作树。
+
+## v1.0.4 公网刷新修复与部署 — 2026-09-10
+
+- [x] 复现生产 AKShare `ProviderTimeout`，确认 20 秒 bounded deadline 不足以覆盖 ETF 分页现货接口。
+- [x] 将 AKShare 默认/示例/Compose timeout 统一为 60 秒，增加默认预算回归测试；接收分支提交 `3e4b9fa` 并推送远端。
+- [x] 以无网络方式构建 `etf-workspace:v1.0.4-runtime-20260910`，诊断端口 API、迁移和 `cryptography` 导入通过。
+- [x] 生产切换前完成 PostgreSQL 备份；新版 API/worker/scheduler 健康，失败路径保留并验证回滚材料。
+- [x] 验证 scheduler `refresh_quotes` 成功写入 35 个启用标的；两只 ETF 当日报价落库且保持非实时资格标识。
+- [x] 通过受审计 TaskService 补两只 ETF 日线，生产各 1,197 根至 2026-09-09；指数缓存三项各 1,197 根至 2026-09-09。
+- [x] 更新 `STATUS.md`、`HANDOFF.md`、本地验收收据和公网部署收据；不合并 `main`，保留旧源/镜像/备份。
+
+### Review
+
+后端全套 pytest 通过；compileall、Node 静态检查、旧 JS 15/15 和 diff check 通过。公网 health、容器状态、scheduler 成功任务、provider audit、两只 ETF 报价/日线和指数缓存均已现场复核。剩余边界为 AKShare 时间戳实时资格、Sina 成交量、因子/预测资格、中证全指实时、OCR/Vibe/真人模型等既有门禁。

@@ -2,6 +2,14 @@
 
 当前功能分支基于main 57470ea，见docs/versions/V1.0.4.md、docs/USER_GUIDE_V104.md和docs/LOCAL_ACCEPTANCE_V104.md。先核对固定SHA与CI，再加载原私有配置/原库副本。不删除以下历史记录，不把分支实现当生产已升级。模型API默认关闭，启用必须初始化独立密钥和本人确认费用。
 
+## 当前公网状态（2026-09-10）
+
+公网 `https://etf.joviluma.com` 已切换到 `3e4b9fa` / v1.0.4。API、worker healthy，scheduler running；生产配置为 `public_composite`、`ALLOW_MOCK_FALLBACK=false`、认证开启。AKShare 分页现货接口的 bounded timeout 已设为 60 秒，scheduler 已成功写入当日两只 ETF 的报价。
+
+生产库备份、旧源目录和回滚 Compose 已保留。两只 ETF 日线目前各 1,197 根至 2026-09-09；三只指数缓存各 1,197 根 OHLC 至 2026-09-09。AKShare 时间戳尚未完成实时资格认证，Sina 回退成交量缺失，因子/预测仍不能晋级 actionable。部署、任务和 hash 证据见 [`docs/PRODUCTION_DEPLOYMENT_RECEIPT_V104_20260910.md`](docs/PRODUCTION_DEPLOYMENT_RECEIPT_V104_20260910.md)。
+
+以下 v1.0.3 段落保留作为历史交接，不覆盖当前 v1.0.4 生产事实。
+
 ## v1.0.4 本地接收完成（2026-09-10）
 
 固定接收 `910e77fc866f123e0d18103048243513e3edb666` 已在独立 clone 完成复测。本地审核修复分支为 `codex/v104-news-time-review-20260910`，提交 `b8112d4`，只修复新闻 publication/fetched 时区解释、前端时间筛选/显示和一条过时的 WorkBuddy 列测试合同。

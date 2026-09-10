@@ -176,3 +176,13 @@ GitHub 网页运行记录显示：
 5. API Key 安全凭据的本人主密钥初始化、支付订阅、完整缠论、自动训练和自动云地同步。
 
 下一步应在用户确认后继续：先处理 Provider 资格和数据质量，再做预测校准与事件回测；本地审核分支可继续复核，但不自动合并 main、不自动部署服务器。
+
+## 10. 公网生产部署与刷新修复（2026-09-10）
+
+本节记录本地验收之后的授权生产动作；详细切换、回滚和 hash 见 [`PRODUCTION_DEPLOYMENT_RECEIPT_V104_20260910.md`](PRODUCTION_DEPLOYMENT_RECEIPT_V104_20260910.md)。
+
+- Jovi 明确授权公网生产部署；应用提交为 `3e4b9fa`，`main` 未合并，原工程脏区未触碰。
+- 根因是 AKShare 分页现货接口在 20 秒 bounded deadline 内经常超时；配置默认值、示例和生产 Compose 已统一为 60 秒，并新增默认预算回归测试。
+- 生产 API、worker、scheduler 使用 `etf-workspace:v1.0.4-runtime-20260910`，公网 health 为 1.0.4；生产 PostgreSQL 备份和旧 v1.0.4 回滚目录保留。
+- scheduler `refresh_quotes` 成功：35/35 启用标的写入；`510300.SH`、`512480.SH` 有 2026-09-10 14:30 左右报价，但仍保持 `is_realtime=false`/`public_quote_not_qualified`。
+- 受审计两只 ETF 日线补齐至各 1,197 根（2026-09-09）；三只指数缓存各 1,197 根至 2026-09-09。Sina 价格回退的成交量缺失、实时/因子/模型/OCR/Vibe 等未通过资格边界没有改变。
