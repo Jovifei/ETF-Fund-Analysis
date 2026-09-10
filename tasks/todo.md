@@ -729,3 +729,12 @@ Allowed code scope: MarketService history upsert, worker summary, Overview index
 ### Review
 
 后端全套 pytest 通过；compileall、Node 静态检查、旧 JS 15/15 和 diff check 通过。公网 health、容器状态、scheduler 成功任务、provider audit、两只 ETF 报价/日线和指数缓存均已现场复核。剩余边界为 AKShare 时间戳实时资格、Sina 成交量、因子/预测资格、中证全指实时、OCR/Vibe/真人模型等既有门禁。
+
+## v1.0.5 ZIP 接收与本地复测计划 — 2026-09-10
+
+- [ ] 校验 ZIP 旁车 SHA256、解压安全、verify_bundle.py 与包内基线/补丁/清单。
+- [ ] 在独立 clone 固定 46c713d4，应用 v105 补丁；按 SOURCE_CHANGESET 核对归一化文件 SHA，不修改原工程。
+- [ ] 先复跑后端、前端、迁移、JS、密钥扫描、HTTP/Playwright 和认证隔离；记录 Node/Python/浏览器/PostgreSQL/Docker 的实际版本与跳过原因。
+- [ ] 备份原持久库到新的证据目录，在副本中逐字段核对目录、板块、两只 ETF、三指数、新闻、API 和页面。
+- [ ] 处理必要 R1–R6 缺陷时，每组单独提交、先复现后修复；R7、生产部署、main 合并、标签移动均保持未执行。
+- [ ] 本地持久服务重启后核对 schema、条数、日期、来源、失败审计、原 WorkBuddy 模板和截图，形成 v105 接收收据。
