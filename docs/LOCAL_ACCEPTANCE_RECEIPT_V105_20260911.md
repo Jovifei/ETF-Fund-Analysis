@@ -7,6 +7,7 @@
 - 固定基线：`46c713d4a7f6f247461ec9b075948f25c6741df7`。
 - 补丁 SHA-256：`5d86ddf0f8efd68e87915f5eb3fcf3fc3d940391380f182a884392aaa0db2e86`。
 - 接收分支：`codex/v105-handoff-local-20260910`，独立 clone；原工程 `E:\project\ETF-Fund-Analysis`、v104 接收 clone、私有配置、账户、持仓和数据库没有作为补丁目标。
+- 最终本地审核 HEAD：`3a46bba`；本轮未推送 v105 应用分支、未合并 `main`、未改标签、未部署服务器。
 - SOURCE_CHANGESET 17 个路径全部匹配。Windows worktree 的 CRLF 与包内 LF 已用换行归一化核对，未修改内容凑 hash。
 
 ## 代码与测试提交
