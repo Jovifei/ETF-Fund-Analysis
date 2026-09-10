@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
-import { ChartAdapter } from '../lib/chartAdapter'
+import { ChartAdapter, groupsForLevel } from '../lib/chartAdapter'
 import { num, levelPrice } from '../lib/format'
 import type { ChartBar, ChartData } from '../lib/types'
 const props=defineProps<{data:ChartData;cost?:number|null;label?:string;allowMinutes?:boolean}>()
@@ -11,7 +11,7 @@ const periodNames:Record<string,string>={'1d':'日 K','1w':'周 K','1mo':'月 K'
 const groups=['MA','PIVOT','BOLL','ATR','FIB','MACD','KDJ','RSI','CHAN']
 const names:Record<string,string>={MA:'均线',PIVOT:'价格拐点',BOLL:'布林带',ATR:'波幅带',FIB:'斐波那契',MACD:'MACD',KDJ:'KDJ',RSI:'RSI',CHAN:'重叠区近似'}
 const selected=ref(['MA','PIVOT','MACD','KDJ','RSI'])
-const levels=computed(()=>props.data.sr_overlay_allowed?[...(props.data.support_resistance?.levels??[])].filter(x=>levelPrice(x)!=null&&(Array.isArray(x.groups)?x.groups.some(g=>selected.value.includes(String(g))):selected.value.includes('PIVOT'))).sort((a,b)=>Math.abs(levelPrice(a)!-(props.data.bars.at(-1)?.close??0))-Math.abs(levelPrice(b)!-(props.data.bars.at(-1)?.close??0))).slice(0,12):[])
+const levels=computed(()=>props.data.sr_overlay_allowed?[...(props.data.support_resistance?.levels??[])].filter(x=>levelPrice(x)!=null&&groupsForLevel(x).some(g=>selected.value.includes(g))).sort((a,b)=>Math.abs(levelPrice(a)!-(props.data.bars.at(-1)?.close??0))-Math.abs(levelPrice(b)!-(props.data.bars.at(-1)?.close??0))).slice(0,12):[])
 let adapter:ChartAdapter|null=null,mountRevision=0
 async function mount(){const revision=++mountRevision;await nextTick();if(revision!==mountRevision)return;adapter?.destroy();adapter=null;failed.value='';cursor.value=props.data.bars.at(-1);if(!host.value||!props.data.available)return;try{adapter=new ChartAdapter(host.value,props.data,props.cost??null,b=>cursor.value=b,selected.value);adapter.range(range.value)}catch{failed.value='图表初始化失败，请重新读取。数值仍可在下方查看。'}}
 function reset(){range.value=100;adapter?.reset()}
