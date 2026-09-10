@@ -149,9 +149,9 @@ def research_outlook(db: DB, settings: Config, user: User, code: str|None=Query(
 
 
 @private_router.get("/workspace/news-status")
-def news_status(db: DB, user: User):
+def news_status(db: DB, settings: Config, user: User):
     from app.workspace.news_status import read
-    return read(db)
+    return read(db, settings=settings)
 
 from app.workspace.ai_api import router as ai_router, members as member_router
 private_router.include_router(ai_router)

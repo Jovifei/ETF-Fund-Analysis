@@ -671,6 +671,18 @@ Allowed code scope: MarketService history upsert, worker summary, Overview index
 - [x] Fix local PaddleOCR v5 manifest/model-name/input compatibility; synthetic image recognized ETF code, shares, and cost; timeout cleanup passed.
 - [ ] Vibe upstream Windows qualification remains blocked by upstream symlink/path tests; official Codex login, pairing, and one model-budgeted run require Jovi's own interactive login.
 
+## v1.0.4 接收、新闻时间修复与本地持久部署 — 2026-09-10
+
+- [x] 从远端独立 clone 接收 `910e77fc866f123e0d18103048243513e3edb666`，验证基线 `57470eabcad35a6038574e893e7245f0d1adb387` 为祖先；原始脏工作树保持不变。
+- [x] 读取 `AGENTS.md`、`STATUS.md`、`HANDOFF.md`、v1.0.4 用户/验收/安全/OSS/验证/版本文档。
+- [x] 核对 PR #32 和固定 SHA 的 CI：`workspace-ci` #88 成功；`ci` #565 失败，`test` exit 1；PR `ci` #566 同样失败；公开数据观察 #1 成功。GitHub 公共 API 限流，网页结果作为运行状态来源，失败原因须以本地复跑定位。
+- [ ] 按 workflow 复跑后端、前端、旧 JS、迁移、Compose/镜像、浏览器和密钥门禁，逐项记录退出码/跳过原因。
+- [ ] 复现并修复 `news_status.py` 的 SQLite 无时区发布时间误按 UTC 解释问题；补后端和前端回归测试，不改历史数据库日期。
+- [ ] 备份原持久库并只在副本执行迁移/数据/重启验收；不初始化、不连接真实用户库、不读取或输出私密配置。
+- [ ] 按 v1.0.4 合同完成本地真实目录/板块/两只 ETF/有限历史准备、图表/原模板/研究/账户边界验证；真实数据失败保留来源与原因，不使用 Mock 冒充。
+- [ ] 在仓库外完成 AI 主密钥安全配置后，若 Jovi 明确确认费用，最多一次连接测试和一次研究验收；否则保持关闭，不复制 auth.json。
+- [ ] 形成本地部署收据、截图、持久重启证明和剩余边界；不合并 main、不移动标签、不部署服务器。
+
 ## 项目知识文档与 Obsidian 同步 — 2026-09-09
 - [x] 新增项目制造过程与文档地图，覆盖当前实现、证据边界、部署回滚和未完成资格。
 - [x] 更新 `docs/README.md` 导航并校验相对链接。
