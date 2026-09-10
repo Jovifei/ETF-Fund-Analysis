@@ -1,0 +1,33 @@
+name: v105-offline-tooling
+on:
+  push:
+    branches: [fix/v105-data-paths-ui-20260910]
+    paths: ['.github/workflows/v105-offline-tooling.yml']
+permissions:
+  contents: read
+jobs:
+  tooling:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Prepare exact-lock offline tooling, without credentials or market requests
+        run: |
+          mkdir -p /tmp/v105-tooling/wheels
+          npm ci --ignore-scripts --prefix frontend
+          cp "$(command -v node)" /tmp/v105-tooling/node
+          pip download -d /tmp/v105-tooling/wheels 'pwdlib[argon2]==0.3.1' 'psycopg[binary]>=3.2,<4' 'feedparser>=6,<7' 'pydantic-settings>=2.5,<3'
+          tar -czf /tmp/v105-tooling/frontend-deps.tar.gz -C frontend node_modules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v105-offline-tooling
+          path: /tmp/v105-tooling/
+          retention-days: 2
