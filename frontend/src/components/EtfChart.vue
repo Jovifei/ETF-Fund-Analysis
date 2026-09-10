@@ -15,8 +15,9 @@ const levels=computed(()=>props.data.sr_overlay_allowed?[...(props.data.support_
 let adapter:ChartAdapter|null=null,mountRevision=0
 async function mount(){const revision=++mountRevision;await nextTick();if(revision!==mountRevision)return;adapter?.destroy();adapter=null;failed.value='';cursor.value=props.data.bars.at(-1);if(!host.value||!props.data.available)return;try{adapter=new ChartAdapter(host.value,props.data,props.cost??null,b=>cursor.value=b,selected.value);adapter.range(range.value)}catch{failed.value='图表初始化失败，请重新读取。数值仍可在下方查看。'}}
 function reset(){range.value=100;adapter?.reset()}
-async function toggleFullscreen(){if(fullscreen.value){if(document.fullscreenElement)await document.exitFullscreen().catch(()=>{});fullscreen.value=false}else{fullscreen.value=true;await root.value?.requestFullscreen?.().catch(()=>{})}await nextTick();adapter?.chart.resize()}
-function escape(event:KeyboardEvent){if(event.key==='Escape'){fullscreen.value=false;void nextTick(()=>adapter?.chart.resize())}}
+async function closeFullscreen(){if(document.fullscreenElement)await document.exitFullscreen().catch(()=>{});fullscreen.value=false;await nextTick();adapter?.chart.resize()}
+async function toggleFullscreen(){if(fullscreen.value){await closeFullscreen();return}fullscreen.value=true;await root.value?.requestFullscreen?.().catch(()=>{});await nextTick();adapter?.chart.resize()}
+function escape(event:KeyboardEvent){if(event.key==='Escape')void closeFullscreen()}
 function fullscreenChanged(){fullscreen.value=!!document.fullscreenElement}
 onMounted(()=>{void mount();document.addEventListener('keydown',escape);document.addEventListener('fullscreenchange',fullscreenChanged)})
 watch(()=>[props.data,props.cost,selected.value.join(',')],mount)
