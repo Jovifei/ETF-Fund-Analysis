@@ -1,14 +1,20 @@
 # 2026-09-10 本地交接包（V105第一阶段工作稿，尚未发布）
 
+## v105 当前公网状态（2026-09-11）
+
+- 公网 `https://etf.joviluma.com` 已切换到接收分支 `409a5e5` 的独立源目录 `deploy-v105-409a5e5`；API、worker healthy，scheduler running，公网 health 返回 production、`public_composite`、认证开启。
+- 切换前 PostgreSQL 备份为 `fund_decision_20260911_084351.sql.gz`，精确回滚 Compose 和 v1.0.4 源目录均保留。账户、持仓和自选只读计数保持 `3/0/6`。
+- 当前服务器时刻尚未进入盘中报价窗口；两只 ETF 日线与报价沿用最新已完成交易日和待核实公开快照，scheduler 将在交易时段按既有节奏刷新。完整记录见 `docs/PRODUCTION_DEPLOYMENT_RECEIPT_V105_20260911.md`。
+
 ## v105 当前本地接收结果（2026-09-11）
 
 - ZIP 校验、`verify_bundle.py`、固定基线 `46c713d4` 和补丁清单均通过；独立分支为 `codex/v105-handoff-local-20260910`。
 - 包内第一阶段与 R1/R2/R3 必要修复已分小提交完成；完整后端、Vue、旧 JS、普通/认证浏览器通过。Node 24 与目标 Node 22 的版本差异、专用 PostgreSQL/Docker 条件未完成。
 - v105 本地真实副本 URL 为 `http://127.0.0.1:8084`。目录 1,658 ETF / 382 LOF；两只 ETF 各 1,198 根日线至 2026-09-10；三指数真实 OHLC 缓存为上证/沪深300 1,198、 中证全指 799。
 - 中证全指市场上下文仍旧缺口，Sina 成交量、实时资格、因子/预测资格继续阻断；SQLite scheduler 与 worker 并发写入出现 `database is locked`，已停止本地 scheduler 并保留证据。
-- 完整收据见 `docs/LOCAL_ACCEPTANCE_RECEIPT_V105_20260911.md`；本轮不部署服务器、不合并 `main`、不改标签。
+- 完整本地收据见 `docs/LOCAL_ACCEPTANCE_RECEIPT_V105_20260911.md`；生产收据见 `docs/PRODUCTION_DEPLOYMENT_RECEIPT_V105_20260911.md`；本轮未合并 `main`、未改标签。
 
-本包基线为 `46c713d4a7f6f247461ec9b075948f25c6741df7`；新增内容用补丁与文件SHA256绑定，没有新的远端应用提交。应用包版本仍为1.0.4。本轮仅源代码及隔离测试，不代表生产发生变化。
+本包基线为 `46c713d4a7f6f247461ec9b075948f25c6741df7`；新增内容用补丁与文件SHA256绑定。应用包版本仍为1.0.4；本地接收证据与生产部署证据分别记录，不相互替代。
 
 先读 `docs/HANDOFF_V105_LOCAL_PACKAGE.md`。待补齐原表重复展示、图表虚线/全屏实测、AI交互、真实数据与Windows部署验收；不能沿用旧报告声明这些通过。平衡刷新默认关闭。以下历史记录原样保留，生产状态必须重新现场核对。
 
