@@ -18,3 +18,4 @@
 - 2026-09-09: 项目知识库不能只写接力摘要；当项目包含多轮版本、部署、真实源、研究资格和开源借鉴时，必须把产品边界、工程关系、技术路线、完成/未完成证据、可复用经验和 revision/许可证/实际落点分主题记录，并同步到仓库 docs 与 Obsidian 五个核心槽位。
 - 2026-09-10: v1.0.4 接收时必须把远端 CI 的当前测试合同与已实现页面合同一起复核；旧 WorkBuddy 测试仍要求已删除的“较昨日”列，不能把 CI 失败归咎于环境，也不能删除该测试。
 - 2026-09-10: SQLite 的 DateTime(timezone=True) 回读可能丢失 tz；新闻 publication 的 naive 值按市场时区解释，fetched_at 默认值按 UTC 解释，aware publication 的保留行为要用带时区对象或 PostgreSQL 证据单独测试。
+- 2026-09-11: 公开行情回退不能只看 OHLC 是否返回；新浪历史接口同时返回量/额时，必须用 amount÷volume 与 close 的单位一致性回归校验后再解除 volume_missing 门禁，缺额或偏差过大继续保留 price-only，并在生产用受审计 bars→indicators→forecasts→signals→decision-board 链路重算。

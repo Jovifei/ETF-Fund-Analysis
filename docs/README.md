@@ -5,7 +5,7 @@
 ## v1.0.5 本地接收结果
 
 - [v105 本地接收与验收收据](LOCAL_ACCEPTANCE_RECEIPT_V105_20260911.md)：ZIP 身份、补丁提交、R1–R3 修复、真实副本数据、HTTP/认证浏览器、重启保留和剩余边界。
-- [v105 公网部署收据](PRODUCTION_DEPLOYMENT_RECEIPT_V105_20260911.md)：生产备份、诊断端口、回滚材料、容器切换、公开 health、认证边界和数据持久性复核。
+- [v105 公网部署收据](PRODUCTION_DEPLOYMENT_RECEIPT_V105_20260911.md)：生产备份、诊断端口、回滚材料、容器切换、公开 health、认证边界、量能回退修复和受审计重算结果。
 
 优先阅读 [v1.0.4版本](versions/V1.0.4.md)、[用户操作](USER_GUIDE_V104.md)、[AI安全](AI_CONNECTION_SECURITY_V104.md)、[本地验收](LOCAL_ACCEPTANCE_V104.md)、[开源落点](OSS_APPLIED_V104.md)、[过程](PROCESS_LOG_V104.md)、[本地接收收据](LOCAL_ACCEPTANCE_RECEIPT_V104_20260910.md)、[公网生产部署收据](PRODUCTION_DEPLOYMENT_RECEIPT_V104_20260910.md)。当前公网状态以生产部署收据为准；历史本地接收段落保留当时边界。
 
