@@ -755,3 +755,10 @@ Allowed code scope: MarketService history upsert, worker summary, Overview index
 - [x] 生产备份 `fund_decision_20260911_084351.sql.gz` SHA、600 权限、诊断端口和回滚材料已记录在 `docs/PRODUCTION_DEPLOYMENT_RECEIPT_V105_20260911.md`。
 - [x] 公网 `https://etf.joviluma.com/api/health` 返回 production、`public_composite`、认证开启；三容器 API/worker/scheduler 运行，未登录 data-health 返回 401。
 - [x] 只读核对 `auth_users=3`、`holdings=0`、`watchlist=6`；当前服务器 08:58 尚未进入 A 股盘中窗口，未把旧日线或待核实快照冒充今天收盘/实时数据。
+
+## v105 数据异常修复：新浪成交量回退 — 2026-09-11
+
+- [x] RED：证明新浪历史接口返回的 `volume/amount` 在价格单位自洽时被 Provider 丢弃，导致全量 `volume_missing_for_shared_signals`。
+- [x] GREEN：仅在 `amount / volume` 与收盘价通过单位一致性校验时保留成交量，使用新来源标识并保留不合格行的价格-only 回退。
+- [x] REVIEW：Provider/数据契约/指标/决策板回归与全套静态检查通过；生产重抓和分组恢复在部署阶段复核。
+- [ ] DEPLOY：新代码通过诊断端口和公网健康检查后滚动切换，保留当前 v105 回滚 Compose。

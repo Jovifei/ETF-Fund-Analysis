@@ -3,7 +3,7 @@ from sqlalchemy import select
 from app.models import DailyBar, Instrument
 from app.providers.base import ProviderError
 
-VERSION = 'cn-fund-shares-cny-v1.0.1'
+VERSION = 'cn-fund-shares-cny-v1.0.2'
 LEGACY_SOURCES = ('akshare','tushare','tushare:fund_daily')
 
 

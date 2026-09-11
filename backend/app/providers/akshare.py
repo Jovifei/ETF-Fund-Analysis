@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 from datetime import date, datetime, timedelta
 from typing import Any
 import urllib.request
@@ -21,6 +22,10 @@ from app.utils.numbers import finite_or_none
 from app.providers.bounded_sdk import BoundedSDK, first
 
 logger = logging.getLogger(__name__)
+
+SINA_PRICE_ONLY_SOURCE = "akshare:sina:v101"
+SINA_VOLUME_SOURCE = "akshare:sina:v102"
+SINA_UNIT_TOLERANCE = 0.05
 
 
 class AKShareProvider(MarketProvider):
@@ -110,6 +115,10 @@ class AKShareProvider(MarketProvider):
         东财 fund_etf_hist_em 在部分网络环境下被反爬断连，新浪接口通常可用。
         新浪 symbol 需带交易所前缀（sh/sz），且不区分 ETF/LOF（fund_etf_hist_sina
         同时覆盖二者）。返回列：date/open/high/low/close/volume/amount。
+
+        新浪成交量只有在 ``amount / volume`` 与收盘价相符时才通过
+        单位校验（成交量按份额、成交额按元）；否则保留价格-only
+        回退，避免把未知单位写入共享量价指标。
         """
         prefix = "sh" if ts_code.upper().endswith(".SH") else "sz"
         function = getattr(self.ak, "fund_etf_hist_sina", None)
@@ -134,6 +143,11 @@ class AKShareProvider(MarketProvider):
             low = finite_or_none(row.get("low"))
             if None in (close, open_price, high, low):
                 continue
+            volume, amount, source = self._sina_volume_fields(
+                close,
+                row.get("volume"),
+                row.get("amount"),
+            )
             result.append(
                 BarRecord(
                     ts_code=ts_code,
@@ -143,11 +157,11 @@ class AKShareProvider(MarketProvider):
                     low=low or 0,
                     close=close or 0,
                     pre_close=None,
-                    volume=None,  # Sina volume unit has not been cross-verified; retain price-only fallback.
-                    amount=finite_or_none(row.get("amount")),
+                    volume=volume,
+                    amount=amount,
                     pct_change=None,
                     adjust="none",
-                    source="akshare:sina:v101",
+                    source=source,
                 )
             )
         result.sort(key=lambda item: item.trade_date)
@@ -155,6 +169,23 @@ class AKShareProvider(MarketProvider):
             if idx > 0 and item.pre_close is None:
                 item.pre_close = result[idx - 1].close
         return result
+
+    @staticmethod
+    def _sina_volume_fields(
+        close: float,
+        raw_volume: Any,
+        raw_amount: Any,
+    ) -> tuple[float | None, float | None, str]:
+        """Qualify Sina volume as shares only when amount/price units agree."""
+
+        volume = finite_or_none(raw_volume)
+        amount = finite_or_none(raw_amount)
+        if volume is None or amount is None or volume <= 0 or amount <= 0 or close <= 0:
+            return None, amount, SINA_PRICE_ONLY_SOURCE
+        unit_price = amount / volume
+        if not math.isfinite(unit_price) or abs(unit_price / close - 1.0) > SINA_UNIT_TOLERANCE:
+            return None, amount, SINA_PRICE_ONLY_SOURCE
+        return volume, amount, SINA_VOLUME_SOURCE
 
     def _parse_bars_frame(self, frame: Any, ts_code: str) -> list[BarRecord]:
         result: list[BarRecord] = []

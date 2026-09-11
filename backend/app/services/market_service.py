@@ -208,7 +208,7 @@ class MarketService:
                     )
         db.flush()
         emit_event(db, "bars.updated", {**totals, "run_id": run_id})
-        return {"run_id": run_id, "ingestion_policy": "daily-batch-v1.0.1", "data_contract": VERSION, **totals}
+        return {"run_id": run_id, "ingestion_policy": "daily-batch-v1.0.2", "data_contract": VERSION, **totals}
 
     @staticmethod
     def _validated_bar_batch(records, ts_code: str, start_date: date, end_date: date) -> dict:
