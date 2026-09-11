@@ -7,7 +7,7 @@
 - 固定基线：`46c713d4a7f6f247461ec9b075948f25c6741df7`。
 - 补丁 SHA-256：`5d86ddf0f8efd68e87915f5eb3fcf3fc3d940391380f182a884392aaa0db2e86`。
 - 接收分支：`codex/v105-handoff-local-20260910`，独立 clone；原工程 `E:\project\ETF-Fund-Analysis`、v104 接收 clone、私有配置、账户、持仓和数据库没有作为补丁目标。
-- 最终本地审核 HEAD：`3a46bba`；本轮未推送 v105 应用分支、未合并 `main`、未改标签、未部署服务器。
+- 最终本地审核 HEAD（部署前文档收口）：`2f9606b`；本地接收阶段未合并 `main`、未改标签。生产切换另有服务器收据记录。
 - SOURCE_CHANGESET 17 个路径全部匹配。Windows worktree 的 CRLF 与包内 LF 已用换行归一化核对，未修改内容凑 hash。
 
 ## 代码与测试提交
@@ -52,11 +52,11 @@
 
 停止 v105 API/worker 后重启同一配置和副本，health 再次返回 v1.0.4/akshare/auth_enabled=true；SQLite integrity 仍为 `ok`，两只 ETF 条数、日期、报价状态不变。数据库文件 hash 从运行前 `ce8a0fa29d3d0ba1018af7188b4d0d93a70de1a1024c65569b11546fa814ac5d` 变为 `d0e1ec23fbb2a528a79d8b2e003e7c5d3a6d89db3b14d582f7ba10d0b4593543`，差异来自 worker 启动心跳等运行元数据，核心数据摘要保持一致。
 
-只启动了一套 scheduler 做现场观察；SQLite 副本在 scheduler 与 worker 同时写任务审计时出现 `database is locked`，已停止该自有 scheduler，保留错误证据。没有把心跳或 HTTP 200 宣称为调度成功，也没有开启 BALANCED_REFRESH_ENABLED。生产 PostgreSQL 不受此本地 SQLite 锁现象影响，本轮不部署服务器。
+只启动了一套 scheduler 做现场观察；SQLite 副本在 scheduler 与 worker 同时写任务审计时出现 `database is locked`，已停止该自有 scheduler，保留错误证据。没有把心跳或 HTTP 200 宣称为调度成功，也没有开启 BALANCED_REFRESH_ENABLED。生产 PostgreSQL 不受此本地 SQLite 锁现象影响；生产切换前仍需保留备份、灰度启动和回滚证据。
 
 ## 剩余项
 
 1. 专用 PostgreSQL 16 条件测试、Docker 容器和 Node 22 未在本机完成；浏览器普通/认证 HTTP 已在本机真实服务与隔离测试服务分别复测。
 2. 中证全指市场上下文近期源时间仍缺失；Sina 成交量缺失；AKShare quote 时间戳仍未完成实时资格；因子、预测和五档动作继续阻断。
 3. SQLite scheduler/worker 并发写锁需要单独的架构修复或 PostgreSQL 现场验证；不通过临时静默重试掩盖。
-4. Windows DPAPI、真人 Codex/Vibe、付费模型、完整缠论、支付、自动训练、自动云地同步、生产部署均未执行。
+4. Windows DPAPI、真人 Codex/Vibe、付费模型、完整缠论、支付、自动训练和自动云地同步不属于本轮验收；生产部署结果另记于生产部署收据。
