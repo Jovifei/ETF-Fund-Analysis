@@ -5,7 +5,7 @@
 - 公网 `https://etf.joviluma.com` 当前运行量能修复提交 `208858e` 的独立源目录 `deploy-v105-208858e`；API、worker healthy，scheduler running，公网 health 返回 production、`public_composite`、认证开启。
 - 切换前 PostgreSQL 备份为 `fund_decision_20260911_084351.sql.gz`，精确回滚 Compose 和 v1.0.4 源目录均保留。账户、持仓和自选只读计数保持 `3/0/6`。
 - 当前服务器时刻尚未进入盘中报价窗口；两只 ETF 日线与报价沿用最新已完成交易日和待核实公开快照，scheduler 将在交易时段按既有节奏刷新。完整记录见 `docs/PRODUCTION_DEPLOYMENT_RECEIPT_V105_20260911.md`。
-- 22:25 维护重算已修复新浪回退成交量丢失：35 个启用标的 `akshare:sina:v102`、缺量 0，指标 35/35 到 2026-09-11，决策板 `数据异常=0`；夜间整体 stale 仅因 15:01 公开报价超过时效且实时资格未通过。
+- 当前运行源码目录为 `deploy-v105-406cad0`（缓存修复提交 `406cad0`）；22:25 维护重算已修复新浪回退成交量丢失：35 个启用标的 `akshare:sina:v102`、缺量 0，指标 35/35 到 2026-09-11，决策板 `数据异常=0`。夜间整体 stale 仅因 15:01 公开报价超过时效且实时资格未通过；legacy 看板已固定 no-store，登录后不会复用旧快照。
 
 ## v105 当前本地接收结果（2026-09-11）
 

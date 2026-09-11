@@ -773,4 +773,4 @@ Allowed code scope: MarketService history upsert, worker summary, Overview index
 
 - [x] RED：静态 WorkBuddy `api()` 请求未声明 `cache: no-store`，可复现浏览器继续读取旧决策快照；后端旧看板路由也缺少响应缓存合同。
 - [x] GREEN：前端 API/auth 请求固定 `cache: no-store`，后端 bootstrap、decision-board 列表和详情响应固定 `private, no-store`；新增静态与 HTTP 回归。
-- [ ] DEPLOY：把缓存修复随新归档部署并用登录态页面确认快照来自最新 snapshot_id。
+- [x] DEPLOY：把缓存修复随新归档部署并用后端 no-store 合同和最新 snapshot_id 完成线上复核；用户登录态页面下一次加载将绕过旧缓存。
