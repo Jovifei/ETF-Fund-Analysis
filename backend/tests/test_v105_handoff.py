@@ -153,6 +153,15 @@ def test_display_endpoint_preserves_original_snapshot_api(bootstrapped):
         assert [{k:v for k,v in row.items() if k!='display_time'} for row in result['latest_view']] == original
 
 
+def test_decision_board_endpoint_is_not_cached(bootstrapped):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    with TestClient(app) as client:
+        response = client.get('/api/decision-board')
+        assert response.status_code == 200
+        assert response.headers['cache-control'] == 'private, no-store'
+
+
 def test_data_health_keeps_actual_admin_dependency(bootstrapped):
     from fastapi import Request
     from fastapi.testclient import TestClient

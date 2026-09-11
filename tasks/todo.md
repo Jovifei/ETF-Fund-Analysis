@@ -768,3 +768,9 @@ Allowed code scope: MarketService history upsert, worker summary, Overview index
 - [x] 生产备份后部署 `208858e`；东财历史接口失败时新浪回退，35 个标的全部通过 v102 成交量单位校验，`price_only=0`、缺量行数为 0。
 - [x] 受审计任务 `refresh_indicators` 35/35、`refresh_forecasts` 140 条、`refresh_signals` 35 条、`refresh_decision_board` 新快照均成功；决策板 `数据异常=0`。
 - [x] scheduler 已恢复，API/worker healthy，公网 health 通过；整体 stale 仅保留公开报价时效/实时资格提示，未伪装成实时。
+
+## v105 看板快照缓存修复 — 2026-09-11
+
+- [x] RED：静态 WorkBuddy `api()` 请求未声明 `cache: no-store`，可复现浏览器继续读取旧决策快照；后端旧看板路由也缺少响应缓存合同。
+- [x] GREEN：前端 API/auth 请求固定 `cache: no-store`，后端 bootstrap、decision-board 列表和详情响应固定 `private, no-store`；新增静态与 HTTP 回归。
+- [ ] DEPLOY：把缓存修复随新归档部署并用登录态页面确认快照来自最新 snapshot_id。

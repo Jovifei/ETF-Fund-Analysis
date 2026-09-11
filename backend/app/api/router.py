@@ -385,8 +385,10 @@ def reset_admin_user_password(
 def bootstrap(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    response: Response,
     user: Annotated[AuthUser | None, Depends(optional_current_user)],
 ) -> dict:
+    response.headers["Cache-Control"] = "private, no-store"
     return DashboardService(settings).bootstrap(
         db,
         user_id=user.id if user is not None else None,
@@ -398,9 +400,11 @@ def bootstrap(
 def decision_board(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    response: Response,
     horizon: int = Query(default=1),
     snapshot_id: str | None = Query(default=None, min_length=1, max_length=64),
 ) -> dict:
+    response.headers["Cache-Control"] = "private, no-store"
     try:
         payload = DecisionBoardService(settings).read_latest(db, horizon=horizon, snapshot_id=snapshot_id)
     except ValueError:
@@ -415,9 +419,11 @@ def decision_board_detail(
     ts_code: str,
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    response: Response,
     horizon: int = Query(default=1),
     snapshot_id: str | None = Query(default=None, min_length=1, max_length=64),
 ) -> dict:
+    response.headers["Cache-Control"] = "private, no-store"
     try:
         row = DecisionBoardService(settings).read_instrument(
             db, ts_code, horizon=horizon, snapshot_id=snapshot_id

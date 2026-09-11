@@ -19,3 +19,4 @@
 - 2026-09-10: v1.0.4 接收时必须把远端 CI 的当前测试合同与已实现页面合同一起复核；旧 WorkBuddy 测试仍要求已删除的“较昨日”列，不能把 CI 失败归咎于环境，也不能删除该测试。
 - 2026-09-10: SQLite 的 DateTime(timezone=True) 回读可能丢失 tz；新闻 publication 的 naive 值按市场时区解释，fetched_at 默认值按 UTC 解释，aware publication 的保留行为要用带时区对象或 PostgreSQL 证据单独测试。
 - 2026-09-11: 公开行情回退不能只看 OHLC 是否返回；新浪历史接口同时返回量/额时，必须用 amount÷volume 与 close 的单位一致性回归校验后再解除 volume_missing 门禁，缺额或偏差过大继续保留 price-only，并在生产用受审计 bars→indicators→forecasts→signals→decision-board 链路重算。
+- 2026-09-11: 原版 WorkBuddy 看板使用的 legacy `/api/decision-board` 不继承 Vue API 的 no-store 约定；数据已落库但浏览器仍可能显示旧快照。凡是可变的 legacy JSON 读路由要同时固定前端 `cache: no-store` 和后端 `Cache-Control: private, no-store`，并用 snapshot_id 做线上回归。
