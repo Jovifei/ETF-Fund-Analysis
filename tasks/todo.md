@@ -732,12 +732,12 @@ Allowed code scope: MarketService history upsert, worker summary, Overview index
 
 ## v1.0.5 ZIP 接收与本地复测计划 — 2026-09-10
 
-- [ ] 校验 ZIP 旁车 SHA256、解压安全、verify_bundle.py 与包内基线/补丁/清单。
-- [ ] 在独立 clone 固定 46c713d4，应用 v105 补丁；按 SOURCE_CHANGESET 核对归一化文件 SHA，不修改原工程。
-- [ ] 先复跑后端、前端、迁移、JS、密钥扫描、HTTP/Playwright 和认证隔离；记录 Node/Python/浏览器/PostgreSQL/Docker 的实际版本与跳过原因。
-- [ ] 备份原持久库到新的证据目录，在副本中逐字段核对目录、板块、两只 ETF、三指数、新闻、API 和页面。
-- [ ] 处理必要 R1–R6 缺陷时，每组单独提交、先复现后修复；R7、生产部署、main 合并、标签移动均保持未执行。
-- [ ] 本地持久服务重启后核对 schema、条数、日期、来源、失败审计、原 WorkBuddy 模板和截图，形成 v105 接收收据。
+- [x] 校验 ZIP 旁车 SHA256、解压安全、verify_bundle.py 与包内基线/补丁/清单。
+- [x] 在独立 clone 固定 46c713d4，应用 v105 补丁；按 SOURCE_CHANGESET 核对归一化文件 SHA，不修改原工程。
+- [x] 先复跑后端、前端、迁移、JS、密钥扫描、HTTP/Playwright 和认证隔离；记录 Node/Python/浏览器/PostgreSQL/Docker 的实际版本与跳过原因。
+- [x] 备份原持久库到新的证据目录，在副本中逐字段核对目录、板块、两只 ETF、三指数、新闻、API 和页面。
+- [x] 处理必要 R1–R6 缺陷时，每组单独提交、先复现后修复；R7、main 合并和标签移动保持未执行。
+- [x] 本地持久服务重启后核对 schema、条数、日期、来源、失败审计、原 WorkBuddy 模板和截图，形成 v105 接收收据。
 
 ### v105 Review（2026-09-11）
 
@@ -746,4 +746,12 @@ Allowed code scope: MarketService history upsert, worker summary, Overview index
 - [x] Python3.12 全量 pytest 无失败；v105 专项23；Vue28/typecheck/build；旧JS20；compileall、secret scan、diff check；普通 Playwright17/17、认证2/2。
 - [x] 临时 SQLite Alembic upgrade/check/head 通过；原副本 Backup API、真实 AKShare 目录/板块/ETF/指数/新闻任务、字段/单位/时间/来源和页面证据已保留。
 - [x] v105 API/worker 使用同一副本重启后 health、完整性、条数和日期保留；scheduler 单实例现场尝试出现 SQLite 并发写锁，已停止并记录为剩余项。
-- [ ] 专用 PostgreSQL16、Node22、Docker、Windows DPAPI、完整实时/量价资格和生产部署仍未执行；R7 完整缠论/自动同步保持未实现。
+- [x] 生产切换前完成 PostgreSQL 备份、诊断端口 Alembic/health、独立源目录和精确 v1.0.4 rollback Compose；公网 API、worker、scheduler、根页面和认证边界复核通过。
+- [x] v105 接收分支已推送远端；`main` 未合并、标签未移动，原工程脏区未触碰。
+- [ ] 专用 PostgreSQL16 条件测试、Node22、Docker 本机条件、Windows DPAPI、完整实时/量价资格和交易时段后的新报价/收盘日线仍待现场窗口复核；R7 完整缠论/自动同步保持未实现。
+
+### v105 生产 Review
+
+- [x] 生产备份 `fund_decision_20260911_084351.sql.gz` SHA、600 权限、诊断端口和回滚材料已记录在 `docs/PRODUCTION_DEPLOYMENT_RECEIPT_V105_20260911.md`。
+- [x] 公网 `https://etf.joviluma.com/api/health` 返回 production、`public_composite`、认证开启；三容器 API/worker/scheduler 运行，未登录 data-health 返回 401。
+- [x] 只读核对 `auth_users=3`、`holdings=0`、`watchlist=6`；当前服务器 08:58 尚未进入 A 股盘中窗口，未把旧日线或待核实快照冒充今天收盘/实时数据。
