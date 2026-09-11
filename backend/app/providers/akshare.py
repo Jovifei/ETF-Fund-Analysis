@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 SINA_PRICE_ONLY_SOURCE = "akshare:sina:v101"
 SINA_VOLUME_SOURCE = "akshare:sina:v102"
-SINA_UNIT_TOLERANCE = 0.05
+SINA_UNIT_TOLERANCE = 0.10
 
 
 class AKShareProvider(MarketProvider):

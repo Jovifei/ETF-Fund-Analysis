@@ -87,6 +87,18 @@ def test_sina_history_rejects_volume_when_amount_unit_does_not_match_price():
     assert rows[0].source=='akshare:sina:v101' and rows[0].volume is None
 
 
+def test_sina_history_allows_documented_turnover_rounding_within_ten_percent():
+    fake=SimpleNamespace(
+        fund_etf_hist_em=lambda **kw: [],
+        fund_etf_hist_sina=lambda **kw: [
+            {'date':'2026-09-04','open':1.19,'high':1.22,'low':1.18,'close':1.2,'volume':1000,'amount':1290},
+        ],
+    )
+    p=AKShareProvider(Settings(_env_file=None),ak_client=fake)
+    rows=p.fetch_daily_bars('512480.SH',date(2026,9,1),date(2026,9,4))
+    assert rows[0].source=='akshare:sina:v102' and rows[0].volume==1000
+
+
 def test_catalog_is_separate_from_light_daily_refresh():
     from app.workspace.worker import task_sequence
     seq=task_sequence('prices',['512480.SH'],420)
