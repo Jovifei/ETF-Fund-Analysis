@@ -78,6 +78,15 @@ def _task_lock(db: Session):
             raise TaskBusyError("已有数据流水线正在运行，请稍后重试")
         yield
         return
+    if dialect == "sqlite":
+        from app.db.task_lock import PipelineLockBusy, sqlite_pipeline_lease
+        try:
+            leased = sqlite_pipeline_lease(db)
+        except PipelineLockBusy:
+            raise TaskBusyError("已有跨进程数据流水线正在运行，请稍后重试") from None
+        if leased:
+            yield
+            return
     acquired = _PROCESS_TASK_LOCK.acquire(blocking=False)
     if not acquired:
         raise TaskBusyError("已有数据流水线正在运行，请稍后重试")
@@ -209,7 +218,9 @@ class TaskService:
 
     def _refresh_market_context(self, db: Session, run_id: str) -> dict:
         result = self.market_context.refresh(db, run_id=run_id)
-        result.update({"status": "succeeded", "unsupported": 0})
+        from app.services.task_outcome import coverage_outcome
+        result.update(coverage_outcome(result.get("requested", 0), result.get("observed", 0)))
+        result.setdefault("unsupported", 0)
         return result
 
     def _market_context_failure_result(self, db: Session, exc: BaseException, run_id: str) -> dict:
@@ -233,7 +244,7 @@ class TaskService:
 
     def _execute(self, db: Session, task_name: str, run_id: str, **kwargs) -> dict:
         self._bind_runtime_provider(db)
-        if task_name in {"validate_forecasts", "calibrate_forecasts", "backtest_rotation", "backtest_ablation", "analyze_factors"}:
+        if task_name in {"validate_forecasts", "calibrate_forecasts", "backtest_rotation", "backtest_ablation"}:
             from app.providers.data_contract import require_current_history
             require_current_history(db, self.settings)
         if task_name == "refresh_index_history":
@@ -338,8 +349,7 @@ class TaskService:
                 lookback_days=int(kwargs.get("lookback_days", 900)),
                 run_id=run_id,
             )
-            from app.providers.data_contract import require_current_history
-            require_current_history(db, self.settings)
+            # Per-instrument gates in the services preserve healthy instruments.
             results["refresh_indicators"] = self.indicators.refresh_all(db, run_id=run_id)
             results["refresh_forecasts"] = self.forecasts.refresh_all(db, run_id=run_id)
             try:
@@ -366,9 +376,12 @@ class TaskService:
                 results["refresh_sector_snapshots"] = {"status": "failed", "failure_class": _failure_class(exc)}
             if task_name == "full_pipeline" or bool(kwargs.get("report", True)):
                 results["generate_report"] = self.reports.generate(db, run_id=run_id)
+            from app.services.task_outcome import normalize_outcome
+            results = {name: normalize_outcome(value) for name, value in results.items()}
+            failed_steps = [name for name, value in results.items() if value["status"] != "succeeded"]
             return {
                 "run_id": run_id,
-                "status": "partial" if failed_steps else "succeeded",
+                "status": ("succeeded" if not failed_steps else "failed" if len(failed_steps) == len(results) else "partial"),
                 "failed_steps": failed_steps,
                 "steps": results,
             }
@@ -513,9 +526,10 @@ class TaskService:
                     task.started_at = started
                 db.flush()
             try:
-                result = self._execute(db, task_name, run_id, **kwargs)
+                from app.services.task_outcome import normalize_outcome
+                result = normalize_outcome(self._execute(db, task_name, run_id, **kwargs))
                 if task is not None:
-                    task.status = result.get("status", "succeeded")
+                    task.status = result["status"]
                     task.result_json = result
                     task.finished_at = datetime.now(self.settings.timezone)
                     db.flush()

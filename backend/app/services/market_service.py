@@ -117,9 +117,10 @@ class MarketService:
         if self.settings.market_provider != "mock":
             from app.services.trading_calendar_service import TradingCalendarService
             now = datetime.now(self.settings.timezone)
-            target = end_date - timedelta(days=1) if (now.hour, now.minute) < (15, 15) else end_date
-            end_date = TradingCalendarService(self.settings).effective_trade_date(target)
+            from app.services.settlement import settled_session
+            end_date = settled_session(self.settings, now)
         totals = {"inserted": 0, "updated": 0, "unchanged": 0, "instruments": 0, "price_only": 0, "failures": []}
+        coverage = []
         for instrument in instruments:
             start_date = end_date - timedelta(days=lookback_days)
             earliest, latest, legacy_count = db.execute(
@@ -189,6 +190,9 @@ class MarketService:
                         row.fetched_at = datetime.now(self.settings.timezone)
                     db.flush()
                 totals["instruments"] += 1
+                latest_received = max(key[0] for key in batch)
+                coverage.append({"ts_code": instrument.ts_code, "received_through": latest_received.isoformat(),
+                                 "complete": latest_received == end_date})
                 totals["price_only"] += int(any(item.source == "akshare:sina:v101" and item.volume is None for item, _ in batch.values()))
                 for key in counts:
                     totals[key] += counts[key]
@@ -208,7 +212,10 @@ class MarketService:
                     )
         db.flush()
         emit_event(db, "bars.updated", {**totals, "run_id": run_id})
-        return {"run_id": run_id, "ingestion_policy": "daily-batch-v1.0.2", "data_contract": VERSION, **totals}
+        from app.services.task_outcome import coverage_outcome
+        outcome = coverage_outcome(len(instruments), sum(item["complete"] for item in coverage),
+            target_trade_date=end_date.isoformat(), coverage=coverage, **totals)
+        return {"run_id": run_id, "ingestion_policy": "daily-batch-v1.0.3-audit", "data_contract": VERSION, **outcome}
 
     @staticmethod
     def _validated_bar_batch(records, ts_code: str, start_date: date, end_date: date) -> dict:

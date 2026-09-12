@@ -22,7 +22,9 @@ def volume_profile(frame: pd.DataFrame, config: dict[str, Any]) -> dict[str, Any
     low = pd.to_numeric(sample["low"], errors="coerce").to_numpy(float)
     high = pd.to_numeric(sample["high"], errors="coerce").to_numpy(float)
     close = pd.to_numeric(sample["close"], errors="coerce").to_numpy(float)
-    volume = pd.to_numeric(sample["volume"], errors="coerce").fillna(0).to_numpy(float)
+    volume = pd.to_numeric(sample["volume"], errors="coerce").to_numpy(float)
+    if not np.isfinite(volume).all() or (volume < 0).any():
+        return out
     finite = np.isfinite(low) & np.isfinite(high) & np.isfinite(close)
     if finite.sum() < 20:
         return out
@@ -72,8 +74,8 @@ def add_structure_features(frame: pd.DataFrame, config: dict[str, Any]) -> pd.Da
     close = pd.to_numeric(df["close"], errors="coerce")
     high = pd.to_numeric(df["high"], errors="coerce")
     low = pd.to_numeric(df["low"], errors="coerce")
-    volume = pd.to_numeric(df["volume"], errors="coerce").fillna(0)
-    amount = pd.to_numeric(df.get("amount", pd.Series(0.0, index=df.index)), errors="coerce").fillna(0)
+    volume = pd.to_numeric(df["volume"], errors="coerce")
+    amount = pd.to_numeric(df.get("amount", pd.Series(np.nan, index=df.index)), errors="coerce")
     vol_cfg = config.get("volume", {})
     vol_window = int(vol_cfg.get("window", 20))
     df["volume_ma20"] = volume.rolling(vol_window, min_periods=1).mean()

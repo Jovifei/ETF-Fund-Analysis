@@ -147,8 +147,11 @@ def _run_guarded(
 
     executed.append(task_name)
     try:
-        tasks.run(db, task_name, **kwargs)
+        result = tasks.run(db, task_name, **kwargs)
         db.commit()
+        if isinstance(result, dict) and result.get("status") in {"failed", "partial", "cancelled"}:
+            failures.append({"task": task_name, "failure_class": "incomplete_task_result"})
+            return False
     except (TaskExecutionError, TaskBusyError) as exc:
         failure_class = str(getattr(exc, "failure_class", type(exc).__name__))[:128]
         failures.append({"task": task_name, "failure_class": failure_class})
@@ -296,11 +299,10 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
                 failures=failures,
             )
 
-        after_close_due = (balanced.after_close and daily_due(
-            _last_success(db, "refresh_bars"), _last_attempt_or_success(db, "refresh_bars"), now
-        )) if balanced is not None else (phase == MarketPhase.AFTER_CLOSE and _due(
-            _last_success(db, "refresh_bars"), now, 12 * 60
-        ))
+        from app.services.settlement import SETTLEMENT_CUTOFF, session_refresh_due
+        daily_window = (now.time().replace(tzinfo=None) >= SETTLEMENT_CUTOFF
+                        or (is_trade_day and 8 <= now.hour < 15))
+        after_close_due = daily_window and session_refresh_due(db, settings, "refresh_bars", now)
 
         if (
             not after_close_due
@@ -346,9 +348,9 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
                 or (balanced.after_close and daily_due(_last_success(db, "refresh_sector_snapshots"),
                     _last_attempt_or_success(db, "refresh_sector_snapshots"), now))):
                 _run_guarded(tasks, db, "refresh_sector_snapshots", executed=executed, failures=failures)
-            if balanced.after_close and daily_due(_last_success(db, "refresh_index_history"),
-                                                   _last_attempt_or_success(db, "refresh_index_history"), now):
-                _run_guarded(tasks, db, "refresh_index_history", executed=executed, failures=failures)
+        # Index OHLC is required regardless of the optional balanced profile.
+        if daily_window and session_refresh_due(db, settings, "refresh_index_history", now, retry_minutes=30):
+            _run_guarded(tasks, db, "refresh_index_history", executed=executed, failures=failures)
 
         # News is additive/optional. Gate by the latest terminal attempt so an
         # upstream outage is retried at the configured cadence instead of every

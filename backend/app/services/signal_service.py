@@ -172,6 +172,8 @@ class SignalService:
         now: datetime,
     ) -> CandidateSignal:
         preflight = self.preflight.check_instrument(db, instrument, now)
+        from app.services.qualification_gate import quote_reasons
+        action_gate_reasons = quote_reasons(self.settings, quote, now, self.strategy["signal"]["maximum_quote_age_minutes"])
         reasons: list[str] = []
         risks = list(preflight.warnings)
         if preflight.missing_optional:
@@ -259,6 +261,7 @@ class SignalService:
             raw_target_weight=raw_target,
             actionable=(
                 preflight.ok
+                and not action_gate_reasons
                 and bool(quote and quote.is_realtime and quote.source != "mock" and not quote.degraded_reason)
                 and self.calendar.actionable_day(now.date())
                 and self.clock.price_session_open(now, is_trade_day=True)

@@ -1,8 +1,8 @@
 {
-  "market_data_contract_version": "cn-fund-shares-cny-v1.0.1",
-  "version": "signal-v0.7.1-research",
-  "indicator_version": "indicator-v0.5.1",
-  "forecast_version": "similarity-corridor-v0.7.1-horizon-aligned",
+  "market_data_contract_version": "cn-fund-shares-cny-v1.0.3-audit",
+  "version": "signal-v0.7.2-qualification-audit",
+  "indicator_version": "indicator-v0.5.2-input-mask",
+  "forecast_version": "similarity-corridor-v0.7.2-audit",
   "signal_center_version": "signal-center-v0.3.0-canonical-fallback",
   "signal_grade_version": "signal-grade-v0.3.1-reference-display",
   "signal_grade": {
@@ -21,12 +21,12 @@
     "disclaimer": "研究提示，非操作指令",
     "board_score_weights": {
       "volume": 0.15,
-      "ma": 0.20,
-      "macd": 0.20,
+      "ma": 0.2,
+      "macd": 0.2,
       "kdj": 0.15,
       "rsi": 0.15,
       "td": 0.05,
-      "momentum": 0.10
+      "momentum": 0.1
     }
   },
   "signal_center": {
@@ -214,7 +214,7 @@
     "single_fund_target_cap": 0.25
   },
   "backtest_version": "rotation-v0.5.1",
-  "feature_schema_version": "feature-store-v0.7.1-horizon-aligned",
+  "feature_schema_version": "feature-store-v0.7.2-input-mask",
   "strategy_engine": {
     "version": "strategy-family-v0.5.1",
     "family_weights": {
