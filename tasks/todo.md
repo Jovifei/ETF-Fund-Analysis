@@ -1,5 +1,12 @@
 # v0.5.0 Local Validation Execution Plan
 
+## 2026-09-12 全面落地审核（只读业务代码）
+
+- [x] 核对原工程脏区、接收分支、远端 SHA、生产挂载及 CI 实际结果。
+- [x] 复现新浪单位资格校验的同比例缩放盲点，核对收盘调度截止冲突。
+- [x] 并行复核数据/指标/预测、Codex/AI/账户、调度/部署/前端（Luna xhigh）；父任务复核关键结论。
+- [x] 输出 docs/CODE_AUDIT_BLOCKERS_20260912.md；纯函数复现单位盲点、15:02盘后窗口、Codex目录冲突和14:30未来报价/非交易日门禁缺口。远端双CI失败及生产运行状态已只读核验。
+
 ## Multi-user security remediation (2026-09-01, active)
 
 ### Browser identity / regression / deployment handoff repair (2026-09-02, in progress)

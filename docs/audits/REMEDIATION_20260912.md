@@ -1,16 +1,13 @@
 # 2026-09-12 审核整改过程
 
-基线：33e976c85008647ca51c0dfcd458d3e66f9e55de，codex/v105-handoff-local-20260910。新分支 fix/v105-audit-blockers-20260912，不修改原接收分支、main、生产数据库或凭据。
+依据用户提供并已归档的 `docs/CODE_AUDIT_BLOCKERS_20260912.md`。保留原报告及P1/P2编号，不用生产存活或旧测试替代资格验证。
 
-依据：用户提供 CODE_AUDIT_BLOCKERS_20260912.md。保留其 P1-1～P1-8、P2 各项编号；代码修复、隔离测试、现场资格分别记录，不把检测阈值或 Mock 通过当成真实资格。
+基线：最新接收分支 `6d09ddb6cfde39d9d8e6a30783f9bdee838bc379`（在审核对象33e976c之后仅新增审核归档）。继续 `fix/v105-audit-blockers-20260912`，保留已存在的CI导入修复e6d8695，不覆盖接收分支/main/生产。
 
-## A：定位当前 CI 双失败
+A：确认原CI失败发生在测试导入 `backend.tests.test_v103_history`，不是Node警告。保留断言，改用pytest已加入路径的 `test_v103_history`；后续将通过独立pytest入口重现/复测。
+B：单位推断冻结、断点阻断、缺失mask、完整输入hash、14:30门禁：开发中。
+C：结算目标覆盖、统一任务状态、SQLite写协调：待验证。
+D：隔离登录、Windows ACL、非法产物显式失败：待验证。
+E：前值版本/异常计数/均线语义/旧壳终态、发布清单与完整CI：待验证。
 
-实际读取运行34612255959的job103305387263：失败断言是test_v105_handoff.py:111的`from backend.tests.test_v103_history import instrument`导致ModuleNotFoundError: backend。不是Node弃用警告。隔离环境去掉工作目录sys.path复现失败，改用pytest测试目录中的test_v103_history导入后同一测试通过；断言及受测应用保持原样。
-
-B：待提交数据资格、缺失mask、完整输入hash及14:30门禁。
-C：待提交结算覆盖、任务状态与跨进程锁。
-D：待提交Codex隔离登录、ACL、无效产物失败释放。
-E：待提交前值/分组/图例/旧壳终态与固定发布清单、完整CI收据。
-
-本文件不是生产部署或数据资格通过的声明。后续修复必须逐项补充实际验证证据，未执行项目保留明确状态。
+真实接口绝对单位、588200公司行动的独立记录、Windows ACL及真人模型登录必须单独登记；不作已通过声明。无生产数据库、账户、凭据或部署改动。
