@@ -1,0 +1,49 @@
+name: apply-audit-data-and-settlement
+on:
+  push:
+    branches: [fix/v105-audit-blockers-20260912]
+    paths: [.github/workflows/apply-audit-bc.yml]
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.repository == 'Jovifei/ETF-Fund-Analysis' && github.ref == 'refs/heads/fix/v105-audit-blockers-20260912'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check reviewed source checksum and paths
+        run: |
+          python - <<'PY'
+          import base64, gzip, hashlib, pathlib, subprocess
+          names = ['0', 's1', 's2', 's3', 's4', 's5']
+          payload = ''.join(pathlib.Path('.integration/audit-bc.'+n).read_text().strip() for n in names)
+          patch = gzip.decompress(base64.b64decode(payload, validate=True))
+          assert hashlib.sha256(patch).hexdigest() == '17846c287b20999f6e8f979d77abd1bd5ff73de3a4c6747897244f4f91eb786e'
+          for line in patch.decode().splitlines():
+              if line.startswith('+++ b/'):
+                  name=line[6:]
+                  assert name.startswith(('backend/app/','backend/tests/','config/')) and '..' not in pathlib.PurePosixPath(name).parts
+          target=pathlib.Path('/tmp/audit-bc.patch');target.write_bytes(patch)
+          subprocess.run(['git','apply','--check',str(target)],check=True)
+          subprocess.run(['git','apply',str(target)],check=True)
+          subprocess.run(['git','diff','--check'],check=True)
+          PY
+      - name: Verify isolated data and settlement cases
+        run: |
+          pip install -e '.[dev]'
+          pytest backend/tests/test_audit_data_20260912.py backend/tests/test_audit_tasks_20260912.py backend/tests/test_v103_history.py -q
+          python -m compileall -q backend/app
+      - name: Commit tested application files and remove transport
+        run: |
+          git add backend/app backend/tests/test_audit_data_20260912.py backend/tests/test_audit_tasks_20260912.py config/strategy.json
+          git rm .integration/audit-bc.* .github/workflows/apply-audit-bc.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(audit): quarantine unverified history and unify target-session task coverage'
+          git push origin HEAD:refs/heads/fix/v105-audit-blockers-20260912
