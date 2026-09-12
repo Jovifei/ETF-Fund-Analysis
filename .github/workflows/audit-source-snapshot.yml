@@ -1,0 +1,26 @@
+name: audit-source-snapshot
+on:
+  push:
+    branches: [fix/v105-audit-blockers-20260912]
+    paths: [.github/workflows/audit-source-snapshot.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Export committed source only
+        run: |
+          mkdir -p /tmp/audit-source
+          git rev-parse HEAD > /tmp/audit-source/commit.txt
+          git archive HEAD --format=tar.gz > /tmp/audit-source/source.tar.gz
+          sha256sum /tmp/audit-source/source.tar.gz > /tmp/audit-source/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: audit-source-snapshot
+          path: /tmp/audit-source/
+          retention-days: 7
