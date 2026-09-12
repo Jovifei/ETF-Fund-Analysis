@@ -78,15 +78,14 @@ class IndicatorService:
                         "high": row.high,
                         "low": row.low,
                         "close": row.close,
-                        "volume": row.volume or 0,
-                        "amount": row.amount or 0,
+                        "volume": row.volume,
+                        "amount": row.amount,
                     }
                     for row in rows
                 ]
             )
-            input_hash = stable_hash(
-                [{"date": row.trade_date, "hash": row.quality_hash} for row in rows[-400:]]
-            )
+            from app.utils.input_lineage import history_digest
+            input_hash = history_digest(rows)
             try:
                 result = calculate_indicators(frame, self.strategy["indicator"])
             except Exception as exc:
@@ -95,6 +94,8 @@ class IndicatorService:
             computed[instrument.id] = result
             metadata[instrument.id] = (instrument, list(rows), input_hash)
 
+        from app.utils.input_lineage import calculation_digest
+        panel_hash = calculation_digest({ident: value[2] for ident, value in metadata.items()}, self.strategy, "indicator-panel-v2")
         rps20 = self._rps(computed, "return_20d")
         rps60 = self._rps(computed, "return_60d")
         rps120 = self._rps(computed, "return_120d")
@@ -103,7 +104,8 @@ class IndicatorService:
         feature_schema_version = self.strategy.get("feature_schema_version", FEATURE_SCHEMA_VERSION)
         strategy_cfg = self.strategy.get("strategy_engine", {})
         for instrument_id, result in computed.items():
-            instrument, rows, input_hash = metadata[instrument_id]
+            instrument, rows, local_hash = metadata[instrument_id]
+            input_hash = stable_hash({"panel": panel_hash, "instrument_id": instrument_id, "local": local_hash})
             values = dict(result.values)
             values["rps20"] = rps20[instrument_id]
             values["rps60"] = rps60[instrument_id]
@@ -179,11 +181,11 @@ class IndicatorService:
                 "indicator_version": version,
             },
         )
-        return {
-            "run_id": run_id,
-            "created": created,
-            "updated": max(0, len(computed) - created),
-            "skipped": skipped,
-            "failures": failures,
-            "indicator_version": version,
-        }
+        from app.services.task_outcome import coverage_outcome
+        from app.services.settlement import settled_session
+        target = settled_session(self.settings)
+        completed = sum(rows[-1].trade_date == target or self.settings.market_provider == "mock"
+                        for _inst, rows, _hash in metadata.values())
+        return coverage_outcome(len(instruments), completed, run_id=run_id,
+            created=created, updated=max(0, len(computed)-created), skipped=skipped,
+            failures=failures, indicator_version=version, target_trade_date=target.isoformat())

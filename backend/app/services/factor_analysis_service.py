@@ -394,7 +394,8 @@ class FactorAnalysisService:
                 .where(DailyBar.instrument_id == instrument.id)
                 .order_by(DailyBar.trade_date)
             ).all()
-            if len(rows) < 160:
+            from app.providers.data_contract import price_history_issue, row_units_verified
+            if len(rows) < 160 or price_history_issue(rows):
                 continue
             raw = pd.DataFrame(
                 [
@@ -407,8 +408,8 @@ class FactorAnalysisService:
                         # Preserve missing volume/amount as missing. Price-only
                         # diagnostics may use the close series, while volume
                         # factors must report honest null coverage.
-                        "volume": row.volume if row.volume is not None else np.nan,
-                        "amount": row.amount if row.amount is not None else np.nan,
+                        "volume": row.volume if row_units_verified(row) or self.settings.market_provider == "mock" else np.nan,
+                        "amount": row.amount if row_units_verified(row) or self.settings.market_provider == "mock" else np.nan,
                     }
                     for row in rows
                 ]

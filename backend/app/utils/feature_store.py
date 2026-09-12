@@ -8,7 +8,7 @@ import pandas as pd
 
 from app.utils.indicators_v05 import calculate_indicators
 
-FEATURE_SCHEMA_VERSION = "feature-store-v0.7.1-horizon-aligned"
+FEATURE_SCHEMA_VERSION = "feature-store-v0.7.2-input-mask"
 
 LEGACY_FEATURES = (
     "return_1d",
@@ -182,6 +182,8 @@ def build_feature_frame(raw_frame: pd.DataFrame, indicator_config: dict[str, Any
     )
     for name in profile:
         frame[name] = profile[name]
+    from app.utils.input_validity import apply_input_validity
+    frame = apply_input_validity(frame, raw_frame, indicator_config)
     return FeatureFrame(frame=frame, values=result.values)
 
 

@@ -27,7 +27,7 @@ def calculate_indicators(frame: pd.DataFrame, config: dict[str, Any]) -> Indicat
     close = pd.to_numeric(df["close"], errors="coerce")
     high = pd.to_numeric(df["high"], errors="coerce")
     low = pd.to_numeric(df["low"], errors="coerce")
-    volume = pd.to_numeric(df["volume"], errors="coerce").fillna(0)
+    volume = pd.to_numeric(df["volume"], errors="coerce")
     df["rsi14"] = rsi(close, 14)
     df["return_120d"] = close.pct_change(120)
     trend_cfg = config.get("trend_strength", {})
@@ -38,7 +38,7 @@ def calculate_indicators(frame: pd.DataFrame, config: dict[str, Any]) -> Indicat
     df["wr28"] = williams_r(high, low, close, int(trend_cfg.get("wr_long_window", 28)))
     df["roc12"] = close.pct_change(int(trend_cfg.get("roc_window", 12))) * 100
     df["obv"] = obv(close, volume)
-    df["obv_slope_5"] = df["obv"].pct_change(5).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    df["obv_slope_5"] = df["obv"].pct_change(5, fill_method=None).replace([np.inf, -np.inf], np.nan).fillna(0.0)
     flow_cfg = config.get("money_flow", {})
     df["mfi14"] = mfi(high, low, close, volume, int(flow_cfg.get("mfi_window", 14)))
     df["cmf20"] = cmf(high, low, close, volume, int(flow_cfg.get("cmf_window", 20)))
@@ -50,9 +50,13 @@ def calculate_indicators(frame: pd.DataFrame, config: dict[str, Any]) -> Indicat
         int(rsrs_cfg.get("zscore_window", 60)),
     )
     df["rsrs_right_skew"] = df["rsrs_zscore"] * df["rsrs_beta"] * df["rsrs_r2"]
+    from app.utils.input_validity import apply_input_validity
+    df = apply_input_validity(df, frame, config)
     chip = volume_profile(df, config.get("chip", {}))
     latest = df.iloc[-1]
     values = dict(base.values)
+    for key in ("volume", "amount", "volume_ratio"):
+        values[key] = _num(latest.get(key))
     keys = [
         "amount_ratio","volume_zscore20","vwap20","obv","obv_slope_5","mfi14","cmf20",
         "adx14","plus_di14","minus_di14","cci20","wr14","wr28","roc12","return_120d",
@@ -63,7 +67,7 @@ def calculate_indicators(frame: pd.DataFrame, config: dict[str, Any]) -> Indicat
     for key in keys:
         values[key] = _num(latest.get(key), 4)
     for key in ["turtle_entry_20","turtle_entry_55","turtle_exit_10","turtle_exit_20","volume_breakout","false_breakout_risk","pullback_ready","second_launch","pullback_support_broken"]:
-        values[key] = bool(latest.get(key))
+        values[key] = bool(latest.get(key)) if pd.notna(latest.get(key)) else None
     values.update(chip)
     reasons = list(values.get("technical_reasons") or [])
     score, risk = float(base.technical_score), float(base.risk_score)
@@ -72,11 +76,11 @@ def calculate_indicators(frame: pd.DataFrame, config: dict[str, Any]) -> Indicat
     if adx >= 20 and pdi > mdi: score += 5; reasons.append("ADX/DMI 趋势确认")
     elif adx >= 25 and mdi > pdi: score -= 6; reasons.append("ADX/DMI 空头趋势")
     if cmf20 >= 0.05 and mfi14 >= 55: score += 4; reasons.append("CMF/MFI 资金流确认")
-    if bool(latest.get("pullback_ready")): score += 4; reasons.append("放量突破后缩量承接")
-    if bool(latest.get("turtle_entry_55")): score += 4; reasons.append("海龟55日突破")
+    if pd.notna(latest.get("pullback_ready")) and bool(latest.get("pullback_ready")): score += 4; reasons.append("放量突破后缩量承接")
+    if pd.notna(latest.get("turtle_entry_55")) and bool(latest.get("turtle_entry_55")): score += 4; reasons.append("海龟55日突破")
     if rz >= 0.7: score += 3; reasons.append("RSRS 偏多")
     elif rz <= -0.7: score -= 4; risk += 6; reasons.append("RSRS 偏空")
-    if bool(latest.get("false_breakout_risk")): risk += 8
+    if pd.notna(latest.get("false_breakout_risk")) and bool(latest.get("false_breakout_risk")): risk += 8
     values["technical_reasons"] = list(dict.fromkeys(reasons))[:16]
     quality_fields = ["adx14","mfi14","cmf20","rsrs_zscore","box_position_20"]
     quality = sum(pd.notna(latest.get(k)) for k in quality_fields) / len(quality_fields) * 100

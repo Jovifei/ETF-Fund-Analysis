@@ -20,12 +20,14 @@ MAX_ROWS = 1500
 
 def refresh(db, settings, provider, run_id, lookback_days=1200):
     now = datetime.now(settings.timezone)
-    end = now.date()
+    from app.services.settlement import settled_session
+    end = settled_session(settings, now)
     start = end-timedelta(days=min(1800,max(30,lookback_days)))
     registries = db.scalars(select(MarketContextRegistry).where(
         MarketContextRegistry.context_kind=='index', MarketContextRegistry.enabled.is_(True),
         MarketContextRegistry.source_symbol.in_(list(INDEX_CODES)))).all()
     failures, saved = [], 0
+    covered = 0
     for registry in registries:
         timer, error, records = AuditTimer(), None, []
         try:
@@ -55,14 +57,16 @@ def refresh(db, settings, provider, run_id, lookback_days=1200):
                 cache.settings_json=data
                 db.flush()
             saved+=1
+            covered += int(ordered[-1]['date'] == end.isoformat())
         except Exception as exc:
             error=exc
             failures.append({'context_id':registry.context_id,'reason':type(exc).__name__})
         finally:
             record_provider_audit(db,run_id=run_id,operation='fetch_index_bars',provider=provider,
                 result=records,error=error,latency_ms=timer.elapsed_ms)
-    return {'status':'succeeded' if saved and not failures else 'partial',
-            'instruments':saved,'failures':failures,'requested':len(registries),'actionable':False}
+    from app.services.task_outcome import coverage_outcome
+    return coverage_outcome(len(registries), covered, instruments=saved, failures=failures,
+                            target_trade_date=end.isoformat(), actionable=False)
 
 
 def read(db, settings, context_id, limit=500):

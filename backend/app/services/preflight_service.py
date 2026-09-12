@@ -67,6 +67,11 @@ class PreflightService:
         if not indicator:
             missing_core.append("技术指标")
         else:
+            from app.utils.hashing import stable_hash
+            if indicator.version != self.strategy["indicator_version"] or indicator.feature_schema_version != self.strategy["feature_schema_version"] or indicator.config_hash != stable_hash(self.strategy):
+                missing_core.append("indicator_version_or_config_mismatch")
+            if indicator.as_of_date > at.date():
+                missing_core.append("indicator_from_future")
             if indicator.data_quality < float(self.strategy["signal"]["minimum_data_quality"]):
                 missing_core.append("指标数据质量")
             max_bar_age = int(self.strategy["signal"].get("maximum_bar_age_trading_days", 3))
@@ -87,6 +92,8 @@ class PreflightService:
             if quote_time.tzinfo is None:
                 quote_time = quote_time.replace(tzinfo=self.settings.timezone)
             age = at - quote_time
+            if age.total_seconds() < 0:
+                missing_core.append("quote_from_future")
             calendar_decision = self.calendar.decision(at.date())
             if not calendar_decision.verified:
                 warnings.append("交易日历未完成验证，操作级信号将被阻断")

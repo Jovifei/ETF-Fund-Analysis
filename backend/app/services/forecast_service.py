@@ -319,8 +319,8 @@ class ForecastService:
                         "high": row.high,
                         "low": row.low,
                         "close": row.close,
-                        "volume": row.volume or 0,
-                        "amount": row.amount or 0,
+                        "volume": row.volume,
+                        "amount": row.amount,
                     }
                     for row in rows
                 ]
@@ -344,6 +344,8 @@ class ForecastService:
         model_version = self.strategy["forecast_version"]
         feature_schema_version = self.strategy.get("feature_schema_version", FEATURE_SCHEMA_VERSION)
         frames = self._frames(db, instruments)
+        from app.utils.input_lineage import calculation_digest, history_digest
+        panel_hash = calculation_digest({inst.id: history_digest(db.scalars(select(DailyBar).where(DailyBar.instrument_id == inst.id).order_by(DailyBar.trade_date)).all()) for inst in instruments if inst.id in frames}, self.strategy, "forecast-panel-v2")
         created = 0
         updated = 0
         failures: list[dict[str, str]] = []
@@ -356,12 +358,9 @@ class ForecastService:
             rows = db.scalars(
                 select(DailyBar)
                 .where(DailyBar.instrument_id == instrument.id)
-                .order_by(DailyBar.trade_date.desc())
-                .limit(600)
+                .order_by(DailyBar.trade_date)
             ).all()
-            input_hash = stable_hash(
-                [{"date": row.trade_date, "hash": row.quality_hash} for row in reversed(rows)]
-            )
+            input_hash = stable_hash({"panel": panel_hash, "instrument_id": instrument.id, "local": history_digest(rows)})
             for horizon in [int(value) for value in forecast_cfg.get("horizons", DEFAULT_RESEARCH_HORIZONS)]:
                 selected = feature_columns_for_horizon(horizon, frame.columns)
                 result = similarity_forecast(
@@ -444,11 +443,11 @@ class ForecastService:
                 "feature_schema_version": feature_schema_version,
             },
         )
-        return {
-            "run_id": run_id,
-            "created": created,
-            "updated": updated,
-            "failures": failures,
-            "model_version": model_version,
-            "feature_schema_version": feature_schema_version,
-        }
+        from app.services.task_outcome import coverage_outcome
+        from app.services.settlement import settled_session
+        target = settled_session(self.settings)
+        completed = sum(frame.iloc[-1]["trade_date"] == target or self.settings.market_provider == "mock"
+                        for frame in frames.values())
+        return coverage_outcome(len(instruments), completed, run_id=run_id, created=created,
+            updated=updated, failures=failures, model_version=model_version,
+            feature_schema_version=feature_schema_version, target_trade_date=target.isoformat())
