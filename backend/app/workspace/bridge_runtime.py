@@ -4,11 +4,8 @@ Windows ACL checks use SIDs, not localized account names. Existing insecure
 folders fail closed. Only a newly created empty directory is provisioned.
 """
 from __future__ import annotations
-import base64
-import json
 import os
 from pathlib import Path
-import subprocess
 
 
 class RuntimeSafetyError(ValueError):
@@ -31,52 +28,20 @@ def acl_is_private(value: dict, current_sid: str, *, require_protected: bool = T
 
 
 def windows_private_directory(path: Path, *, created: bool, directory: bool = True) -> None:
-    # Passing the target through an environment variable avoids PowerShell
-    # interpolation of a path containing quotes/metacharacters.
-    script = r'''
-$ErrorActionPreference = 'Stop'
-$p = $env:ETF_ACL_TARGET
-$me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
-if ($env:ETF_ACL_CREATE -eq '1') {
-    if ($env:ETF_ACL_DIRECTORY -eq '1') {
-        $acl = New-Object System.Security.AccessControl.DirectorySecurity
-        $inherit = 'ContainerInherit,ObjectInherit'
-    } else {
-        $acl = New-Object System.Security.AccessControl.FileSecurity
-        $inherit = 'None'
-    }
-    $acl.SetOwner($me)
-    $acl.SetAccessRuleProtection($true, $false)
-    foreach ($sid in @($me.Value, 'S-1-5-18', 'S-1-5-32-544')) {
-        $who = New-Object System.Security.Principal.SecurityIdentifier($sid)
-        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($who, 'FullControl', $inherit, 'None', 'Allow')
-        $acl.AddAccessRule($rule)
-    }
-    Set-Acl -LiteralPath $p -AclObject $acl
-}
-$a = Get-Acl -LiteralPath $p
-$rules = @($a.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier]) | ForEach-Object {
-    @{sid=$_.IdentityReference.Value;allow=($_.AccessControlType -eq 'Allow');rights=[int]$_.FileSystemRights}
-})
-@{current=$me.Value;owner=$a.GetOwner([System.Security.Principal.SecurityIdentifier]).Value;protected=$a.AreAccessRulesProtected;rules=$rules} | ConvertTo-Json -Depth 5 -Compress
-'''
-    env = {k: v for k, v in os.environ.items() if k.upper() in {'PATH', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP'}}
-    env.update(ETF_ACL_TARGET=str(path), ETF_ACL_CREATE='1' if created else '0', ETF_ACL_DIRECTORY='1' if directory else '0')
+    from app.workspace.windows_acl import descriptor
     try:
-        # -EncodedCommand is UTF-16LE on Windows PowerShell. A multiline
-        # -Command inherited CI stdin could wait for a continuation/EOF; do
-        # not inherit stdin or depend on shell quoting for a security check.
-        encoded = base64.b64encode(script.encode('utf-16le')).decode('ascii')
-        run = subprocess.run(['powershell.exe', '-NoLogo', '-NoProfile',
-            '-NonInteractive', '-EncodedCommand', encoded],
-            env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
-        value = json.loads(run.stdout) if run.returncode == 0 else {}
+        value = descriptor(path, created=created, directory=directory)
         if not acl_is_private(value, value.get('current', ''), require_protected=directory):
             raise RuntimeSafetyError('bridge_directory_acl_unsafe')
-    except (OSError, ValueError, subprocess.SubprocessError) as exc:
-        if isinstance(exc, RuntimeSafetyError):
-            raise
+    except ImportError:
+        raise RuntimeSafetyError('windows_acl_dependency_missing_install_project') from None
+    except RuntimeSafetyError:
+        raise
+    except Exception:
+        # Paths and OS security details may contain private identifiers. Only
+        # expose a stable reason code; inability to inspect is never success.
         raise RuntimeSafetyError('bridge_directory_acl_not_verified') from None
+
 
 
 def ensure_private_directory(path: Path) -> Path:
