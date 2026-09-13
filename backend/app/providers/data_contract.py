@@ -18,8 +18,19 @@ MAX_UNEXPLAINED_GAP = 0.35
 class HistoryContractError(ProviderError):
     pass
 
+# These are endpoint-specific normalization contracts, not blanket SDK trust.
+# A new provider must explicitly document its conversion and extend tests here.
+DOCUMENTED_UNIT_SOURCES = frozenset({
+    "akshare:em:v101", "tushare:fund_daily:v101", "ftshare:fetch_daily_bars",
+})
+
 def finite(value):
-    return value is not None and not isinstance(value, bool) and math.isfinite(float(value))
+    if value is None or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(float(value))
+    except (TypeError, ValueError, OverflowError):
+        return False
 
 def price_history_issue(rows):
     if not rows:
@@ -29,7 +40,7 @@ def price_history_issue(rows):
     prior = None
     for row in rows:
         prices = [row.open, row.high, row.low, row.close]
-        if not all(finite(v) and v > 0 for v in prices) or not row.low <= min(row.open, row.close) <= max(row.open, row.close) <= row.high:
+        if not all(finite(v) and float(v) > 0 for v in prices) or not row.low <= min(row.open, row.close) <= max(row.open, row.close) <= row.high:
             return "invalid_ohlc"
         if prior is not None:
             if row.trade_date <= prior.trade_date:
@@ -41,8 +52,7 @@ def price_history_issue(rows):
     return None
 
 def row_units_verified(row):
-    return (row.source not in LEGACY_SOURCES + UNVERIFIED_UNIT_SOURCES
-            and "mock" not in str(row.source).lower())
+    return row.source in DOCUMENTED_UNIT_SOURCES
 
 def assess_history(rows):
     reasons = []
@@ -53,14 +63,17 @@ def assess_history(rows):
         reasons.append("legacy_units_unverified")
     if any(row.source == "akshare:sina:v102" for row in rows):
         reasons.append("sina_absolute_units_unverified")
+    if any(row.source == "akshare:sina:v101" for row in rows):
+        reasons.append("price_only_history_units_unverified")
+    if any(row.source not in DOCUMENTED_UNIT_SOURCES | set(LEGACY_SOURCES + UNVERIFIED_UNIT_SOURCES)
+           and "mock" not in str(row.source).lower() for row in rows):
+        reasons.append("unknown_endpoint_units_unverified")
     if any("mock" in str(row.source).lower() for row in rows):
         reasons.append("mock_history")
     if any(not finite(row.volume) or row.volume < 0 for row in rows):
         reasons.append("volume_missing_for_shared_signals")
     if any(not finite(row.amount) or row.amount < 0 for row in rows):
         reasons.append("amount_missing_for_shared_signals")
-    if any(row.source == "akshare:sina:v101" for row in rows) and not reasons:
-        reasons.append("sina_absolute_units_unverified")
     return reasons
 
 def legacy_history_present(db, instrument_id=None):

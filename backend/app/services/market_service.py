@@ -14,7 +14,7 @@ from app.providers.base import MarketProvider, ProviderError
 from app.services.audit_service import AuditTimer, record_provider_audit
 from app.services.event_service import emit_event
 from app.utils.hashing import stable_hash
-from app.providers.data_contract import LEGACY_SOURCES, VERSION, HistoryContractError
+from app.providers.data_contract import LEGACY_SOURCES, UNVERIFIED_UNIT_SOURCES, VERSION, HistoryContractError, row_units_verified
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +124,7 @@ class MarketService:
         for instrument in instruments:
             start_date = end_date - timedelta(days=lookback_days)
             earliest, latest, legacy_count = db.execute(
-                select(func.min(DailyBar.trade_date), func.max(DailyBar.trade_date), func.sum(case((or_(DailyBar.source.in_(LEGACY_SOURCES), and_(DailyBar.source == "akshare:sina:v101", DailyBar.volume.is_(None))), 1), else_=0)))
+                select(func.min(DailyBar.trade_date), func.max(DailyBar.trade_date), func.sum(case((or_(DailyBar.source.in_(LEGACY_SOURCES + UNVERIFIED_UNIT_SOURCES)), 1), else_=0)))
                 .where(DailyBar.instrument_id == instrument.id)
             ).one()
             if legacy_count:
@@ -153,7 +153,7 @@ class MarketService:
                         ))
                     }
                     if legacy_count:
-                        old_keys = {key for key, value in existing.items() if value.source in LEGACY_SOURCES or (value.source == "akshare:sina:v101" and value.volume is None)}
+                        old_keys = {key for key, value in existing.items() if value.source in LEGACY_SOURCES + UNVERIFIED_UNIT_SOURCES}
                         if not old_keys.issubset(batch) or any(value[0].source in LEGACY_SOURCES for value in batch.values()):
                             raise HistoryContractError("legacy_refetch_incomplete_no_partial_unit_upgrade")
                     for key, (item, content_hash) in batch.items():

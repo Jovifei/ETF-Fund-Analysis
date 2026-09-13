@@ -72,7 +72,8 @@ def test_cache_is_durable_idempotent_and_failure_preserves_history(db_session):
     assert value['summary']['change_ratio']==0 and value['actionable'] is False
     before=value['data_hash'];p.fail=True
     result=index_history.refresh(db,settings,p,uuid4().hex)
-    assert result['status']=='partial'
+    # All requests failed: retained cached data does not make this attempt partial.
+    assert result['status']=='failed'
     assert index_history.read(db,settings,ident)['data_hash']==before
     # Read does not touch the provider, and never synthesizes OHLC from point history.
     assert value['bars'][-1]['open']==3000

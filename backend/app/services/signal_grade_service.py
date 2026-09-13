@@ -326,23 +326,10 @@ class SignalGradeService:
         return latest
 
     @staticmethod
-    def _previous_indicators(
-        db: Session, latest: dict[int, IndicatorSnapshot]
-    ) -> dict[int, dict[str, Any]]:
-        previous: dict[int, dict[str, Any]] = {}
-        for instrument_id, current in latest.items():
-            row = db.scalar(
-                select(IndicatorSnapshot)
-                .where(
-                    IndicatorSnapshot.instrument_id == instrument_id,
-                    IndicatorSnapshot.as_of_date < current.as_of_date,
-                )
-                .order_by(IndicatorSnapshot.as_of_date.desc(), IndicatorSnapshot.generated_at.desc())
-                .limit(1)
-            )
-            if row and row.values_json:
-                previous[instrument_id] = dict(row.values_json)
-        return previous
+    def _previous_indicators(db: Session, latest: dict) -> dict:
+        from app.utils.indicator_history import previous_values
+        return {ident: values for ident, current in latest.items()
+                if (values := previous_values(db, current)) is not None}
 
     @staticmethod
     def _latest_quotes(db: Session) -> dict[int, QuoteSnapshot]:

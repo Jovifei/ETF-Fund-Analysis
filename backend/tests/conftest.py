@@ -7,8 +7,10 @@ from tempfile import TemporaryDirectory
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-TEST_DB = PROJECT_ROOT / "backend" / "tests" / "test_fund_decision.sqlite3"
-TEST_DB.unlink(missing_ok=True)
+# Each pytest invocation owns a distinct database and WAL/SHM lifetime.
+# Parallel review/CI commands must not unlink another running suite's DB.
+DATABASE_TEMP = TemporaryDirectory(prefix="fund-test-database-")
+TEST_DB = Path(DATABASE_TEMP.name) / "test_fund_decision.sqlite3"
 REPORTS_TEMP = TemporaryDirectory(prefix="fund-test-reports-")
 os.environ.update(
     {
@@ -38,6 +40,7 @@ def database():
         try:
             TEST_DB.unlink(missing_ok=True)
         finally:
+            DATABASE_TEMP.cleanup()
             REPORTS_TEMP.cleanup()
 
 

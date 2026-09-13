@@ -60,7 +60,7 @@ def test_empty_em_history_uses_sina_and_source_is_visible():
     assert rows[0].amount is None
 
 
-def test_sina_history_keeps_volume_when_amount_matches_price_units():
+def test_sina_history_does_not_infer_absolute_units_from_matching_vwap():
     fake=SimpleNamespace(
         fund_etf_hist_em=lambda **kw: [],
         fund_etf_hist_sina=lambda **kw: [
@@ -70,8 +70,9 @@ def test_sina_history_keeps_volume_when_amount_matches_price_units():
     p=AKShareProvider(Settings(_env_file=None),ak_client=fake)
     rows=p.fetch_daily_bars('512480.SH',date(2026,9,1),date(2026,9,4))
     assert len(rows)==1
-    assert rows[0].source=='akshare:sina:v102'
-    assert rows[0].volume==1000 and rows[0].amount==1200
+    # Audit P1-1: a plausible ratio is invariant to scaling both fields.
+    assert rows[0].source=='akshare:sina:v101'
+    assert rows[0].volume is None and rows[0].amount is None
 
 
 def test_sina_history_rejects_volume_when_amount_unit_does_not_match_price():
@@ -87,7 +88,7 @@ def test_sina_history_rejects_volume_when_amount_unit_does_not_match_price():
     assert rows[0].source=='akshare:sina:v101' and rows[0].volume is None
 
 
-def test_sina_history_allows_documented_turnover_rounding_within_ten_percent():
+def test_sina_history_ten_percent_tolerance_is_not_a_unit_contract():
     fake=SimpleNamespace(
         fund_etf_hist_em=lambda **kw: [],
         fund_etf_hist_sina=lambda **kw: [
@@ -96,7 +97,8 @@ def test_sina_history_allows_documented_turnover_rounding_within_ten_percent():
     )
     p=AKShareProvider(Settings(_env_file=None),ak_client=fake)
     rows=p.fetch_daily_bars('512480.SH',date(2026,9,1),date(2026,9,4))
-    assert rows[0].source=='akshare:sina:v102' and rows[0].volume==1000
+    assert rows[0].source=='akshare:sina:v101' and rows[0].volume is None
+    assert rows[0].amount is None
 
 
 def test_catalog_is_separate_from_light_daily_refresh():

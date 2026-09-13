@@ -8,7 +8,7 @@ import pandas as pd
 
 from app.utils.indicators_v05 import calculate_indicators
 
-FEATURE_SCHEMA_VERSION = "feature-store-v0.7.2-input-mask"
+FEATURE_SCHEMA_VERSION = "feature-store-v0.7.3-input-mask"
 
 LEGACY_FEATURES = (
     "return_1d",

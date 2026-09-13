@@ -13,6 +13,8 @@ VOLUME_FEATURES = {
     "volume_breakout": 20, "false_breakout_risk": 20,
     "pullback_volume_ratio": 0, "pullback_ready": 0, "second_launch": 0,
     "pullback_support_broken": 0, "last_ignition_volume": 0,
+    "bars_since_ignition": 0, "last_ignition_low": 0, "last_ignition_high": 0,
+    "last_ignition_platform": 0, "pullback_support": 0,
     "vp_peak_distance": 120, "cost50_distance": 120,
     "profit_ratio_est": 120, "chip_concentration": 120,
 }
@@ -30,14 +32,17 @@ def apply_input_validity(frame, raw, config=None):
     def window_mask(valid, window):
         return valid.cummin() if window == 0 else valid.rolling(window, min_periods=window).sum().eq(window)
     masks = {}
+    volume_window = int(cfg.get("volume", {}).get("window", 20))
     for key, window in VOLUME_FEATURES.items():
+        if key in {"volume_ma20", "volume_ratio", "volume_zscore20", "volume_breakout", "false_breakout_risk"}:
+            window = volume_window
         if key in {"mfi14", "cmf20"}:
             window = int(cfg.get("money_flow", {}).get("mfi_window" if key == "mfi14" else "cmf_window", 14 if key == "mfi14" else 20)) + (key == "mfi14")
         if key.startswith(("vp_", "cost50", "profit_ratio", "chip_concentration")):
             window = int(cfg.get("chip", {}).get("window", 120))
         masks[key] = window_mask(validity["volume"], window)
     for key, window in AMOUNT_FEATURES.items():
-        masks[key] = window_mask(validity["amount"], window)
+        masks[key] = window_mask(validity["amount"], volume_window)
     masks["vwap20"] = window_mask(validity["volume"] & validity["amount"], 20)
     for key, mask in masks.items():
         if key in frame:

@@ -95,17 +95,16 @@ def classify_ma(values: dict[str, Any], previous: dict[str, Any] | None) -> dict
         kind, label = "mixed", "多空交织"
     arrows: list[dict[str, str]] = []
     for window, current in zip((5, 10, 20, 30), mas, strict=True):
-        prior = _f(previous or {}, f"ma{window}")
-        if prior is None:
-            close = _f(values, "close")
-            up = close is not None and current is not None and close >= current
-        else:
-            up = current >= prior
-        arrows.append({"window": f"M{window}", "dir": "up" if up else "down"})
+        # Always price position, matching the legend. Never silently switch to
+        # MA slope merely because a previous snapshot happened to be available.
+        close = _f(values, "close")
+        direction = "unknown" if close is None else "up" if close >= current else "down"
+        arrows.append({"window": f"M{window}", "dir": direction})
     return {
         "label": label,
         "kind": kind,
         "arrows": arrows,
+        "arrow_basis": "close_vs_ma",
         "values_text": f"MA5={m5:.2f} MA20={m20:.2f}",
     }
 

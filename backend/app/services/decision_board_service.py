@@ -364,7 +364,9 @@ class DecisionBoardService:
         rows.sort(key=lambda row: (*health_sort_key(row["grade"], row["freshness"]), row["ts_code"]))
         groups = {grade: [row for row in rows if row["grade"] == grade] for grade in GRADE_ORDER}
         groups["数据异常"] = [row for row in rows if row["grade"] == "数据异常"]
-        counts = {grade: len(groups[grade]) for grade in GRADE_ORDER}
+        counts = {grade: len(group) for grade, group in groups.items()}
+        if sum(counts.values()) != len(rows):
+            raise ValueError("decision_groups_do_not_partition_rows")
         freshness = "fresh" if rows and all(row["freshness"] == "fresh" for row in rows) else "stale" if rows else "missing"
         status_counts = {status: sum(row["data_status"] == status for row in rows) for status in sorted({row["data_status"] for row in rows})}
         return {
@@ -774,21 +776,10 @@ class DecisionBoardService:
         return latest
 
     @staticmethod
-    def _previous_indicator_values(db: Session, latest: dict[int, object]) -> dict[int, dict]:
-        previous: dict[int, dict] = {}
-        for instrument_id, current in latest.items():
-            row = db.scalar(
-                select(IndicatorSnapshot)
-                .where(
-                    IndicatorSnapshot.instrument_id == instrument_id,
-                    IndicatorSnapshot.as_of_date < current.as_of_date,
-                )
-                .order_by(IndicatorSnapshot.as_of_date.desc(), IndicatorSnapshot.generated_at.desc())
-                .limit(1)
-            )
-            if row is not None and row.values_json:
-                previous[instrument_id] = {**dict(row.values_json), "_as_of_date": row.as_of_date.isoformat()}
-        return previous
+    def _previous_indicator_values(db: Session, latest: dict) -> dict:
+        from app.utils.indicator_history import previous_values
+        return {ident: values for ident, current in latest.items()
+                if (values := previous_values(db, current)) is not None}
 
     @staticmethod
     def _latest_provisional(db: Session) -> dict[int, DecisionBoardProvisionalInput]:

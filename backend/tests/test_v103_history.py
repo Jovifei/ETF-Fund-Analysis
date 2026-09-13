@@ -18,7 +18,8 @@ def instrument(db, missing_volume=False, legacy=False):
         db.add(DailyBar(instrument_id=inst.id, trade_date=date(2025,1,1)+timedelta(days=i),
             open=price, high=price+.1, low=price-.1, close=price+.02,
             volume=None if missing_volume else 1000, amount=None if missing_volume else 2000,
-            source='akshare' if legacy else 'akshare:sina:v101' if missing_volume else 'fixture:v103',
+            source='akshare' if legacy else 'akshare:sina:v101' if missing_volume else 'akshare:em:v101'  # synthetic rows exercising the documented EM contract
+            ,
             adjust='none', quality_hash=str(i)))
     db.flush()
     return inst

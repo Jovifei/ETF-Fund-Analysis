@@ -48,3 +48,8 @@ trial-runtime/
 
 frontend/test-results-auth/
 frontend/playwright-report-auth/
+
+# Runtime SQLite sidecars and interprocess leases are never source artifacts.
+*.sqlite3-wal
+*.sqlite3-shm
+*.pipeline.lock
