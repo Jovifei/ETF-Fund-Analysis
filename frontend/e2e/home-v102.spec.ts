@@ -42,6 +42,9 @@ test('industry and concept remain visible without decision snapshots', async ({p
 
 test('market context cards expose persisted history and catalog rows open the same detail route', async ({page}) => {
   await page.goto('/')
+  const runtime = await (await page.request.get('/api/workspace/status')).json()
+  expect(runtime.workspace_version).toBe(runtime.app_version)
+  await expect(page.locator('.workspace-footer')).toContainText(runtime.app_version)
   await expect(page.locator('.market-context-card').first()).toBeVisible()
   await page.locator('.market-context-card').first().click()
   await expect(page.locator('.market-context-detail')).toBeVisible()
