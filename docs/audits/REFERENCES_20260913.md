@@ -20,3 +20,8 @@
 ## 用户精心选择的项目继续保留
 
 TradingAgents、QuantDinger、tick-stock-panel、deepseek-harness-quant、KHQuant Skill、Vibe与Kairo的仓库/源码/许可证/实施落点仍见[原登记](../OPEN_SOURCE_ADOPTION_REGISTER_V103.md)、[V104落点](../OSS_APPLIED_V104.md)。本轮没有把它们的前端/策略/密钥机制全量复制并直接获得生产资格。现有参考与隔离脚本保留；证券单位、复权和人工批准不能由外部Agent或框架代为认证。复制具体源码时必须保留对应LICENSE/NOTICE，商业/非自由前端不能按后端许可证处理。
+
+## 本轮补充复核：缺失值与调整因子
+
+- Qlib官方Data Layer：https://qlib.readthedocs.io/en/latest/component/data.html ，区分调整后的OHLCV、factor，并要求缺失数据保留NaN及数据健康检查。参考落点为本项目input_validity、完整input_lineage与不合格历史拒绝；不是安装Qlib或完成公司行动重建。
+- 2026-09-13重新读取上列管理人588200公告及AKShare官方Sina字段表。公告不能单独校准两根数据库价格；volume字段文档与实际SDK响应须在本地留版本证据，均价比值不够。本次没有复制整篇公告或移植外部凭据。
