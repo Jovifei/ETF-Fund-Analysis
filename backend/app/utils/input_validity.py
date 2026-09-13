@@ -47,5 +47,9 @@ def apply_input_validity(frame, raw, config=None):
     for key, mask in masks.items():
         if key in frame:
             frame[key] = frame[key].where(mask, np.nan)
-    frame.attrs["input_validity"] = {key: mask.tolist() for key, mask in masks.items() if key in frame}
+    # NaN values already carry the dependency mask. Pandas deep-copies attrs
+    # on each iloc/column/concat operation; storing O(rows*features) booleans
+    # here turned rolling/walk-forward calculations into metadata-copy work.
+    frame.attrs.pop("input_validity", None)
+    frame.attrs["input_validity_policy"] = "raw-dependency-mask-v1"
     return frame

@@ -5,6 +5,7 @@ never become qualified simply because the amount/volume ratio looks plausible.
 """
 from __future__ import annotations
 import math
+from datetime import date, datetime
 from sqlalchemy import select
 from app.models import DailyBar, Instrument
 from app.providers.base import ProviderError
@@ -35,18 +36,25 @@ def finite(value):
 def price_history_issue(rows):
     if not rows:
         return "history_missing"
+    if any(row.adjust not in {"none", "qfq", "hfq"} for row in rows):
+        return "unknown_price_basis"
     if len({row.adjust for row in rows}) != 1:
         return "ambiguous_price_basis"
     prior = None
     for row in rows:
         prices = [row.open, row.high, row.low, row.close]
-        if not all(finite(v) and float(v) > 0 for v in prices) or not row.low <= min(row.open, row.close) <= max(row.open, row.close) <= row.high:
+        if not all(finite(v) and float(v) > 0 for v in prices):
             return "invalid_ohlc"
+        op, high, low, close = map(float, prices)
+        if not low <= min(op, close) <= max(op, close) <= high:
+            return "invalid_ohlc"
+        if not isinstance(row.trade_date, date) or isinstance(row.trade_date, datetime):
+            return "invalid_history_date"
         if prior is not None:
             if row.trade_date <= prior.trade_date:
                 return "duplicate_or_unordered_history"
             # No auto-rescaling, dropping, smoothing, or inferred corporate action.
-            if abs(row.close / prior.close - 1) > MAX_UNEXPLAINED_GAP or abs(row.open / prior.close - 1) > MAX_UNEXPLAINED_GAP:
+            if abs(close / float(prior.close) - 1) > MAX_UNEXPLAINED_GAP or abs(op / float(prior.close) - 1) > MAX_UNEXPLAINED_GAP:
                 return "unexplained_price_discontinuity"
         prior = row
     return None
@@ -70,9 +78,9 @@ def assess_history(rows):
         reasons.append("unknown_endpoint_units_unverified")
     if any("mock" in str(row.source).lower() for row in rows):
         reasons.append("mock_history")
-    if any(not finite(row.volume) or row.volume < 0 for row in rows):
+    if any(not finite(row.volume) or float(row.volume) < 0 for row in rows):
         reasons.append("volume_missing_for_shared_signals")
-    if any(not finite(row.amount) or row.amount < 0 for row in rows):
+    if any(not finite(row.amount) or float(row.amount) < 0 for row in rows):
         reasons.append("amount_missing_for_shared_signals")
     return reasons
 
