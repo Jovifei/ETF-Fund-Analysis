@@ -59,3 +59,14 @@ terms and are not granted by the MIT code license.
 - `akfamily/akquant`：独立事件驱动回测与 walk-forward 研究。
 - `Nixtla/mlforecast`：多序列全局预测研究。
 - `microsoft/qlib`、`dcajasn/Riskfolio-Lib`、`ricequant/rqalpha`：仅可选离线研究。
+
+
+## Windows native ACL adapter (2026-09-13)
+
+Windows installs pin `pywin32==311` (PSF license metadata; upstream license is
+shipped in its wheel). Only native security APIs are used for Bridge NTFS ACL
+checks. Linux/container installations do not install it. No upstream code or
+credentials are copied here. Source: https://github.com/mhammond/pywin32 ;
+release: https://pypi.org/project/pywin32/311/ ; API:
+https://mhammond.github.io/pywin32/win32security__GetNamedSecurityInfo_meth.html .
+Do not run global `pywin32_postinstall` inside the project virtual environment.

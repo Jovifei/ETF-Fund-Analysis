@@ -75,6 +75,12 @@ class SignalV05Service(SignalService):
                 forecast = forecasts.get(horizon)
                 if forecast is None or forecast.expected_return is None:
                     continue
+                if bool(adjustment_cfg.get("requires_calibrated", True)) and forecast.calibration_status != "calibrated":
+                    continue
+                if forecast.model_version != self.strategy["forecast_version"] or forecast.as_of_date != indicator.as_of_date:
+                    continue
+                if forecast.config_hash != indicator.config_hash or forecast.feature_schema_version != indicator.feature_schema_version:
+                    continue
                 probability = float(forecast.p_up if forecast.p_up is not None else 0.5)
                 expected_scale = float(adjustment_cfg.get("expected_return_scale", 0.04))
                 downside_scale = float(adjustment_cfg.get("downside_scale", 0.06))

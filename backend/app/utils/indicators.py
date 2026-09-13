@@ -104,7 +104,7 @@ def calculate_indicators(frame: pd.DataFrame, config: dict[str, Any]) -> Indicat
     close = pd.to_numeric(df["close"], errors="coerce")
     high = pd.to_numeric(df["high"], errors="coerce")
     low = pd.to_numeric(df["low"], errors="coerce")
-    volume = pd.to_numeric(df["volume"], errors="coerce").fillna(0)
+    volume = pd.to_numeric(df["volume"], errors="coerce")
 
     for window in config.get("ma_windows", [5, 10, 20, 30, 60]):
         df[f"ma{window}"] = close.rolling(window, min_periods=window).mean()

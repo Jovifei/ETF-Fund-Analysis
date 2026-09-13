@@ -95,7 +95,7 @@ def test_invalid_batch_never_partially_mutates_history(store, bad):
     assert store.scalars(select(DailyBar)).all() == []
 
 
-@pytest.mark.parametrize('output, expected', [({'status':'skipped'},'partial'), ({'status':'partial'},'partial'), ({'missing_codes':['512480.SH']},'partial'), ({'status':'failed'},'failed'), ({'inserted':0,'updated':0,'unchanged':2},'succeeded')])
+@pytest.mark.parametrize('output, expected', [({'status':'skipped'},'partial'), ({'status':'partial'},'partial'), ({'missing_codes':['512480.SH']},'failed'), ({'status':'failed'},'failed'), ({'inserted':0,'updated':0,'unchanged':2},'succeeded')])
 def test_worker_preserves_partial_outcomes(output, expected):
     from app.workspace.worker import outcome_state
     assert outcome_state(output)==expected

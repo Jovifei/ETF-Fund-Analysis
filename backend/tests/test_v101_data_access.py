@@ -60,7 +60,7 @@ def test_empty_em_history_uses_sina_and_source_is_visible():
     assert rows[0].amount is None
 
 
-def test_sina_history_keeps_volume_when_amount_matches_price_units():
+def test_sina_history_does_not_infer_absolute_units_from_matching_vwap():
     fake=SimpleNamespace(
         fund_etf_hist_em=lambda **kw: [],
         fund_etf_hist_sina=lambda **kw: [
@@ -70,8 +70,9 @@ def test_sina_history_keeps_volume_when_amount_matches_price_units():
     p=AKShareProvider(Settings(_env_file=None),ak_client=fake)
     rows=p.fetch_daily_bars('512480.SH',date(2026,9,1),date(2026,9,4))
     assert len(rows)==1
-    assert rows[0].source=='akshare:sina:v102'
-    assert rows[0].volume==1000 and rows[0].amount==1200
+    # Audit P1-1: a plausible ratio is invariant to scaling both fields.
+    assert rows[0].source=='akshare:sina:v101'
+    assert rows[0].volume is None and rows[0].amount is None
 
 
 def test_sina_history_rejects_volume_when_amount_unit_does_not_match_price():
@@ -87,7 +88,7 @@ def test_sina_history_rejects_volume_when_amount_unit_does_not_match_price():
     assert rows[0].source=='akshare:sina:v101' and rows[0].volume is None
 
 
-def test_sina_history_allows_documented_turnover_rounding_within_ten_percent():
+def test_sina_history_ten_percent_tolerance_is_not_a_unit_contract():
     fake=SimpleNamespace(
         fund_etf_hist_em=lambda **kw: [],
         fund_etf_hist_sina=lambda **kw: [
@@ -96,7 +97,8 @@ def test_sina_history_allows_documented_turnover_rounding_within_ten_percent():
     )
     p=AKShareProvider(Settings(_env_file=None),ak_client=fake)
     rows=p.fetch_daily_bars('512480.SH',date(2026,9,1),date(2026,9,4))
-    assert rows[0].source=='akshare:sina:v102' and rows[0].volume==1000
+    assert rows[0].source=='akshare:sina:v101' and rows[0].volume is None
+    assert rows[0].amount is None
 
 
 def test_catalog_is_separate_from_light_daily_refresh():
@@ -109,7 +111,7 @@ def test_catalog_is_separate_from_light_daily_refresh():
 def test_worker_detects_degraded_quotes_and_sector_errors():
     from app.workspace.worker import outcome_state
     assert outcome_state({'inserted':2,'degraded':2,'realtime':0})=='partial'
-    assert outcome_state({'error':'TimeoutError','boards':{}})=='partial'
+    assert outcome_state({'error':'TimeoutError','boards':{}})=='failed'  # no successful outputs
 
 
 def test_network_timeout_is_hard_and_process_is_reaped():
@@ -346,7 +348,7 @@ def test_sina_price_only_is_not_zero_volume_shared_signal_input(v101_db):
     v101_db.add(DailyBar(instrument_id=inst.id,trade_date=date(2026,9,4),adjust='none',open=1,high=2,low=1,close=1.2,volume=None,source='akshare:sina:v101',quality_hash='b'*64));v101_db.flush()
     with pytest.raises(HistoryContractError,match='price_only'):
         require_current_history(v101_db,Settings(_env_file=None).model_copy(update={'market_provider':'akshare'}))
-    assert outcome_state({'price_only':1,'instruments':1})=='partial'
+    assert outcome_state({'price_only':1,'instruments':1})=='failed'  # input inventory is not completed work
 
 
 def test_live_launcher_ignores_unrelated_demo_environment(tmp_path,monkeypatch):

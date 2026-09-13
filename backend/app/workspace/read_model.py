@@ -236,13 +236,15 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
     if any(any(number(row[key]) is None for key in ("open", "high", "low", "close")) or row["low"] > min(row["open"], row["close"]) or row["high"] < max(row["open"], row["close"]) for row in rows):
         return {"ts_code": code, "interval": interval, "available": False, "bars": [], "reason": "invalid_ohlc", "actionable": False}
     strategy = settings.load_strategy()
-    from app.providers.data_contract import LEGACY_SOURCES
-    legacy_units = settings.market_provider != "mock" and any(row["source"] in LEGACY_SOURCES for row in rows)
+    from app.providers.data_contract import LEGACY_SOURCES, UNVERIFIED_UNIT_SOURCES, price_history_issue
+    continuity_issue = price_history_issue(stored) if stored else None
+    legacy_units = settings.market_provider != "mock" and any(row["source"] in LEGACY_SOURCES + UNVERIFIED_UNIT_SOURCES for row in rows)
     if legacy_units:
         # Core chart fields are price-derived only. Do not publish volume-based
         # outputs or change the persisted shared indicator/strategy snapshots.
         rows = [{**row, "volume": None, "amount": None} for row in rows]
-    series = cached_indicator_series(rows, strategy["indicator"])
+    series = ([{**row, "indicators": {}, "history_issue": continuity_issue} for row in rows]
+              if continuity_issue else cached_indicator_series(rows, strategy["indicator"]))
     now = datetime.now(SHANGHAI)
     for row in series:
         row["is_partial"] = row["date"] == now.date().isoformat() and now.time() < time(15, 0)
@@ -255,14 +257,15 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
     mock = settings.market_provider == "mock" or any("mock" in str(row["source"]).lower() for row in rows)
     sr = SupportResistanceService(settings).latest(db, inst.id)
     price_only = legacy_units or any(row["volume"] is None for row in rows)
-    if price_only:
+    if price_only or continuity_issue:
         sr = None
     return {
         "ts_code": code, "interval": interval, "available": bool(series), "bars": series[-limit:],
         "adjust": adjust, "currency": "CNY", "source_bars": len(rows), "history_truncated": truncated,
         "indicator_version": strategy["indicator_version"], "indicator_basis": "shared_python_core_formulas_full_available_history",
         "core_snapshot_match": matches, "source_as_of": rows[-1]["date"] if rows else None,
-        "qualification": "mock" if mock else "legacy_units_unverified" if legacy_units else "historical_price_only" if price_only else "research_only", "actionable": False,
+        "history_issue": continuity_issue, "return_basis": "unadjusted_price_not_total_return" if adjust == "none" else adjust,
+        "qualification": continuity_issue if continuity_issue else "mock" if mock else "legacy_units_unverified" if legacy_units else "historical_price_only" if price_only else "research_only", "actionable": False,
         "cost_overlay_allowed": adjust == "none", "sr_overlay_allowed": len(adjustments) == 1 and bool(sr),
         "support_resistance": sr if len(adjustments) == 1 else None,
         "indicator_note": "历史价格指标可展示；量能缺失或旧单位未验证，禁止生成操作级信号。" if price_only else "图表由服务端统一公式生成；支撑压力为当前快照，不是历史当时已知的点位。",

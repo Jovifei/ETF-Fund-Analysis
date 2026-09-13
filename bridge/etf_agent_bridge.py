@@ -24,8 +24,10 @@ from uuid import uuid4
 
 import httpx
 from app.workspace.protocol import ResearchResult, canonical_bytes, content_hash
+from app.db.task_lock import PipelineFileLock, PipelineLockBusy
+from app.workspace.bridge_runtime import RuntimeSafetyError, child_environment, ensure_private_directory, check_private_file
 
-VERSION = "etf-bridge-v1.1"
+VERSION = "etf-bridge-v1.2-audit"
 REVIEWED_CODEX = "0.149.0"
 MAX_BYTES = 1_500_000
 ID = re.compile(r"^[a-f0-9]{32}$")
@@ -55,32 +57,35 @@ def private_root(value: str | Path) -> Path:
     home = Path.home().resolve()
     if root in {home, home / ".codex", Path(root.anchor)} or root == Path.cwd().resolve():
         raise BridgeError("dedicated_bridge_directory_required")
-    root.mkdir(parents=True, exist_ok=True, mode=0o700)
-    if os.name != "nt":
-        if root.stat().st_uid != os.getuid():
-            raise BridgeError("bridge_directory_owner_mismatch")
-        root.chmod(0o700)
+    try:
+        ensure_private_directory(candidate.absolute())
+    except RuntimeSafetyError as exc:
+        raise BridgeError(str(exc)) from None
     return root
 
 
 def atomic_write(path: Path, data: bytes) -> None:
     if path.is_symlink():
         raise BridgeError("symlink_file_rejected")
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    private_root(path.parent)
     fd, temporary = tempfile.mkstemp(prefix=".pending-", dir=path.parent)
     try:
         with os.fdopen(fd, "wb") as handle:
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
+        check_private_file(Path(temporary), created=True)
         os.replace(temporary, path)
-        if os.name != "nt":
-            path.chmod(0o600)
     finally:
         Path(temporary).unlink(missing_ok=True)
 
 
 def read_json(path: Path) -> dict:
+    try:
+        private_root(path.parent)
+        check_private_file(path)
+    except RuntimeSafetyError as exc:
+        raise BridgeError(str(exc)) from None
     if path.is_symlink() or not path.is_file():
         raise BridgeError("regular_local_file_required")
     with path.open("rb") as handle:
@@ -182,29 +187,57 @@ class Bridge:
         self.post(f"/api/bridge/jobs/{job_id}/failure", {"lease_id": lease["lease_id"], "reason": reason})
         (self.root / "claim.json").unlink(missing_ok=True)
 
-    def work_once(self, binary: str, model: str, *, timeout: int = 600) -> bool:
+    def work_once(self, binary: str, model: str, *, timeout: int = 600, approved: bool = False) -> bool:
         response = self.claim()
         if not response.get("job"):
             return False
-        job_id = response["job"]["job_id"]
+        self.execute_job(response["job"]["job_id"], binary, model, timeout=timeout, approved=approved)
+        return True
+
+    def execute_job(self, job_id: str, binary: str, model: str, *, timeout: int = 600, approved: bool = False):
+        # A process lock protects read/validate/generate/upload as one operation.
+        # A concurrent client must not report failure for the active first client.
+        try:
+            lock = PipelineFileLock(self.root / 'runner-execution.lock').acquire()
+        except PipelineLockBusy:
+            raise BridgeError('runner_execution_busy') from None
+        try:
+            return self._execute_locked(job_id, binary, model, timeout=timeout, approved=approved)
+        finally:
+            lock.release()
+
+    def _execute_locked(self, job_id: str, binary: str, model: str, *, timeout: int = 600, approved: bool = False):
         status = self.remote_status(job_id)
         if status.get("status") != "running" or status.get("expired"):
             raise BridgeError("job_not_active_for_model")
         folder = self.job_folder(job_id)
-        # Resume a finished local result after an ambiguous upload; never pay twice.
-        output = folder / "result.json"
+        output, attempt = folder / "result.json", folder / "execution-attempt.json"
+        if not output.exists() and not approved:
+            raise BridgeError("explicit_execution_approval_required")
+        # Validation and generation are separate from transport. Invalid results
+        # release the remote lease. A valid result on a failed upload is retained
+        # and resubmitted without a second model call.
         try:
             if not output.exists():
+                if attempt.exists():
+                    raise BridgeError("previous_execution_requires_new_job")
+                package = read_json(folder / "evidence.json")
+                if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,80}", model) or not 1 <= timeout <= 600:
+                    raise BridgeError("invalid_execution_budget")
+                atomic_write(attempt, canonical_bytes({"job_id": job_id, "input_hash": package["input_hash"],
+                    "model": model, "runner_version": REVIEWED_CODEX, "max_attempts": 1,
+                    "approved_at": int(time.time()), "timeout_seconds": timeout,
+                    "output_token_setting": 8000, "monetary_cap_verified": False}))
                 output = codex_once(self.root, folder, binary, model, timeout=timeout)
-            self.submit(job_id, output)
+            self.validate_result(job_id, output)
         except (BridgeError, ValueError, OSError, subprocess.SubprocessError) as exc:
-            if not output.exists():
-                try:
-                    self.report_failure(job_id, "timeout" if isinstance(exc, BridgeError) and str(exc) == "runner_timeout" else "runner_failed")
-                except BridgeError:
-                    pass  # Preserve claim marker when the failure cannot be acknowledged.
+            reason = "invalid_result" if output.exists() else "timeout" if str(exc) == "runner_timeout" else "runner_failed"
+            try:
+                self.report_failure(job_id, reason)
+            except (BridgeError, OSError, httpx.HTTPError):
+                pass  # Keep local evidence/attempt; recovery never repeats execution.
             raise
-        return True
+        return self.submit(job_id, output)
 
     def release_closed_claim(self, job_id: str) -> None:
         self.job_folder(job_id)
@@ -240,7 +273,7 @@ class Bridge:
         atomic_write(folder / "prompt.txt", prompt_for(package).encode("utf-8"))
         return response
 
-    def submit(self, job_id: str, path: Path) -> dict:
+    def validate_result(self, job_id: str, path: Path):
         folder = self.job_folder(job_id)
         lease = read_json(folder / "lease.json")
         parsed = ResearchResult.model_validate(read_json(path))
@@ -251,6 +284,11 @@ class Bridge:
         refs = set(parsed.evidence_ids) | {x for claim in [*parsed.facts, *parsed.inferences] for x in claim.evidence_ids}
         if not refs <= known:
             raise BridgeError("unknown_evidence_reference")
+        return lease, parsed
+
+    def submit(self, job_id: str, path: Path) -> dict:
+        folder = self.job_folder(job_id)
+        lease, parsed = self.validate_result(job_id, path)
         result = self.post(f"/api/bridge/jobs/{job_id}/result", {"lease_id": lease["lease_id"], "result": parsed.model_dump()})
         atomic_write(folder / "receipt.json", canonical_bytes({"status": result.get("status"), "result_hash": result.get("result_hash"), "review_status": result.get("review_status")}))
         (self.root / "claim.json").unlink(missing_ok=True)
@@ -262,6 +300,7 @@ class Bridge:
         folder = self.root / "jobs" / job_id
         if folder.is_symlink() or not folder.is_dir():
             raise BridgeError("unknown_local_job")
+        private_root(folder)
         return folder
 
 
@@ -282,10 +321,10 @@ def codex_once(root: Path, folder: Path, binary: str, model: str, timeout: int =
         raise BridgeError("invalid_model_id")
     # New dedicated HOME for this runner, never copy ~/.codex/auth.json.
     home = private_root(root / "runner-home")
-    codex_home = home / ".codex"
-    codex_home.mkdir(exist_ok=True, mode=0o700)
-    env = {k: v for k, v in os.environ.items() if k in {"PATH", "SystemRoot", "WINDIR", "TEMP", "TMP", "LANG"}}
-    env.update({"HOME": str(home), "USERPROFILE": str(home), "CODEX_HOME": str(codex_home)})
+    try:
+        env = child_environment(home)
+    except RuntimeSafetyError as exc:
+        raise BridgeError(str(exc)) from None
     version = subprocess.run([binary, "--version"], env=env, cwd=folder, capture_output=True, text=True, timeout=15)
     if version.returncode or version.stdout.strip() != f"codex-cli {REVIEWED_CODEX}":
         raise BridgeError("unreviewed_codex_version")
@@ -322,6 +361,9 @@ def codex_once(root: Path, folder: Path, binary: str, model: str, timeout: int =
         raise BridgeError("runner_process_failed") from None
     if child.returncode or not output.exists():
         raise BridgeError("runner_failed_or_login_required")
+    # Model-created output must not retain broader inherited file permissions.
+    # Existing result recovery never repairs permissions silently.
+    check_private_file(output, created=True)
     parsed = ResearchResult.model_validate(read_json(output))
     parsed.duration_seconds = round(time.monotonic() - started, 3)
     parsed.model, parsed.producer, parsed.producer_version = model, "codex", REVIEWED_CODEX
@@ -329,19 +371,42 @@ def codex_once(root: Path, folder: Path, binary: str, model: str, timeout: int =
     return output
 
 
+def login_codex(root: Path, binary: str, *, timeout: int = 300):
+    """Official interactive login with child-only HOME. Never copy auth files."""
+    home = private_root(root / "runner-home")
+    try:
+        env = child_environment(home)
+    except RuntimeSafetyError as exc:
+        raise BridgeError(str(exc)) from None
+    version = subprocess.run([binary, "--version"], env=env, cwd=home,
+        capture_output=True, text=True, timeout=15)
+    if version.returncode or version.stdout.strip() != f"codex-cli {REVIEWED_CODEX}":
+        raise BridgeError("unreviewed_codex_version")
+    result = subprocess.run([binary, "login"], env=env, cwd=home, timeout=timeout)
+    if result.returncode:
+        raise BridgeError("official_login_not_completed")
+    return {"login_command_completed": True, "model_called": False}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="ETF evidence bridge; never trades or publishes")
     parser.add_argument("--root", required=True)
     sub = parser.add_subparsers(dest="command", required=True)
     pair = sub.add_parser("pair"); pair.add_argument("--origin", required=True)
+    login = sub.add_parser("login"); login.add_argument("--binary", default="codex")
     sub.add_parser("doctor"); sub.add_parser("claim"); sub.add_parser("heartbeat")
     release = sub.add_parser("release"); release.add_argument("job_id")
     submit = sub.add_parser("submit"); submit.add_argument("job_id"); submit.add_argument("result")
     run = sub.add_parser("run-codex"); run.add_argument("job_id"); run.add_argument("--binary", default="codex"); run.add_argument("--model", required=True)
     work = sub.add_parser("work"); work.add_argument("--binary", default="codex"); work.add_argument("--model", required=True)
+    run.add_argument("--approve-execution", action="store_true")
+    work.add_argument("--approve-execution", action="store_true")
     work.add_argument("--max-jobs", type=int, default=1); work.add_argument("--idle-seconds", type=int, default=60); work.add_argument("--max-minutes", type=int, default=15)
     args = parser.parse_args()
     root = private_root(args.root)
+    if args.command == "login":
+        print(json.dumps(login_codex(root, args.binary)))
+        return 0
     if args.command == "doctor":
         print(json.dumps({"bridge_version": VERSION, "paired": (root / "device.secret").is_file(), "secret_store": "Windows DPAPI" if os.name == "nt" else "0600 permission-controlled file (not encryption)", "model_login": "not_inspected", "scheduled": False}))
         return 0
@@ -372,12 +437,14 @@ def main() -> int:
             value = bridge.submit(args.job_id, Path(args.result))
             print(json.dumps({"status": value.get("status"), "review_status": value.get("review_status"), "actionable": False}))
         elif args.command == "work":
-            if not 1 <= args.max_jobs <= 10 or not 10 <= args.idle_seconds <= 600 or not 1 <= args.max_minutes <= 120:
+            if not args.approve_execution:
+                raise BridgeError("explicit_execution_approval_required")
+            if args.max_jobs != 1 or not 10 <= args.idle_seconds <= 600 or not 1 <= args.max_minutes <= 120:
                 raise BridgeError("invalid_work_budget")
             deadline, completed = time.monotonic() + args.max_minutes * 60, 0
             while completed < args.max_jobs and time.monotonic() < deadline:
                 bridge.post("/api/bridge/heartbeat", {"bridge_version": VERSION, "login_state": "unknown", "mode": "codex_no_tools"})
-                if bridge.work_once(args.binary, args.model, timeout=max(1, min(600, int(deadline - time.monotonic())))):
+                if bridge.work_once(args.binary, args.model, timeout=max(1, min(600, int(deadline - time.monotonic()))), approved=True):
                     completed += 1
                     print(json.dumps({"completed_candidates": completed, "published": False}))
                 else:
@@ -386,9 +453,7 @@ def main() -> int:
             status = bridge.remote_status(args.job_id)
             if status.get("status") != "running" or status.get("expired"):
                 raise BridgeError("job_not_active_for_model")
-            folder = bridge.job_folder(args.job_id)
-            output = codex_once(root, folder, args.binary, args.model)
-            bridge.submit(args.job_id, output)
+            bridge.execute_job(args.job_id, args.binary, args.model, approved=args.approve_execution)
             print("研究结果已提交为待审核候选；没有自动发布或下单。")
     finally:
         bridge.http.close()

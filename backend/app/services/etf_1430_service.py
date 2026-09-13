@@ -291,35 +291,10 @@ class ETF1430WorkbenchService:
         inside = time(start_h, start_m) <= current <= time(end_h, end_m)
         return {"inside": inside, "start": self.config["decision_window"]["start"], "target": self.config["decision_window"]["target"], "end": self.config["decision_window"]["end"]}
 
-    def _qualification(self, quote: QuoteSnapshot | None, now: datetime) -> dict[str, Any]:
-        reasons: list[str] = []
-        if self.settings.market_provider == "mock":
-            reasons.append("mock_provider")
-        if quote is None:
-            reasons.append("quote_missing")
-        else:
-            if not quote.is_realtime:
-                reasons.append("quote_not_realtime")
-            if not quote.timestamp_verified:
-                reasons.append("source_timestamp_unverified")
-            if quote.degraded_reason:
-                reasons.append("quote_degraded")
-            quote_time = quote.quote_time
-            if quote_time.tzinfo is None:
-                quote_time = quote_time.replace(tzinfo=self.timezone)
-            age = (now.astimezone(self.timezone) - quote_time.astimezone(self.timezone)).total_seconds() / 60
-            if age > float(self.config["thresholds"].get("maximum_quote_age_minutes", 8)):
-                reasons.append("quote_stale")
-        window = self._decision_window(now)
-        if not window["inside"]:
-            reasons.append("outside_1430_window")
-        return {
-            "actionable": not reasons,
-            "research_only": True,
-            "reasons": reasons,
-            "decision_window": window,
-            "historical_1430_backtest": "not_qualified",
-        }
+    def _qualification(self, quote: QuoteSnapshot | None, now: datetime, *, bars=None, indicator=None) -> dict[str, Any]:
+        from app.services.qualification_gate import qualify_1430
+        window = {**self._decision_window(now), "maximum_quote_age_minutes": self.config["thresholds"].get("maximum_quote_age_minutes", 8)}
+        return qualify_1430(self.settings, quote, now, window, bars=bars, indicator=indicator)
 
     def _scenario_candles(self, last_bar: DailyBar, forecasts: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
         if last_bar is None:
@@ -404,7 +379,7 @@ class ETF1430WorkbenchService:
         rr = _finite(structure_metrics.get("risk_reward"))
         action = str((current_decision or {}).get("state") or "数据异常")
         now = datetime.now(self.timezone)
-        qualification = self._qualification(quote, now)
+        qualification = self._qualification(quote, now, bars=bars, indicator=indicator)
         current_price = _finite(quote.price if quote else None) or (_finite(float(bars[-1].close)) if bars else None)
         reasons = [
             f"趋势 {trend_score:.1f}",

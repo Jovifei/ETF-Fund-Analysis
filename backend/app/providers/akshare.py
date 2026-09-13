@@ -176,16 +176,14 @@ class AKShareProvider(MarketProvider):
         raw_volume: Any,
         raw_amount: Any,
     ) -> tuple[float | None, float | None, str]:
-        """Qualify Sina volume as shares only when amount/price units agree."""
+        """No independent absolute-unit evidence yet: preserve prices only.
 
-        volume = finite_or_none(raw_volume)
-        amount = finite_or_none(raw_amount)
-        if volume is None or amount is None or volume <= 0 or amount <= 0 or close <= 0:
-            return None, amount, SINA_PRICE_ONLY_SOURCE
-        unit_price = amount / volume
-        if not math.isfinite(unit_price) or abs(unit_price / close - 1.0) > SINA_UNIT_TOLERANCE:
-            return None, amount, SINA_PRICE_ONLY_SOURCE
-        return volume, amount, SINA_VOLUME_SOURCE
+        Scaling both fields by 100 leaves amount/volume unchanged. This ratio
+        cannot confer a unit contract; existing v102 rows are also quarantined.
+        A later approval must bind endpoint/SDK, independent observations and
+        date/basis scope. Never mutate old rows by a guessed factor.
+        """
+        return None, None, SINA_PRICE_ONLY_SOURCE
 
     def _parse_bars_frame(self, frame: Any, ts_code: str) -> list[BarRecord]:
         result: list[BarRecord] = []

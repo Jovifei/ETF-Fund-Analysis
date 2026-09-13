@@ -40,7 +40,7 @@ STOP = False
 
 _SUMMARY_SCALARS = frozenset({
     "inserted", "updated", "unchanged", "instruments", "count", "status", "received",
-    "requested", "missing", "degraded", "realtime", "source_timestamp_verified",
+    "requested", "completed", "coverage_complete", "target_trade_date", "reason", "missing", "degraded", "realtime", "source_timestamp_verified",
 })
 _CONTEXT_ID = re.compile(r"^[a-z][a-z0-9-]{0,95}$")
 _FAILURE_REASON = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
@@ -94,6 +94,7 @@ def sync_catalog(db, provider, *, enable_codes=()):
         known[code].enabled = True
     db.flush()
     summary = {"created": created, "updated": updated, "catalog_count": len(known), "enabled_requested": len(wanted), "scope": "provider_returned_catalog_not_certified_complete", "coverage": getattr(records, "coverage", {}), "synced_at": datetime.now(UTC).isoformat()}
+    summary["status"] = "succeeded" if records or wanted else "partial"
     coverage = summary['coverage']
     # Source fallback supports reading, not proof of all-market completeness.
     if coverage:
@@ -110,14 +111,9 @@ def sync_catalog(db, provider, *, enable_codes=()):
 
 def outcome_state(outcome: dict) -> str:
     """Do not turn skipped/partial/failed provider outcomes into green steps."""
-    state = outcome.get("status")
-    if state in {"failed", "error"}:
-        return "failed"
-    if state in {"partial", "incomplete", "skipped", "unavailable", "stale"}:
-        return "partial"
-    if any(outcome.get(key) for key in ("failures", "error", "errors", "failed_steps", "missing", "missing_codes", "skipped", "degraded", "price_only")):
-        return "partial"
-    return "succeeded"
+    from app.services.task_outcome import normalize_outcome
+    state = normalize_outcome(outcome)["status"]
+    return "partial" if state in {"skipped", "cancelled"} else state
 
 
 def bounded_step_summary(outcome: dict) -> dict:
@@ -256,7 +252,7 @@ def execute(job_id: str) -> int:
         with session_scope() as db:
             row = db.get(WorkspaceDataJob, job_id)
             if row.status == "running":
-                row.status = "partial" if failed else "succeeded"
+                row.status = "failed" if steps and all(step["status"] == "failed" for step in steps) else "partial" if failed else "succeeded"
                 row.finished_at = datetime.now(UTC)
                 row.result_json = {"steps": steps, "models_called": False, "qualification_changed": False}
         return 0

@@ -100,7 +100,11 @@ def chart_studies(rows: list[dict], config: dict, period: str) -> dict:
 def transform_chart(result: dict, period: str, config: dict, limit: int=500) -> dict:
     bars=aggregate_bars(result.get('bars',[]),period)
     series=(bars if period=="1d" and bars and "indicators" in bars[-1] else cached_indicator_series(bars,config)) if bars else []
-    studies=chart_studies(series,config,period)
+    if result.get("history_issue"):
+        series = [{**bar, "indicators": {}} for bar in bars]
+        studies = {"levels": [], "readings": [], "qualified": False, "actionable": False, "reason": result["history_issue"]}
+    else:
+        studies=chart_studies(series,config,period)
     return {**result,'interval':period,'bars':series[-limit:],'studies':studies,
         'core_snapshot_match': result.get('core_snapshot_match') if period=='1d' else None,
         'indicator_basis':'same_server_formulas_on_'+period,'support_resistance':studies,

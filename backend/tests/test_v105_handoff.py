@@ -108,7 +108,7 @@ def test_daily_refresh_success_is_once_per_local_day_and_failure_is_backed_off()
 
 
 def test_historical_comparison_uses_adjacent_cached_bars(db_session):
-    from backend.tests.test_v103_history import instrument
+    from test_v103_history import instrument
     from app.services.decision_board_service import DecisionBoardService
     inst=instrument(db_session, missing_volume=True)
     settings=get_settings().model_copy(update={'market_provider':'akshare'})

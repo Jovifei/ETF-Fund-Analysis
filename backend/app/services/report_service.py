@@ -81,6 +81,7 @@ class ReportService:
         if user_id is not None:
             emit_event(db, "report.generated", {"run_id": run_id, "filename": filename, "user_id": user_id})
         return {
+            "status": "succeeded",
             "run_id": run_id,
             "filename": filename,
             "path": str(path),

@@ -11,7 +11,7 @@ from app.core.config import get_settings
 from app.db.base import Base
 
 _settings = get_settings()
-_connect_args = {"check_same_thread": False} if _settings.database_url.startswith("sqlite") else {}
+_connect_args = {"check_same_thread": False, "timeout": 30} if _settings.database_url.startswith("sqlite") else {}
 _engine: Engine = create_engine(
     _settings.database_url,
     echo=_settings.sql_echo,
@@ -27,6 +27,9 @@ if _settings.database_url.startswith("sqlite"):
         cursor = dbapi_connection.cursor()
         try:
             cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA busy_timeout=30000")
+            if _settings.database_url not in {"sqlite://", "sqlite:///:memory:"}:
+                cursor.execute("PRAGMA journal_mode=WAL")
         finally:
             cursor.close()
 

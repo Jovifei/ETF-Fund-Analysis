@@ -10,12 +10,16 @@ window.addEventListener('message',event=>{
   if(value?.type!=='etf-board:state')return;
   if(!HORIZONS.includes(value.horizon))return;
   // An earlier horizon response must not erase a newer keystroke.
-  if(Number.isSafeInteger(value.revision)&&value.revision>=editRevision){
+  if(Number.isSafeInteger(value.revision)&&value.revision>=editRevision&&value.revision>=0){
     editRevision=value.revision;
     state.horizon=value.horizon;
     state.filter=typeof value.filter==='string'?value.filter.slice(0,128):'';
     document.querySelector('#horizonSelect').value=String(state.horizon);
     document.querySelector('#searchInput').value=state.filter;
+    // The initial HTML is disabled so a slow script cannot lose early edits.
+    // Only a validated same-origin host message completes the handshake.
+    document.querySelector('#horizonSelect').disabled=false;
+    document.querySelector('#searchInput').disabled=false;
   }
   state.favorites=Array.isArray(value.favorites)?value.favorites.filter(x=>/^\d{6}\.(SH|SZ|BJ)$/.test(x)):[];
   state.favoriteBusy=Array.isArray(value.favoriteBusy)?value.favoriteBusy:[];

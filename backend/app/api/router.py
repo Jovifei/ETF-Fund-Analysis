@@ -58,7 +58,7 @@ from app.core.security import (
     session_cookie_name,
 )
 from app.db.session import SessionLocal, get_db
-from app.models import AuthUser, EventLog, Instrument, ReportArtifact
+from app.models import AuthUser, EventLog, Instrument, ReportArtifact, TaskRun
 from app.ocr.image_validation import ImageValidationError, read_limited_bytes
 from app.services.analysis_persistence_service import AnalysisStorageNotMigrated
 from app.services.auth_service import (
@@ -924,6 +924,19 @@ def task_history(
     limit: int = Query(default=30, ge=1, le=200),
 ) -> list[dict]:
     return DashboardService(settings).task_runs(db, limit)
+
+
+@private_router.get("/tasks/runs/{run_id}", dependencies=[Depends(require_admin)])
+def task_run_status(run_id: str, db: Annotated[Session, Depends(get_db)], response: Response) -> dict:
+    """Bounded status projection; no provider calls or arbitrary task payloads."""
+    response.headers["Cache-Control"] = "private, no-store"
+    if len(run_id) > 64:
+        raise HTTPException(status_code=404, detail="task not found")
+    row = db.scalar(select(TaskRun).where(TaskRun.run_id == run_id))
+    if row is None:
+        raise HTTPException(status_code=404, detail="task not found")
+    return {"run_id": row.run_id, "task_name": row.task_name, "status": row.status,
+            "started_at": row.started_at, "finished_at": row.finished_at}
 
 
 @private_router.post(

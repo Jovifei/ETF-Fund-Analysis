@@ -33,7 +33,9 @@ def test_mock_pipeline_builds_research_layers(bootstrapped):
 
 def test_bootstrap_includes_market_context_step_generating_mock_observations(bootstrapped):
     context = bootstrapped["steps"]["refresh_market_context"]
-    assert context["status"] == "succeeded"
+    # Collection returned all mock records, but degraded evidence is not full success.
+    assert context["status"] == "partial"
+    assert context["coverage_complete"] is False
     # 默认 registry 含 9 张卡片，其中 7 张启用（A股/美股大盘指数 + 半导体代理）；
     # mock 环境下会为启用卡片生成 degraded mock 观测（demo 隔离，非真实数据）。
     assert context["configured"] == 9

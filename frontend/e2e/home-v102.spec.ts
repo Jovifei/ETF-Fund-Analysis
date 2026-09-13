@@ -42,6 +42,9 @@ test('industry and concept remain visible without decision snapshots', async ({p
 
 test('market context cards expose persisted history and catalog rows open the same detail route', async ({page}) => {
   await page.goto('/')
+  const runtime = await (await page.request.get('/api/workspace/status')).json()
+  expect(runtime.workspace_version).toBe(runtime.app_version)
+  await expect(page.locator('.workspace-footer')).toContainText(runtime.app_version)
   await expect(page.locator('.market-context-card').first()).toBeVisible()
   await page.locator('.market-context-card').first().click()
   await expect(page.locator('.market-context-detail')).toBeVisible()
@@ -52,4 +55,28 @@ test('market context cards expose persisted history and catalog rows open the sa
   const detailCode = await row.locator('a').first().getAttribute('href')
   await row.click()
   await expect(page).toHaveURL(new RegExp(`${detailCode?.replace('.', '\\.').replace('/', '\\/')}$`))
+})
+
+
+test('slow embedded scripts cannot lose early search and horizon edits', async ({page}) => {
+  let allowScript!: () => void
+  const gate = new Promise<void>(resolve => { allowScript = resolve })
+  await page.route('**/assets/decision_board_embed.js', async route => {
+    await gate
+    await route.continue()
+  })
+  await page.goto('/', {waitUntil:'commit'})
+  const frame = page.frameLocator('iframe[title="原版 ETF 决策快照"]')
+  try {
+    await expect(frame.locator('#searchInput')).toBeDisabled()
+    await expect(frame.locator('#horizonSelect')).toBeDisabled()
+  } finally {
+    allowScript()
+  }
+  await expect(frame.locator('#searchInput')).toBeEnabled()
+  await frame.locator('#horizonSelect').selectOption('20')
+  await frame.locator('#searchInput').fill('512480')
+  await expect(frame.locator('.decision-data-row')).toHaveCount(1)
+  await expect(frame.locator('#searchInput')).toHaveValue('512480')
+  await expect(frame.locator('#horizonSelect')).toHaveValue('20')
 })

@@ -1,72 +1,23 @@
-# v105 接收、部署与阶段性审核（2026-09-12）
+# 当前状态：v1.0.5 审核修复分支（2026-09-13）
 
-## v105 当前公网状态（2026-09-11）
+这是代码和隔离验证状态，不是生产部署收据。PR #33：`fix/v105-audit-blockers-20260912` → `codex/v105-handoff-local-20260910`；基线 `6d09ddb6cfde39d9d8e6a30783f9bdee838bc379`。没有合并 main、移动标签、修改用户账户或生产数据库。
 
-- 公网 `https://etf.joviluma.com` 当前运行量能修复提交 `208858e` 的独立源目录 `deploy-v105-208858e`；API、worker healthy，scheduler running，公网 health 返回 production、`public_composite`、认证开启。
-- 切换前 PostgreSQL 备份为 `fund_decision_20260911_084351.sql.gz`，精确回滚 Compose 和 v1.0.4 源目录均保留。账户、持仓和自选只读计数保持 `3/0/6`。
-- 当前服务器时刻尚未进入盘中报价窗口；两只 ETF 日线与报价沿用最新已完成交易日和待核实公开快照，scheduler 将在交易时段按既有节奏刷新。完整记录见 `docs/PRODUCTION_DEPLOYMENT_RECEIPT_V105_20260911.md`。
-- 当前运行源码目录为 `deploy-v105-406cad0`（缓存修复提交 `406cad0`）；22:25 维护重算已修复新浪回退成交量丢失：35 个启用标的 `akshare:sina:v102`、缺量 0，指标 35/35 到 2026-09-11，决策板 `数据异常=0`。夜间整体 stale 仅因 15:01 公开报价超过时效且实时资格未通过；legacy 看板已固定 no-store，登录后不会复用旧快照。
+## 必须纠正的旧结论
 
-## v105 阶段性全面审核（2026-09-12）
+旧文档的“新浪 v102 量额恢复即资格通过”不再成立。均价比值不能认证绝对单位；历史价格断点未完成独立行情与公司行动对账。588200 已找到 1:3 拆分公告，但未因此更改原记录、成本、收益或研究资格。代码启用更严格门禁后，部分标的可能显示更多明确缺口，不允许为减少异常数量而放宽门禁。
 
-- 审核报告见 `docs/CODE_AUDIT_BLOCKERS_20260912.md`。当前最先落地的阻碍是新浪单位资格证据不足、未复权价格断点、15:15结算冲突、partial 任务误记 succeeded、远端 ci/workspace-ci 双失败，以及 Codex 页面登录与 Bridge 目录保护冲突。
-- 本阶段只做只读审核和知识归档，没有以审核报告替代修复，也没有改变生产数据、账户或配置。
+## 当前代码
 
-## v105 当前本地接收结果（2026-09-11）
+应用/前端版本统一 1.0.5；数据契约 cn-fund-shares-cny-v1.0.3-audit，特征 feature-store-v0.7.3-input-mask，指标 ind-v0.7.3-audit，预测 similarity-corridor-v0.7.3-audit，策略 signal-v0.7.2-qualification-audit。迁移 head 保持 d40609090002。旧快照不能只改版本字段冒充重算。
 
-- ZIP 校验、`verify_bundle.py`、固定基线 `46c713d4` 和补丁清单均通过；独立分支为 `codex/v105-handoff-local-20260910`。
-- 包内第一阶段与 R1/R2/R3 必要修复已分小提交完成；完整后端、Vue、旧 JS、普通/认证浏览器通过。Node 24 与目标 Node 22 的版本差异、专用 PostgreSQL/Docker 条件未完成。
-- v105 本地真实副本 URL 为 `http://127.0.0.1:8084`。目录 1,658 ETF / 382 LOF；两只 ETF 各 1,198 根日线至 2026-09-10；三指数真实 OHLC 缓存为上证/沪深300 1,198、 中证全指 799。
-- 中证全指市场上下文仍旧缺口，Sina 成交量、实时资格、因子/预测资格继续阻断；SQLite scheduler 与 worker 并发写入出现 `database is locked`，已停止本地 scheduler 并保留证据。
-- 完整本地收据见 `docs/LOCAL_ACCEPTANCE_RECEIPT_V105_20260911.md`；生产收据见 `docs/PRODUCTION_DEPLOYMENT_RECEIPT_V105_20260911.md`；本轮未合并 `main`、未改标签。
+累计修复覆盖新浪资格冻结、价格断点拒绝、量额缺失 mask、全输入哈希、同版本前值、统一结算目标、partial/failed 传播、衍生任务恢复、指数盘后任务、跨进程流水线锁、14:30交易日/未来报价门禁、子进程独立登录、NTFS ACL、无效产物终态、不重复付费以及发布 manifest。
 
-本包基线为 `46c713d4a7f6f247461ec9b075948f25c6741df7`；新增内容用补丁与文件SHA256绑定。应用包版本仍为1.0.4；本地接收证据与生产部署证据分别记录，不相互替代。
+新增只读诊断 scripts/audit_research_inputs.py；新回归覆盖 Windows 中文编码和原版表慢脚本丢筛选。原 WorkBuddy 模板、统一总览和详情均保留。主流水线、工作站浏览器和 Windows/PostgreSQL 必须在同一个最终 SHA 核实；中间失败及其后跳过项不计通过。
 
-先读 `docs/HANDOFF_V105_LOCAL_PACKAGE.md`。待补齐原表重复展示、图表虚线/全屏实测、AI交互、真实数据与Windows部署验收；不能沿用旧报告声明这些通过。平衡刷新默认关闭。以下历史记录原样保留，生产状态必须重新现场核对。
+## 仍未获得的资格
 
----
+真实新浪绝对单位认证、完整公司行动/复权总收益序列、真实14:30历史回测与前瞻观察、本人Codex登录/付费响应/端到端公网回传没有因为CI通过而自动完成。14:30最终 actionable 保持 false。只读审核工具退出0只表示成功产出报告，不表示数据合格。
 
-# v1.0.4 增量接手
+[逐项关闭矩阵](docs/audits/CLOSURE_20260913.md) · [版本记录](docs/versions/V1.0.5.md) · [交接](HANDOFF.md)。最后测试收据与固定应用SHA由 docs/audits 下的最终验收文件补充。
 
-当前功能分支基于main 57470ea，见docs/versions/V1.0.4.md、docs/USER_GUIDE_V104.md和docs/LOCAL_ACCEPTANCE_V104.md。先核对固定SHA与CI，再加载原私有配置/原库副本。不删除以下历史记录，不把分支实现当生产已升级。模型API默认关闭，启用必须初始化独立密钥和本人确认费用。
-
-## 2026-09-10 公网生产状态（当前）
-
-- 公网 `https://etf.joviluma.com` 已运行提交 `3e4b9fa` 对应的 v1.0.4；API 与 worker healthy，scheduler running，公网 health 返回 `version=1.0.4`、`provider=public_composite`、认证开启。
-- 本轮数据刷新修复把 AKShare bounded timeout 从 20 秒提高到 60 秒。scheduler 的全量 `refresh_quotes` 已成功写入 35 个启用标的，并在 14:35、14:40、14:45 连续复核成功；`510300.SH`、`512480.SH` 最新检查时均有 2026-09-10 14:45 左右报价，按未完成实时资格契约标为非实时/待核实。
-- 受审计补历史任务使两只 ETF 各 1,197 根日线到 2026-09-09；三只指数缓存各 1,197 根 OHLC 到 2026-09-09。成交量缺失、实时资格和研究因子门禁保持原状态。
-- 生产 PostgreSQL 备份、旧 v1.0.4 源目录、旧镜像和回滚 Compose 均保留。完整记录见 `docs/PRODUCTION_DEPLOYMENT_RECEIPT_V104_20260910.md`。
-
-旧段落中的“未部署服务器”是部署前的历史记录，以本节为当前事实源；本轮未合并 `main`。
-
-## 2026-09-10 本地接收与持久部署
-
-- 固定接收 `910e77fc866f123e0d18103048243513e3edb666` 已在独立 clone 验证基线 `57470eabcad35a6038574e893e7245f0d1adb387` 为祖先；原工程脏区未触碰。
-- 远端固定 SHA 的 `workspace-ci` 成功，`public-data-v104-observation` 成功；完整 `ci` 的旧 JS 合同测试失败已在本地复现并由 `b8112d4` 修复，未合并 main、未推送审核修复、未部署服务器。
-- 本地持久副本 URL 为 `http://127.0.0.1:8082`，运行 v1.0.4 / `akshare` / 数据库认证；目录实际为 ETF 1,658、LOF 382，行业 90、概念 614、全市场 1。
-- 两只 ETF 各 1,197 根日线至 2026-09-09；有限准备任务选择 10 只、实际写入 137 根；报价任务因上游不可用保持失败/partial，不提升实时或 actionable 资格。
-- 新闻任务实际写入 200 条 `akshare:eastmoney`；publication 使用市场时区、fetched 使用 UTC；缺失/未来时间显示待核实。完整收据见 `docs/LOCAL_ACCEPTANCE_RECEIPT_V104_20260910.md`。
-- 本地副本重启前后 schema、目录、目标 ETF bars、板块统计和 integrity 均一致；Docker daemon 不可用，临时 PostgreSQL/镜像 build/container smoke 未宣称通过。
-- 2026-09-10 12:58 再次执行两只 ETF 的 `quotes` 重试仍为 `TaskExecutionError/partial`；本地最新日线为 2026-09-09，今天日线尚未形成且当前公共报价能力不可用。
-- 生产修复后，本机 8082 的外部 live env 已同步为 60 秒并重启；14:54–14:55 对两只 ETF 的受审计报价重试返回 2/2，旧失败记录保留为历史证据。
-
-# 当前开发：v1.0.3 历史与研究入口修复
-
-## 2026-09-09 部署状态
-
-- 服务器已运行审核分支 `codex/v103-local-review-20260909` 的 `c60a15788d5206a407fc6d8a4238137a9ee19b80`；API/worker healthy，公网 health 返回 v1.0.3。
-- 服务器保留旧镜像回滚 tag和 PostgreSQL 备份；生产仍为 `public_composite`、`ALLOW_MOCK_FALLBACK=false`、模型/OCR关闭。
-- 中证全指已通过 `akshare:index:tx-v103` 补齐 1,196 根；缺量 ETF 仅展示价格指标，因子诊断保持研究态、不可操作。
-- OCR v5 本地合成图已通过适配器验证；Vibe 上游 Windows 资格和真人模型仍待独立用户登录/环境门禁。
-
-基线204a31cbc0214a6e80389224c238bc897b2279af（codex/parallel-v102-gapfix-20260908），分支fix/v103-history-research-20260909。应用/前端版本1.0.3；不得把旧main当作已包含工作站。未合并main、未移动旧标签、未执行本版生产部署。
-
-已提交应用阶段：aabc390c历史逐标的隔离；cec11c6b指数缓存/收藏/人工复盘/因子选择/归档；4bb08a77原盘中状态兼容；0ecbad7d无凭据缓存重算与首次指数注册表。最终交付固定SHA见PR与接收Prompt，不能部署只包含传输材料的中间提交。
-
-必须保留市场总览中的原WorkBuddy模板、唯一ETF详情、行业/概念与全目录搜索。OHLC有缓存时可显示K线与价格指标；缺量、旧单位和未校准研究不升级为操作级信号。1/3/5/10与当前动作、指标公式不变。
-
-先读[版本](docs/versions/V1.0.3.md)→[验证](docs/VALIDATION_V103.md)→[本地接收L1–L5](docs/LOCAL_ACCEPTANCE_V103.md)→[历史存储](docs/HISTORY_STORAGE_V103.md)→[开源落点](docs/OSS_APPLIED_V103.md)。真实行情网络/权限、OCR模型、本人Codex与Vibe真实任务留待本地；API密钥安全存储、行情包可信重导入/自动双向同步、月度预测与自动参数进化尚未实现。
-
-Schema未新增，Alembic head仍d40609090002。ETF数据契约仍cn-fund-shares-cny-v1.0.1；旧单位修复必须原有审计流程，不能直接乘系数。原账户/持仓/数据库不被初始化覆盖。
-
-上一版生产记录已原文保留在[部署前文档](docs/archive/pre-v103/STATUS.md)，只描述2026-09-07的历史收据，不代表v1.0.3已上线。当前服务器状态必须现场核实。
+[原状态完整归档](docs/archive/pre-audit-close-20260913/STATUS.md)。旧生产收据保留当时证据，但本轮未访问服务器，不能作为今天的现场状态。
