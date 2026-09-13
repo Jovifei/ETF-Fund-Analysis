@@ -1,0 +1,60 @@
+name: apply-audit-continuation
+on:
+  push:
+    branches: [fix/v105-audit-blockers-20260912]
+    paths: ['.integration/continued-edit.json']
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.repository == 'Jovifei/ETF-Fund-Analysis' && github.ref == 'refs/heads/fix/v105-audit-blockers-20260912'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Materialize exact reviewed source edits
+        run: |
+          python - <<'PY'
+          import hashlib, json, pathlib, subprocess
+          edits = json.loads(pathlib.Path('.integration/continued-edit.json').read_text())
+          allowed = ('backend/app/', 'backend/tests/', 'config/', 'docs/', 'bridge/', 'frontend/', 'scripts/')
+          prepared = {}
+          for name, spec in edits.items():
+              path = pathlib.Path(name)
+              assert not path.is_absolute() and '..' not in path.parts
+              assert name == '.gitignore' or name.startswith(allowed)
+              assert not path.is_symlink()
+              raw = path.read_bytes() if path.exists() else b''
+              assert hashlib.sha256(raw).hexdigest() == spec['before'], (name, 'preimage mismatch')
+              lines = raw.decode('utf-8').splitlines(keepends=True)
+              for start, end, replacement in reversed(spec['edits']):
+                  assert 0 <= start <= end <= len(lines)
+                  lines[start:end] = [replacement]
+              output = ''.join(lines).encode('utf-8')
+              assert hashlib.sha256(output).hexdigest() == spec['after'], (name, 'postimage mismatch')
+              prepared[name] = output
+          for name, output in prepared.items():
+              path = pathlib.Path(name); path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(output)
+          subprocess.run(['git', 'add', '--', *prepared], check=True)
+          subprocess.run(['git', 'diff', '--cached', '--check'], check=True)
+          PY
+      - name: Run preserved and new qualification regressions
+        run: |
+          pip install -e '.[dev]'
+          pytest backend/tests/test_audit_continuation_20260913.py backend/tests/test_audit_data_20260912.py backend/tests/test_v101_data_access.py backend/tests/test_v103_history.py backend/tests/test_v103_indexes.py -q
+          python -m compileall -q backend/app
+      - name: Commit application files without overwriting concurrent work
+        env:
+          EXPECTED_HEAD: ${{ github.sha }}
+        run: |
+          test "$(git ls-remote origin refs/heads/fix/v105-audit-blockers-20260912 | cut -f1)" = "$EXPECTED_HEAD"
+          git rm .integration/continued-edit.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(audit): enforce endpoint units, compatible comparisons and raw factor masks'
+          git push origin HEAD:refs/heads/fix/v105-audit-blockers-20260912
