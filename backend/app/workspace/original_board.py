@@ -14,6 +14,13 @@ def original_board_frame():
     if html.count(start) != 1 or html.count(stop) != 1:
         raise RuntimeError("original_board_template_boundary_changed")
     report = html[html.index(start):html.index(stop) + len(stop)]
+    # Markup becomes visible before external scripts finish loading. Keep edits
+    # disabled until the embed binds its listeners and accepts the host state;
+    # otherwise slow assets discard a real user's early filter/horizon changes.
+    for marker in ('<input id="searchInput"', '<select id="horizonSelect"'):
+        if report.count(marker) != 1:
+            raise RuntimeError("original_board_controls_changed")
+        report = report.replace(marker, marker + " disabled")
     return HTMLResponse(
         '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'

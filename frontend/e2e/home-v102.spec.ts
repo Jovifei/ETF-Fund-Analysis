@@ -53,3 +53,27 @@ test('market context cards expose persisted history and catalog rows open the sa
   await row.click()
   await expect(page).toHaveURL(new RegExp(`${detailCode?.replace('.', '\\.').replace('/', '\\/')}$`))
 })
+
+
+test('slow embedded scripts cannot lose early search and horizon edits', async ({page}) => {
+  let allowScript!: () => void
+  const gate = new Promise<void>(resolve => { allowScript = resolve })
+  await page.route('**/assets/decision_board_embed.js', async route => {
+    await gate
+    await route.continue()
+  })
+  await page.goto('/', {waitUntil:'commit'})
+  const frame = page.frameLocator('iframe[title="原版 ETF 决策快照"]')
+  try {
+    await expect(frame.locator('#searchInput')).toBeDisabled()
+    await expect(frame.locator('#horizonSelect')).toBeDisabled()
+  } finally {
+    allowScript()
+  }
+  await expect(frame.locator('#searchInput')).toBeEnabled()
+  await frame.locator('#horizonSelect').selectOption('20')
+  await frame.locator('#searchInput').fill('512480')
+  await expect(frame.locator('.decision-data-row')).toHaveCount(1)
+  await expect(frame.locator('#searchInput')).toHaveValue('512480')
+  await expect(frame.locator('#horizonSelect')).toHaveValue('20')
+})

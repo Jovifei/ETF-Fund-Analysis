@@ -10,14 +10,24 @@ function frame() {
   const parent = {postMessage: (value: unknown) => sent.push(value)}
   const state = {filter:'',horizon:1,board:null,connectionError:false}
   const window = {parent,location:{origin:'https://example.test'},addEventListener:(key:string,fn:any)=>{handlers[key]=fn}}
-  const document = {querySelector:(key:string) => nodes[key] ??= {value:'',innerHTML:'',getBoundingClientRect:()=>({height:800}),addEventListener:(event:string,fn:any)=>{inputs[key+event]=fn}}}
+  const document = {querySelector:(key:string) => nodes[key] ??= {disabled:true,value:'',innerHTML:'',getBoundingClientRect:()=>({height:800}),addEventListener:(event:string,fn:any)=>{inputs[key+event]=fn}}}
   const renderAll = vi.fn()
   runInNewContext(source,{window,document,state,HORIZONS:[1,3,5,10],renderAll,esc:(value:string)=>value,
     requestAnimationFrame:(fn:any)=>fn(),ResizeObserver:class{observe(){} disconnect(){}}})
   const deliver=(data:any)=>handlers.message({source:parent,origin:window.location.origin,data})
-  return {state,deliver,handlers,inputs,parent,renderAll,sent}
+  return {state,deliver,handlers,inputs,parent,renderAll,sent,nodes}
 }
 describe('original-template host protocol',()=>{
+  it('only a valid host handshake enables early user input',()=>{
+    const f=frame(), search=f.nodes['#searchInput'], horizon=f.nodes['#horizonSelect']
+    expect(search.disabled).toBe(true);expect(horizon.disabled).toBe(true)
+    f.handlers.message({origin:'https://other.test',source:f.parent,data:{type:'etf-board:state',revision:0,horizon:1}})
+    f.deliver({type:'etf-board:state',revision:-1,horizon:1})
+    expect(search.disabled).toBe(true)
+    f.deliver({type:'etf-board:state',revision:7,horizon:5,filter:'512480'})
+    expect(search.disabled).toBe(false);expect(horizon.disabled).toBe(false)
+    expect(search.value).toBe('512480');expect(horizon.value).toBe('5')
+  })
   it('does not erase a newer filter when an old horizon response arrives',()=>{
     const f=frame()
     f.deliver({type:'etf-board:state',revision:0,horizon:1,filter:'',board:{rows:[]}})
