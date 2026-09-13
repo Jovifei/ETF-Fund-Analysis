@@ -221,6 +221,8 @@ class TaskService:
         from app.services.task_outcome import coverage_outcome
         result.update(coverage_outcome(result.get("requested", 0), result.get("observed", 0)))
         result.setdefault("unsupported", 0)
+        if not result.get("eligible") and not result.get("requested"):
+            result.update(status="skipped", coverage_complete=False, reason="no_enabled_context")
         return result
 
     def _market_context_failure_result(self, db: Session, exc: BaseException, run_id: str) -> dict:

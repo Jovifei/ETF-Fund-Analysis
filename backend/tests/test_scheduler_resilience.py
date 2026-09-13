@@ -117,6 +117,9 @@ def _run_fake_tick(
         def close(self):
             return None
 
+    monkeypatch.setattr(scheduler, "settled_pipeline_tasks",
+        lambda *a, **k: list(scheduler.DAILY_DEPENDENCIES) if "refresh_bars" in success_due else [])
+    monkeypatch.setattr("app.services.settlement.session_refresh_due", lambda *a, **k: False)
     monkeypatch.setattr(scheduler, "session_scope", fake_scope)
     monkeypatch.setattr(scheduler, "TradingCalendarService", FakeCalendar)
     monkeypatch.setattr(scheduler, "TaskService", FakeTasks)

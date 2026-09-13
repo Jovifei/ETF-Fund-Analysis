@@ -64,6 +64,7 @@ def run(db, settings, *, selected=None):
         "correlations": correlations, "correlation_dates": counts,
         "correlation_method": "mean_date_local_spearman_min_4_instruments", "instruments": int(panel.ts_code.nunique()),
         "actionable": False, "qualification": "mock" if settings.market_provider == "mock" else "not_qualified",
-        "price_only_instruments": sum(reason == "volume_missing_for_shared_signals" for reason in issues.values()),
+        "price_only_instruments": int(panel.groupby("ts_code", observed=True)[["volume", "amount"]]
+            .apply(lambda group: group.isna().any().any()).sum()),
         "limitations": ["诊断不是样本外验证", "相关性不代表因果或增量收益", "基线日线可见性与可成交性尚未封版", "缺量标的仅参与价格因子，量价因子覆盖率保持为空", "不会修改策略权重或启用因子"],
     }

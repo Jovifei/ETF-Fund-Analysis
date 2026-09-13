@@ -160,6 +160,20 @@ def _run_guarded(
     return True
 
 
+# Retry each stage by its own target session, not just by the upstream bars job.
+DAILY_DEPENDENCIES = {
+    "refresh_bars": (),
+    "refresh_indicators": ("refresh_bars",),
+    "refresh_forecasts": ("refresh_bars", "refresh_indicators"),
+}
+
+
+def settled_pipeline_tasks(db, settings, now):
+    from app.services.settlement import session_refresh_due
+    return [name for name, dependencies in DAILY_DEPENDENCIES.items()
+            if session_refresh_due(db, settings, name, now, dependencies=dependencies)]
+
+
 def tick() -> dict:
     settings = get_settings()
     provider = create_provider(settings)
@@ -302,7 +316,8 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
         from app.services.settlement import SETTLEMENT_CUTOFF, session_refresh_due
         daily_window = (now.time().replace(tzinfo=None) >= SETTLEMENT_CUTOFF
                         or (is_trade_day and 8 <= now.hour < 15))
-        after_close_due = daily_window and session_refresh_due(db, settings, "refresh_bars", now)
+        daily_due_tasks = settled_pipeline_tasks(db, settings, now) if daily_window else []
+        after_close_due = bool(daily_due_tasks)
 
         if (
             not after_close_due
@@ -332,6 +347,8 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
                 ("refresh_decision_board", {}),
                 ("generate_report", {}),
             ):
+                if task_name in DAILY_DEPENDENCIES and task_name not in daily_due_tasks:
+                    continue
                 _run_guarded(
                     tasks,
                     db,

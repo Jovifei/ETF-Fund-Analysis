@@ -981,7 +981,7 @@ def test_refresh_market_context_task_reports_bounded_counts_and_same_run_event(t
     tasks.market_context = MarketContextService(provider, settings)
     result = tasks.run(db, "refresh_market_context", run_id="market-context-task")
 
-    assert result["status"] == "succeeded"
+    assert result["status"] == "skipped"
     assert result["configured"] == 2
     assert result["eligible"] == 0
     assert result["observed"] == 0
@@ -992,7 +992,7 @@ def test_refresh_market_context_task_reports_bounded_counts_and_same_run_event(t
     assert result["unsupported"] == 0
     assert provider.calls == 0
     task = db.scalar(select(TaskRun).where(TaskRun.run_id == "market-context-task"))
-    assert task is not None and task.status == "succeeded"
+    assert task is not None and task.status == "skipped"
     event = db.scalar(
         select(EventLog)
         .where(EventLog.event_type == "market_context.updated")
@@ -1000,7 +1000,7 @@ def test_refresh_market_context_task_reports_bounded_counts_and_same_run_event(t
     )
     assert event is not None
     assert event.payload_json["run_id"] == "market-context-task"
-    assert event.payload_json["status"] == "succeeded"
+    assert event.payload_json["status"] == "skipped"
     db.close()
     engine.dispose()
 
@@ -1048,17 +1048,18 @@ def test_full_pipeline_market_context_capability_failure_is_partial_without_mock
     settings = Settings(_env_file=None, market_context_path=config_path)
     provider = _ContextCountingProvider(error=CapabilityUnavailable("not supported"))
     tasks = TaskService(settings, provider=provider)
-    tasks.market.sync_instruments = lambda db, **kwargs: {"created": 0}  # type: ignore[method-assign]
-    tasks.market.refresh_daily_bars = lambda db, **kwargs: {"inserted": 0}  # type: ignore[method-assign]
-    tasks.indicators.refresh_all = lambda db, **kwargs: {"created": 0}  # type: ignore[method-assign]
-    tasks.forecasts.refresh_all = lambda db, **kwargs: {"created": 0}  # type: ignore[method-assign]
-    tasks.signals.refresh_all = lambda db, **kwargs: {"created": 0}  # type: ignore[method-assign]
+    tasks.market.sync_instruments = lambda db, **kwargs: {"status": "succeeded", "unchanged": 1}  # type: ignore[method-assign]
+    tasks.market.refresh_daily_bars = lambda db, **kwargs: {"status": "succeeded", "unchanged": 1}  # type: ignore[method-assign]
+    tasks.indicators.refresh_all = lambda db, **kwargs: {"status": "succeeded", "unchanged": 1}  # type: ignore[method-assign]
+    tasks.forecasts.refresh_all = lambda db, **kwargs: {"status": "succeeded", "unchanged": 1}  # type: ignore[method-assign]
+    tasks.signals.refresh_all = lambda db, **kwargs: {"status": "succeeded", "unchanged": 1}  # type: ignore[method-assign]
 
     engine, db = _context_session()
     result = tasks.run(db, "full_pipeline", run_id="market-context-partial", report=False)
 
     assert result["status"] == "partial"
-    assert result["failed_steps"] == ["refresh_market_context"]
+    # Empty quote/news/sector outputs are no longer silently successful.
+    assert set(result["failed_steps"]) == {"refresh_market_context", "refresh_quotes", "refresh_news", "refresh_sector_snapshots"}
     context = result["steps"]["refresh_market_context"]
     assert context["status"] == "failed"
     assert context["unsupported"] == 1
@@ -1074,6 +1075,8 @@ def test_full_pipeline_market_context_capability_failure_is_partial_without_mock
 
 def test_scheduler_invokes_market_context_as_its_own_due_task(monkeypatch: pytest.MonkeyPatch) -> None:
     import app.scheduler as scheduler
+    monkeypatch.setattr(scheduler, "settled_pipeline_tasks", lambda *a, **k: [])
+    monkeypatch.setattr("app.services.settlement.session_refresh_due", lambda *a, **k: False)
 
     engine, db = _context_session()
     settings = Settings(_env_file=None, market_context_refresh_minutes=15)
@@ -1213,11 +1216,11 @@ def test_market_context_pre_provider_validation_failure_reports_zero_calls(tmp_p
     settings = Settings(_env_file=None, market_context_path=config_path)
     provider = _ContextCountingProvider()
     tasks = TaskService(settings, provider=provider)
-    tasks.market.sync_instruments = lambda db, **kwargs: {"created": 0}  # type: ignore[method-assign]
-    tasks.market.refresh_daily_bars = lambda db, **kwargs: {"inserted": 0}  # type: ignore[method-assign]
-    tasks.indicators.refresh_all = lambda db, **kwargs: {"created": 0}  # type: ignore[method-assign]
-    tasks.forecasts.refresh_all = lambda db, **kwargs: {"created": 0}  # type: ignore[method-assign]
-    tasks.signals.refresh_all = lambda db, **kwargs: {"created": 0}  # type: ignore[method-assign]
+    tasks.market.sync_instruments = lambda db, **kwargs: {"status": "succeeded", "unchanged": 1}  # type: ignore[method-assign]
+    tasks.market.refresh_daily_bars = lambda db, **kwargs: {"status": "succeeded", "unchanged": 1}  # type: ignore[method-assign]
+    tasks.indicators.refresh_all = lambda db, **kwargs: {"status": "succeeded", "unchanged": 1}  # type: ignore[method-assign]
+    tasks.forecasts.refresh_all = lambda db, **kwargs: {"status": "succeeded", "unchanged": 1}  # type: ignore[method-assign]
+    tasks.signals.refresh_all = lambda db, **kwargs: {"status": "succeeded", "unchanged": 1}  # type: ignore[method-assign]
     engine, db = _context_session()
 
     result = tasks.run(db, "full_pipeline", run_id="pre-provider-failure", report=False)
@@ -1234,6 +1237,8 @@ def test_market_context_pre_provider_validation_failure_reports_zero_calls(tmp_p
 def test_scheduler_context_failure_isolated_and_terminal_attempt_throttles_retry(monkeypatch: pytest.MonkeyPatch) -> None:
     import app.scheduler as scheduler
     from app.services.task_service import TaskExecutionError
+    monkeypatch.setattr(scheduler, "settled_pipeline_tasks", lambda *a, **k: [])
+    monkeypatch.setattr("app.services.settlement.session_refresh_due", lambda *a, **k: False)
 
     engine, db = _context_session()
     settings = Settings(_env_file=None, market_context_refresh_minutes=15)

@@ -1,10 +1,11 @@
-"""Daily completion is tied to a settled exchange session, not task wall time."""
+"""Completion belongs to a settled exchange session and its input generation."""
 from datetime import datetime, time, timedelta
 from sqlalchemy import select
 from app.models import TaskRun
 from app.services.trading_calendar_service import TradingCalendarService
 
 SETTLEMENT_CUTOFF = time(15, 15)
+
 
 def settled_session(settings, at=None):
     at = at or datetime.now(settings.timezone)
@@ -14,26 +15,42 @@ def settled_session(settings, at=None):
         day -= timedelta(days=1)
     return TradingCalendarService(settings).effective_trade_date(day)
 
-def session_refresh_due(db, settings, task_name, now, retry_minutes=15):
-    """After-settlement or next-session catchup; partial attempts back off."""
-    local = now.astimezone(settings.timezone)
-    # Do not launch an after-close chain during the known unsettled gap.
+
+def session_refresh_due(db, settings, task_name, now, retry_minutes=15, dependencies=()):
+    """Partial attempts back off; yesterday's success cannot complete today.
+
+    A newer input-stage result invalidates derived completion even when both
+    refer to the same trade date. No old successful output masks a later failure.
+    """
+    local = now.astimezone(settings.timezone) if now.tzinfo else now.replace(tzinfo=settings.timezone)
     wall = local.time().replace(tzinfo=None)
     if time(15, 0) < wall < SETTLEMENT_CUTOFF:
         return False
     target = settled_session(settings, now).isoformat()
-    runs = db.scalars(select(TaskRun).where(TaskRun.task_name == task_name)
-        .order_by(TaskRun.started_at.desc()).limit(30)).all()
-    for run in runs:
-        result = run.result_json or {}
-        if (run.status == "succeeded" and result.get("target_trade_date") == target
-                and result.get("coverage_complete") is True):
-            return False
-    if runs:
-        run = runs[0]
-        last = run.finished_at or run.started_at
-        if last is not None:
-            last = last.replace(tzinfo=settings.timezone) if last.tzinfo is None else last
-            if (local - last).total_seconds() < retry_minutes * 60:
-                return False
+    run = db.scalar(select(TaskRun).where(TaskRun.task_name == task_name)
+        .order_by(TaskRun.started_at.desc(), TaskRun.id.desc()).limit(1))
+    if run is None:
+        return True
+    result = run.result_json or {}
+    def localize(value):
+        return value.replace(tzinfo=settings.timezone) if value.tzinfo is None else value.astimezone(settings.timezone)
+    from app.services.task_outcome import normalize_outcome
+    complete = (run.status == "succeeded" and result.get("target_trade_date") == target
+                and result.get("coverage_complete") is True and normalize_outcome(result)["status"] == "succeeded")
+    if complete:
+        finished = localize(run.finished_at or run.started_at)
+        for dependency in dependencies:
+            latest = db.scalar(select(TaskRun).where(TaskRun.task_name == dependency,
+                TaskRun.status.in_(("succeeded", "partial")), TaskRun.finished_at.is_not(None))
+                .order_by(TaskRun.finished_at.desc()).limit(1))
+            if latest and localize(latest.finished_at) > finished:
+                complete = False
+                break
+    if complete:
+        return False
+    last = run.finished_at or run.started_at
+    # Unknown legacy outcomes retain backoff; a known older session does not.
+    same_or_unknown_target = result.get("target_trade_date") in {None, target}
+    if same_or_unknown_target and last is not None and (local - localize(last)).total_seconds() < retry_minutes * 60:
+        return False
     return True
