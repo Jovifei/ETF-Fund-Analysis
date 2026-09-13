@@ -4,6 +4,7 @@ Windows ACL checks use SIDs, not localized account names. Existing insecure
 folders fail closed. Only a newly created empty directory is provisioned.
 """
 from __future__ import annotations
+import base64
 import json
 import os
 from pathlib import Path
@@ -62,8 +63,13 @@ $rules = @($a.GetAccessRules($true,$true,[System.Security.Principal.SecurityIden
     env = {k: v for k, v in os.environ.items() if k.upper() in {'PATH', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP'}}
     env.update(ETF_ACL_TARGET=str(path), ETF_ACL_CREATE='1' if created else '0', ETF_ACL_DIRECTORY='1' if directory else '0')
     try:
-        run = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', script],
-            env=env, capture_output=True, text=True, timeout=20)
+        # -EncodedCommand is UTF-16LE on Windows PowerShell. A multiline
+        # -Command inherited CI stdin could wait for a continuation/EOF; do
+        # not inherit stdin or depend on shell quoting for a security check.
+        encoded = base64.b64encode(script.encode('utf-16le')).decode('ascii')
+        run = subprocess.run(['powershell.exe', '-NoLogo', '-NoProfile',
+            '-NonInteractive', '-EncodedCommand', encoded],
+            env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
         value = json.loads(run.stdout) if run.returncode == 0 else {}
         if not acl_is_private(value, value.get('current', ''), require_protected=directory):
             raise RuntimeSafetyError('bridge_directory_acl_unsafe')

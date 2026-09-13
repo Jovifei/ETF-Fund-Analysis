@@ -3,6 +3,7 @@ import {ref} from 'vue'
 const mode=ref('api')
 const powershell=String.raw`# 在项目根目录的 PowerShell 执行；这是隔离的本地研究目录。
 $root = 'E:\AI_Tools\Other\ETF-Agent-Bridge'
+# login仅为Codex子进程设置HOME/USERPROFILE/CODEX_HOME。
 # 不修改本PowerShell的HOME/USERPROFILE。新空目录会设置私有ACL；旧目录不安全则停止。
 python bridge/etf_agent_bridge.py --root $root login
 python bridge/etf_agent_bridge.py --root $root pair --origin http://127.0.0.1:8082
