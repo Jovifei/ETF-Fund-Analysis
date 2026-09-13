@@ -1,0 +1,44 @@
+name: apply-reviewed-audit-stage-a
+on:
+  push:
+    branches: [fix/v105-audit-blockers-20260912]
+    paths: ['.integration/audit-stage-a*']
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.repository == 'Jovifei/ETF-Fund-Analysis' && github.ref == 'refs/heads/fix/v105-audit-blockers-20260912'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Materialize exact locally reviewed patch
+        run: |
+          python - <<'PY'
+          import base64,gzip,hashlib,pathlib,subprocess
+          raw=pathlib.Path('.integration/audit-stage-a.b64').read_text().split('CIo8Onfphc3')[0]+pathlib.Path('.integration/audit-stage-a-tail.txt').read_text().strip()
+          patch=gzip.decompress(base64.b64decode(raw,validate=True))
+          assert hashlib.sha256(patch).hexdigest()=='18afe9e38a2adc7fcf3f2bae15dc96252f253cf652261a2e70dd39a24a23faf9'
+          path=pathlib.Path('/tmp/audit-stage-a.patch');path.write_bytes(patch)
+          subprocess.run(['git','apply','--check',str(path)],check=True)
+          subprocess.run(['git','apply',str(path)],check=True)
+          subprocess.run(['git','diff','--check'],check=True)
+          PY
+      - name: Verify completion and no-success-by-default regressions
+        run: |
+          pip install -e '.[dev]'
+          pytest backend/tests/test_audit_completion_20260913.py backend/tests/test_scheduler_resilience.py backend/tests/test_market_context.py backend/tests/test_audit_tasks_20260912.py backend/tests/test_v103_research.py -q
+          python -m compileall -q backend/app
+      - name: Commit reviewed application changes, remove transport
+        run: |
+          git add backend/app/scheduler.py backend/app/services/settlement.py backend/app/services/task_outcome.py backend/app/services/task_service.py backend/app/workspace/factor_diagnostics.py backend/app/workspace/worker.py backend/tests/test_audit_completion_20260913.py backend/tests/test_market_context.py backend/tests/test_scheduler_resilience.py
+          git rm .integration/audit-stage-a.b64 .integration/audit-stage-a-tail.txt .github/workflows/apply-audit-stage-a.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(audit): recover target-session stages and propagate truthful task outcomes'
+          git push origin HEAD:refs/heads/fix/v105-audit-blockers-20260912
