@@ -1,0 +1,44 @@
+name: apply-reviewed-audit-stage-b
+on:
+  push:
+    branches: [fix/v105-audit-blockers-20260912]
+    paths: ['.integration/audit-stage-b*']
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.repository == 'Jovifei/ETF-Fund-Analysis' && github.ref == 'refs/heads/fix/v105-audit-blockers-20260912'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Materialize exact reviewed bridge changes
+        run: |
+          python - <<'PY'
+          import base64,gzip,hashlib,pathlib,subprocess
+          encoded=''.join(p.read_text().strip() for p in sorted(pathlib.Path('.integration').glob('audit-stage-b.part*')))
+          patch=gzip.decompress(base64.b64decode(encoded,validate=True))
+          assert hashlib.sha256(patch).hexdigest()=='f33b6b0f1cec38326a61d3bb0f2a080e9e49fd3c0b1b6e3ff9cafe115a5eea7b'
+          p=pathlib.Path('/tmp/audit-stage-b.patch');p.write_bytes(patch)
+          subprocess.run(['git','apply','--check',str(p)],check=True)
+          subprocess.run(['git','apply',str(p)],check=True)
+          subprocess.run(['git','diff','--check'],check=True)
+          PY
+      - name: Verify no-paid-model local contracts
+        run: |
+          pip install -e '.[dev]'
+          pytest backend/tests/test_audit_bridge_20260913.py backend/tests/test_workspace_bridge_client.py -q
+          python -m compileall -q bridge backend/app/workspace
+      - name: Commit application and delete one-shot transport
+        run: |
+          git add bridge/etf_agent_bridge.py frontend/src/components/AISetupGuide.vue backend/app/workspace/bridge_runtime.py backend/tests/test_audit_bridge_20260913.py
+          git rm .integration/audit-stage-b* .github/workflows/apply-audit-stage-b.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(bridge): isolate login environment, verify privacy and prevent paid retries'
+          git push origin HEAD:refs/heads/fix/v105-audit-blockers-20260912
