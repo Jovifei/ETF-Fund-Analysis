@@ -39,13 +39,34 @@ def read_only_audit(settings, codes):
         engine.dispose()
 
 
+def summarize_audit(report: dict) -> dict:
+    """Count history and indicator gaps separately, never as certification.
+
+    A current, structurally readable history can still have an absent or
+    outdated indicator. The headline must include that case without counting
+    an instrument twice when both categories are blocked.
+    """
+    items = report["items"]
+    return {
+        "audit_written": True,
+        "instruments": len(items),
+        "history_blocked": sum(bool(item.get("blockers")) for item in items),
+        "indicator_blocked": sum(bool(item.get("indicator_blockers")) for item in items),
+        "blocked": sum(bool(item.get("blockers") or item.get("indicator_blockers")) for item in items),
+        "qualification_granted": False,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--codes", nargs="+", required=True, help="Explicit codes, e.g. 510300.SH 588200.SH")
     parser.add_argument("--output", type=Path, required=True, help="New private JSON receipt; never overwrites")
+    parser.add_argument("--fail-on-blockers", action="store_true",
+        help="Write the receipt, then exit 3 for any history or indicator blocker (not a qualification grant)")
     args = parser.parse_args()
     try:
         report = read_only_audit(get_settings(), args.codes)
+        summary = summarize_audit(report)
         output = args.output.absolute()
         if any(p.is_symlink() for p in (output, *output.parents)):
             raise ValueError("audit_output_symlink_rejected")
@@ -54,9 +75,10 @@ def main() -> int:
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
             json.dump(report, stream, ensure_ascii=False, indent=2, allow_nan=False)
             stream.write("\n")
-        print(json.dumps({"audit_written": True, "instruments": len(report["items"]),
-            "blocked": sum(bool(i["blockers"]) for i in report["items"]), "qualification_granted": False}))
-        return 0
+        print(json.dumps(summary))
+        # Code 2 denotes an audit/IO failure. Code 3 denotes a successfully
+        # written audit that found blockers. Default mode remains compatible.
+        return 3 if args.fail_on_blockers and summary["blocked"] else 0
     except Exception as exc:
         # Do not print SQLAlchemy/OS exception strings: they can contain URLs,
         # paths, passwords or rows. The type is sufficient for private diagnosis.
