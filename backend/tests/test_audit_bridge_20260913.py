@@ -25,7 +25,7 @@ def test_login_is_a_child_only_environment_and_same_private_runner(tmp_path, mon
     assert bridge.private_root(root/'runner-home')==root/'runner-home'
     assert not any('KEY' in key or 'TOKEN' in key for key in kwargs['env'])
     ui=Path(__file__).resolve().parents[2]/'frontend/src/components/AISetupGuide.vue'
-    text=ui.read_text()
+    text=ui.read_text(encoding="utf-8")
     assert '$env:HOME =' not in text and '$env:USERPROFILE =' not in text
     assert ' login' in text and '--approve-execution' in text
 
