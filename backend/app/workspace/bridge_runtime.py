@@ -59,7 +59,7 @@ $rules = @($a.GetAccessRules($true,$true,[System.Security.Principal.SecurityIden
 })
 @{current=$me.Value;owner=$a.GetOwner([System.Security.Principal.SecurityIdentifier]).Value;protected=$a.AreAccessRulesProtected;rules=$rules} | ConvertTo-Json -Depth 5 -Compress
 '''
-    env = {k: v for k, v in os.environ.items() if k in {'PATH', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP'}}
+    env = {k: v for k, v in os.environ.items() if k.upper() in {'PATH', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP'}}
     env.update(ETF_ACL_TARGET=str(path), ETF_ACL_CREATE='1' if created else '0', ETF_ACL_DIRECTORY='1' if directory else '0')
     try:
         run = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', script],
@@ -97,7 +97,7 @@ def ensure_private_directory(path: Path) -> Path:
 def child_environment(home: Path) -> dict[str, str]:
     ensure_private_directory(home)
     codex_home = ensure_private_directory(home / '.codex')
-    env = {k: v for k, v in os.environ.items() if k in {'PATH', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'LANG'}}
+    env = {k: v for k, v in os.environ.items() if k.upper() in {'PATH', 'SYSTEMROOT', 'WINDIR', 'TEMP', 'TMP', 'LANG'}}
     env.update(HOME=str(home), USERPROFILE=str(home), CODEX_HOME=str(codex_home))
     return env
 

@@ -1,0 +1,72 @@
+name: audit-platforms
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: audit-platforms-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  postgres-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: audit
+          POSTGRES_PASSWORD: CHANGE_ME_CI_ONLY
+          POSTGRES_DB: etf_audit_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U audit -d etf_audit_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_POSTGRES_URL: postgresql+psycopg://audit:CHANGE_ME_CI_ONLY@127.0.0.1:5432/etf_audit_ci
+      APP_ENV: test
+      ALLOW_DESTRUCTIVE_TEST_DATABASE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -e '.[dev]'
+      - name: Explicit temporary PostgreSQL concurrency and migration contract
+        run: pytest backend/tests/test_multi_user_auth.py -q --junitxml=/tmp/pg-audit.xml
+      - name: Final migration graph check on same disposable database
+        env:
+          DATABASE_URL: postgresql+psycopg://audit:CHANGE_ME_CI_ONLY@127.0.0.1:5432/etf_audit_ci
+          AUTH_ENABLED: 'false'
+          AUTO_CREATE_SCHEMA: 'false'
+          MARKET_PROVIDER: mock
+        run: alembic upgrade head && alembic check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: postgres-audit-${{ github.run_id }}
+          path: /tmp/pg-audit.xml
+          retention-days: 14
+  windows-bridge:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -e '.[dev]'
+      - name: Actual NTFS ACL and child environment, no model calls
+        run: python -m pytest backend/tests/test_audit_bridge_20260913.py backend/tests/test_workspace_bridge_client.py -q --junitxml=windows-bridge.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-bridge-audit-${{ github.run_id }}
+          path: windows-bridge.xml
+          retention-days: 14

@@ -111,7 +111,7 @@ def test_catalog_is_separate_from_light_daily_refresh():
 def test_worker_detects_degraded_quotes_and_sector_errors():
     from app.workspace.worker import outcome_state
     assert outcome_state({'inserted':2,'degraded':2,'realtime':0})=='partial'
-    assert outcome_state({'error':'TimeoutError','boards':{}})=='partial'
+    assert outcome_state({'error':'TimeoutError','boards':{}})=='failed'  # no successful outputs
 
 
 def test_network_timeout_is_hard_and_process_is_reaped():
@@ -348,7 +348,7 @@ def test_sina_price_only_is_not_zero_volume_shared_signal_input(v101_db):
     v101_db.add(DailyBar(instrument_id=inst.id,trade_date=date(2026,9,4),adjust='none',open=1,high=2,low=1,close=1.2,volume=None,source='akshare:sina:v101',quality_hash='b'*64));v101_db.flush()
     with pytest.raises(HistoryContractError,match='price_only'):
         require_current_history(v101_db,Settings(_env_file=None).model_copy(update={'market_provider':'akshare'}))
-    assert outcome_state({'price_only':1,'instruments':1})=='partial'
+    assert outcome_state({'price_only':1,'instruments':1})=='failed'  # input inventory is not completed work
 
 
 def test_live_launcher_ignores_unrelated_demo_environment(tmp_path,monkeypatch):

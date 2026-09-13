@@ -311,7 +311,7 @@ function restoreDecisionScroll() {
 }
 function decisionRefreshLabel(payload = state.decisionBoard) {
   const pending = state.decisionRefreshTask;
-  if (pending) return `刷新任务 ${pending.status || 'queued'} · 等待新快照`;
+  if (pending) return `刷新任务 ${pending.status || 'queued'} · ${pending.terminal ? '本次等待已结束，可核对任务后重试' : '等待任务状态'}`;
   return payload?.refresh_state || '只读快照';
 }
 function syncDecisionRefreshButton() {
@@ -361,8 +361,14 @@ async function loadDecisionBoard(silent = false) {
     if ([1, 3, 5, 10].includes(selectedHorizon)) state.decisionUi.horizon = selectedHorizon;
     const changed = !state.decisionBoard || payload.snapshot_id !== state.decisionBoard.snapshot_id;
     state.decisionBoard = payload;
-    if (changed && state.decisionRefreshTask) state.decisionRefreshTask = null;
-    else if (state.decisionRefreshTask && payload.refresh_state) state.decisionRefreshTask.status = payload.refresh_state;
+    const pending = state.decisionRefreshTask;
+    if (pending && !pending.terminal) {
+      let task = null;
+      try { task = await api(`/api/tasks/runs/${encodeURIComponent(pending.taskId)}`, {signal: controller.signal}); }
+      catch (error) { if (error.name === 'AbortError' || error.message === 'unauthorized') throw error; }
+      if (controller.signal.aborted || state.decisionRefreshTask !== pending) return;
+      state.decisionRefreshTask = window.ETFDecisionRefresh.reconcile(pending, task);
+    }
     renderDecisionBoard();
     if (changed && state.decisionUi.openDetailCode) openDecisionDetail(state.decisionUi.openDetailCode, true);
   } catch (error) {
@@ -378,7 +384,7 @@ async function requestDecisionBoardRefresh() {
   if (state.decisionRefreshTask?.status === 'queued' || state.decisionRefreshTask?.status === 'running') return;
   try {
     const result = await api('/api/decision-board/refresh', {method: 'POST', body: JSON.stringify({})});
-    state.decisionRefreshTask = {taskId: result.task_id || result.run_id || '—', status: result.status || 'queued'};
+    state.decisionRefreshTask = {taskId: result.task_id || result.run_id || '—', status: result.status || 'queued', startedAt: Date.now(), terminal: false};
     syncDecisionRefreshButton();
     renderDecisionBoard();
     toast(`决策快照刷新已排队：${state.decisionRefreshTask.taskId}`);
