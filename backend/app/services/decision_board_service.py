@@ -37,6 +37,7 @@ from app.utils.indicators_v05 import calculate_indicators
 from app.utils.numbers import finite_or_none
 from app.utils.support_resistance import build_support_resistance
 
+READ_MODEL_VERSION = "decision-read-v106"
 HORIZONS = (1, 3, 5, 10)
 SLOT_TIMES = (
     "09:00", "09:30", "10:30", "11:30", "13:00", "13:20", "13:40",
@@ -294,7 +295,22 @@ class DecisionBoardService:
         )
         if snapshot is None:
             return None if snapshot_id is not None else self._empty_payload(horizon)
-        return self._select_horizon(dict(snapshot.payload_json or {}), horizon)
+        payload = self._select_horizon(dict(snapshot.payload_json or {}), horizon)
+        from app.utils.hashing import stable_hash
+        compatible = (payload.get("read_model_version") == READ_MODEL_VERSION
+                      and payload.get("config_hash") == stable_hash(self.settings.load_strategy()))
+        payload["read_contract"] = "version_matched" if compatible else "legacy_snapshot_requires_rebuild"
+        if not compatible:
+            payload["freshness"] = "stale"
+            payload["data_status"] = {**payload.get("data_status", {}), "freshness": "stale"}
+            payload["source_status"] = {**payload.get("source_status", {}), "freshness": "stale", "actionable": False}
+            for row in payload.get("rows", []):
+                row["historical_grade"] = row.get("grade")
+                row.update(grade="数据异常", freshness="stale", data_status="legacy_snapshot_requires_rebuild",
+                           grade_reason="旧快照与当前读取合同不一致，请通过任务重算。", actionable=False,
+                           forecasts={}, forecast_scenario=[])
+            payload = self._select_horizon(payload, horizon)
+        return payload
 
     def read_instrument(self, db: Session, ts_code: str, *, horizon: int = 1, snapshot_id: str | None = None) -> dict | None:
         payload = self.read_latest(db, horizon=horizon, snapshot_id=snapshot_id)
@@ -319,11 +335,11 @@ class DecisionBoardService:
     def _prune_snapshot_dates(self, db: Session) -> None:
         """Retain every snapshot on the latest 20 actual trading dates only."""
 
-        snapshots = db.scalars(
-            select(DecisionBoardSnapshot).order_by(
+        snapshots = db.execute(
+            select(DecisionBoardSnapshot.id, DecisionBoardSnapshot.generated_at).order_by(
                 DecisionBoardSnapshot.generated_at.desc(), DecisionBoardSnapshot.id.desc()
-            )
-        ).all()
+            ).execution_options(yield_per=256)
+        )
         kept_dates: list[date] = []
         stale_ids: list[int] = []
         for snapshot in snapshots:
@@ -341,7 +357,8 @@ class DecisionBoardService:
             elif trade_date not in kept_dates:
                 stale_ids.append(snapshot.id)
         if stale_ids:
-            db.execute(delete(DecisionBoardSnapshot).where(DecisionBoardSnapshot.id.in_(stale_ids)))
+            for start in range(0, len(stale_ids), 500):
+                db.execute(delete(DecisionBoardSnapshot).where(DecisionBoardSnapshot.id.in_(stale_ids[start:start+500])))
             db.flush()
 
     def _build_payload(self, db: Session, generated_at: datetime) -> dict:
@@ -369,7 +386,12 @@ class DecisionBoardService:
             raise ValueError("decision_groups_do_not_partition_rows")
         freshness = "fresh" if rows and all(row["freshness"] == "fresh" for row in rows) else "stale" if rows else "missing"
         status_counts = {status: sum(row["data_status"] == status for row in rows) for status in sorted({row["data_status"] for row in rows})}
+        from app.services.settlement import settled_session
+        from app.utils.hashing import stable_hash
         return {
+            "read_model_version": READ_MODEL_VERSION,
+            "config_hash": stable_hash(self.settings.load_strategy()),
+            "target_trade_date": settled_session(self.settings, generated_at).isoformat(),
             "snapshot_id": uuid4().hex,
             "generated_at": generated_at.isoformat(),
             "next_refresh_at": next_decision_board_refresh(generated_at, self.calendar).isoformat(),
@@ -411,6 +433,15 @@ class DecisionBoardService:
         comparison_basis = "previous_saved_confirmed_date_not_intraday_quote"
         from app.providers.data_contract import history_issues
         blocked = history_issues(db, self.settings, [instrument.id]).get(instrument.id)
+        from app.services.snapshot_contract import snapshot_issues
+        from app.services.settlement import settled_session
+        expected_date = None if self.settings.market_provider == "mock" else settled_session(self.settings, generated_at)
+        indicator_issues = snapshot_issues(indicator, self.settings, expected_date, kind="indicator")
+        forecast_issues = {str(h): snapshot_issues(value, self.settings, expected_date, kind="forecast")
+                           for h, value in forecasts.items()}
+        forecasts = {h: value for h, value in forecasts.items() if not forecast_issues[str(h)]}
+        if indicator_issues:
+            indicator = None
         display_history = None
         if blocked or indicator is None:
             from app.workspace.read_model import chart_data
@@ -438,12 +469,20 @@ class DecisionBoardService:
             "used_for_derived_values": False, "reason": blocked}
             if blocked else self._provisional_status(db, instrument.id, provisional, generated_at))
         forecast_map = {str(horizon): self._forecast_payload(forecasts.get(horizon)) for horizon in HORIZONS}
-        today_return = percent_points_to_ratio(quote.pct_change) if quote is not None else finite_or_none(values.get("return_1d"))
-        previous_confirmed_return = self._latest_confirmed_daily_return(db, instrument.id)
+        from app.services.return_observation import observed_returns
+        return_context = observed_returns(db, self.settings, instrument.id, quote, generated_at)
+        today_return = return_context["value"]
+        previous_confirmed_return = return_context["previous_return"]
         if provisional_status["used_for_derived_values"]:
             derived = provisional_status["derived"]
             values = dict(derived["indicator_values"])
+            from types import SimpleNamespace
+            return_context = observed_returns(db, self.settings, instrument.id,
+                SimpleNamespace(quote_time=provisional.observed_at, pct_change=provisional.pct_change_percent_points,
+                                degraded_reason=None), generated_at)
+            return_context["basis"] = "provisional_research_observation"
             today_return = percent_points_to_ratio(provisional.pct_change_percent_points)
+            previous_confirmed_return = return_context["previous_return"]
             grade_row = {
                 **grade_row,
                 **classify_row(
@@ -460,8 +499,6 @@ class DecisionBoardService:
             confirmed_levels = {}
             if not provisional_status["used_for_derived_values"]:
                 freshness, data_status = "stale", "historical_price_only"
-            if not provisional_status["used_for_derived_values"] and quote is None and len(history) >= 2:
-                today_return = history[-1]["close"] / history[-2]["close"] - 1
         if provisional_status["used_for_derived_values"]:
             history = [
                 *history,
@@ -517,6 +554,10 @@ class DecisionBoardService:
             "return_5d": finite_or_none(values.get("return_5d")),
             "returns": {
                 "today": today_return,
+                "as_of_date": return_context["as_of_date"],
+                "basis": return_context["basis"],
+                "target_trade_date": return_context["target_trade_date"],
+                "previous_as_of_date": return_context["previous_as_of_date"],
                 "previous_confirmed_return": previous_confirmed_return,
                 "previous_day_delta": (
                     round(today_return - previous_return, 12)
@@ -546,6 +587,7 @@ class DecisionBoardService:
             "rsi": rsi,
             "chan": chan,
             "sector": metric(grade_row.get("sector"), {"label": "未验证 / 不可用", "status": "missing", "coverage_count": 0}),
+            "snapshot_issues": {"indicator": indicator_issues, "forecasts": forecast_issues},
             "indicator_comparison": {
                 "as_of_date": indicator.as_of_date.isoformat() if indicator is not None else (display_history or {}).get("source_as_of"),
                 "previous_as_of_date": (previous_values or {}).get("_as_of_date"),
@@ -583,10 +625,11 @@ class DecisionBoardService:
             return "missing", "indicator_missing"
         if quote is None:
             return "stale", "quote_missing_using_confirmed_history"
-        quote_time = quote.fetched_at or quote.quote_time
-        if quote_time.tzinfo is None:
-            quote_time = quote_time.replace(tzinfo=SHANGHAI)
-        target = generated_at if generated_at.tzinfo else generated_at.replace(tzinfo=SHANGHAI)
+        quote_time = quote.quote_time
+        if quote_time is None or str(quote.degraded_reason or "").startswith("source_timestamp_missing"):
+            return "stale", "quote_source_time_missing"
+        quote_time = quote_time.astimezone(SHANGHAI) if quote_time.tzinfo else quote_time.replace(tzinfo=SHANGHAI)
+        target = generated_at.astimezone(SHANGHAI) if generated_at.tzinfo else generated_at.replace(tzinfo=SHANGHAI)
         if quote_time > target:
             return "stale", "quote_future_at_snapshot_generation"
         if quote_time.date() != target.date() or (target - quote_time).total_seconds() > 8 * 60:
@@ -598,8 +641,8 @@ class DecisionBoardService:
     def _provisional_status(self, db: Session, instrument_id: int, row, generated_at: datetime) -> dict:
         if row is None:
             return {"status": "missing", "used_for_derived_values": False, "reason": "no_provisional_input"}
-        observed = row.observed_at if row.observed_at.tzinfo else row.observed_at.replace(tzinfo=SHANGHAI)
-        target = generated_at if generated_at.tzinfo else generated_at.replace(tzinfo=SHANGHAI)
+        observed = row.observed_at.astimezone(SHANGHAI) if row.observed_at.tzinfo else row.observed_at.replace(tzinfo=SHANGHAI)
+        target = generated_at.astimezone(SHANGHAI) if generated_at.tzinfo else generated_at.replace(tzinfo=SHANGHAI)
         if observed > target or observed.date() != target.date() or (target - observed).total_seconds() > 8 * 60:
             return {"status": "stale", "used_for_derived_values": False, "reason": "provisional_outside_snapshot_window", "observed_at": observed.isoformat(), "source": row.source, "timestamp_verified": bool(row.timestamp_verified)}
         complete = all(
@@ -633,10 +676,10 @@ class DecisionBoardService:
             "derived": derived,
         }
 
-    @staticmethod
-    def _history_and_levels(db: Session, instrument_id: int) -> tuple[list[dict], dict]:
+    def _history_and_levels(self, db: Session, instrument_id: int) -> tuple[list[dict], dict]:
         bars = db.scalars(
-            select(DailyBar).where(DailyBar.instrument_id == instrument_id).order_by(DailyBar.trade_date)
+            select(DailyBar).where(DailyBar.instrument_id == instrument_id)
+            .order_by(DailyBar.trade_date.desc(), DailyBar.id.desc()).limit(160)
         ).all()
         history = [
             {
@@ -648,15 +691,13 @@ class DecisionBoardService:
                 "volume": item.volume,
                 "is_forecast": False,
             }
-            for item in bars[-160:]
+            for item in reversed(bars)
         ]
         if not history:
             return history, {"status": "missing", "label": "历史不足"}
         # 支撑压力走统一快照服务（250 根 + 真实成交额口径，与其他页面完全一致）。
-        try:
-            return history, self.support_resistance.latest_or_compute(db, instrument_id)
-        except Exception:
-            return history, {"status": "missing", "label": "支撑压力计算不足", "chan_zone_approx": None}
+        levels = self.support_resistance.latest(db, instrument_id)
+        return history, levels or {"status": "missing", "label": "支撑压力快照待生成", "chan_zone_approx": None}
 
     @staticmethod
     def _latest_confirmed_daily_return(db: Session, instrument_id: int) -> float | None:
@@ -672,19 +713,32 @@ class DecisionBoardService:
     def _forecast_scenario(history: list[dict], forecasts: dict[str, dict]) -> list[dict]:
         if not history:
             return []
-        current = float(history[-1]["close"])
-        anchors = {0: current}
-        for horizon in HORIZONS:
-            expected = finite_or_none((forecasts.get(str(horizon)) or {}).get("expected_return"))
-            anchors[horizon] = current * (1 + expected) if expected is not None else current
-        candles: list[dict] = []
-        previous = current
-        for day in range(1, 11):
+        current = finite_or_none(history[-1].get("close"))
+        basis_date = history[-1].get("date")
+        if current is None or current <= 0 or not basis_date:
+            return []
+        accepted = {h: {**forecasts[str(h)], "expected_return": value} for h in HORIZONS
+                    if (value := finite_or_none(forecasts.get(str(h), {}).get("expected_return"))) is not None}
+        if not accepted or any(row.get("as_of_date") != basis_date for row in accepted.values()):
+            return []
+        if any(not row.get("model_version") for row in accepted.values()) or len({row.get("model_version") for row in accepted.values()}) != 1:
+            return []
+        if any(row["expected_return"] <= -1 for row in accepted.values()):
+            return []
+        anchors = {0: current, **{h: current * (1 + row["expected_return"]) for h, row in accepted.items()}}
+        if not all(isfinite(value) and value > 0 for value in anchors.values()):
+            return []
+        candles, previous = [], current
+        for day in range(1, max(accepted) + 1):
             upper_key = min(key for key in anchors if key >= day)
             lower_key = max(key for key in anchors if key < day)
             lower = anchors[lower_key]
             close = lower + (anchors[upper_key] - lower) * (day - lower_key) / (upper_key - lower_key)
-            candles.append({"day": day, "open": round(previous, 6), "high": round(max(previous, close), 6), "low": round(min(previous, close), 6), "close": round(close, 6), "volume": None, "is_forecast": True, "not_actual": True, "scenario": "snapshot_conditional_path"})
+            candles.append({"day": day, "open": round(previous, 6), "high": round(max(previous, close), 6),
+                "low": round(min(previous, close), 6), "close": round(close, 6), "volume": None,
+                "is_forecast": True, "not_actual": True, "scenario": "snapshot_conditional_path",
+                "as_of_date": basis_date, "base_price": current, "anchor_horizons": sorted(accepted),
+                "interpolated": day not in accepted, "ohlc_semantics": "illustration_not_predicted_market_ohlc"})
             previous = close
         return candles
 
@@ -706,8 +760,8 @@ class DecisionBoardService:
                     "high": item.high,
                     "low": item.low,
                     "close": item.close,
-                    "volume": item.volume or 0.0,
-                    "amount": item.amount or 0.0,
+                    "volume": item.volume,
+                    "amount": item.amount,
                 }
                 for item in history
             ]
@@ -741,6 +795,10 @@ class DecisionBoardService:
     def _forecast_payload(row) -> dict:
         return {
             "source": "persisted_forecast_snapshot" if row is not None else "unavailable",
+            "model_version": row.model_version if row is not None else None,
+            "feature_schema_version": row.feature_schema_version if row is not None else None,
+            "config_hash": row.config_hash if row is not None else None,
+            "input_hash": row.input_hash if row is not None else None,
             "feature_basis": "settled_daily_bars" if row is not None else "unavailable",
             "intraday_provisional_used": False,
             "expected_return": finite_or_none(row.expected_return) if row is not None else None,
@@ -757,22 +815,18 @@ class DecisionBoardService:
 
     @staticmethod
     def _latest_by_instrument(db: Session, model, first_order, second_order) -> dict[int, object]:
-        rows = db.scalars(select(model).order_by(model.instrument_id, first_order.desc(), second_order.desc())).all()
-        latest: dict[int, object] = {}
-        for row in rows:
-            latest.setdefault(row.instrument_id, row)
-        return latest
+        from app.utils.snapshot_queries import latest_enabled
+        return {row.instrument_id: row for row in latest_enabled(db, model, first_order.desc(), second_order.desc())}
 
     @staticmethod
     def _latest_forecasts(db: Session) -> dict[int, dict[int, ForecastSnapshot]]:
-        rows = db.scalars(
-            select(ForecastSnapshot)
-            .where(ForecastSnapshot.horizon.in_(HORIZONS))
-            .order_by(ForecastSnapshot.instrument_id, ForecastSnapshot.horizon, ForecastSnapshot.as_of_date.desc(), ForecastSnapshot.generated_at.desc())
-        ).all()
+        from app.utils.snapshot_queries import latest_enabled
+        rows = latest_enabled(db, ForecastSnapshot, ForecastSnapshot.as_of_date.desc(), ForecastSnapshot.generated_at.desc(),
+                              partitions=[ForecastSnapshot.instrument_id, ForecastSnapshot.horizon],
+                              where=[ForecastSnapshot.horizon.in_(HORIZONS)])
         latest: dict[int, dict[int, ForecastSnapshot]] = {}
         for row in rows:
-            latest.setdefault(row.instrument_id, {}).setdefault(row.horizon, row)
+            latest.setdefault(row.instrument_id, {})[row.horizon] = row
         return latest
 
     @staticmethod
@@ -783,11 +837,9 @@ class DecisionBoardService:
 
     @staticmethod
     def _latest_provisional(db: Session) -> dict[int, DecisionBoardProvisionalInput]:
-        rows = db.scalars(select(DecisionBoardProvisionalInput).order_by(DecisionBoardProvisionalInput.instrument_id, DecisionBoardProvisionalInput.observed_at.desc(), DecisionBoardProvisionalInput.id.desc())).all()
-        latest: dict[int, DecisionBoardProvisionalInput] = {}
-        for row in rows:
-            latest.setdefault(row.instrument_id, row)
-        return latest
+        from app.utils.snapshot_queries import latest_enabled
+        return {row.instrument_id: row for row in latest_enabled(db, DecisionBoardProvisionalInput,
+            DecisionBoardProvisionalInput.observed_at.desc(), DecisionBoardProvisionalInput.id.desc())}
 
     @staticmethod
     def _select_horizon(payload: dict, horizon: int) -> dict:
@@ -819,7 +871,7 @@ class DecisionBoardService:
             grade: [row for row in rows if row.get("grade") == grade] for grade in GRADE_ORDER
         }
         selected["groups"]["数据异常"] = [row for row in rows if row.get("grade") == "数据异常"]
-        selected["counts"] = {grade: len(selected["groups"][grade]) for grade in GRADE_ORDER}
+        selected["counts"] = {grade: len(group) for grade, group in selected["groups"].items()}
         return selected
 
     @staticmethod
@@ -853,8 +905,8 @@ class DecisionBoardService:
                 "td": "TD9 setup only; TD13 not implemented",
                 "chan": "overlap-zone approximation only; not full Chan/CZSC",
             },
-            "groups": {grade: [] for grade in GRADE_ORDER},
-            "counts": {grade: 0 for grade in GRADE_ORDER},
+            "groups": {grade: [] for grade in (*GRADE_ORDER, "数据异常")},
+            "counts": {grade: 0 for grade in (*GRADE_ORDER, "数据异常")},
             "rows": [],
             "research_only": True,
             "automatic_orders": False,

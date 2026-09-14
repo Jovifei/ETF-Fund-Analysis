@@ -83,7 +83,11 @@ def _indicator_confirmations(frame: pd.DataFrame, index: int, kind: str) -> list
 def _volume_profile(frame: pd.DataFrame, window: int, bins: int) -> dict[str, float] | None:
     sample = frame.tail(max(20, window)).copy()
     typical = (sample["high"].astype(float) + sample["low"].astype(float) + sample["close"].astype(float)) / 3
-    volume = sample["volume"].astype(float).fillna(0).clip(lower=0)
+    volume = pd.to_numeric(sample["volume"], errors="coerce")
+    # A missing observation is not a zero-volume session. Keep the price-only
+    # methods, but do not publish a weighted profile from an incomplete window.
+    if not np.isfinite(volume).all() or (volume < 0).any():
+        return None
     valid = np.isfinite(typical) & np.isfinite(volume) & (volume > 0)
     if int(valid.sum()) < 20:
         return None
