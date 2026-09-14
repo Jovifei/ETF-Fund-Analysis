@@ -20,10 +20,14 @@ while (($#)); do
       fi
       shift 2 ;;
     --project-name)
-      (($# >= 2)) && [[ "$2" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || { echo "invalid project name" >&2; exit 2; }
+      if (($# < 2)) || [[ ! "$2" =~ ^[a-z0-9][a-z0-9_-]*$ ]]; then
+        echo "invalid project name" >&2; exit 2
+      fi
       compose+=(-p "$2"); shift 2 ;;
     --backup-dir)
-      (($# >= 2)) && [[ -n "$2" ]] || { echo "missing backup directory" >&2; exit 2; }
+      if (($# < 2)) || [[ -z "$2" ]]; then
+        echo "missing backup directory" >&2; exit 2
+      fi
       backup_dir="$(realpath -m -- "$2")"; shift 2 ;;
     *) echo "usage: backup_postgres.sh [--compose-file FILE] [--project-name NAME] [--env-file FILE] [--backup-dir DIR]" >&2; exit 2 ;;
   esac
@@ -49,6 +53,8 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+# The database identity expands inside the container, never on the host.
+# shellcheck disable=SC2016
 "${compose[@]}" exec -T db sh -c 'pg_dump --clean --if-exists --no-owner --no-privileges -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip -9 > "$pending/archive.sql.gz"
 gzip -t "$pending/archive.sql.gz"
 bytes="$(gzip -cd "$pending/archive.sql.gz" | wc -c)"
