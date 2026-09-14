@@ -371,6 +371,14 @@ class TaskService:
                     "failure_class": _failure_class(exc),
                 }
             results["refresh_signals"] = self.signals.refresh_all(db, run_id=run_id)
+            # Bootstrap prepares raw/derived caches; full_pipeline additionally
+            # publishes the same canonical board as the workspace worker.
+            if task_name == "full_pipeline":
+                try:
+                    built = self.decision_board.refresh(db)
+                    results["refresh_decision_board"] = {"status": "succeeded", "snapshot_id": built.snapshot.snapshot_id}
+                except Exception as exc:
+                    results["refresh_decision_board"] = {"status": "failed", "failure_class": _failure_class(exc)}
             try:
                 results["refresh_sector_snapshots"] = self.market.refresh_sector_snapshots(db, run_id=run_id)
             except Exception as exc:
@@ -441,6 +449,7 @@ class TaskService:
                     "market_context.updated",
                     {
                         "run_id": run_id,
+                        "task_name": task_name,
                         "status": "failed",
                         "failure_class": failure_class,
                     },
@@ -530,6 +539,8 @@ class TaskService:
             try:
                 from app.services.task_outcome import normalize_outcome
                 result = normalize_outcome(self._execute(db, task_name, run_id, **kwargs))
+                from app.services.settlement import stamp_output_completion
+                result = stamp_output_completion(db, self.settings, task_name, result, started)
                 if task is not None:
                     task.status = result["status"]
                     task.result_json = result
