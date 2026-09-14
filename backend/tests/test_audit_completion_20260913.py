@@ -3,7 +3,8 @@ from datetime import datetime, date
 from uuid import uuid4
 import pytest
 from app.core.config import get_settings
-from app.models import TaskRun
+from app.models import Instrument, TaskRun
+from sqlalchemy import select
 from app.services.task_outcome import normalize_outcome, coverage_outcome
 from app.services.settlement import session_refresh_due
 
@@ -28,6 +29,14 @@ def test_nested_incomplete_result_cannot_keep_coverage_true():
 
 
 def add_run(db,name,at,status='succeeded',target='2026-09-11',**fields):
+    if name == 'refresh_bars':
+        codes = list(db.scalars(select(Instrument.ts_code).where(Instrument.enabled.is_(True))))
+        if not codes:
+            db.add(Instrument(ts_code='998899.SH', symbol='998899', name='scope fixture', kind='ETF', enabled=True))
+            db.flush()
+            codes = ['998899.SH']
+        fields = {'requested': len(codes), 'completed': len(codes),
+                  'coverage': [{'ts_code': code, 'complete': True, 'received_through': target} for code in codes], **fields}
     db.add(TaskRun(run_id=uuid4().hex,task_name=name,status=status,started_at=at,
         finished_at=at,result_json={'status':status,'target_trade_date':target,
         'requested':2,'completed':2,'coverage_complete':True,**fields}))

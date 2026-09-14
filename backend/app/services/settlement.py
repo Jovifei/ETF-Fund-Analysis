@@ -1,7 +1,7 @@
 """Completion belongs to a settled exchange session and its input generation."""
 from datetime import datetime, time, timedelta
 from sqlalchemy import select
-from app.models import TaskRun
+from app.models import Instrument, TaskRun
 from app.services.trading_calendar_service import TradingCalendarService
 
 SETTLEMENT_CUTOFF = time(15, 15)
@@ -35,7 +35,25 @@ def session_refresh_due(db, settings, task_name, now, retry_minutes=15, dependen
     def localize(value):
         return value.replace(tzinfo=settings.timezone) if value.tzinfo is None else value.astimezone(settings.timezone)
     from app.services.task_outcome import normalize_outcome
-    complete = (run.status == "succeeded" and result.get("target_trade_date") == target
+    scope_complete = True
+    different_scope = False
+    if task_name == "refresh_bars":
+        # A manual single-code refresh shares the task name with the full
+        # scheduled download. Validate identities, not only equal counts.
+        expected = set(db.scalars(select(Instrument.ts_code).where(Instrument.enabled.is_(True))))
+        coverage = result.get("coverage")
+        valid_rows = isinstance(coverage, list) and all(isinstance(row, dict) for row in coverage)
+        received = [row.get("ts_code") for row in coverage] if valid_rows else []
+        valid_codes = all(isinstance(code, str) for code in received)
+        scope_complete = bool(expected and valid_rows and valid_codes
+            and len(received) == len(expected) and set(received) == expected
+            and all(row.get("complete") is True and row.get("received_through") == target for row in coverage))
+        requested = result.get("requested")
+        # A subset attempt must not postpone the full pool. A failed full-pool
+        # attempt must still back off, even if no per-code rows were returned.
+        different_scope = (isinstance(requested, int) and not isinstance(requested, bool)
+                           and 0 <= requested < len(expected))
+    complete = (scope_complete and run.status == "succeeded" and result.get("target_trade_date") == target
                 and result.get("coverage_complete") is True and normalize_outcome(result)["status"] == "succeeded")
     if complete:
         finished = localize(run.finished_at or run.started_at)
@@ -51,6 +69,6 @@ def session_refresh_due(db, settings, task_name, now, retry_minutes=15, dependen
     last = run.finished_at or run.started_at
     # Unknown legacy outcomes retain backoff; a known older session does not.
     same_or_unknown_target = result.get("target_trade_date") in {None, target}
-    if same_or_unknown_target and last is not None and (local - localize(last)).total_seconds() < retry_minutes * 60:
+    if not different_scope and same_or_unknown_target and last is not None and (local - localize(last)).total_seconds() < retry_minutes * 60:
         return False
     return True
