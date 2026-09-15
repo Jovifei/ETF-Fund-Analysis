@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChartBar, ChartData } from '../src/lib/types'
-const mocked = vi.hoisted(() => ({ definitions: [] as any[], chart: { setPriceVolumePrecision: vi.fn(), applyNewData: vi.fn(), createIndicator: vi.fn(), createOverlay: vi.fn(), subscribeAction: vi.fn(), unsubscribeAction: vi.fn(), setBarSpace: vi.fn(), scrollToRealTime: vi.fn(), resize: vi.fn() }, disposed: vi.fn() }))
-vi.mock('klinecharts', () => ({ init: () => mocked.chart, dispose: mocked.disposed, registerIndicator: (v: any) => mocked.definitions.push(v), registerOverlay: vi.fn(), ActionType: { OnCrosshairChange: 'crosshair' } }))
+const mocked = vi.hoisted(() => ({ definitions: [] as any[], overlayDefinitions: [] as any[], chart: { setPriceVolumePrecision: vi.fn(), applyNewData: vi.fn(), createIndicator: vi.fn(), createOverlay: vi.fn(), subscribeAction: vi.fn(), unsubscribeAction: vi.fn(), setBarSpace: vi.fn(), scrollToRealTime: vi.fn(), resize: vi.fn() }, disposed: vi.fn() }))
+vi.mock('klinecharts', () => ({ init: () => mocked.chart, dispose: mocked.disposed, registerIndicator: (v: any) => mocked.definitions.push(v), registerOverlay: (v: any) => mocked.overlayDefinitions.push(v), ActionType: { OnCrosshairChange: 'crosshair' } }))
 import { ChartAdapter, groupsForLevel, projectBars } from '../src/lib/chartAdapter'
 const bar: ChartBar = { date: '2026-09-01', open: 2, high: 3, low: 1, close: 2.5, volume: 5, amount: 10, indicators: { macd_hist: .012345, kdj_k: 72.234, rsi14: 61.278, ma20: null, boll_upper: 3.45678, boll_mid: 2.12345, boll_lower: .79012 } }
 beforeEach(() => { vi.clearAllMocks(); vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }) })
@@ -21,4 +21,17 @@ describe('ChartAdapter has no independent indicator formulas', () => {
     expect(overlays.some((item: any) => item.name === 'segment' && item.styles?.line?.style === 'dashed')).toBe(true)
     adapter.destroy()
   })
+})
+
+// Same numeric lines/zones; only avoid long labels covering narrow candles.
+it('research zones keep prices but omit dense method labels below 600px',()=>{
+  const overlay=mocked.overlayDefinitions.find(x=>x.name==='researchZone')
+  const args={coordinates:[{x:0,y:20},{x:0,y:30},{x:0,y:25}],overlay:{extendData:{color:'#4dba90',label:'support methods'}}}
+  const narrow=overlay.createPointFigures({...args,bounding:{width:320}})
+  const wide=overlay.createPointFigures({...args,bounding:{width:900}})
+  expect(narrow.filter((x:any)=>x.type==='text')).toEqual([])
+  expect(narrow.find((x:any)=>x.type==='line').attrs.coordinates.map((x:any)=>x.y)).toEqual([25,25])
+  const text=wide.find((x:any)=>x.type==='text')
+  expect(text.attrs.text).toBe('support methods')
+  expect(text.styles.backgroundColor).toBe('transparent')
 })

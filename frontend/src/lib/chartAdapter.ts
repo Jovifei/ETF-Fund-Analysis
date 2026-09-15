@@ -32,7 +32,7 @@ function register() {
     if (coordinates.length < 2) return []
     const extra = overlay.extendData as { color: string; label: string }
     const levelY = coordinates[2]?.y ?? (coordinates[0].y + coordinates[1].y) / 2
-    return [{ type: 'line', attrs: { coordinates: [{ x: 0, y: levelY }, { x: bounding.width, y: levelY }] }, styles: { color: extra.color, size: 1, style: 'dashed', dashedValue: [5, 3] } }, {type:'text',attrs:{x:8,y:levelY-3,text:extra.label,align:'left',baseline:'bottom'},styles:{color:extra.color,size:11}}, { type: 'rect', attrs: { x: 0, y: Math.min(coordinates[0].y,coordinates[1].y), width: bounding.width, height: Math.max(2, Math.abs(coordinates[0].y - coordinates[1].y)) }, styles: { color: `${extra.color}18`, borderColor: `${extra.color}80`, borderSize: 1 } }]
+    return [{ type: 'line', attrs: { coordinates: [{ x: 0, y: levelY }, { x: bounding.width, y: levelY }] }, styles: { color: extra.color, size: 1, style: 'dashed', dashedValue: [5, 3] } }, ...(bounding.width >= 600 ? [{type:'text',attrs:{x:8,y:levelY-3,text:extra.label,align:'left',baseline:'bottom'},styles:{color:extra.color,size:11,backgroundColor:'transparent',borderSize:0}}] : []), { type: 'rect', attrs: { x: 0, y: Math.min(coordinates[0].y,coordinates[1].y), width: bounding.width, height: Math.max(2, Math.abs(coordinates[0].y - coordinates[1].y)) }, styles: { color: `${extra.color}18`, borderColor: `${extra.color}80`, borderSize: 1 } }]
   } })
 }
 export class ChartAdapter {
