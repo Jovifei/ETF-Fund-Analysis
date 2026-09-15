@@ -1,0 +1,63 @@
+/* QA-R03: reflow, not a scaled-down fixed desktop canvas. Tables retain their
+   own horizontal scroll; no global overflow masking and no strategy changes. */
+.workspace .main-content { width:100%; max-width:none; min-width:0; }
+.main-content > section,.card,.card-body,.card-header > div,.page-heading > div,
+.stat-card,.market-context-card,.chart-workspace,.chart,.actions,.toolbar { min-width:0; max-width:100%; }
+.card-header,.heading-actions,.chart-top,.chart-bottom,.page-heading { flex-wrap:wrap; gap:12px; }
+.card-header p,.page-heading p,.notice,.small-note,.workspace-footer,
+.card-body,.stat-card small,.details-list dd { overflow-wrap:anywhere; }
+.toolbar > input,.toolbar > select,.actions > input,.actions > select { max-width:100%; }
+.toolbar,.actions,.heading-actions,.chart-legend { flex-wrap:wrap; }
+.table-scroll,.decision-table-wrap { max-width:100%; overscroll-behavior-inline:contain; }
+.chart { width:100%; }
+.workspace-footer { flex-wrap:wrap; }
+.mobile-decision-board { display:none; }
+.decision-reason-list { margin:12px 20px; min-width:0; }
+.decision-reason-list summary { cursor:pointer; color:var(--accent); padding:10px 0; }
+.decision-reason-list p { border-top:1px solid var(--border); padding:10px 0; overflow-wrap:anywhere; }
+.decision-reason-list p span { display:block; color:var(--muted); margin-top:6px; }
+.decision-reason-list a { color:var(--accent); }
+@media (min-width:681px) and (max-width:1050px) {
+  .sidebar-expanded .sidebar { width:76px; }
+  .sidebar-expanded .main-shell { margin-left:76px; width:calc(100% - 76px); }
+  .sidebar-expanded .brand { padding:20px; }
+  .sidebar-expanded .brand-name,.sidebar-expanded .nav-label,.sidebar-expanded .nav-item span,
+  .sidebar-expanded .nav-chevron,.sidebar-expanded .account-text,.sidebar-expanded .sidebar-note,
+  .sidebar-expanded .connection-mini,.sidebar-expanded .account-actions span { display:none; }
+  .sidebar-expanded .nav-item { justify-content:center; padding:0; }
+  .sidebar-expanded .sidebar-bottom { padding:12px 20px; }
+  .sidebar-expanded .account-actions { flex-direction:column; }
+}
+@media (max-width:680px) {
+  body.mobile-navigation-open { overflow:hidden; }
+  .main-shell { width:100%; margin-left:0; }
+  .main-content { padding:16px 12px; }
+  .workspace .topbar { padding-left:max(12px,env(safe-area-inset-left)); padding-right:max(12px,env(safe-area-inset-right)); }
+  .sidebar { max-width:calc(100% - 44px); height:100dvh; }
+  .icon-button { min-width:44px; min-height:44px; }
+  .button { min-height:40px; white-space:normal; }
+  .page-heading h1 { overflow-wrap:anywhere; }
+  .card-header,.card-body { padding:14px; }
+  .card-header > div,.card-header .actions { max-width:100%; }
+  .metrics-grid,.sector-grid,.cards { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .stat-card .value { font-size:clamp(16px,5vw,23px); overflow-wrap:anywhere; }
+  .original-board > iframe { display:none!important; }
+  .mobile-decision-board { display:block; padding:14px; }
+  .mobile-decision-controls { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; }
+  .mobile-decision-controls label { display:grid; gap:6px; color:var(--muted); }
+  .mobile-decision-controls input,.mobile-decision-controls select { width:100%; min-height:44px; }
+  .mobile-decision-group h3 { display:flex; justify-content:space-between; margin:22px 0 10px; }
+  .mobile-decision-row { border:1px solid var(--border); background:var(--bg); border-radius:8px; padding:14px; margin:10px 0; overflow-wrap:anywhere; }
+  .mobile-instrument { display:grid; gap:6px; min-height:44px; color:var(--accent); }
+  .mobile-instrument strong { color:var(--text); }
+  .mobile-instrument span:last-child { font-size:12px; }
+  .mobile-price-pair { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:16px 0 10px; }
+  .mobile-price-pair > div { min-width:0; }
+  .mobile-price-pair strong,.mobile-price-pair small { display:block; line-height:1.7; }
+  .mobile-price-pair strong { font-variant-numeric:tabular-nums; font-size:20px; }
+  .mobile-metrics summary { cursor:pointer; padding:10px 0; color:var(--accent); min-height:44px; }
+  .mobile-metrics p { font-size:12px; overflow-wrap:anywhere; }
+  .mobile-reason { margin:10px 0; font-size:12px; color:var(--warn); }
+  .decision-reason-list { margin:0 14px 14px; }
+  .login-card { width:100%; min-width:0; }
+}

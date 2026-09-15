@@ -16,7 +16,14 @@ const groups = [
 function selected(path: string) { return path === '/' ? ['/', '/boards', '/decision/1430'].includes(route.path) : path === '/analysis' ? route.path === path || route.path.startsWith('/etf/') : route.path === path }
 function toggleSidebar() { sidebar.value = sidebar.value === 'expanded' ? 'compact' : sidebar.value === 'compact' ? 'hidden' : 'expanded'; try { localStorage.setItem('etf-workspace-sidebar', sidebar.value) } catch {} }
 let restoreFocus: HTMLElement | null = null
+const narrow=ref(typeof window.matchMedia==='function' && window.matchMedia('(max-width:680px)').matches)
+let narrowQuery: MediaQueryList | null = null
+function breakpointChanged(event: MediaQueryListEvent | MediaQueryList) {
+  narrow.value=event.matches
+  if (!event.matches) mobileOpen.value=false
+}
 watch(mobileOpen, async value => {
+  document.body.classList.toggle('mobile-navigation-open', value && narrow.value)
   if (value) { restoreFocus = document.activeElement as HTMLElement; await nextTick(); document.querySelector<HTMLElement>('.sidebar a')?.focus() }
   else { await nextTick(); if (restoreFocus?.isConnected) restoreFocus.focus(); restoreFocus = null }
 })
@@ -55,8 +62,11 @@ watch([() => session.ready, () => session.authenticated, () => route.path], () =
   }
 }, { immediate:true })
 let timer: ReturnType<typeof setInterval> | undefined
-onMounted(async () => { try { const saved = localStorage.getItem('etf-workspace-sidebar'); if (saved && ['expanded', 'compact', 'hidden'].includes(saved)) sidebar.value = saved } catch {} window.addEventListener('workspace-preferences', applyPreferences); window.addEventListener('session-expired', expire); window.addEventListener('keydown', escape); await session.load(); await readStatus(); timer = setInterval(() => { if (!document.hidden) void readStatus() }, 60000) })
-onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('workspace-preferences', applyPreferences); window.removeEventListener('session-expired', expire); window.removeEventListener('keydown', escape) })
+onMounted(async () => { if (typeof window.matchMedia==='function') {
+  narrowQuery=window.matchMedia('(max-width:680px)');breakpointChanged(narrowQuery)
+  narrowQuery.addEventListener('change',breakpointChanged)
+} try { const saved = localStorage.getItem('etf-workspace-sidebar'); if (saved && ['expanded', 'compact', 'hidden'].includes(saved)) sidebar.value = saved } catch {} window.addEventListener('workspace-preferences', applyPreferences); window.addEventListener('session-expired', expire); window.addEventListener('keydown', escape); await session.load(); await readStatus(); timer = setInterval(() => { if (!document.hidden) void readStatus() }, 60000) })
+onBeforeUnmount(() => { narrowQuery?.removeEventListener('change',breakpointChanged);document.body.classList.remove('mobile-navigation-open'); clearInterval(timer); window.removeEventListener('workspace-preferences', applyPreferences); window.removeEventListener('session-expired', expire); window.removeEventListener('keydown', escape) })
 </script>
 <template>
 <div v-if="!session.ready" class="boot-state" role="status">正在连接私有研究工作站…</div>
@@ -64,13 +74,13 @@ onBeforeUnmount(() => { clearInterval(timer); window.removeEventListener('worksp
 <div v-else class="workspace" :class="[`sidebar-${sidebar}`, { 'mobile-open': mobileOpen, 'reduce-motion': reduced }]" :key="`session-${session.generation}`">
   <a class="skip-link" href="#main-content">跳到主要内容</a>
   <button v-if="mobileOpen" class="sidebar-backdrop" aria-label="关闭导航" @click="mobileOpen = false"/>
-  <aside class="sidebar" aria-label="主要导航">
+  <aside id="primary-navigation" class="sidebar" aria-label="主要导航" :inert="narrow ? !mobileOpen : sidebar==='hidden'" :role="narrow && mobileOpen ? 'dialog' : undefined" :aria-modal="narrow && mobileOpen ? true : undefined">
     <RouterLink to="/" class="brand"><span class="brand-mark">E</span><span class="brand-name">ETF<span>Research</span><small>你的低频研究工作站</small></span></RouterLink>
     <button class="icon-button mobile-close" aria-label="关闭导航" @click="mobileOpen = false"><X :size="20"/></button>
     <nav class="nav-scroll"><div v-for="group in groups" :key="group.title" class="nav-group"><p class="nav-label">{{ group.title }}</p><RouterLink v-for="item in group.items" :key="item.path" :to="item.path" class="nav-item" :class="{ active: selected(item.path) }" :title="item.label" :aria-current="selected(item.path) ? 'page' : undefined"><component :is="item.icon" :size="19"/><span>{{ item.label }}</span><ChevronRight v-if="selected(item.path)" class="nav-chevron" :size="13"/></RouterLink></div><div class="sidebar-note"><span class="signal-dot"/>不连接券商 · 不自动下单</div></nav>
     <div class="sidebar-bottom"><RouterLink to="/settings" class="connection-mini"><span class="signal-dot" :class="{ warning: !status || olderThan(status.worker?.last_seen_at, 90) }"/><span>{{ status?.market_provider === 'mock' ? '演示数据模式' : '数据与 AI 连接' }}</span><ChevronRight :size="14"/></RouterLink><RouterLink to="/profile" class="account-card" title="个人中心"><div class="avatar">{{ (session.identifier ?? '本').slice(0, 1).toUpperCase() }}</div><div class="account-text"><strong>{{ session.identifier ?? '本地单用户' }}</strong><small>{{ session.role === 'admin' ? '管理员' : session.role ? '个人研究空间' : '无认证演示 / 请勿公网开放' }}</small></div></RouterLink><div class="account-actions"><RouterLink to="/settings" title="设置"><Settings :size="17"/><span>设置</span></RouterLink><button @click="logout" :disabled="!session.identifier" :title="session.identifier ? '退出登录' : '无认证演示模式：关闭页面退出'"><LogOut :size="16"/><span>{{session.identifier ? '退出' : '演示模式'}}</span></button></div></div>
   </aside>
-  <div class="main-shell"><header class="topbar"><button class="icon-button desktop-menu" aria-label="切换侧栏形态" @click="toggleSidebar"><PanelLeft :size="20"/></button><button class="icon-button mobile-menu" aria-label="打开导航" @click="mobileOpen = true"><Menu :size="22"/></button><GlobalSearch/><div class="topbar-status"><span class="signal-dot"/>研究模式<span class="header-divider"/><RouterLink to="/profile" class="icon-button" aria-label="个人中心"><UserRound :size="18"/></RouterLink></div></header>
+  <div class="main-shell" :inert="narrow && mobileOpen"><header class="topbar"><button class="icon-button desktop-menu" aria-label="切换侧栏形态" @click="toggleSidebar"><PanelLeft :size="20"/></button><button class="icon-button mobile-menu" aria-label="打开导航" aria-controls="primary-navigation" :aria-expanded="mobileOpen" @click="mobileOpen = true"><Menu :size="22"/></button><GlobalSearch/><div class="topbar-status"><span class="signal-dot"/>研究模式<span class="header-divider"/><RouterLink to="/profile" class="icon-button" aria-label="个人中心"><UserRound :size="18"/></RouterLink></div></header>
   <main id="main-content" class="main-content" tabindex="-1"><div v-if="status?.market_provider === 'mock'" class="notice warning-notice"><CircleHelp :size="16"/><span>当前为演示数据，所有页面仅用于功能验收，不可作为真实市场判断。</span></div><div v-if="notice" class="notice" role="alert">{{ notice }}</div><RouterView v-slot="{ Component }"><KeepAlive include="MarketOverview" :max="1"><component :is="Component" :key="route.path"/></KeepAlive></RouterView></main>
   <footer class="workspace-footer"><span>ETF Research · {{ status?.workspace_version ?? 'workspace' }}</span><span>Asia/Shanghai · 研究非投资指令 · 历史 14:30 回测尚未取得资格</span></footer></div>
 </div>

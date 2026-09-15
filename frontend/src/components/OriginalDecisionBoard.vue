@@ -4,12 +4,17 @@ import { useRouter } from 'vue-router'
 import { useQuery } from '../lib/query'
 import { useFavorites } from '../stores/favorites'
 import { errorText } from '../lib/api'
+import DecisionSummary from './DecisionSummary.vue'
 const favorites=useFavorites(), favoriteError=ref('')
 const router = useRouter(), frame = ref<HTMLIFrameElement | null>(null), height = ref(900)
 const horizon = ref(1), filter = ref(''), revision = ref(0), ready = ref(false)
 const outlook=useQuery<{items:Record<string,{forecasts:Record<string,unknown>}>}>('/api/workspace/research-outlook')
 const q = useQuery<Record<string, unknown>>(() => `/api/decision-board?horizon=${horizon.value===20?1:horizon.value}`)
 const displayed=computed(()=>q.data.value?{...q.data.value,rows:((q.data.value.rows??[]) as Record<string,unknown>[]).map(row=>({...row,forecasts:{...(outlook.data.value?.items[String(row.ts_code)]?.forecasts??{}),...((row.forecasts??{}) as Record<string,unknown>)}}))}:null)
+function mobileControls(value:{filter:string;horizon:number}) {
+  if (![1,3,5,10,20].includes(value.horizon)) return
+  revision.value += 1; filter.value=value.filter.slice(0,128); horizon.value=value.horizon
+}
 function deliver() {
   if (ready.value) frame.value?.contentWindow?.postMessage({ type: 'etf-board:state', board: displayed.value,
     favorites: Object.keys(favorites.entries), favoriteBusy: Object.keys(favorites.busy).filter(code=>favorites.busy[code]), revision: revision.value, horizon: horizon.value, filter: filter.value, error: q.error.value }, window.location.origin)
@@ -34,6 +39,7 @@ defineExpose({ reload:()=>Promise.all([q.reload(),outlook.reload()]) })
   <div class="card-header"><div><h2 id="decision-heading">ETF 决策快照</h2><p>原版五档分组与指标模板 · 点击基金进入同一工作站分析</p></div>
     <button class="button small" :disabled="q.loading.value" @click="q.reload">重新读取快照</button></div>
   <p v-if="q.error.value" class="notice warning-notice" role="alert">{{ q.error.value }}</p>
+  <DecisionSummary :board="displayed" :filter="filter" :horizon="horizon" @controls="mobileControls"/>
   <p v-if="favoriteError" class="notice" role="alert">{{favoriteError}}</p><iframe ref="frame" title="原版 ETF 决策快照" src="/internal/decision-board-frame" :style="{ height: height + 'px' }"
     style="width:100%;border:0;display:block" @load="ready=true;deliver()"/>
 </section></template>

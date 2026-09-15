@@ -45,6 +45,9 @@ jobs:
       - name: Real authenticated browser journeys
         run: npx playwright test --config playwright.auth.config.ts
         working-directory: frontend
+      - name: Responsive viewport and chart acceptance
+        run: npx playwright test --config playwright.responsive.config.ts
+        working-directory: frontend
       - name: Auditable source archive
         if: always()
         run: mkdir -p /tmp/workspace-source && git archive -o /tmp/workspace-source/source.tar HEAD
@@ -57,6 +60,9 @@ jobs:
             frontend/playwright-report/
             frontend/test-results-auth/
             frontend/playwright-report-auth/
+            frontend/test-results-responsive/
+            frontend/playwright-report-responsive/
+            frontend/responsive-results.json
             /tmp/workspace-source/
             /tmp/workspace-audit.xml
           retention-days: 7
