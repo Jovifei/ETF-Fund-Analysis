@@ -1,5 +1,9 @@
 /* QA-R03: reflow, not a scaled-down fixed desktop canvas. Tables retain their
    own horizontal scroll; no global overflow masking and no strategy changes. */
+.topbar .search-wrap { flex:1 1 0; min-width:0; max-width:550px; }
+.cards { grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr)); }
+.stat-card .label { flex-wrap:wrap; gap:6px; }
+.stat-card .value { overflow-wrap:anywhere; }
 .workspace .main-content { width:100%; max-width:none; min-width:0; }
 .main-content > section,.card,.card-body,.card-header > div,.page-heading > div,
 .stat-card,.market-context-card,.chart-workspace,.chart,.actions,.toolbar { min-width:0; max-width:100%; }
@@ -39,7 +43,7 @@
   .page-heading h1 { overflow-wrap:anywhere; }
   .card-header,.card-body { padding:14px; }
   .card-header > div,.card-header .actions { max-width:100%; }
-  .metrics-grid,.sector-grid,.cards { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .metrics-grid,.sector-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .stat-card .value { font-size:clamp(16px,5vw,23px); overflow-wrap:anywhere; }
   .original-board > iframe { display:none!important; }
   .mobile-decision-board { display:block; padding:14px; }

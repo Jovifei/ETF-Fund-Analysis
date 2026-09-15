@@ -29,7 +29,7 @@ jobs:
           pip install -e '.[dev]'
           npm ci --ignore-scripts --prefix frontend
       - name: Dependency security gate
-        run: npm audit --audit-level=high --prefix frontend
+        run: npm audit --audit-level=high --json --prefix frontend > /tmp/workspace-npm-audit.json
       - name: Workspace backend contracts
         run: pytest backend/tests/test_workspace*.py backend/tests/test_delivery*.py backend/tests/test_v101*.py backend/tests/test_v102*.py backend/tests/test_v103*.py backend/tests/test_v104*.py backend/tests/test_v105*.py backend/tests/test_audit*.py -q --junitxml=/tmp/workspace-audit.xml
       - name: TypeScript check
@@ -65,4 +65,5 @@ jobs:
             frontend/responsive-results.json
             /tmp/workspace-source/
             /tmp/workspace-audit.xml
+            /tmp/workspace-npm-audit.json
           retention-days: 7

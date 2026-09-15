@@ -21,6 +21,7 @@ for (const [width, height] of screens) {
           await expect(page.getByTestId('mobile-decision-board')).toBeVisible()
           await expect(page.getByTestId('mobile-decision-row').first()).toBeVisible()
           await expect(page.getByTestId('mobile-decision-row').first()).toContainText('历史收盘')
+          await page.getByTestId('mobile-decision-row').first().screenshot({path:info.outputPath(`summary-${width}.png`)})
         } else {
           const frame = page.frameLocator('iframe[title="原版 ETF 决策快照"]')
           await expect(frame.locator('.decision-data-row').first()).toBeVisible()
@@ -119,7 +120,23 @@ for (const zoom of [0.8, 1.25, 2]) {
     await page.goto('/etf/512480.SH')
     await expect(page.getByTestId('etf-chart').locator('canvas').first()).toBeVisible()
     await page.evaluate(value => { document.documentElement.style.zoom = String(value) }, zoom)
-    await noPageOverflow(page)
+    // Root CSS zoom changes body coordinate units: at .8 a correctly fitting
+    // body can report 1800 CSS px while innerWidth remains 1440. Compare the
+    // actual scrolling element's extent and client size in the SAME units.
+    // A deliberately overwide element must fail this check at every zoom.
+    const extent = () => page.evaluate(() => {
+      const root = document.scrollingElement as HTMLElement
+      return root.scrollWidth - root.clientWidth
+    })
+    await page.evaluate(() => { const probe=document.createElement('div');probe.id='overflow-negative-control';probe.style.cssText='width:4000px;height:1px';document.body.append(probe) })
+    expect(await extent()).toBeGreaterThan(1)
+    await page.evaluate(() => document.getElementById('overflow-negative-control')!.remove())
+    await expect.poll(extent).toBeLessThanOrEqual(1)
+    const geometry = await page.evaluate(() => ({innerWidth, bodyWidth:document.body.scrollWidth,
+      rootWidth:document.documentElement.scrollWidth, rootClient:document.documentElement.clientWidth,
+      cards:Array.from(document.querySelectorAll('.stat-card')).map(el=>({width:el.clientWidth,scroll:el.scrollWidth}))}))
+    await info.attach(`css-zoom-${zoom}-geometry`, {body:JSON.stringify(geometry),contentType:'application/json'})
+    for(const card of geometry.cards) expect(card.scroll-card.width).toBeLessThanOrEqual(1)
     await expect(page.getByTestId('chart-fullscreen')).toBeVisible()
     await page.screenshot({ path: info.outputPath(`css-zoom-${zoom}.png`) })
   })

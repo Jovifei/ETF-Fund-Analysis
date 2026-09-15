@@ -8,6 +8,7 @@ import { useSession } from './stores/session'
 import { api, errorText } from './lib/api'
 import type { Status } from './lib/types'
 import { olderThan } from './lib/format'
+import { drawerFocusTargets } from './lib/navigationFocus'
 const session = useSession(), route = useRoute(), router = useRouter(), sidebar = ref('expanded'), mobileOpen = ref(false), status = ref<Status | null>(null), notice = ref(''), reduced = ref(false)
 const groups = [
   { title: '日常研究', items: [{ path: '/', label: '市场总览', icon: LayoutDashboard }, { path: '/analysis', label: 'ETF 分析', icon: ChartCandlestick }, { path: '/watchlist', label: '我的自选', icon: Star }, { path: '/holdings', label: '我的持仓', icon: BriefcaseBusiness }] },
@@ -44,7 +45,8 @@ function expire() { session.clear(); status.value = null; mobileOpen.value = fal
 function escape(event: KeyboardEvent) {
   if (event.key === 'Escape') mobileOpen.value = false
   if (event.key !== 'Tab' || !mobileOpen.value) return
-  const focusable = Array.from(document.querySelectorAll<HTMLElement>('.sidebar a, .sidebar button')).filter(el => el.offsetParent !== null)
+  const aside = document.querySelector<HTMLElement>('.sidebar')
+  const focusable = aside ? drawerFocusTargets(aside) : []
   const first = focusable[0], last = focusable.at(-1)
   if (!first || !last) return
   if (event.shiftKey && (document.activeElement === first || !focusable.includes(document.activeElement as HTMLElement))) { event.preventDefault(); last.focus() }
