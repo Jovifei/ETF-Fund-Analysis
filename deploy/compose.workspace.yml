@@ -38,6 +38,8 @@ x-app: &app
     REPORTS_DIR: /app/reports
     BACKUP_DIR: /app/backups
     WORKSPACE_UI_ENABLED: "true"
+    SCHEDULER_ENABLED: ${SCHEDULER_ENABLED:-true}
+    BALANCED_REFRESH_ENABLED: ${BALANCED_REFRESH_ENABLED:-false}
     WORKSPACE_AI_API_ENABLED: ${WORKSPACE_AI_API_ENABLED:-false}
     WORKSPACE_AI_KEY_FILE: ${WORKSPACE_AI_KEY_FILE:-}
     WORKSPACE_AI_ALLOWED_ORIGINS: ${WORKSPACE_AI_ALLOWED_ORIGINS:-https://api.openai.com,https://api.deepseek.com}
@@ -65,6 +67,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in a private env file}
       TZ: Asia/Shanghai
     volumes: [database:/var/lib/postgresql/data]
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
     networks: [workspace]
     healthcheck:
       test: [CMD-SHELL, "pg_isready -U fundapp -d fund_decision"]

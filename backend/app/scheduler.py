@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import json
 import signal
 import time
 from datetime import datetime, timedelta
@@ -145,10 +146,17 @@ def _run_guarded(
     failure cannot erase earlier quote/snapshot/after-close work from this tick.
     """
 
+    if STOP:
+        return False
+    from app.services.runtime_observation import stage_sample
+    started_clock = time.monotonic()
+    logger.info("scheduler_stage %s", json.dumps(stage_sample(task_name, "started")))
+    terminal_state = "failed"
     executed.append(task_name)
     try:
         result = tasks.run(db, task_name, **kwargs)
         db.commit()
+        terminal_state = result.get("status", "unknown") if isinstance(result, dict) else "unknown"
         if isinstance(result, dict) and result.get("status") in {"failed", "partial", "cancelled"}:
             failures.append({"task": task_name, "failure_class": "incomplete_task_result"})
             return False
@@ -157,6 +165,9 @@ def _run_guarded(
         failures.append({"task": task_name, "failure_class": failure_class})
         logger.warning("scheduler task %s failed: %s", task_name, failure_class)
         return False
+    finally:
+        logger.info("scheduler_stage %s", json.dumps(stage_sample(
+            task_name, terminal_state, elapsed_seconds=time.monotonic() - started_clock)))
     return True
 
 
@@ -165,13 +176,25 @@ DAILY_DEPENDENCIES = {
     "refresh_bars": (),
     "refresh_indicators": ("refresh_bars",),
     "refresh_forecasts": ("refresh_bars", "refresh_indicators"),
+    "refresh_signals": ("refresh_bars", "refresh_indicators", "refresh_forecasts"),
+    "refresh_decision_board": ("refresh_bars", "refresh_indicators", "refresh_forecasts", "refresh_signals", "refresh_sector_snapshots"),
+    "generate_report": ("refresh_decision_board",),
+    # Optional/slow sector work follows the core publication. Its completion
+    # invalidates the next board, without preventing this tick's blocked view.
+    "refresh_sector_snapshots": (),
 }
 
 
 def settled_pipeline_tasks(db, settings, now):
     from app.services.settlement import session_refresh_due
-    return [name for name, dependencies in DAILY_DEPENDENCIES.items()
-            if session_refresh_due(db, settings, name, now, dependencies=dependencies)]
+    due = {name for name, dependencies in DAILY_DEPENDENCIES.items()
+           if session_refresh_due(db, settings, name, now, dependencies=dependencies)}
+    # Include descendants of a scheduled recompute, even before that recompute
+    # has committed. Invalidation must not lag by an entire scheduler restart.
+    for name, dependencies in DAILY_DEPENDENCIES.items():
+        if due.intersection(dependencies):
+            due.add(name)
+    return [name for name in DAILY_DEPENDENCIES if name in due]
 
 
 def tick() -> dict:
@@ -296,28 +319,32 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
                 failures=failures,
             )
 
-        # Market context is optional and cannot block the quote/decision path.
-        market_context_minutes = balanced.context_minutes if balanced else int(settings.market_context_refresh_minutes)
-        context_window = balanced is None or balanced.market_open or (
-            balanced.after_close and daily_due(_last_success(db, "refresh_market_context"),
-                                               _last_attempt_or_success(db, "refresh_market_context"), now)
-        )
-        if context_window and _due(
-            _last_attempt_or_success(db, "refresh_market_context"), now, market_context_minutes
-        ):
-            _run_guarded(
-                tasks,
-                db,
-                "refresh_market_context",
-                executed=executed,
-                failures=failures,
-            )
-
         from app.services.settlement import SETTLEMENT_CUTOFF, session_refresh_due
         daily_window = (now.time().replace(tzinfo=None) >= SETTLEMENT_CUTOFF
                         or (is_trade_day and 8 <= now.hour < 15))
         daily_due_tasks = settled_pipeline_tasks(db, settings, now) if daily_window else []
         after_close_due = bool(daily_due_tasks)
+
+        def refresh_optional_context():
+            # Preserve intraday order, but never precede a due settled publication.
+            market_context_minutes = balanced.context_minutes if balanced else int(settings.market_context_refresh_minutes)
+            context_window = balanced is None or balanced.market_open or (
+                balanced.after_close and daily_due(_last_success(db, "refresh_market_context"),
+                                                   _last_attempt_or_success(db, "refresh_market_context"), now)
+            )
+            if context_window and _due(
+                _last_attempt_or_success(db, "refresh_market_context"), now, market_context_minutes
+            ):
+                _run_guarded(
+                    tasks,
+                    db,
+                    "refresh_market_context",
+                    executed=executed,
+                    failures=failures,
+                )
+
+        if not after_close_due:
+            refresh_optional_context()
 
         if (
             not after_close_due
@@ -343,9 +370,9 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
                 ("refresh_indicators", {}),
                 ("refresh_forecasts", {}),
                 ("refresh_signals", {}),
-                ("refresh_sector_snapshots", {}),
                 ("refresh_decision_board", {}),
                 ("generate_report", {}),
+                ("refresh_sector_snapshots", {}),
             ):
                 if task_name in DAILY_DEPENDENCIES and task_name not in daily_due_tasks:
                     continue
@@ -357,6 +384,9 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
                     failures=failures,
                     **kwargs,
                 )
+
+        if after_close_due:
+            refresh_optional_context()
 
         # Balanced mode adds board updates between close chains and daily index history.
         # TaskService remains the only writer/lock authority; this is not a second daemon.

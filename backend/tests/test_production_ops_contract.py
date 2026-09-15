@@ -8,8 +8,8 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_backup_script_forces_owner_only_permissions() -> None:
     source = (ROOT / "scripts" / "backup_postgres.sh").read_text(encoding="utf-8")
     assert "umask 077" in source
-    assert "chmod 700 backups" in source
-    assert 'chmod 600 "$file" "${file}.sha256"' in source
+    assert 'chmod 700 "$backup_dir"' in source
+    assert 'chmod 600 "$pending/archive.sql.gz" "$pending/archive.sha256"' in source
 
 
 def test_aliyun_deploy_hardens_server_local_private_directories() -> None:

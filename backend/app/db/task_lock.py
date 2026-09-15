@@ -74,4 +74,13 @@ def sqlite_pipeline_lease(db):
                     lease.release()
         event.listen(db, 'after_transaction_end', ended)
         db.info['pipeline_file_listener'] = True
+    # The file lock does not autobegin SQLAlchemy. A logical transaction makes
+    # close/rollback release it even when no SQL statement follows acquisition.
+    if not db.in_transaction():
+        try:
+            db.begin()
+        except BaseException:
+            db.info.pop('pipeline_file_lease', None)
+            lock.release()
+            raise
     return True

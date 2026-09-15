@@ -23,6 +23,9 @@ def read(db, settings, *, now=None):
         Instrument.kind.in_(('ETF', 'LOF'))).group_by(Instrument.kind)).all())
     tracked = db.scalar(select(func.count()).select_from(Instrument).where(Instrument.enabled.is_(True))) or 0
     panels = []
+    from app.services.settlement import settled_session
+    from app.services.task_summary import bounded_step_summary
+    target = settled_session(settings, now)
 
     def append(key, label, model, date_column, fetch_column, task, retry_task, *, where=None, scope=False, fetch_timezone=None):
         query = select(func.count(), func.max(date_column), func.max(fetch_column)).select_from(model)
@@ -38,11 +41,18 @@ def read(db, settings, *, now=None):
                 Instrument, model.instrument_id == Instrument.id).where(Instrument.enabled.is_(True)).group_by(
                 model.instrument_id).subquery()
             coverage, oldest_latest = db.execute(select(func.count(), func.min(per_asset.c.latest))).one()
+        target_covered = None
+        if scope and key in {"daily", "indicators"}:
+            target_covered = db.scalar(select(func.count()).select_from(per_asset).where(per_asset.c.latest == target)) or 0
         terminal = db.scalar(select(TaskRun).where(TaskRun.task_name == task).order_by(TaskRun.id.desc()).limit(1))
         successful = db.scalar(select(TaskRun).where(TaskRun.task_name == task, TaskRun.status == 'succeeded')
                                .order_by(TaskRun.id.desc()).limit(1))
         panels.append({'key': key, 'label': label, 'rows': rows, 'covered_instruments': coverage,
                        'tracked_instruments': tracked if scope else None,
+                       'target_trade_date': target.isoformat(),
+                       'target_covered_instruments': target_covered,
+                       'target_missing_instruments': tracked - target_covered if target_covered is not None else None,
+                       'last_attempt_summary': bounded_step_summary(terminal.result_json or {}) if terminal else None,
                        'latest_source': serial(latest_source, timezone=settings.timezone),
                        'oldest_instrument_latest': serial(oldest_latest, timezone=settings.timezone),
                        # The maximum fetch time is NOT necessarily from the row with newest source time.
@@ -85,6 +95,7 @@ def read(db, settings, *, now=None):
     return {'as_of': serial(now, timezone=settings.timezone), 'catalog_by_kind': counts,
             'catalog_count': sum(counts.values()), 'tracked_count': tracked, 'panels':panels,
             'worker_last_seen_at': (worker.settings_json or {}).get('last_seen_at') if worker else None,
+            'target_trade_date': target.isoformat(),
             'balanced_refresh_enabled': settings.balanced_refresh_enabled,
             'provider_called':False, 'actionable':False,
             'note':'各时间为范围统计，最大抓取时间不一定属于最新源记录。无时区的旧日线抓取时间保留原串、待现场核对。已有记录不等于最新、全量或有交易资格；心跳不等于采集成功。未读取账户/持仓/密钥。'}

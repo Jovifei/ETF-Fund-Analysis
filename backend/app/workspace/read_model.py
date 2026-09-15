@@ -179,10 +179,18 @@ def instrument_detail(db: Session, settings: Settings, code: str, user_id: int |
     indicator = db.scalar(select(IndicatorSnapshot).where(IndicatorSnapshot.instrument_id == inst.id).order_by(IndicatorSnapshot.as_of_date.desc(), IndicatorSnapshot.generated_at.desc(), IndicatorSnapshot.id.desc()).limit(1))
     quote = latest_rows(db, QuoteSnapshot, [inst.id], QuoteSnapshot.quote_time.desc()).get(inst.id)
     forecasts = latest_rows(db, ForecastSnapshot, [inst.id], ForecastSnapshot.as_of_date.desc(), ForecastSnapshot.generated_at.desc(), partitions=[ForecastSnapshot.instrument_id, ForecastSnapshot.horizon])
+    from app.services.snapshot_contract import snapshot_issues
+    from app.services.settlement import settled_session
+    expected = None if settings.market_provider == "mock" else settled_session(settings)
+    indicator_issues = snapshot_issues(indicator, settings, expected, kind="indicator")
+    forecast_issues = {str(h): snapshot_issues(forecasts.get((inst.id, h)), settings, expected, kind="forecast")
+                       for h in (1, 3, 5, 10)}
+    if indicator_issues:
+        indicator = None
     forecast_rows = {}
     for horizon in (1, 3, 5, 10):
         item = forecasts.get((inst.id, horizon))
-        if item:
+        if item and not forecast_issues[str(horizon)]:
             forecast_rows[str(horizon)] = {name: getattr(item, name) for name in ("p_up", "expected_return", "q10", "q50", "q90", "sample_count", "confidence", "calibration_status", "model_version", "config_hash", "terminal_price_q10", "terminal_price_q50", "terminal_price_q90")}
             forecast_rows[str(horizon)]["as_of_date"] = iso(item.as_of_date)
     from app.providers.data_contract import history_issues
@@ -204,11 +212,15 @@ def instrument_detail(db: Session, settings: Settings, code: str, user_id: int |
         "instrument": {"ts_code": code, "name": inst.name, "kind": inst.kind, "theme_l1": inst.theme_l1, "theme_l2": inst.theme_l2, "benchmark": inst.benchmark},
         "decision": compact_row(row) if row else None, "snapshot_id": (row or {}).get("snapshot_id"),
         "decision_time": (row or {}).get("generated_at"), "quote": view_quote,
+        "snapshot_issues": {"indicator": indicator_issues, "forecasts": forecast_issues},
+        "daily_as_of": (display_chart or {}).get("source_as_of") or (last or {}).get("date"),
+        "target_trade_date": expected.isoformat() if expected else None,
         "history_issue": issue, "indicator_basis": "persisted_snapshot" if indicator and not issue else "historical_price_display",
         "indicator_values": display_values, "indicator_version": indicator.version if indicator and not issue else settings.load_strategy()["indicator_version"],
         "indicator_as_of": iso(indicator.as_of_date) if indicator and not issue else (last or {}).get("date"), "forecasts": forecast_rows,
         "support_resistance": None if issue else SupportResistanceService(settings).latest(db, inst.id),
-        "forecast_scenario": (row or {}).get("forecast_scenario"), "holding": personal,
+        "forecast_scenario": DecisionBoardService._forecast_scenario(
+            (display_chart or {}).get("bars", []), forecast_rows), "holding": personal,
         "actionable": False, "research_only": True,
     }
 
@@ -297,8 +309,17 @@ def portfolio_risk(db: Session, settings: Settings, user_id: int | None) -> dict
     items = portfolio["items"][:60]
     codes = [item["ts_code"] for item in items]
     pairs = db.execute(select(Instrument.ts_code, DailyBar).join(DailyBar, DailyBar.instrument_id == Instrument.id).where(Instrument.ts_code.in_(codes), DailyBar.adjust == "none").order_by(DailyBar.trade_date.desc()).limit(20000)).all() if codes else []
-    records = [{"code": code, "date": bar.trade_date, "close": bar.close} for code, bar in pairs]
-    correlations = []
+    from app.providers.data_contract import price_history_issue
+    grouped = {code: [] for code in codes}
+    for code, bar in pairs:
+        grouped[code].append(bar)
+    history_issues = {code: issue for code, bars in grouped.items()
+                      if (issue := price_history_issue(list(reversed(bars))[-121:]))}
+    records = [{"code": code, "date": bar.trade_date, "close": bar.close} for code, bar in pairs
+               if code not in history_issues]
+    correlations = [{"left": left, "right": right, "correlation": None, "observations": 0,
+                     "reason": "history_not_qualified"} for i, left in enumerate(codes)
+                    for right in codes[i+1:] if left in history_issues or right in history_issues]
     if records:
         prices = pd.DataFrame(records).pivot(index="date", columns="code", values="close").sort_index().tail(121)
         returns = prices.pct_change(fill_method=None)
@@ -314,7 +335,7 @@ def portfolio_risk(db: Session, settings: Settings, user_id: int | None) -> dict
         if item["weight"] is not None:
             key = item["theme"] or "未分类"
             theme_weights[key] = theme_weights.get(key, 0) + item["weight"]
-    return {"pricing_complete": portfolio["pricing_complete"], "max_weight": max((item["weight"] or 0 for item in items), default=0) if portfolio["pricing_complete"] else None, "theme_weights": theme_weights, "correlations": correlations, "basis": "last_120_daily_return_pearson_unadjusted_research", "limitations": ["不含未录入现金和资产", "收益相关性不是成分股重叠", "未复权收益会受分红影响", "个人成本不参与共享市场信号"], "actionable": False}
+    return {"pricing_complete": portfolio["pricing_complete"], "max_weight": max((item["weight"] or 0 for item in items), default=0) if portfolio["pricing_complete"] else None, "theme_weights": theme_weights, "correlations": correlations, "history_issues": history_issues, "basis": "last_120_daily_return_pearson_unadjusted_research", "limitations": ["不含未录入现金和资产", "收益相关性不是成分股重叠", "未复权收益会受分红影响", "个人成本不参与共享市场信号"], "actionable": False}
 
 
 def sector_overview(db: Session, settings: Settings) -> dict:

@@ -22,8 +22,7 @@ class CurrentDecisionService:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
 
-    @staticmethod
-    def latest_board_rows(db: Session) -> tuple[str | None, dict[str, dict[str, Any]]]:
+    def latest_board_rows(self, db: Session) -> tuple[str | None, dict[str, dict[str, Any]]]:
         snapshot = db.scalar(
             select(DecisionBoardSnapshot)
             .order_by(DecisionBoardSnapshot.generated_at.desc(), DecisionBoardSnapshot.id.desc())
@@ -31,7 +30,11 @@ class CurrentDecisionService:
         )
         if snapshot is None:
             return None, {}
-        payload = snapshot.payload_json if isinstance(snapshot.payload_json, dict) else {}
+        if self.settings.market_provider != "mock":
+            from app.services.decision_board_service import DecisionBoardService
+            payload = DecisionBoardService(self.settings).read_latest(db, snapshot_id=snapshot.snapshot_id) or {}
+        else:
+            payload = snapshot.payload_json if isinstance(snapshot.payload_json, dict) else {}
         mapped: dict[str, dict[str, Any]] = {}
         for row in payload.get("rows", []) or []:
             if not isinstance(row, dict):

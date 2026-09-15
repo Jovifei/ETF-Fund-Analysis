@@ -1,0 +1,65 @@
+name: postdeploy-ci
+on:
+  push:
+    branches: [fix/v106-postdeploy-20260914]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: postdeploy-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  followup-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated test and optional archive dependencies
+        run: pip install -e '.[dev]' duckdb==1.4.5
+      - name: Follow-up Python contracts
+        run: pytest backend/tests/test_postdeploy*.py -q --junitxml=/tmp/postdeploy.xml
+      - name: Embedded board failure-state regression
+        run: node --test backend/app/static/decision_board_embed.test.js
+      - name: Dependency inventory and offline test wheels
+        if: always()
+        run: |
+          python -m pip list --format=json > /tmp/postdeploy-packages.json
+          mkdir -p /tmp/postdeploy-wheels
+          python -m pip download --no-deps --only-binary=:all: --dest /tmp/postdeploy-wheels duckdb==1.4.5 pwdlib==0.3.1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: postdeploy-evidence-${{ github.run_id }}
+          path: |
+            /tmp/postdeploy.xml
+            /tmp/postdeploy-packages.json
+            /tmp/postdeploy-wheels/
+          retention-days: 7
+  windows-archive:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install explicit Windows archive dependencies
+        run: python -m pip install -e ".[dev]" duckdb==1.4.5
+      - name: NTFS archive paths and Parquet roundtrip
+        run: python -m pytest backend/tests/test_postdeploy_archive.py -q --junitxml=windows-archive.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-archive-${{ github.run_id }}
+          path: windows-archive.xml
+          retention-days: 7

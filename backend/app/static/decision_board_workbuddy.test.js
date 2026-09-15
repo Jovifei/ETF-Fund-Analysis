@@ -29,3 +29,30 @@ test('forecast score shrinks weak uncalibrated evidence toward neutral',()=>{con
 test('auth exposes registration and tab switching',()=>{const ui=load();assert.equal(typeof ui.registerAccount,'function');assert.equal(typeof ui.switchAuthTab,'function');});
 test('decision-board API always bypasses browser cache',async()=>{const ui=load();await ui.api('/api/decision-board');assert.equal(ui.requests[0][1].cache,'no-store');});
 test('indicator comparisons omit missing placeholders and use point deltas for oscillators',()=>{const ui=load();const missing=ui.comparisonHtml({indicator_comparison:{as_of_date:'2026-09-11',values:{rsi14:{current:48}}}},'rsi14','RSI');assert.match(missing,/RSI 48\.00/);assert.doesNotMatch(missing,/前 —|变化 —/);const macd=ui.comparisonHtml({indicator_comparison:{values:{macd_dif:{current:-0.1,previous:0.1}}}},'macd_dif','DIF');assert.match(macd,/变化 -0\.2000/);assert.doesNotMatch(macd,/%/);const rsi=ui.comparisonHtml({indicator_comparison:{values:{rsi14:{current:48,previous:50}}}},'rsi14','RSI');assert.match(rsi,/变化 -2\.00/);assert.doesNotMatch(rsi,/%/);});
+
+test('audit: lower break is not classified as an upward breakout',()=>{
+  const ui=load();assert.equal(ui.structureScore({chan:{status:'lower_break'}}),28);
+  assert.equal(ui.structureScore({chan:{status:'upper_break'}}),82);
+  assert.equal(ui.structureScore({chan:{status:'inside'}}),66);
+  assert.equal(ui.structureScore({chan:{status:'unknown_break'}}),50);
+});
+test('audit: missing indicators are not coerced into low numeric readings',()=>{
+  const ui=load();for(const value of [null,undefined,'',false]){
+    assert.match(ui.kdjInterpret({j:value,k:20,d:10}).label,/不足/);
+    assert.equal(ui.rsiScore({value}),50);
+  }
+  assert.match(ui.kdjInterpret({j:0,k:0,d:0}).label,/低位/);
+  assert.equal(ui.rsiScore({value:0}),66);
+});
+test('audit: cached iframe state cannot hide a failed refresh',()=>{
+  const handlers={}, nodes={}; const parent={postMessage(){}};
+  const node=(name)=>nodes[name]??=( {value:'',disabled:true,innerHTML:'',addEventListener(){},getBoundingClientRect(){return {height:300}}} );
+  const ctx={window:{parent,location:{origin:'https://fixture'},addEventListener(k,f){handlers[k]=f}},
+    document:{querySelector:node},state:{},HORIZONS:[1,3,5,10,20],renderAll(){},esc:String,
+    requestAnimationFrame(){},ResizeObserver:class {observe(){} disconnect(){}}};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'decision_board_embed.js'),'utf8'),ctx);
+  const emit=(error)=>handlers.message({source:parent,origin:'https://fixture',data:{type:'etf-board:state',
+    horizon:1,revision:0,filter:'',board:{rows:[]},error}});
+  emit('connection_failed');assert.equal(ctx.state.connectionError,true);
+  emit('');assert.equal(ctx.state.connectionError,false);
+});

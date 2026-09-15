@@ -1,16 +1,17 @@
-"""支撑/压力唯一计算与读取入口（support-resistance-v1）。
+"""支撑/压力唯一计算与读取入口（support-resistance-v2-input-mask）。
 
 全系统的支撑压力只在这里计算并落库（SupportResistanceSnapshot），
 决策总表 / 14:30 工作台 / ETF 详情一律读取快照，禁止各自从日线重算。
 
 统一输入口径（修复方案 P0-5）：
-* 回溯窗口 250 个交易日（config 可覆盖）；
-* 成交额使用真实 ``amount``，缺失时降级 ``volume * close``（结果可审计）；
+* 回溯窗口 250 根已存日线；原始价格口径不能混合；
+* 保留真实 ``amount/volume`` 的空值与零值，不估算或填零；
 * 参数来自 ``config/etf_1430_workbench.json`` 的 ``support_resistance`` 块。
 """
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +26,7 @@ from app.utils.support_resistance import build_support_resistance
 
 logger = logging.getLogger(__name__)
 
-METHOD_VERSION = "support-resistance-v1"
+METHOD_VERSION = "support-resistance-v2-input-mask"
 DEFAULT_WINDOW = 250
 
 _EMPTY_PAYLOAD: dict[str, Any] = {
@@ -61,35 +62,24 @@ class SupportResistanceService:
     # -------------------------------------------------------------- 数据准备
 
     def _sr_frame(self, db: Session, instrument_id: int, *, window: int = DEFAULT_WINDOW) -> pd.DataFrame:
-        """统一输入口径：最近 ``window`` 根日线 + 真实成交额（缺失时 volume*close）。"""
-        rows = db.scalars(
-            select(DailyBar)
+        """Bounded raw history; unknown units may not feed weighted methods."""
+        from app.providers.data_contract import finite, price_history_issue, row_units_verified
+        from app.utils.input_lineage import history_digest
+        rows = list(reversed(db.scalars(select(DailyBar)
             .where(DailyBar.instrument_id == instrument_id)
-            .order_by(DailyBar.trade_date.desc())
-            .limit(window)
-        ).all()
-        rows = list(reversed(rows))
-        if not rows:
-            return pd.DataFrame()
+            .order_by(DailyBar.trade_date.desc(), DailyBar.id.desc()).limit(window)).all()))
         records = []
         for row in rows:
-            amount = row.amount
-            if amount in (None, 0) or not amount:
-                close = row.close
-                volume = row.volume
-                amount = float(close) * float(volume) if close and volume else 0.0
-            records.append(
-                {
-                    "trade_date": row.trade_date,
-                    "open": row.open,
-                    "high": row.high,
-                    "low": row.low,
-                    "close": row.close,
-                    "volume": row.volume or 0.0,
-                    "amount": amount,
-                }
-            )
-        return pd.DataFrame(records)
+            units_ok = row_units_verified(row) or (self.settings.market_provider == "mock" and "mock" in row.source)
+            records.append({"trade_date": row.trade_date, "open": row.open, "high": row.high,
+                "low": row.low, "close": row.close,
+                "volume": row.volume if units_ok and finite(row.volume) and row.volume >= 0 else None,
+                "amount": row.amount if units_ok and finite(row.amount) and row.amount >= 0 else None})
+        frame = pd.DataFrame(records)
+        frame.attrs["history_issue"] = price_history_issue(rows)
+        frame.attrs["input_hash"] = history_digest(rows)
+        frame.attrs["contains_mock"] = any("mock" in str(row.source).lower() for row in rows)
+        return frame
 
     # -------------------------------------------------------------- 计算/落库
 
@@ -119,6 +109,8 @@ class SupportResistanceService:
             existing.config_hash = self.config_hash
             existing.source_bars = bars
             existing.computed_by = computed_by
+            existing.method_version = METHOD_VERSION
+            existing.generated_at = datetime.now(timezone.utc)
         else:
             db.add(
                 SupportResistanceSnapshot(
@@ -137,10 +129,20 @@ class SupportResistanceService:
         db.flush()
 
     def compute(self, db: Session, instrument_id: int, *, computed_by: str = "scheduled") -> dict[str, Any]:
-        """计算 + 落库 + 返回 payload（调度器/请求兜底共用同一口径）。"""
+        """显式任务计算并落库；页面读取不触发本方法。"""
         frame = self._sr_frame(db, instrument_id)
         bars = len(frame)
-        payload = build_support_resistance(frame, self.config)
+        issue = frame.attrs.get("history_issue")
+        payload = ({**_EMPTY_PAYLOAD, "reason": issue} if issue
+                   else build_support_resistance(frame, self.config))
+        volume_ready = bool(bars and frame["volume"].notna().all())
+        amount_ready = bool(bars and frame["amount"].notna().all())
+        payload.update(method_version=METHOD_VERSION, config_hash=self.config_hash,
+            input_hash=frame.attrs.get("input_hash"), actionable=False,
+            qualification="mock" if frame.attrs.get("contains_mock") else "blocked" if issue
+                          else "price_only_research" if not volume_ready else "research_only",
+            input_availability={"volume": volume_ready, "amount": amount_ready, "estimated_amount": False},
+            qualified_semantics="price_structure_computable_not_trading_approval")
         as_of_date = frame.iloc[-1]["trade_date"] if bars else None
         # JSON 列只收可序列化值：date 以 ISO 字符串进 payload，date 对象进列。
         payload["source_as_of_date"] = as_of_date.isoformat() if as_of_date else None
@@ -168,16 +170,24 @@ class SupportResistanceService:
             .order_by(SupportResistanceSnapshot.as_of_date.desc(), SupportResistanceSnapshot.generated_at.desc())
             .limit(1)
         )
-        if snapshot is None:
+        if (snapshot is None or snapshot.method_version != METHOD_VERSION
+                or snapshot.config_hash != self.config_hash):
+            return None
+        from app.utils.input_lineage import history_digest
+        rows = db.scalars(select(DailyBar).where(DailyBar.instrument_id == instrument_id)
+            .order_by(DailyBar.trade_date.desc(), DailyBar.id.desc()).limit(DEFAULT_WINDOW)).all()
+        if not rows or rows[0].trade_date != snapshot.as_of_date:
             return None
         payload = dict(snapshot.payload_json or {})
+        if payload.get("input_hash") != history_digest(list(reversed(rows))):
+            return None
         payload.setdefault("snapshot_as_of_date", snapshot.as_of_date.isoformat())
         payload["snapshot_source"] = "persisted_snapshot"
         return payload
 
     def latest_or_compute(self, db: Session, instrument_id: int, *, computed_by: str = "request") -> dict[str, Any]:
-        """读取持久化快照；缺失时即时计算并尝试落库（只读请求里 flush 不提交也无妨）。"""
+        """Compatibility reader: absence requires an explicit task, never GET writes."""
         persisted = self.latest(db, instrument_id)
         if persisted is not None:
             return persisted
-        return self.compute(db, instrument_id, computed_by=computed_by)
+        return {**_EMPTY_PAYLOAD, "reason": "snapshot_missing_requires_task", "actionable": False}

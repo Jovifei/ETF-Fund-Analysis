@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from uuid import uuid4
+from datetime import date
 
 import pandas as pd
 from sqlalchemy import select
@@ -55,7 +56,7 @@ class IndicatorService:
         skipped = 0
         failures: list[dict] = []
         computed: dict[int, IndicatorResult] = {}
-        metadata: dict[int, tuple[Instrument, list[DailyBar], str]] = {}
+        metadata: dict[int, tuple[Instrument, date, str]] = {}
         for instrument in instruments:
             if instrument.id in issues:
                 skipped += 1
@@ -89,10 +90,13 @@ class IndicatorService:
             try:
                 result = calculate_indicators(frame, self.strategy["indicator"])
             except Exception as exc:
-                failures.append({"ts_code": instrument.ts_code, "reason": f"{type(exc).__name__}: {exc}"})
+                failures.append({"ts_code": instrument.ts_code, "reason": type(exc).__name__})
                 continue
             computed[instrument.id] = result
-            metadata[instrument.id] = (instrument, list(rows), input_hash)
+            metadata[instrument.id] = (instrument, rows[-1].trade_date, input_hash)
+            # RPS and persistence consume scalar values only; retaining every
+            # enriched history frame and ORM row list multiplies peak RSS.
+            result.frame = pd.DataFrame()
 
         from app.utils.input_lineage import calculation_digest
         panel_hash = calculation_digest({ident: value[2] for ident, value in metadata.items()}, self.strategy, "indicator-panel-v2")
@@ -104,7 +108,7 @@ class IndicatorService:
         feature_schema_version = self.strategy.get("feature_schema_version", FEATURE_SCHEMA_VERSION)
         strategy_cfg = self.strategy.get("strategy_engine", {})
         for instrument_id, result in computed.items():
-            instrument, rows, local_hash = metadata[instrument_id]
+            instrument, as_of_date, local_hash = metadata[instrument_id]
             input_hash = stable_hash({"panel": panel_hash, "instrument_id": instrument_id, "local": local_hash})
             values = dict(result.values)
             values["rps20"] = rps20[instrument_id]
@@ -131,7 +135,6 @@ class IndicatorService:
             )
             values["reproducibility"] = reproducibility
 
-            as_of_date = rows[-1].trade_date
             snapshot = db.scalar(
                 select(IndicatorSnapshot).where(
                     IndicatorSnapshot.instrument_id == instrument.id,
@@ -184,8 +187,8 @@ class IndicatorService:
         from app.services.task_outcome import coverage_outcome
         from app.services.settlement import settled_session
         target = settled_session(self.settings)
-        completed = sum(rows[-1].trade_date == target or self.settings.market_provider == "mock"
-                        for _inst, rows, _hash in metadata.values())
+        completed = sum(as_of_date == target or self.settings.market_provider == "mock"
+                        for _inst, as_of_date, _hash in metadata.values())
         return coverage_outcome(len(instruments), completed, run_id=run_id,
             created=created, updated=max(0, len(computed)-created), skipped=skipped,
             failures=failures, indicator_version=version, target_trade_date=target.isoformat())

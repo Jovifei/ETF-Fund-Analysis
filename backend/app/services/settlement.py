@@ -1,7 +1,7 @@
 """Completion belongs to a settled exchange session and its input generation."""
 from datetime import datetime, time, timedelta
 from sqlalchemy import select
-from app.models import TaskRun
+from app.models import Instrument, TaskRun
 from app.services.trading_calendar_service import TradingCalendarService
 
 SETTLEMENT_CUTOFF = time(15, 15)
@@ -35,8 +35,29 @@ def session_refresh_due(db, settings, task_name, now, retry_minutes=15, dependen
     def localize(value):
         return value.replace(tzinfo=settings.timezone) if value.tzinfo is None else value.astimezone(settings.timezone)
     from app.services.task_outcome import normalize_outcome
-    complete = (run.status == "succeeded" and result.get("target_trade_date") == target
+    scope_complete = True
+    different_scope = False
+    if task_name == "refresh_bars":
+        # A manual single-code refresh shares the task name with the full
+        # scheduled download. Validate identities, not only equal counts.
+        expected = set(db.scalars(select(Instrument.ts_code).where(Instrument.enabled.is_(True))))
+        coverage = result.get("coverage")
+        valid_rows = isinstance(coverage, list) and all(isinstance(row, dict) for row in coverage)
+        received = [row.get("ts_code") for row in coverage] if valid_rows else []
+        valid_codes = all(isinstance(code, str) for code in received)
+        scope_complete = bool(expected and valid_rows and valid_codes
+            and len(received) == len(expected) and set(received) == expected
+            and all(row.get("complete") is True and row.get("received_through") == target for row in coverage))
+        requested = result.get("requested")
+        # A subset attempt must not postpone the full pool. A failed full-pool
+        # attempt must still back off, even if no per-code rows were returned.
+        different_scope = (isinstance(requested, int) and not isinstance(requested, bool)
+                           and 0 <= requested < len(expected))
+    complete = (scope_complete and run.status == "succeeded" and result.get("target_trade_date") == target
                 and result.get("coverage_complete") is True and normalize_outcome(result)["status"] == "succeeded")
+    if complete and task_name in OUTPUT_STAGES:
+        complete = (result.get("completion_contract") == "settled-output-v106"
+                    and result.get("output_scope_hash") == output_scope_hash(db, settings))
     if complete:
         finished = localize(run.finished_at or run.started_at)
         for dependency in dependencies:
@@ -51,6 +72,38 @@ def session_refresh_due(db, settings, task_name, now, retry_minutes=15, dependen
     last = run.finished_at or run.started_at
     # Unknown legacy outcomes retain backoff; a known older session does not.
     same_or_unknown_target = result.get("target_trade_date") in {None, target}
-    if same_or_unknown_target and last is not None and (local - localize(last)).total_seconds() < retry_minutes * 60:
+    if not different_scope and same_or_unknown_target and last is not None and (local - localize(last)).total_seconds() < retry_minutes * 60:
         return False
     return True
+
+
+OUTPUT_STAGES = frozenset({"refresh_signals", "refresh_decision_board", "generate_report", "refresh_sector_snapshots"})
+
+
+def output_scope_hash(db, settings):
+    from app.utils.hashing import stable_hash
+    codes = list(db.scalars(select(Instrument.ts_code).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code)))
+    return stable_hash({"codes": codes, "strategy": settings.load_strategy()})
+
+
+def stamp_output_completion(db, settings, task_name, result, at):
+    """Processing a blocked view succeeds; it does not certify the input data.
+
+    Services with record-coverage contracts keep their own counters and status.
+    This adds a separate identity for derived publications that previously had
+    no target-session receipt at all. A failed/partial output stays retryable.
+    """
+    if task_name not in OUTPUT_STAGES:
+        return result
+    result = dict(result)
+    result.setdefault("target_trade_date", settled_session(settings, at).isoformat())
+    result["output_scope_hash"] = output_scope_hash(db, settings)
+    result["completion_contract"] = "settled-output-v106"
+    result["completion_basis"] = "processed_output_not_research_qualification"
+    proof = (task_name == "refresh_decision_board" and bool(result.get("snapshot_id"))
+             or task_name == "generate_report" and bool(result.get("content_hash"))
+             or task_name in {"refresh_signals", "refresh_sector_snapshots"}
+             and any(isinstance(result.get(k), int) and not isinstance(result.get(k), bool)
+                     and result[k] > 0 for k in ("created", "updated", "inserted", "unchanged")))
+    result["coverage_complete"] = result.get("status") == "succeeded" and bool(proof)
+    return result

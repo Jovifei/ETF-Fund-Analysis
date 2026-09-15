@@ -97,10 +97,20 @@ def history_issues(db, settings, instrument_ids=None):
     ids = list(instrument_ids) if instrument_ids is not None else list(db.scalars(select(Instrument.id).where(Instrument.enabled.is_(True))))
     if not ids:
         return {}
-    groups = {ident: [] for ident in ids}
-    for row in db.scalars(select(DailyBar).where(DailyBar.instrument_id.in_(ids)).order_by(DailyBar.instrument_id, DailyBar.trade_date, DailyBar.adjust)):
-        groups[row.instrument_id].append(row)
-    return {ident: reasons[0] for ident, rows in groups.items() if (reasons := assess_history(rows))}
+    from itertools import groupby
+    issues = {}
+    seen = set()
+    query = select(DailyBar).where(DailyBar.instrument_id.in_(ids)).order_by(
+        DailyBar.instrument_id, DailyBar.trade_date, DailyBar.adjust).execution_options(yield_per=256)
+    for ident, group in groupby(db.scalars(query), key=lambda row: row.instrument_id):
+        seen.add(ident)
+        reasons = assess_history(list(group))
+        if reasons:
+            issues[ident] = reasons[0]
+    for ident in ids:
+        if ident not in seen:
+            issues[ident] = "history_missing"
+    return issues
 
 def require_current_history(db, settings):
     if settings.market_provider == "mock":
