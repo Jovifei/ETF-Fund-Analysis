@@ -5,7 +5,7 @@ import {api, errorText} from '../lib/api'
 import {stamp, statusName} from '../lib/format'
 import type {DataJob} from '../lib/types'
 import TaskProgress from './TaskProgress.vue'
-type Panel = {key:string;label:string;rows:number;latest_source:string|null;latest_fetch_in_scope?:string|null;oldest_instrument_latest?:string|null;covered_instruments?:number;tracked_instruments?:number;last_success_at?:string|null;status:string;retry_task:string;last_attempt?:{status:string;failed:boolean;started_at:string;finished_at:string|null}|null}
+type Panel = {target_trade_date?:string;target_covered_instruments?:number|null;target_missing_instruments?:number|null;last_attempt_summary?:{failures?:{ts_code?:string;context_id?:string;reason:string}[];failures_omitted?:number};key:string;label:string;rows:number;latest_source:string|null;latest_fetch_in_scope?:string|null;oldest_instrument_latest?:string|null;covered_instruments?:number;tracked_instruments?:number;last_success_at?:string|null;status:string;retry_task:string;last_attempt?:{status:string;failed:boolean;started_at:string;finished_at:string|null}|null}
 type Health = {as_of:string;catalog_count:number;tracked_count:number;worker_last_seen_at:string|null;balanced_refresh_enabled:boolean;note:string;panels:Panel[]}
 const q=useQuery<Health>('/api/workspace/data-health'), active=ref(''), error=ref(''),pending=ref(false)
 async function refreshTask(panel:Panel){
@@ -35,9 +35,9 @@ defineExpose({reload:q.refresh})
         <tbody><tr v-for="p in q.data.value?.panels??[]" :key="p.key">
           <td>{{p.label}}<small>{{p.rows}} 条已存记录</small></td>
           <td>{{sourceLabel(p.latest_source)}}<small v-if="p.oldest_instrument_latest">最旧标的的最新日期 {{sourceLabel(p.oldest_instrument_latest)}}</small></td>
-          <td>{{p.rows?'已有记录，资格需独立检查':'尚无数据'}}<small v-if="p.covered_instruments!=null">{{p.covered_instruments}} / {{p.tracked_instruments}} 只研究池标的有记录</small></td>
+          <td>{{p.rows?'已有记录，资格需独立检查':'尚无数据'}}<small v-if="p.covered_instruments!=null">{{p.covered_instruments}} / {{p.tracked_instruments}} 只研究池标的有记录</small><small v-if="p.target_covered_instruments!=null">目标 {{p.target_trade_date}}：{{p.target_covered_instruments}} / {{p.tracked_instruments}} 已覆盖，{{p.target_missing_instruments}} 只待补齐（不代表资格通过）</small></td>
           <td>{{sourceLabel(p.latest_fetch_in_scope)}}</td>
-          <td><span :class="{'warning-notice':p.last_attempt?.failed}">{{p.last_attempt?statusName(p.last_attempt.status):'无任务记录'}}</span><small>成功 {{stamp(p.last_success_at)}}</small></td>
+          <td><span :class="{'warning-notice':p.last_attempt?.failed}">{{p.last_attempt?statusName(p.last_attempt.status):'无任务记录'}}</span><small>成功 {{stamp(p.last_success_at)}}</small><small v-for="(f,i) in p.last_attempt_summary?.failures??[]" :key="i">{{f.ts_code??f.context_id}} · {{f.reason}}</small><small v-if="p.last_attempt_summary?.failures_omitted">另有 {{p.last_attempt_summary.failures_omitted}} 项未展开</small></td>
           <td><button class="button small" :disabled="pending" @click="refreshTask(p)">{{p.retry_task==='recompute'?'重算缓存':'提交补采'}}</button></td>
         </tr></tbody></table></div>
       <p class="small-note">{{q.data.value?.note}}<RouterLink to="/settings">查看数据源与详细任务</RouterLink></p>
