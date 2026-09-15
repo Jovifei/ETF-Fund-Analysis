@@ -2,7 +2,18 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from scripts.production_data_gate import evaluate_snapshot
+# The CLI is not an installed package. Load by repository path so both
+# the pytest console entry point and python -m pytest work on all platforms.
+import importlib.util
+from pathlib import Path
+
+_SPEC = importlib.util.spec_from_file_location(
+    "production_data_gate", Path(__file__).resolve().parents[2] / "scripts" / "production_data_gate.py"
+)
+assert _SPEC is not None and _SPEC.loader is not None
+_GATE = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(_GATE)
+evaluate_snapshot = _GATE.evaluate_snapshot
 
 
 def item(**overrides):

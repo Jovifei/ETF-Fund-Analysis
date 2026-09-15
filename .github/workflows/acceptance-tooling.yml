@@ -1,0 +1,43 @@
+name: acceptance-tooling
+on:
+  push:
+    branches: [codex/v106-scheduler-oom-fix]
+permissions:
+  contents: read
+concurrency:
+  group: acceptance-tooling-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  locked-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install only the existing lockfile
+        run: npm ci --ignore-scripts --prefix frontend
+      - name: Frontend acceptance checks
+        run: |
+          npm run test --prefix frontend
+          npm run typecheck --prefix frontend
+          npm run build --prefix frontend
+          npm audit --audit-level=high --prefix frontend
+      # For offline validation in the reviewer sandbox. No environment files,
+      # credentials, databases, reports or home-directory caches are exported.
+      - name: Prepare reproducible offline frontend tooling
+        run: |
+          mkdir -p /tmp/etf-acceptance-tooling/bin
+          cp "$(command -v node)" /tmp/etf-acceptance-tooling/bin/node
+          tar --exclude='*.woff' --exclude='*.woff2' --exclude='*.ttf' --exclude='*.otf' -czf /tmp/etf-acceptance-tooling/npm-dependencies.tar.gz -C frontend node_modules
+          cp frontend/package-lock.json /tmp/etf-acceptance-tooling/package-lock.json
+          node --version > /tmp/etf-acceptance-tooling/node-version.txt
+          sha256sum /tmp/etf-acceptance-tooling/bin/node /tmp/etf-acceptance-tooling/npm-dependencies.tar.gz /tmp/etf-acceptance-tooling/package-lock.json > /tmp/etf-acceptance-tooling/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-tooling-${{ github.run_id }}
+          path: /tmp/etf-acceptance-tooling/
+          retention-days: 1

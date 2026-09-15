@@ -1,0 +1,44 @@
+# 阶段 QA-R：验收门禁可靠性与响应式（实施日志）
+
+接续固定基线 ac4d6a84c5d378b02190263a0d036d7461f91702，tree
+270bb356e4b74f85bb2ac6421f96e70b29996c89；现有分支 codex/v106-scheduler-oom-fix。
+不是生产发布；原 Gate 0–7 标准保留不改。本阶段不改策略、量额单位、复权、
+数据库、生产配置、本人模型权限或此前被拦截接线。
+
+## QA-R01：测试入口修复
+
+远端基线 ci #661 / 34993101349 在收集 test_production_data_gate.py 时出现
+ModuleNotFoundError: scripts；其后构建等步骤 skipped，不能算通过。
+原因是 CLI 脚本不是安装包，pytest 与 python -m pytest 的 sys.path 不同。
+改为按测试文件的仓库相对路径加载 CLI，不改生产代码或降低断言。
+隔离本地 python -P -m pytest 已复现失败；修复后原 4 条测试与 39 条 JS 通过。
+全量结果与平台差异由本阶段最后收据记录，不借原 c219 收据替代。
+postdeploy-ci 加入当前接收分支，恢复 Windows/DuckDB 专项覆盖。
+acceptance-tooling 使用原锁文件验证前端并提供 1 天保留的无凭据离线测试依赖。
+这是测试辅助产物，不能作为部署包，不包含字体或用户数据。
+
+## QA-R02：数据验收器负面样本（待完成）
+
+检查未知计数、无效日期、重复/漏标的、期限身份、陈旧报价、证据时间、
+缺少来源/版本检查、异常报告以及 CLI 文件边界。新的验证不能授予交易资格。
+原生产 gate 的 BLOCKED_DATA 保留；没有现场输入时报告 UNKNOWN，不造生产通过。
+
+## QA-R03：响应式及浏览器矩阵（待完成）
+
+保留 WorkBuddy 模板/五档动作，修整弹性容器、表格内滚动、窄屏核心字段、
+解释可见性、导航抽屉与图表 resize。按原标准七个视口，并补 320 CSS px
+重排压力测试；CSS 缩放测试与真实浏览器原生缩放的证据必须分开。
+
+## QA-R04：固定树验收与交接（待完成）
+
+每批保留 RED/GREEN，远端按相同源码树复测。总结源码/测试通过、环境跳过、
+数据阻断、尚未现场验证四种结果。只交付固定 SHA 与本地 Codex 接收 Prompt；
+不自动部署、不合并 main、不移标签，不以“HTTP 200”替代数据资格。
+
+## 参考（设计/接口依据，不是照搬策略）
+
+- pytest stable usage：console entrypoint 与 python -m pytest 的路径差异。
+- W3C WCAG Reflow：320 CSS px；数据表可在自身容器双向滚动，正文不应撑宽。
+- Playwright Emulation：viewport、触控和 deviceScaleFactor 各有用途；DPR 不是页面 zoom。
+
+原始官方地址记录于最终验收文档。没有导入新的交易框架或改变投资逻辑。
