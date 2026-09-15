@@ -23,8 +23,11 @@ window.addEventListener('message',event=>{
   }
   state.favorites=Array.isArray(value.favorites)?value.favorites.filter(x=>/^\d{6}\.(SH|SZ|BJ)$/.test(x)):[];
   state.favoriteBusy=Array.isArray(value.favoriteBusy)?value.favoriteBusy:[];
+  state.connectionError=Boolean(value.error);
   if(value.board&&Array.isArray(value.board.rows)){
-    state.board=value.board;state.connectionError=false;renderAll();
+    state.board=value.board;renderAll();
+  }else if(value.error&&state.board){
+    renderAll();
   }else if(value.error){
     document.querySelector('#boardArea').innerHTML='<div class="empty">'+esc(value.error)+'</div>';
   }
