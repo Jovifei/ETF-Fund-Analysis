@@ -15,7 +15,7 @@ const GROUP_META = Object.freeze({
 const SCORE_WEIGHTS = Object.freeze({trend:22, momentum:22, volume:14, structure:14, forecast:20, data:8});
 const state = {sessionActive:false, auth:{identifier:null, role:null}, board:null, horizon:1, filter:'', activeCode:null, poll:null, connectionError:false, sortDaily:'desc'};
 
-function numeric(value){return value!==null&&value!==undefined&&value!==''&&Number.isFinite(Number(value));}
+function numeric(value){return (typeof value==='number'||typeof value==='string')&&String(value).trim()!==''&&Number.isFinite(Number(value));}
 function clamp(value,min=0,max=100){return Math.max(min,Math.min(max,Number(value)));}
 function esc(value){return String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');}
 function fmt(value,digits=1,fallback='—'){return numeric(value)?Number(value).toFixed(digits):fallback;}
@@ -28,11 +28,11 @@ function scoreLabel(score){if(!numeric(score))return '待评估';if(score>=85)re
 function toneFromScore(score){if(score>=70)return 'good';if(score<40)return 'hot';if(score<55)return 'warn';return 'neutral';}
 function todayReturn(row){return row?.returns?.today??row?.return_1d??null;}
 function forecastItem(row,h){return row?.forecasts?.[String(h)]||row?.forecasts?.[h]||(h===state.horizon?row?.forecast:{})||{};}
-function confidenceNumber(item={}){const raw=Number(item?.confidence);if(!Number.isFinite(raw))return null;return raw<=1?raw*100:raw;}
+function confidenceNumber(item={}){if(!numeric(item?.confidence))return null;const raw=Number(item.confidence);if(!Number.isFinite(raw))return null;return raw<=1?raw*100:raw;}
 function confidenceBand(value){if(!numeric(value))return '未验证';const n=Number(value);return n>=60?'可参考':n>=40?'弱信号':'忽略';}
 
 function kdjInterpret(kdj={}){
-  const j=Number(kdj?.j),k=Number(kdj?.k),d=Number(kdj?.d);
+  const j=numeric(kdj?.j)?Number(kdj.j):NaN,k=numeric(kdj?.k)?Number(kdj.k):NaN,d=numeric(kdj?.d)?Number(kdj.d):NaN;
   if(!Number.isFinite(j))return {score:50,label:'KDJ不足',note:'J值不可用',tone:'neutral'};
   const death=kdj?.kind==='death'||(Number.isFinite(k)&&Number.isFinite(d)&&k<d&&kdj?.death===true);
   if(death)return {score:18,label:`J=${fmt(j,1)} · 死叉`,note:'K下穿D · 空头信号 · 短线谨慎',tone:'hot'};
@@ -43,11 +43,11 @@ function kdjInterpret(kdj={}){
 }
 function maScore(ma={}){const base=({bull:92,mixed:58,bear:24}[ma?.kind]??50);const arrows=(ma?.arrows||[]).filter(x=>x?.dir==='up').length;return clamp(base+Math.max(-6,Math.min(6,(arrows-2)*2)));}
 function macdScore(macd={}){return ({gold:96,bull_cont:86,approach_gold:72,bear_cont:42,approach_death:28,death:16}[macd?.kind]??50);}
-function rsiScore(rsi={}){const n=Number(rsi?.value);if(!Number.isFinite(n))return 50;if(n>=70)return 28;if(n>=50)return 86;if(n>=30)return 58;return 66;}
+function rsiScore(rsi={}){const n=numeric(rsi?.value)?Number(rsi.value):NaN;if(!Number.isFinite(n))return 50;if(n>=70)return 28;if(n>=50)return 86;if(n>=30)return 58;return 66;}
 function tdScore(td={}){const count=Number(String(td?.label||'').match(/(\d+)$/)?.[1]||0);if(td?.kind==='buy')return clamp(58+count*3,0,84);if(td?.kind==='sell')return clamp(48-count*3,16,48);return 55;}
 function volumeScore(volume={},row={}){const ret=todayReturn(row)??0,ratio=Number(volume?.ratio);if(volume?.kind==='expand')return ret>0?clamp(78+(Number.isFinite(ratio)?(ratio-1)*12:0),60,98):28;if(volume?.kind==='flat')return 64;if(volume?.kind==='contract')return ret>=0?54:40;return 50;}
-function structureScore(row={}){const status=String(row?.chan?.status||'');if(/upper|above|break/i.test(status))return 82;if(/inside/i.test(status))return 66;if(/lower|below/i.test(status))return 28;const levels=row?.support_resistance||{};const s=Number(levels?.nearest_support?.price??levels?.nearest_support),r=Number(levels?.nearest_resistance?.price??levels?.nearest_resistance);return Number.isFinite(s)&&Number.isFinite(r)?66:50;}
-function forecastScore(row={},horizon=1){const item=forecastItem(row,horizon),conf=confidenceNumber(item),expected=Number(item?.expected_return),pup=Number(item?.p_up);if(conf===null||conf<40)return 50;if(!Number.isFinite(expected)&&!Number.isFinite(pup))return 50;const exp=Number.isFinite(expected)?clamp(50+expected*1200,10,90):50,prob=Number.isFinite(pup)?clamp(pup*100,10,90):50,raw=exp*.62+prob*.38;let evidence=clamp((conf-39)/41,0,1);if(item?.calibration_status!=='calibrated')evidence*=.65;return Math.round(50+(raw-50)*evidence);}
+function structureScore(row={}){const status=String(row?.chan?.status||''),scores={upper_break:82,above:82,upper:82,inside:66,lower_break:28,below:28,lower:28};if(Object.hasOwn(scores,status))return scores[status];const levels=row?.support_resistance||{},s=levels?.nearest_support?.price??levels?.nearest_support,r=levels?.nearest_resistance?.price??levels?.nearest_resistance;return numeric(s)&&numeric(r)?66:50;}
+function forecastScore(row={},horizon=1){const item=forecastItem(row,horizon),conf=confidenceNumber(item),expected=numeric(item?.expected_return)?Number(item.expected_return):NaN,pup=numeric(item?.p_up)?Number(item.p_up):NaN;if(conf===null||conf<40)return 50;if(!Number.isFinite(expected)&&!Number.isFinite(pup))return 50;const exp=Number.isFinite(expected)?clamp(50+expected*1200,10,90):50,prob=Number.isFinite(pup)?clamp(pup*100,10,90):50,raw=exp*.62+prob*.38;let evidence=clamp((conf-39)/41,0,1);if(item?.calibration_status!=='calibrated')evidence*=.65;return Math.round(50+(raw-50)*evidence);}
 function dataScore(row={}){let score=100;const text=JSON.stringify([row?.freshness,row?.data_status,row?.quote,row?.provisional]).toLowerCase();if(text.includes('mock'))score-=70;if(text.includes('missing'))score-=55;if(text.includes('stale'))score-=45;if(text.includes('degraded'))score-=45;if(text.includes('unverified'))score-=30;if(row?.quote?.timestamp_verified===false)score-=20;if(row?.quote?.is_realtime===false)score-=10;return clamp(score);}
 function scoreRow(row,horizon=1){const trend=Math.round(maScore(row?.ma)*.55+macdScore(row?.macd)*.45),kdj=kdjInterpret(row?.kdj),momentum=Math.round(kdj.score*.55+rsiScore(row?.rsi)*.30+tdScore(row?.td)*.15),volume=Math.round(volumeScore(row?.volume,row)),structure=Math.round(structureScore(row)),forecast=Math.round(forecastScore(row,horizon)),data=Math.round(dataScore(row));const components={trend,momentum,volume,structure,forecast,data};const total=Math.round(Object.entries(SCORE_WEIGHTS).reduce((sum,[key,w])=>sum+components[key]*w/100,0));return {total,components,kdj};}
 function isBlocked(row){return dataScore(row)<60||row?.grade==='数据异常';}
@@ -114,7 +114,7 @@ function navigateEtf(code){
   }else window.location.assign(`/etf/${encodeURIComponent(code)}`);
 }
 document.addEventListener('DOMContentLoaded',()=>{if(!document.body?.hasAttribute('data-workspace-embed'))start();});
-globalThis.WorkBuddyDecisionBoard=Object.freeze({api,ensureSession,loginAccount,registerAccount,switchAuthTab,logoutAccount,scoreRow,kdjInterpret,maScore,macdScore,rsiScore,tdScore,volumeScore,structureScore,forecastScore,forecastProbabilityLabel,dataScore,scoreClass,scoreLabel,pct,deltaArrow,confidenceBand,snapshotConnectionState});
+globalThis.WorkBuddyDecisionBoard=Object.freeze({displayScoreVersion:'workbuddy-display-v106.1',api,ensureSession,loginAccount,registerAccount,switchAuthTab,logoutAccount,scoreRow,kdjInterpret,maScore,macdScore,rsiScore,tdScore,volumeScore,structureScore,forecastScore,forecastProbabilityLabel,dataScore,scoreClass,scoreLabel,pct,deltaArrow,confidenceBand,snapshotConnectionState});
 
 // Handle before the table row listener to avoid navigating when starring.
 document.addEventListener('click',event=>{const button=event.target?.closest?.('[data-favorite]');if(!button||!document.body?.hasAttribute('data-workspace-embed'))return;event.preventDefault();event.stopImmediatePropagation();const code=button.getAttribute('data-favorite');if(/^\d{6}\.(SH|SZ|BJ)$/.test(code))window.parent.postMessage({type:'etf-board:favorite',code},window.location.origin);},true);
