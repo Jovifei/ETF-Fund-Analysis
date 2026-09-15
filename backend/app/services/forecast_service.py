@@ -298,6 +298,7 @@ class ForecastService:
 
     def _frames(self, db: Session, instruments: list[Instrument]) -> dict[int, pd.DataFrame]:
         frames: dict[int, pd.DataFrame] = {}
+        self._frame_history_hashes = {}
         panel: list[pd.DataFrame] = []
         from app.providers.data_contract import history_issues
         issues = history_issues(db, self.settings, [item.id for item in instruments])
@@ -325,6 +326,8 @@ class ForecastService:
                     for row in rows
                 ]
             )
+            from app.utils.input_lineage import history_digest
+            self._frame_history_hashes[instrument.id] = history_digest(rows)
             rich = build_feature_frame(raw, self.strategy["indicator"]).frame
             rich["instrument_id"] = instrument.id
             frames[instrument.id] = rich
@@ -345,7 +348,7 @@ class ForecastService:
         feature_schema_version = self.strategy.get("feature_schema_version", FEATURE_SCHEMA_VERSION)
         frames = self._frames(db, instruments)
         from app.utils.input_lineage import calculation_digest, history_digest
-        panel_hash = calculation_digest({inst.id: history_digest(db.scalars(select(DailyBar).where(DailyBar.instrument_id == inst.id).order_by(DailyBar.trade_date)).all()) for inst in instruments if inst.id in frames}, self.strategy, "forecast-panel-v2")
+        panel_hash = calculation_digest(self._frame_history_hashes, self.strategy, "forecast-panel-v2")
         created = 0
         updated = 0
         failures: list[dict[str, str]] = []
@@ -355,12 +358,8 @@ class ForecastService:
                 failures.append({"ts_code": instrument.ts_code, "reason": "历史数据不足或指标计算失败"})
                 continue
             as_of_date = frame.iloc[-1]["trade_date"]
-            rows = db.scalars(
-                select(DailyBar)
-                .where(DailyBar.instrument_id == instrument.id)
-                .order_by(DailyBar.trade_date)
-            ).all()
-            input_hash = stable_hash({"panel": panel_hash, "instrument_id": instrument.id, "local": history_digest(rows)})
+            input_hash = stable_hash({"panel": panel_hash, "instrument_id": instrument.id,
+                                      "local": self._frame_history_hashes[instrument.id]})
             for horizon in [int(value) for value in forecast_cfg.get("horizons", DEFAULT_RESEARCH_HORIZONS)]:
                 selected = feature_columns_for_horizon(horizon, frame.columns)
                 result = similarity_forecast(
