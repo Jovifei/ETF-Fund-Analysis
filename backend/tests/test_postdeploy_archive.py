@@ -1,6 +1,6 @@
 """Cold archives are untrusted research packets, not a live database sync."""
 from datetime import datetime, timedelta, timezone
-import copy
+import os
 import gzip
 import json
 
@@ -9,6 +9,16 @@ import pytest
 NOW = datetime(2026, 9, 15, 2, 0, tzinfo=timezone.utc)
 KEY = bytes(range(32))  # disposable fixture, never a deployed secret
 
+
+
+def protect_new_fixture(path, *, directory=False):
+    """Provision only newly created throwaway fixtures, not existing user paths."""
+    if os.name == 'nt':
+        from app.workspace.bridge_runtime import windows_private_directory
+        windows_private_directory(path, created=True, directory=directory)
+    else:
+        path.chmod(0o700 if directory else 0o600)
+    return path
 
 def request():
     from app.workspace.archive_protocol import new_request
@@ -73,14 +83,14 @@ def test_empty_response_is_explicit_not_a_complete_history():
 
 def test_local_export_verifies_manifest_before_selection(tmp_path):
     from app.workspace.archive_store import read_export
-    root = tmp_path / 'private'; root.mkdir(mode=0o700)
-    archive = root / 'pack'; archive.mkdir(mode=0o700)
+    root = tmp_path / 'private'; root.mkdir(mode=0o700); protect_new_fixture(root, directory=True)
+    archive = root / 'pack'; archive.mkdir(mode=0o700); protect_new_fixture(archive, directory=True)
     raw = b''.join((json.dumps({'kind':'etf_bar', **row, 'actionable':False})+'\n').encode() for row in rows())
-    path = archive / 'market-history.jsonl.gz'; path.write_bytes(gzip.compress(raw)); path.chmod(0o600)
+    path = archive / 'market-history.jsonl.gz'; path.write_bytes(gzip.compress(raw)); protect_new_fixture(path)
     import hashlib
     manifest = {'schema_version':'market-history-archive-v1','file':path.name,
                 'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}
-    meta = archive / 'manifest.json'; meta.write_text(json.dumps(manifest)); meta.chmod(0o600)
+    meta = archive / 'manifest.json'; meta.write_text(json.dumps(manifest)); protect_new_fixture(meta)
     assert len(read_export(root, 'pack', request(), now=NOW)) == 3
     path.write_bytes(gzip.compress(b'bad'))
     with pytest.raises(ValueError): read_export(root, 'pack', request(), now=NOW)
@@ -89,7 +99,7 @@ def test_local_export_verifies_manifest_before_selection(tmp_path):
 
 def test_symlink_archive_root_rejected(tmp_path):
     from app.workspace.archive_store import private_path
-    root = tmp_path / 'private'; root.mkdir(mode=0o700)
+    root = tmp_path / 'private'; root.mkdir(mode=0o700); protect_new_fixture(root, directory=True)
     link = tmp_path / 'link'
     try: link.symlink_to(root, target_is_directory=True)
     except OSError: pytest.skip('symlink creation unavailable')
@@ -99,7 +109,7 @@ def test_symlink_archive_root_rejected(tmp_path):
 def test_optional_parquet_roundtrip_and_filters(tmp_path):
     pytest.importorskip('duckdb')
     from app.workspace.archive_parquet import write, read
-    root = tmp_path / 'private'; root.mkdir(mode=0o700)
+    root = tmp_path / 'private'; root.mkdir(mode=0o700); protect_new_fixture(root, directory=True)
     req = request(); write(root, 'parquet-one', req, rows(), now=NOW)
     selected = {**req,'start':'2026-09-11'}
     result = read(root, 'parquet-one', selected, now=NOW)
@@ -130,3 +140,35 @@ def test_request_ids_must_be_strings(field, value):
     req = request(); req[field] = value
     with pytest.raises(ValueError, match='invalid_archive_nonce'):
         validate_request(req, now=NOW)
+
+
+def test_existing_broad_archive_directory_is_rejected_not_repaired(tmp_path):
+    from app.workspace.archive_store import private_path
+    path = tmp_path / 'broad'
+    path.mkdir(mode=0o700)
+    protect_new_fixture(path, directory=True)
+    if os.name == 'nt':
+        import win32security as security
+        import ntsecuritycon
+        info = security.DACL_SECURITY_INFORMATION
+        descriptor = security.GetNamedSecurityInfo(str(path), security.SE_FILE_OBJECT, info)
+        acl = descriptor.GetSecurityDescriptorDacl()
+        acl.AddAccessAllowedAceEx(security.ACL_REVISION, 0, ntsecuritycon.FILE_GENERIC_READ,
+                                 security.ConvertStringSidToSid('S-1-1-0'))
+        security.SetNamedSecurityInfo(str(path), security.SE_FILE_OBJECT,
+            info | security.PROTECTED_DACL_SECURITY_INFORMATION, None, None, acl, None)
+        def acl_snapshot():
+            current = security.GetNamedSecurityInfo(str(path), security.SE_FILE_OBJECT, info)
+            entries = current.GetSecurityDescriptorDacl()
+            return [(ace[0], ace[1], security.ConvertSidToStringSid(ace[-1]))
+                    for ace in (entries.GetAce(i) for i in range(entries.GetAceCount()))]
+        before = acl_snapshot()
+        with pytest.raises(ValueError):
+            private_path(path, directory=True)
+        after = acl_snapshot()
+        assert before == after
+    else:
+        path.chmod(0o755)
+        with pytest.raises(ValueError, match='archive_permissions_unsafe'):
+            private_path(path, directory=True)
+        assert path.stat().st_mode & 0o777 == 0o755
