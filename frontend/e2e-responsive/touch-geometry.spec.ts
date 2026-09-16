@@ -35,7 +35,10 @@ test('touch controls and orientation preserve chart sizing at DPR 2', async ({ p
   await canvasFitsHost(page)
   await page.getByRole('button', { name: '打开导航', exact: true }).tap()
   await expect(page.locator('.main-shell')).toHaveAttribute('inert', '')
-  await page.getByRole('button', { name: '关闭导航', exact: true }).tap()
+  // The backdrop is also a close control; choose the button inside the dialog.
+  const close = page.getByRole('dialog', { name: '主要导航' }).getByRole('button', { name: '关闭导航', exact: true })
+  await expect(close).toHaveCount(1)
+  await close.tap()
   await expect(page.locator('.main-shell')).not.toHaveAttribute('inert')
   await page.getByTestId('chart-fullscreen').tap()
   await expect(page.locator('.expanded-chart')).toBeVisible()
