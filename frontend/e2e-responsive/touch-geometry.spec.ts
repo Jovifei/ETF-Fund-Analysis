@@ -2,9 +2,11 @@ import { test, expect, type Page, type TestInfo } from '@playwright/test'
 
 // Device emulation is not native browser zoom or physical iOS/Android acceptance.
 // KLineCharts 9.8.12 uses ResizeObserver's device pixel box when available.
-// That measured box, not CSS clientWidth * an emulated DPR, is the pixel oracle.
+// Its initial DPR fallback may remain supersampled until the observer redraws.
+// Compare complete width/height pairs for either documented renderer path,
+// never accept arbitrary dimensions or mix axes from different paths.
 test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
-type Measurement = { probe: boolean; width: number; height: number; expectedWidth: number; expectedHeight: number;
+type Measurement = { probe: boolean; width: number; height: number; expectedWidth: number; expectedHeight: number; estimatedWidth: number; estimatedHeight: number;
   cssWidth: number; cssHeight: number; hostWidth: number; hostHeight: number; dpr: number; basis: string }
 
 async function measureCanvases(page: Page): Promise<Measurement[]> {
@@ -26,6 +28,8 @@ async function measureCanvases(page: Page): Promise<Measurement[]> {
           return { probe: c.hasAttribute('data-pixel-negative-control'), width: c.width, height: c.height,
             expectedWidth: physical?.inlineSize ?? Math.round(entry.contentRect.width * devicePixelRatio),
             expectedHeight: physical?.blockSize ?? Math.round(entry.contentRect.height * devicePixelRatio),
+            estimatedWidth: Math.round(entry.contentRect.width * devicePixelRatio),
+            estimatedHeight: Math.round(entry.contentRect.height * devicePixelRatio),
             cssWidth: css.width, cssHeight: css.height, hostWidth: parent.width, hostHeight: parent.height,
             dpr: devicePixelRatio, basis: physical ? 'device-pixel-content-box' : 'DPR-estimate' }
         }))
@@ -41,7 +45,9 @@ function violations(rows: Measurement[]) {
   if (!rows.length) return ['no_visible_canvas']
   return rows.flatMap((c, i) => {
     const invalid = !Number.isFinite(c.expectedWidth) || !Number.isFinite(c.expectedHeight) || c.expectedWidth <= 0 || c.expectedHeight <= 0
-    const pixelMismatch = Math.abs(c.width - c.expectedWidth) > 1 || Math.abs(c.height - c.expectedHeight) > 1
+    const observedPair = Math.abs(c.width - c.expectedWidth) <= 1 && Math.abs(c.height - c.expectedHeight) <= 1
+    const fallbackPair = Math.abs(c.width - c.estimatedWidth) <= 1 && Math.abs(c.height - c.estimatedHeight) <= 1
+    const pixelMismatch = !observedPair && !fallbackPair
     const overflow = c.cssWidth > c.hostWidth + 1 || c.cssHeight > c.hostHeight + 1
     return invalid || pixelMismatch || overflow ? [`${c.probe ? 'negative-control' : i}:invalid=${invalid},pixels=${pixelMismatch},overflow=${overflow}`] : []
   })
@@ -49,8 +55,11 @@ function violations(rows: Measurement[]) {
 async function canvasFitsHost(page: Page, info: TestInfo, stage: string) {
   await expect(page.getByTestId('etf-chart').locator('canvas').first()).toBeVisible()
   let measured: Measurement[] = []
-  await expect.poll(async () => { measured = await measureCanvases(page); return violations(measured) }).toEqual([])
-  await info.attach(`canvas-geometry-${stage}`, { body: JSON.stringify(measured), contentType: 'application/json' })
+  try {
+    await expect.poll(async () => { measured = await measureCanvases(page); return violations(measured) }).toEqual([])
+  } finally {
+    await info.attach(`canvas-geometry-${stage}`, { body: JSON.stringify(measured), contentType: 'application/json' })
+  }
   await expect.poll(() => page.evaluate(() => {
     const root = document.scrollingElement as HTMLElement
     return root.scrollWidth - root.clientWidth
@@ -73,6 +82,12 @@ test('touch controls and orientation preserve chart sizing at DPR 2', async ({ p
     const probe = document.createElement('canvas'); probe.setAttribute('data-pixel-negative-control', '')
     probe.style.cssText = 'position:absolute;left:0;top:0;width:47px;height:31px;pointer-events:none'
     probe.width = 1; probe.height = 1; host.append(probe)
+  })
+  expect(violations(await measureCanvases(page)).some(v => v.startsWith('negative-control'))).toBe(true)
+  // A mixed physical/DPR axis pair must fail too, even when one axis matches.
+  await page.locator('[data-pixel-negative-control]').evaluate(el => {
+    const probe = el as HTMLCanvasElement
+    probe.width = Math.round(47 * devicePixelRatio); probe.height = 31
   })
   expect(violations(await measureCanvases(page)).some(v => v.startsWith('negative-control'))).toBe(true)
   await page.locator('[data-pixel-negative-control]').evaluate(el => el.remove())
