@@ -137,8 +137,7 @@ def trailing_unverified_history(rows):
     tail = ordered[first:]
     if not qualified or any(row_units_verified(row) for row in tail):
         return None
-    issue = price_history_issue(qualified)
-    if issue:
+    if price_history_issue(qualified) or assess_history(qualified):
         return None
     reasons = assess_history(tail)
     return {

@@ -98,6 +98,18 @@ def test_daily_price_only_primary_does_not_hide_documented_fallback() -> None:
     assert provider.last_trace[0].reason == "price_only_units_unverified"
 
 
+def test_only_price_only_daily_candidate_remains_partial_in_audit() -> None:
+    code = "510300.SH"
+    primary = _Provider("akshare", daily_bars=[_bar(code, "akshare:sina:v101")])
+    provider = CompositeProvider([primary])
+
+    rows = provider.fetch_daily_bars(code, date(2026, 9, 1), date(2026, 9, 18))
+
+    assert [row.source for row in rows] == ["akshare:sina:v101"]
+    assert provider.last_trace[0].status == "partial"
+    assert provider.last_trace[0].reason == "price_only_units_unverified"
+
+
 def test_degraded_primary_quote_does_not_hide_verified_realtime_fallback() -> None:
     code = "510300.SH"
     degraded = QuoteRecord(

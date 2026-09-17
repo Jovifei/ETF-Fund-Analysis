@@ -159,8 +159,11 @@ class CompositeProvider(MarketProvider):
             selected_trace = selected[-1]
             for quality, _covers_target, _count, _priority, _rows, trace in candidates:
                 if trace is selected_trace:
-                    trace.status = "ok" if trace.provider == self.providers[0].name else "fallback_used"
-                    trace.reason = None
+                    if quality == 3 and _covers_target:
+                        trace.status = "ok" if _priority == 0 else "fallback_used"
+                        trace.reason = None
+                    else:
+                        trace.status = "partial" if _priority == 0 else "fallback_partial"
                 elif quality < selected[0]:
                     trace.status = "quality_fallback"
                 else:
@@ -366,7 +369,15 @@ class CompositeProvider(MarketProvider):
 
     @staticmethod
     def _quote_is_qualified(row: T) -> bool:
-        return bool(getattr(row, "is_realtime", False)) and not getattr(row, "degraded_reason", None)
+        source = str(getattr(row, "source", ""))
+        timestamp = getattr(row, "quote_time", None)
+        return (
+            bool(getattr(row, "is_realtime", False))
+            and not getattr(row, "degraded_reason", None)
+            and bool(source)
+            and timestamp is not None
+            and source not in {"akshare:em:v101", "tushare:fund_daily:v101"}
+        )
 
     def list_instruments(self, codes: list[str] | None = None) -> list[InstrumentRecord]:
         if codes is None:

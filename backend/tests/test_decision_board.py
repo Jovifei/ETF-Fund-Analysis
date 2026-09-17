@@ -56,49 +56,23 @@ def test_trailing_price_only_tail_keeps_last_qualified_snapshot_stale_not_anomal
     start = datetime(2026, 1, 1, tzinfo=SHANGHAI).date()
     for offset in range(80):
         close = 2.0 + offset * 0.01
-        db_session.add(
-            DailyBar(
-                instrument_id=instrument.id,
-                trade_date=start + timedelta(days=offset),
-                open=close,
-                high=close * 1.01,
-                low=close * 0.99,
-                close=close,
-                pre_close=close,
-                volume=1000.0,
-                amount=close * 1000.0,
-                source="akshare:em:v101",
-                adjust="none",
-                quality_hash=f"qualified-{offset}",
-            )
-        )
+        db_session.add(DailyBar(
+            instrument_id=instrument.id, trade_date=start + timedelta(days=offset),
+            open=close, high=close * 1.01, low=close * 0.99, close=close,
+            pre_close=close, volume=1000.0, amount=close * 1000.0,
+            source="akshare:em:v101", adjust="none", quality_hash=f"qualified-{offset}",
+        ))
     db_session.flush()
-    indicator_result = IndicatorService(settings).refresh_all(db_session, run_id="tail-fixture-indicators")
-    assert indicator_result["created"] == 1
+    assert IndicatorService(settings).refresh_all(db_session, run_id="tail-fixture-indicators")["created"] == 1
     qualified_date = start + timedelta(days=79)
-    db_session.add(
-        DailyBar(
-            instrument_id=instrument.id,
-            trade_date=start + timedelta(days=80),
-            open=2.8,
-            high=2.82,
-            low=2.78,
-            close=2.8,
-            pre_close=2.79,
-            volume=None,
-            amount=None,
-            source="akshare:sina:v101",
-            adjust="none",
-            quality_hash="price-only-tail",
-        )
-    )
+    db_session.add(DailyBar(
+        instrument_id=instrument.id, trade_date=start + timedelta(days=80),
+        open=2.8, high=2.82, low=2.78, close=2.8, pre_close=2.79,
+        volume=None, amount=None, source="akshare:sina:v101", adjust="none", quality_hash="price-only-tail",
+    ))
     db_session.flush()
-
-    built = DecisionBoardService(settings).refresh(
-        db_session, generated_at=datetime(2026, 3, 25, 14, 30, tzinfo=SHANGHAI)
-    )
-    payload = built.payload
-    row = next(item for item in payload["rows"] if item["ts_code"] == instrument.ts_code)
+    built = DecisionBoardService(settings).refresh(db_session, generated_at=datetime(2026, 3, 25, 14, 30, tzinfo=SHANGHAI))
+    row = next(item for item in built.payload["rows"] if item["ts_code"] == instrument.ts_code)
     assert row["data_status"] == "historical_price_only_stale"
     assert row["freshness"] == "stale"
     assert row["actionable"] is False
@@ -109,6 +83,37 @@ def test_trailing_price_only_tail_keeps_last_qualified_snapshot_stale_not_anomal
     db_session.execute(delete(DailyBar).where(DailyBar.instrument_id == instrument.id))
     db_session.execute(delete(Instrument).where(Instrument.id == instrument.id))
     db_session.flush()
+
+
+def test_tail_snapshot_after_qualified_date_remains_anomalous(db_session) -> None:
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    instrument = Instrument(ts_code="998872.SH", symbol="998872", name="tail snapshot fixture", kind="ETF", enabled=True)
+    db_session.add(instrument); db_session.flush()
+    start = datetime(2026, 1, 1, tzinfo=SHANGHAI).date()
+    for offset in range(40):
+        close = 2.0 + offset * 0.01
+        db_session.add(DailyBar(
+            instrument_id=instrument.id, trade_date=start + timedelta(days=offset),
+            open=close, high=close * 1.01, low=close * 0.99, close=close,
+            pre_close=close, volume=1000.0, amount=close * 1000.0,
+            source="akshare:em:v101", adjust="none", quality_hash=f"qualified-tail-{offset}",
+        ))
+    db_session.flush()
+    assert IndicatorService(settings).refresh_all(db_session, run_id="tail-snapshot-indicators")["created"] == 1
+    snapshot = db_session.scalar(select(IndicatorSnapshot).where(IndicatorSnapshot.instrument_id == instrument.id))
+    tail_date = start + timedelta(days=40)
+    db_session.add(DailyBar(
+        instrument_id=instrument.id, trade_date=tail_date, open=2.4, high=2.42, low=2.38, close=2.4,
+        pre_close=2.39, volume=None, amount=None, source="akshare:sina:v101", adjust="none", quality_hash="tail-snapshot-price-only",
+    ))
+    snapshot.as_of_date = tail_date; db_session.flush()
+    payload = DecisionBoardService(settings).refresh(db_session, generated_at=datetime(2026, 3, 25, 14, 30, tzinfo=SHANGHAI)).payload
+    row = next(item for item in payload["rows"] if item["ts_code"] == instrument.ts_code)
+    assert row["grade"] == "数据异常" and row["actionable"] is False
+    db_session.execute(delete(DecisionBoardSnapshot).where(DecisionBoardSnapshot.snapshot_id == payload["snapshot_id"]))
+    db_session.execute(delete(IndicatorSnapshot).where(IndicatorSnapshot.instrument_id == instrument.id))
+    db_session.execute(delete(DailyBar).where(DailyBar.instrument_id == instrument.id))
+    db_session.execute(delete(Instrument).where(Instrument.id == instrument.id)); db_session.flush()
 
 
 def test_refresh_builds_one_unique_row_per_enabled_instrument_and_never_writes_daily_bars(

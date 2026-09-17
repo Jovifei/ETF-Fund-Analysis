@@ -441,13 +441,25 @@ class DecisionBoardService:
         from app.services.snapshot_contract import snapshot_issues
         expected_date = None if self.settings.market_provider == "mock" else settled_session(self.settings, generated_at)
         indicator_issues = snapshot_issues(indicator, self.settings, expected_date, kind="indicator")
+        qualified_through = stale_history["qualified_through"] if stale_history else None
         if stale_history and indicator is not None:
-            indicator_issues = [issue for issue in indicator_issues if issue != "indicator_date_mismatch"]
+            if indicator.as_of_date <= qualified_through:
+                indicator_issues = [issue for issue in indicator_issues if issue != "indicator_date_mismatch"]
+            else:
+                indicator_issues.append("indicator_date_after_qualified_history")
         forecast_issues = {str(h): snapshot_issues(value, self.settings, expected_date, kind="forecast")
                            for h, value in forecasts.items()}
         if stale_history:
             forecast_issues = {
-                horizon: [issue for issue in issues if issue != "forecast_date_mismatch"]
+                horizon: (
+                    [issue for issue in issues if issue != "forecast_date_mismatch"]
+                    if forecasts.get(int(horizon)) is not None
+                    and forecasts[int(horizon)].as_of_date <= qualified_through
+                    else [*issues, "forecast_date_after_qualified_history"]
+                    if stale_history and forecasts.get(int(horizon)) is not None
+                    and forecasts[int(horizon)].as_of_date > qualified_through
+                    else issues
+                )
                 for horizon, issues in forecast_issues.items()
             }
         forecasts = {h: value for h, value in forecasts.items() if not forecast_issues[str(h)]}
