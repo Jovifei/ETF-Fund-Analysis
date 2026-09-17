@@ -6,14 +6,14 @@ Restore a qualified ETF decision-data path without weakening the data contract, 
 
 ## Work items
 
-- [ ] Reproduce the production failure with deterministic fixture rows and provider fallback metadata.
-- [ ] Trace EM failure → Sina fallback → missing/unknown units and discontinuity gate across bars, indicators, forecasts, and decision board.
-- [ ] Define the smallest provider-side repair: only accept volume/amount when the documented unit contract is verified; otherwise keep price-only and block dependent outputs.
-- [ ] Add regression tests for qualified Sina quantity fields, missing quantity, unit mismatch, and unexplained price discontinuity.
-- [ ] Implement the approved minimal fix and keep all fail-closed gates intact.
-- [ ] Run focused tests, full pytest, compileall, JS checks, Vue tests/typecheck/build, and QA-R Playwright suites.
-- [ ] Rebuild the production image, verify source/tree/digest, back up PostgreSQL, deploy with rollback point, and verify scheduler/data outcomes.
-- [ ] Update the production receipt and data-freshness evidence; do not claim complete realtime qualification unless all gates pass.
+- [x] Reproduce the production failure with deterministic fixture rows and provider fallback metadata.
+- [x] Trace EM failure → Sina fallback → missing/unknown units and discontinuity gate across bars, indicators, forecasts, and decision board.
+- [x] Define the smallest provider-side repair: only accept volume/amount when the documented unit contract is verified; otherwise keep price-only and block dependent outputs.
+- [x] Add regression tests for qualified Sina quantity fields, missing quantity, unit mismatch, unexplained price discontinuity, and fallback audit status.
+- [x] Implement the approved minimal fix and keep all fail-closed gates intact.
+- [x] Run focused tests, full pytest, compileall, JS checks, Vue tests/typecheck/build, and QA-R Playwright suites.
+- [x] Rebuild the production image, verify source/tree/digest, back up PostgreSQL, deploy with rollback point, and verify scheduler/data outcomes.
+- [x] Update the production receipt and data-freshness evidence; do not claim complete realtime qualification unless all gates pass.
 
 ## Acceptance gates
 
