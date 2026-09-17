@@ -431,19 +431,30 @@ class DecisionBoardService:
         grade_row = grade_row or {}
         independent_sector = grade_row.get("sector")
         comparison_basis = "previous_saved_confirmed_date_not_intraday_quote"
-        from app.providers.data_contract import history_issues
+        from app.providers.data_contract import history_issues, trailing_unverified_history
         blocked = history_issues(db, self.settings, [instrument.id]).get(instrument.id)
-        from app.services.snapshot_contract import snapshot_issues
+        history_rows = db.scalars(
+            select(DailyBar).where(DailyBar.instrument_id == instrument.id).order_by(DailyBar.trade_date)
+        ).all()
+        stale_history = trailing_unverified_history(history_rows) if blocked else None
         from app.services.settlement import settled_session
+        from app.services.snapshot_contract import snapshot_issues
         expected_date = None if self.settings.market_provider == "mock" else settled_session(self.settings, generated_at)
         indicator_issues = snapshot_issues(indicator, self.settings, expected_date, kind="indicator")
+        if stale_history and indicator is not None:
+            indicator_issues = [issue for issue in indicator_issues if issue != "indicator_date_mismatch"]
         forecast_issues = {str(h): snapshot_issues(value, self.settings, expected_date, kind="forecast")
                            for h, value in forecasts.items()}
+        if stale_history:
+            forecast_issues = {
+                horizon: [issue for issue in issues if issue != "forecast_date_mismatch"]
+                for horizon, issues in forecast_issues.items()
+            }
         forecasts = {h: value for h, value in forecasts.items() if not forecast_issues[str(h)]}
         if indicator_issues:
             indicator = None
         display_history = None
-        if blocked or indicator is None:
+        if (blocked and stale_history is None) or indicator is None:
             from app.workspace.read_model import chart_data
             display_history = chart_data(db, self.settings, instrument.ts_code, "1d", 60)
             indicator = None
@@ -460,8 +471,16 @@ class DecisionBoardService:
             if independent_sector is not None:
                 grade_row["sector"] = independent_sector
             grade_row.update(grade="数据异常", grade_reason="历史价格展示；完整量价/指标资格尚未通过，不生成当前动作")
+        elif stale_history:
+            qualified_through = stale_history["qualified_through"].isoformat()
+            grade_row["grade_reason"] = (
+                f"{grade_row.get('grade_reason', '基于历史快照')}；最后合格历史至 {qualified_through}，"
+                "当前行情源未通过量额/连续性门禁"
+            )
         values = dict(indicator.values_json or {}) if indicator is not None else (price_values if display_history else {})
         freshness, data_status = self._status(indicator, quote, generated_at)
+        if stale_history and indicator is not None:
+            freshness, data_status = "stale", "historical_price_only_stale"
         source_verified = bool(quote and quote.timestamp_verified and quote.is_realtime and not quote.degraded_reason)
         # Missing settled indicators do not erase independently timestamped
         # intraday research input. Incompatible history still fails closed.
@@ -494,6 +513,8 @@ class DecisionBoardService:
             }
             freshness, data_status = "stale", "provisional_unverified_research_only" if not provisional.timestamp_verified else "provisional_research_only"
         history, confirmed_levels = self._history_and_levels(db, instrument.id)
+        if stale_history:
+            confirmed_levels = {}
         if display_history:
             history = [{**bar, "is_forecast": False} for bar in display_history.get("bars", [])]
             confirmed_levels = {}
@@ -516,7 +537,8 @@ class DecisionBoardService:
             ]
         support_resistance = provisional_status.get("derived", {}).get("support_resistance", confirmed_levels)
         scenario = self._forecast_scenario(history, forecast_map)
-        metric = lambda value, fallback: value if isinstance(value, dict) and value.get("label") else fallback
+        def metric(value, fallback):
+            return value if isinstance(value, dict) and value.get("label") else fallback
         volume = metric(grade_row.get("volume"), {"label": "量能不足", "kind": "unknown", "status": "missing"})
         ma = metric(grade_row.get("ma"), {"label": "均线不足", "kind": "unknown", "status": "missing"})
         macd = metric(grade_row.get("macd"), {"label": "MACD不足", "kind": "unknown", "status": "missing"})

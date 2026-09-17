@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from app.main import app
+from app.core.config import get_settings
 from app.models import (
     DailyBar,
     DecisionBoardProvisionalInput,
@@ -12,6 +13,7 @@ from app.models import (
     EventLog,
     ForecastSnapshot,
     IndicatorSnapshot,
+    Instrument,
     QuoteSnapshot,
     TaskRun,
 )
@@ -23,9 +25,10 @@ from app.services.decision_board_service import (
     percent_points_to_ratio,
     semantic_sort_keys,
 )
+from app.services.indicator_service import IndicatorService
 from app.services.task_service import TaskBusyError, TaskService
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
@@ -41,6 +44,71 @@ def test_health_sort_key_is_display_only_and_keeps_existing_grade_order() -> Non
     assert health_sort_key("可加仓", "fresh") < health_sort_key("可入场", "fresh")
     assert health_sort_key("可入场", "fresh") < health_sort_key("可入场", "stale")
     assert health_sort_key("减仓", "missing") > health_sort_key("观望", "stale")
+
+
+def test_trailing_price_only_tail_keeps_last_qualified_snapshot_stale_not_anomaly(db_session) -> None:
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    instrument = Instrument(
+        ts_code="998871.SH", symbol="998871", name="tail fallback fixture", kind="ETF", enabled=True
+    )
+    db_session.add(instrument)
+    db_session.flush()
+    start = datetime(2026, 1, 1, tzinfo=SHANGHAI).date()
+    for offset in range(80):
+        close = 2.0 + offset * 0.01
+        db_session.add(
+            DailyBar(
+                instrument_id=instrument.id,
+                trade_date=start + timedelta(days=offset),
+                open=close,
+                high=close * 1.01,
+                low=close * 0.99,
+                close=close,
+                pre_close=close,
+                volume=1000.0,
+                amount=close * 1000.0,
+                source="akshare:em:v101",
+                adjust="none",
+                quality_hash=f"qualified-{offset}",
+            )
+        )
+    db_session.flush()
+    indicator_result = IndicatorService(settings).refresh_all(db_session, run_id="tail-fixture-indicators")
+    assert indicator_result["created"] == 1
+    qualified_date = start + timedelta(days=79)
+    db_session.add(
+        DailyBar(
+            instrument_id=instrument.id,
+            trade_date=start + timedelta(days=80),
+            open=2.8,
+            high=2.82,
+            low=2.78,
+            close=2.8,
+            pre_close=2.79,
+            volume=None,
+            amount=None,
+            source="akshare:sina:v101",
+            adjust="none",
+            quality_hash="price-only-tail",
+        )
+    )
+    db_session.flush()
+
+    built = DecisionBoardService(settings).refresh(
+        db_session, generated_at=datetime(2026, 3, 25, 14, 30, tzinfo=SHANGHAI)
+    )
+    payload = built.payload
+    row = next(item for item in payload["rows"] if item["ts_code"] == instrument.ts_code)
+    assert row["data_status"] == "historical_price_only_stale"
+    assert row["freshness"] == "stale"
+    assert row["actionable"] is False
+    assert row["indicator"]["as_of_date"] == qualified_date.isoformat()
+    assert row["grade"] != "数据异常"
+    db_session.execute(delete(DecisionBoardSnapshot).where(DecisionBoardSnapshot.snapshot_id == built.snapshot.snapshot_id))
+    db_session.execute(delete(IndicatorSnapshot).where(IndicatorSnapshot.instrument_id == instrument.id))
+    db_session.execute(delete(DailyBar).where(DailyBar.instrument_id == instrument.id))
+    db_session.execute(delete(Instrument).where(Instrument.id == instrument.id))
+    db_session.flush()
 
 
 def test_refresh_builds_one_unique_row_per_enabled_instrument_and_never_writes_daily_bars(

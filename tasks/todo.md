@@ -1,3 +1,29 @@
+# QA-R Provider/Data Repair Plan — 2026-09-17
+
+## Goal
+
+Restore a qualified ETF decision-data path without weakening the data contract, inferring units, repairing splits by guesswork, or promoting non-realtime quotes. Preserve the current production deployment and work in this isolated worktree.
+
+## Work items
+
+- [ ] Reproduce the production failure with deterministic fixture rows and provider fallback metadata.
+- [ ] Trace EM failure → Sina fallback → missing/unknown units and discontinuity gate across bars, indicators, forecasts, and decision board.
+- [ ] Define the smallest provider-side repair: only accept volume/amount when the documented unit contract is verified; otherwise keep price-only and block dependent outputs.
+- [ ] Add regression tests for qualified Sina quantity fields, missing quantity, unit mismatch, and unexplained price discontinuity.
+- [ ] Implement the approved minimal fix and keep all fail-closed gates intact.
+- [ ] Run focused tests, full pytest, compileall, JS checks, Vue tests/typecheck/build, and QA-R Playwright suites.
+- [ ] Rebuild the production image, verify source/tree/digest, back up PostgreSQL, deploy with rollback point, and verify scheduler/data outcomes.
+- [ ] Update the production receipt and data-freshness evidence; do not claim complete realtime qualification unless all gates pass.
+
+## Acceptance gates
+
+- Bars may be stored only with a documented source/unit contract and continuity evidence.
+- Indicators/forecasts remain blocked for unknown units or unexplained price gaps.
+- Decision board must expose partial/stale reasons and never derive an actionable state from degraded inputs.
+- Production rollback remains available from the pre-repair PostgreSQL backup and prior Compose/release.
+
+---
+
 # v0.5.0 Local Validation Execution Plan
 
 ## 2026-09-12 全面落地审核（只读业务代码）

@@ -4,9 +4,12 @@ Display may retain raw prices. Unknown units and unresolved price events may
 never become qualified simply because the amount/volume ratio looks plausible.
 """
 from __future__ import annotations
+
 import math
 from datetime import date, datetime
+
 from sqlalchemy import select
+
 from app.models import DailyBar, Instrument
 from app.providers.base import ProviderError
 
@@ -111,6 +114,39 @@ def history_issues(db, settings, instrument_ids=None):
         if ident not in seen:
             issues[ident] = "history_missing"
     return issues
+
+
+def trailing_unverified_history(rows):
+    """Describe a safe stale-history scope when only the newest rows degrade.
+
+    A complete, documented-unit prefix can still support a historical research
+    snapshot.  This helper never promotes the unverified tail: callers must
+    mark the result stale, keep actionable false, and avoid using the tail for
+    shared volume-derived calculations.  Interleaved or wholly unverified
+    histories return ``None`` so the existing fail-closed behavior remains.
+    """
+
+    ordered = sorted(rows or [], key=lambda row: row.trade_date)
+    if not ordered:
+        return None
+    unverified = [index for index, row in enumerate(ordered) if not row_units_verified(row)]
+    if not unverified:
+        return None
+    first = unverified[0]
+    qualified = ordered[:first]
+    tail = ordered[first:]
+    if not qualified or any(row_units_verified(row) for row in tail):
+        return None
+    issue = price_history_issue(qualified)
+    if issue:
+        return None
+    reasons = assess_history(tail)
+    return {
+        "qualified_through": qualified[-1].trade_date,
+        "tail_start": tail[0].trade_date,
+        "tail_rows": len(tail),
+        "reasons": reasons or ["unverified_history_tail"],
+    }
 
 def require_current_history(db, settings):
     if settings.market_provider == "mock":

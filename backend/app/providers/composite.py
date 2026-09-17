@@ -82,6 +82,94 @@ class CompositeProvider(MarketProvider):
     def fetch_index_bars(self, symbol, start_date, end_date):
         return self._invoke("fetch_index_bars", lambda p: p.fetch_index_bars(symbol, start_date, end_date))
 
+    @staticmethod
+    def _daily_candidate(rows: list[BarRecord], end_date: date) -> tuple[int, bool, str | None]:
+        """Rank one provider's complete daily batch without mixing sources.
+
+        A non-empty Sina price-only response is useful for chart display, but it
+        must not hide a later provider with documented units.  The ranking is
+        deliberately conservative: source identity, quantity presence, OHLC
+        continuity, and target-date coverage are all considered before a batch
+        can be selected for shared calculations.
+        """
+
+        if not rows:
+            return 0, False, "empty_result"
+        from app.providers.data_contract import DOCUMENTED_UNIT_SOURCES, price_history_issue
+
+        sources = {str(getattr(row, "source", "")) for row in rows}
+        if len(sources) != 1:
+            return 0, False, "mixed_source_batch"
+        source = next(iter(sources))
+        latest = max((row.trade_date for row in rows), default=None)
+        covers_target = latest is not None and latest >= end_date
+        if source in DOCUMENTED_UNIT_SOURCES:
+            issue = price_history_issue(rows)
+            if issue:
+                return 0, covers_target, issue
+            if any(getattr(row, "volume", None) is None or getattr(row, "amount", None) is None for row in rows):
+                return 0, covers_target, "documented_source_missing_quantity"
+            return 3, covers_target, None if covers_target else "target_date_missing"
+        if source.startswith("akshare:sina:"):
+            return 1, covers_target, "price_only_units_unverified"
+        return 0, covers_target, "unknown_units_unverified"
+
+    def _fetch_daily_bars_quality_aware(self, ts_code: str, start_date: date, end_date: date) -> list[BarRecord]:
+        self.last_trace = []
+        candidates: list[tuple[int, bool, int, int, list[BarRecord], ProviderTrace]] = []
+        unsupported = 0
+        errors: list[str] = []
+        for index, provider in enumerate(self.providers):
+            started = time.perf_counter()
+            try:
+                rows = list(provider.fetch_daily_bars(ts_code, start_date, end_date) or [])
+                quality, covers_target, reason = self._daily_candidate(rows, end_date)
+                trace = ProviderTrace(
+                    operation="fetch_daily_bars",
+                    provider=provider.name,
+                    status="candidate",
+                    latency_ms=(time.perf_counter() - started) * 1000,
+                    record_count=len(rows),
+                    reason=reason,
+                    quality_hash=stable_hash(rows),
+                )
+                self.last_trace.append(trace)
+                candidates.append((quality, covers_target, len(rows), -index, rows, trace))
+                # A fully qualified batch through the requested date cannot be
+                # improved by a lower-priority source.
+                if quality == 3 and covers_target:
+                    break
+            except CapabilityUnavailable as exc:
+                unsupported += 1
+                label = _safe_failure_label(exc)
+                self.last_trace.append(ProviderTrace(
+                    operation="fetch_daily_bars", provider=provider.name, status="unsupported",
+                    latency_ms=(time.perf_counter() - started) * 1000, record_count=0, reason=label,
+                ))
+            except Exception as exc:
+                label = _safe_failure_label(exc)
+                errors.append(f"{provider.name}={label}")
+                self.last_trace.append(ProviderTrace(
+                    operation="fetch_daily_bars", provider=provider.name, status="failed",
+                    latency_ms=(time.perf_counter() - started) * 1000, record_count=0, reason=label,
+                ))
+
+        if candidates:
+            selected = max(candidates, key=lambda item: item[:4])
+            selected_trace = selected[-1]
+            for quality, _covers_target, _count, _priority, _rows, trace in candidates:
+                if trace is selected_trace:
+                    trace.status = "ok" if trace.provider == self.providers[0].name else "fallback_used"
+                    trace.reason = None
+                elif quality < selected[0]:
+                    trace.status = "quality_fallback"
+                else:
+                    trace.status = "superseded"
+            return selected[4]
+        if unsupported == len(self.providers):
+            raise CapabilityUnavailable("all providers unsupported: fetch_daily_bars") from None
+        raise ProviderError(f"所有数据源均失败：fetch_daily_bars; {'; '.join(errors)}") from None
+
     def close(self) -> None:
         if self._closed:
             return
@@ -176,6 +264,7 @@ class CompositeProvider(MarketProvider):
 
         selected: dict[str, T] = {}
         daily_fallbacks: dict[str, T] = {}
+        degraded_quotes: dict[str, T] = {}
         errors: list[str] = []
         unsupported = 0
         successful_calls = 0
@@ -203,6 +292,12 @@ class CompositeProvider(MarketProvider):
                         continue
                     if operation == "fetch_spot_quotes" and str(getattr(row, "source", "")).startswith("tushare:fund_daily"):
                         daily_fallbacks.setdefault(key, row)
+                        continue
+                    if operation == "fetch_spot_quotes" and not self._quote_is_qualified(row):
+                        # A public snapshot can be useful as a degraded display
+                        # value, but it must not prevent a later provider from
+                        # supplying a timestamped realtime quote.
+                        degraded_quotes.setdefault(key, row)
                         continue
                     selected[key] = row
                     accepted += 1
@@ -257,6 +352,8 @@ class CompositeProvider(MarketProvider):
                 )
                 logger.warning("Provider %s operation %s failed: %s", provider.name, operation, label)
 
+        for code, row in degraded_quotes.items():
+            selected.setdefault(code, row)
         for code, row in daily_fallbacks.items():
             selected.setdefault(code, row)
         if selected:
@@ -266,6 +363,10 @@ class CompositeProvider(MarketProvider):
         if not successful_calls and errors:
             raise ProviderError(f"所有数据源均失败：{operation}; {'; '.join(errors)}") from None
         raise ProviderError(f"所有数据源均未返回请求代码：{operation}") from None
+
+    @staticmethod
+    def _quote_is_qualified(row: T) -> bool:
+        return bool(getattr(row, "is_realtime", False)) and not getattr(row, "degraded_reason", None)
 
     def list_instruments(self, codes: list[str] | None = None) -> list[InstrumentRecord]:
         if codes is None:
@@ -278,10 +379,7 @@ class CompositeProvider(MarketProvider):
         )
 
     def fetch_daily_bars(self, ts_code: str, start_date: date, end_date: date) -> list[BarRecord]:
-        return self._invoke(
-            "fetch_daily_bars",
-            lambda provider: provider.fetch_daily_bars(ts_code, start_date, end_date),
-        )
+        return self._fetch_daily_bars_quality_aware(ts_code, start_date, end_date)
 
     def fetch_minute_bars(self, ts_code: str, interval: str, start_date: date, end_date: date) -> list[BarRecord]:
         return self._invoke("fetch_minute_bars", lambda provider: provider.fetch_minute_bars(ts_code, interval, start_date, end_date))

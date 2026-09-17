@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
-from sqlalchemy import select
-
 from app.models import Instrument
 from app.providers.base import MarketProvider, ProviderError
 from app.providers.composite import CompositeProvider
 from app.providers.types import BarRecord, InstrumentRecord, QuoteRecord
 from app.services.market_service import MarketService
+from sqlalchemy import select
 
 
 class _Provider(MarketProvider):
@@ -18,14 +17,17 @@ class _Provider(MarketProvider):
         *,
         quotes: dict[str, QuoteRecord] | None = None,
         instruments: dict[str, InstrumentRecord] | None = None,
+        daily_bars: list[BarRecord] | None = None,
         quote_error: Exception | None = None,
     ) -> None:
         self.name = name
         self.quotes = {str(k).upper(): v for k, v in (quotes or {}).items()}
         self.instruments = {str(k).upper(): v for k, v in (instruments or {}).items()}
+        self.daily_bars = list(daily_bars or [])
         self.quote_error = quote_error
         self.quote_calls: list[list[str]] = []
         self.instrument_calls: list[list[str] | None] = []
+        self.daily_calls: list[tuple[str, date, date]] = []
 
     def list_instruments(self, codes: list[str] | None = None) -> list[InstrumentRecord]:
         self.instrument_calls.append(list(codes) if codes is not None else None)
@@ -39,8 +41,8 @@ class _Provider(MarketProvider):
         return result
 
     def fetch_daily_bars(self, ts_code: str, start_date: date, end_date: date) -> list[BarRecord]:
-        del ts_code, start_date, end_date
-        return []
+        self.daily_calls.append((ts_code, start_date, end_date))
+        return list(self.daily_bars)
 
     def fetch_spot_quotes(self, codes: list[str]) -> list[QuoteRecord]:
         self.quote_calls.append(list(codes))
@@ -62,6 +64,59 @@ def _quote(code: str, source: str, price: float) -> QuoteRecord:
 
 def _instrument(code: str, symbol: str, name: str) -> InstrumentRecord:
     return InstrumentRecord(ts_code=code, symbol=symbol, name=name)
+
+
+def _bar(code: str, source: str, close: float = 4.10) -> BarRecord:
+    return BarRecord(
+        ts_code=code,
+        trade_date=date(2026, 9, 17),
+        open=close,
+        high=close * 1.01,
+        low=close * 0.99,
+        close=close,
+        pre_close=close,
+        volume=1000.0 if source != "akshare:sina:v101" else None,
+        amount=close * 1000.0 if source != "akshare:sina:v101" else None,
+        pct_change=0.0,
+        adjust="none",
+        source=source,
+    )
+
+
+def test_daily_price_only_primary_does_not_hide_documented_fallback() -> None:
+    code = "510300.SH"
+    primary = _Provider("akshare", daily_bars=[_bar(code, "akshare:sina:v101")])
+    fallback = _Provider("tushare", daily_bars=[_bar(code, "tushare:fund_daily:v101")])
+    provider = CompositeProvider([primary, fallback])
+
+    rows = provider.fetch_daily_bars(code, date(2026, 9, 1), date(2026, 9, 17))
+
+    assert [row.source for row in rows] == ["tushare:fund_daily:v101"]
+    assert len(primary.daily_calls) == 1
+    assert len(fallback.daily_calls) == 1
+    assert [item.status for item in provider.last_trace] == ["quality_fallback", "fallback_used"]
+    assert provider.last_trace[0].reason == "price_only_units_unverified"
+
+
+def test_degraded_primary_quote_does_not_hide_verified_realtime_fallback() -> None:
+    code = "510300.SH"
+    degraded = QuoteRecord(
+        ts_code=code,
+        quote_time=datetime(2026, 9, 17, 6, 30, tzinfo=UTC),
+        price=4.10,
+        source="akshare:em:v101",
+        is_realtime=False,
+        degraded_reason="public_quote_not_qualified",
+    )
+    primary = _Provider("akshare", quotes={code: degraded})
+    fallback = _Provider("tushare", quotes={code: _quote(code, "tushare:rt_etf_k:v101", 4.11)})
+    provider = CompositeProvider([primary, fallback])
+
+    rows = provider.fetch_spot_quotes([code])
+
+    assert [row.source for row in rows] == ["tushare:rt_etf_k:v101"]
+    assert primary.quote_calls == [[code]]
+    assert fallback.quote_calls == [[code]]
 
 
 def test_quotes_fill_only_missing_codes_and_preserve_primary_priority() -> None:

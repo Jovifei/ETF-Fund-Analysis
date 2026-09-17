@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.providers.akshare import AKShareProvider
-from app.providers.data_contract import assess_history, history_issues, price_history_issue
+from app.providers.data_contract import assess_history, history_issues, price_history_issue, trailing_unverified_history
 from app.services.etf_1430_service import ETF1430WorkbenchService
 from app.utils.input_lineage import history_digest
 from app.utils.feature_store import build_feature_frame
@@ -44,6 +44,24 @@ def test_unexplained_588200_break_blocks_returns_not_raw_display():
 
 def test_amount_missing_is_qualification_failure():
     assert 'amount_missing_for_shared_signals' in assess_history([bar(amount=None)])
+
+
+def test_trailing_price_only_rows_keep_last_qualified_history_scope():
+    qualified = [bar(i, close=1.2 + i * 0.001, source='akshare:em:v101') for i in range(5)]
+    tail = [bar(5, close=1.21, source='akshare:sina:v101', volume=None, amount=None)]
+    scope = trailing_unverified_history(qualified + tail)
+    assert scope is not None
+    assert scope['qualified_through'] == qualified[-1].trade_date
+    assert scope['tail_rows'] == 1
+
+
+def test_interleaved_price_only_rows_do_not_get_a_stale_scope():
+    rows = [
+        bar(0, source='akshare:em:v101'),
+        bar(1, source='akshare:sina:v101', volume=None, amount=None),
+        bar(2, source='akshare:em:v101'),
+    ]
+    assert trailing_unverified_history(rows) is None
 
 @pytest.mark.parametrize('when,stamp',[(datetime(2026,9,12,14,30),datetime(2026,9,12,14,30)), (datetime(2026,9,11,14,30),datetime(2026,9,12,14,30))])
 def test_1430_weekend_future_never_actionable(when,stamp):
