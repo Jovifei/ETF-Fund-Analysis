@@ -10,10 +10,28 @@ import app.scheduler as scheduler
 from app.core.config import get_settings
 from app.db.base import Base
 from app.services.task_service import TaskExecutionError
+from app.workspace.refresh_policy import intraday_refresh_minutes
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
+
+
+def test_intraday_refresh_policy_matches_session_cadence() -> None:
+    cases = [
+        (datetime(2026, 8, 31, 9, 30, tzinfo=SHANGHAI), 60),
+        (datetime(2026, 8, 31, 10, 30, tzinfo=SHANGHAI), 60),
+        (datetime(2026, 8, 31, 11, 30, tzinfo=SHANGHAI), 60),
+        (datetime(2026, 8, 31, 13, 0, tzinfo=SHANGHAI), 30),
+        (datetime(2026, 8, 31, 14, 20, tzinfo=SHANGHAI), 30),
+        (datetime(2026, 8, 31, 14, 30, tzinfo=SHANGHAI), 10),
+        (datetime(2026, 8, 31, 14, 48, tzinfo=SHANGHAI), 10),
+        (datetime(2026, 8, 31, 14, 50, tzinfo=SHANGHAI), 2),
+        (datetime(2026, 8, 31, 14, 58, tzinfo=SHANGHAI), 2),
+        (datetime(2026, 8, 31, 15, 1, tzinfo=SHANGHAI), None),
+        (datetime(2026, 8, 30, 14, 50, tzinfo=SHANGHAI), None),
+    ]
+    assert [intraday_refresh_minutes(value, is_trade_day=value.weekday() < 5) for value, _ in cases] == [expected for _, expected in cases]
 
 
 def test_decision_board_grace_runs_recent_misfire_and_coalesces_to_latest_slot() -> None:
@@ -24,10 +42,10 @@ def test_decision_board_grace_runs_recent_misfire_and_coalesces_to_latest_slot()
         datetime(2026, 8, 31, 14, 31, 45, tzinfo=SHANGHAI), is_trade_day=True
     ) == "20260831-1430"
     assert scheduler.decision_board_due_slot_with_grace(
-        datetime(2026, 8, 31, 14, 36, 30, tzinfo=SHANGHAI), is_trade_day=True
-    ) == "20260831-1435"
+        datetime(2026, 8, 31, 14, 41, 30, tzinfo=SHANGHAI), is_trade_day=True
+    ) == "20260831-1440"
     assert scheduler.decision_board_due_slot_with_grace(
-        datetime(2026, 8, 31, 14, 33, 1, tzinfo=SHANGHAI), is_trade_day=True
+        datetime(2026, 8, 31, 14, 43, 1, tzinfo=SHANGHAI), is_trade_day=True
     ) is None
 
 

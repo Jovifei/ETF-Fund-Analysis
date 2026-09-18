@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import logging
 import json
+import logging
 import signal
 import time
 from datetime import datetime, timedelta
@@ -221,7 +221,7 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
     calendar_decision = TradingCalendarService(settings, provider).decision(now.date())
     is_trade_day = calendar_decision.is_trade_day
     phase = clock.phase(now, is_trade_day)
-    from app.workspace.refresh_policy import balanced_plan, daily_due
+    from app.workspace.refresh_policy import balanced_plan, daily_due, intraday_refresh_minutes
     balanced = balanced_plan(now, is_trade_day=is_trade_day) if settings.balanced_refresh_enabled else None
     executed: list[str] = []
     failures: list[dict[str, str]] = []
@@ -264,6 +264,10 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
 
         if balanced is not None:
             quote_minutes, signal_minutes, news_minutes = balanced.quote_minutes, balanced.signal_minutes, balanced.news_minutes
+        session_minutes = intraday_refresh_minutes(now, is_trade_day=is_trade_day)
+        if session_minutes is not None:
+            quote_minutes = session_minutes
+            signal_minutes = session_minutes
 
         # Critical path first. Coalesce a short scheduler delay to the latest
         # unclaimed decision slot before optional market-context/news work.

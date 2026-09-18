@@ -40,9 +40,8 @@ from app.utils.support_resistance import build_support_resistance
 READ_MODEL_VERSION = "decision-read-v106"
 HORIZONS = (1, 3, 5, 10)
 SLOT_TIMES = (
-    "09:00", "09:30", "10:30", "11:30", "13:00", "13:20", "13:40",
-    "14:00", "14:10", "14:20", "14:30", "14:35", "14:40", "14:45",
-    "14:48", "14:51", "14:54", "14:57", "15:00",
+    "09:30", "10:30", "11:30", "13:00", "13:30", "14:00",
+    "14:30", "14:40", "14:50", "14:52", "14:54", "14:56", "14:58", "15:00",
 )
 _SLOT_CLOCKS = tuple(time.fromisoformat(value) for value in SLOT_TIMES)
 _GRADE_RANK = {grade: index for index, grade in enumerate(GRADE_ORDER)}

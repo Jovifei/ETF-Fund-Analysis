@@ -4,8 +4,8 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
-from app.main import app
 from app.core.config import get_settings
+from app.main import app
 from app.models import (
     DailyBar,
     DecisionBoardProvisionalInput,
@@ -88,7 +88,8 @@ def test_trailing_price_only_tail_keeps_last_qualified_snapshot_stale_not_anomal
 def test_tail_snapshot_after_qualified_date_remains_anomalous(db_session) -> None:
     settings = get_settings().model_copy(update={"market_provider": "akshare"})
     instrument = Instrument(ts_code="998872.SH", symbol="998872", name="tail snapshot fixture", kind="ETF", enabled=True)
-    db_session.add(instrument); db_session.flush()
+    db_session.add(instrument)
+    db_session.flush()
     start = datetime(2026, 1, 1, tzinfo=SHANGHAI).date()
     for offset in range(40):
         close = 2.0 + offset * 0.01
@@ -106,14 +107,16 @@ def test_tail_snapshot_after_qualified_date_remains_anomalous(db_session) -> Non
         instrument_id=instrument.id, trade_date=tail_date, open=2.4, high=2.42, low=2.38, close=2.4,
         pre_close=2.39, volume=None, amount=None, source="akshare:sina:v101", adjust="none", quality_hash="tail-snapshot-price-only",
     ))
-    snapshot.as_of_date = tail_date; db_session.flush()
+    snapshot.as_of_date = tail_date
+    db_session.flush()
     payload = DecisionBoardService(settings).refresh(db_session, generated_at=datetime(2026, 3, 25, 14, 30, tzinfo=SHANGHAI)).payload
     row = next(item for item in payload["rows"] if item["ts_code"] == instrument.ts_code)
     assert row["grade"] == "数据异常" and row["actionable"] is False
     db_session.execute(delete(DecisionBoardSnapshot).where(DecisionBoardSnapshot.snapshot_id == payload["snapshot_id"]))
     db_session.execute(delete(IndicatorSnapshot).where(IndicatorSnapshot.instrument_id == instrument.id))
     db_session.execute(delete(DailyBar).where(DailyBar.instrument_id == instrument.id))
-    db_session.execute(delete(Instrument).where(Instrument.id == instrument.id)); db_session.flush()
+    db_session.execute(delete(Instrument).where(Instrument.id == instrument.id))
+    db_session.flush()
 
 
 def test_refresh_builds_one_unique_row_per_enabled_instrument_and_never_writes_daily_bars(
@@ -192,8 +195,8 @@ def test_provisional_input_is_isolated_from_daily_bars(db_session, bootstrapped)
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
-        (datetime(2026, 8, 31, 9, 0, tzinfo=SHANGHAI), "20260831-0900"),
-        (datetime(2026, 8, 31, 14, 57, tzinfo=SHANGHAI), "20260831-1457"),
+        (datetime(2026, 8, 31, 9, 30, tzinfo=SHANGHAI), "20260831-0930"),
+        (datetime(2026, 8, 31, 14, 58, tzinfo=SHANGHAI), "20260831-1458"),
         (datetime(2026, 8, 31, 11, 31, tzinfo=SHANGHAI), None),
         (datetime(2026, 8, 30, 14, 30, tzinfo=SHANGHAI), None),
     ],
@@ -411,7 +414,7 @@ def test_next_refresh_skips_weekend_to_next_trading_day() -> None:
     from app.services.decision_board_service import next_decision_board_refresh
 
     next_refresh = next_decision_board_refresh(datetime(2026, 9, 5, 16, 0, tzinfo=SHANGHAI))
-    assert next_refresh == datetime(2026, 9, 7, 9, 0, tzinfo=SHANGHAI)
+    assert next_refresh == datetime(2026, 9, 7, 9, 30, tzinfo=SHANGHAI)
 
 
 def test_snapshot_retention_keeps_last_twenty_trading_dates(db_session, bootstrapped) -> None:

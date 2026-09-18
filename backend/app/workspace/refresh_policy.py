@@ -1,4 +1,4 @@
-"""Opt-in low-frequency cadence; uses the existing scheduler and TaskService locks."""
+"""Session-aware refresh cadence; uses the existing scheduler and TaskService locks."""
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
@@ -8,6 +8,30 @@ ZONE = ZoneInfo('Asia/Shanghai')
 
 def market_time(value):
     return value.replace(tzinfo=ZONE) if value.tzinfo is None else value.astimezone(ZONE)
+
+
+def intraday_refresh_minutes(now: datetime, *, is_trade_day: bool) -> int | None:
+    """Return the requested quote/signal cadence for the current session.
+
+    The board slots and the independent quote refresh use the same policy so a
+    browser refresh cannot observe a cadence that the scheduler does not use:
+    09:30–11:30 hourly, 13:00–14:29 every 30 minutes, 14:30–14:49 every 10
+    minutes, and 14:50–15:00 every 2 minutes.  Outside an open session the
+    caller keeps its normal non-session behavior.
+    """
+
+    if not is_trade_day:
+        return None
+    clock = market_time(now).time().replace(tzinfo=None)
+    if time(9, 30) <= clock <= time(11, 30):
+        return 60
+    if time(13, 0) <= clock < time(14, 30):
+        return 30
+    if time(14, 30) <= clock < time(14, 50):
+        return 10
+    if time(14, 50) <= clock <= time(15, 0):
+        return 2
+    return None
 
 
 @dataclass(frozen=True)
