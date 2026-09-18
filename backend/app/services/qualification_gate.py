@@ -1,6 +1,7 @@
 """Shared fail-closed checks on the inputs, independent of UI labels."""
 from datetime import timedelta
 import math
+from app.providers.corporate_action_contract import research_return_series_status
 from app.providers.data_contract import VERSION, assess_history
 from app.providers.unit_certification import history_units_independently_certified
 from app.services.trading_calendar_service import TradingCalendarService
@@ -47,6 +48,9 @@ def qualify_1430(settings, quote, now, window, bars=None, indicator=None, unit_c
     certification = unit_certification if unit_certification is not None else history_units_independently_certified(bars or [])
     if not getattr(certification, "certified", False):
         reasons.append("absolute_units_not_independently_certified")
+    series = research_return_series_status(bars or [])
+    if not series.research_allowed:
+        reasons.append("research_return_series_blocked")
     if not window["inside"]:
         reasons.append("outside_1430_window")
     if indicator is None:
