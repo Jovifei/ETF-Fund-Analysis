@@ -371,6 +371,26 @@ def codex_once(root: Path, folder: Path, binary: str, model: str, timeout: int =
     return output
 
 
+def doctor_status(root: Path) -> dict:
+    """Local runner hygiene only. Never read auth.json or claim a live login."""
+
+    home = root / "runner-home"
+    return {
+        "bridge_version": VERSION,
+        "paired": (root / "device.secret").is_file(),
+        "runner_home_present": home.is_dir(),
+        "reviewed_codex_version": REVIEWED_CODEX,
+        "secret_store": "Windows DPAPI" if os.name == "nt" else "0600 permission-controlled file (not encryption)",
+        "model_login": "not_inspected",
+        "scheduled": False,
+        "auto_recharge": False,
+        "writes_holdings": False,
+        "computes_official_actions": False,
+        "requires_approve_execution": True,
+        "max_jobs_per_work": 1,
+    }
+
+
 def login_codex(root: Path, binary: str, *, timeout: int = 300):
     """Official interactive login with child-only HOME. Never copy auth files."""
     home = private_root(root / "runner-home")
@@ -408,7 +428,7 @@ def main() -> int:
         print(json.dumps(login_codex(root, args.binary)))
         return 0
     if args.command == "doctor":
-        print(json.dumps({"bridge_version": VERSION, "paired": (root / "device.secret").is_file(), "secret_store": "Windows DPAPI" if os.name == "nt" else "0600 permission-controlled file (not encryption)", "model_login": "not_inspected", "scheduled": False}))
+        print(json.dumps(doctor_status(root)))
         return 0
     if args.command == "pair":
         origin = base_url(args.origin)

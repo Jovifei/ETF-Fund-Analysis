@@ -7,6 +7,20 @@ import pytest
 from test_workspace_bridge_client import bridge
 
 
+def test_doctor_reports_isolation_without_inspecting_login(tmp_path) -> None:
+    root = bridge.private_root(tmp_path / "isolated")
+    status = bridge.doctor_status(root)
+    assert status["reviewed_codex_version"] == bridge.REVIEWED_CODEX
+    assert status["model_login"] == "not_inspected"
+    assert status["auto_recharge"] is False
+    assert status["writes_holdings"] is False
+    assert status["computes_official_actions"] is False
+    assert status["requires_approve_execution"] is True
+    assert status["max_jobs_per_work"] == 1
+    assert status["runner_home_present"] is False
+    assert not (root / "runner-home" / ".codex" / "auth.json").exists()
+
+
 def test_login_is_a_child_only_environment_and_same_private_runner(tmp_path, monkeypatch):
     root=bridge.private_root(tmp_path/'isolated')
     before=dict(os.environ); calls=[]; native_run=bridge.subprocess.run
