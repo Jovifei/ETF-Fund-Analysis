@@ -150,6 +150,9 @@ def test_snapshot_read_is_provider_free_and_returns_explicit_stale_missing_state
     assert payload["source_status"]["actionable"] is False
     assert all("freshness" in row and "data_status" in row for row in payload["rows"])
     assert all(row["forecast"]["return_semantics"]["unit"] == "decimal_ratio" for row in payload["rows"])
+    assert all(row["entry_exit_ref"]["actionable"] is False for row in payload["rows"])
+    assert all(row["theme_relative_strength"]["actionable"] is False for row in payload["rows"])
+    assert all(row["forecasts"]["1"]["intraday_provisional_used"] is False for row in payload["rows"])
 
 
 def test_demo_refresh_is_ephemeral_and_does_not_write_production_snapshot(db_session, bootstrapped) -> None:

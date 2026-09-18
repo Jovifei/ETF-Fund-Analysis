@@ -26,6 +26,8 @@ MACD、KDJ、RSI 本身没有价格单位。本工程不会把振荡器数值直
 
 相近候选价格会按 ATR 和价格百分比容差聚类。强度来自参与方法、确认次数和方法权重，不代表价格必然有效。
 
+决策快照额外投影 `entry_exit_ref`：把最近支撑/压力的 `zone_low`–`zone_high` 显示为研究带，并给出 `inside_band` / `below_support` / `above_resistance`。这是展示层，不改五档动作或指标版本。同一主题内用已确认 `return_5d` 做相对名次（`theme_relative_strength`），缺收益的标的不排名。
+
 ## 缠论边界
 
 `chan_zone_approx` 只是最近若干价格区间的重叠估算。它不等同于完整的：

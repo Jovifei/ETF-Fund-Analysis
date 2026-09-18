@@ -25,11 +25,12 @@ function horizonInput(event:Event){emit('controls',{filter:props.filter,horizon:
       <article v-for="row in group.rows" :key="String(row.ts_code)" class="mobile-decision-row" data-testid="mobile-decision-row">
         <RouterLink :to="`/etf/${row.ts_code}`" class="mobile-instrument"><strong>{{row.name}}</strong><span class="mono">{{row.ts_code}}</span><span>查看完整指标 →</span></RouterLink>
         <div class="mobile-price-pair"><div><small>历史收盘 · {{historicalClose(row).date??'日期未知'}}</small><strong>{{num(historicalClose(row).price,3)}}</strong></div><div><small>涨跌幅 · {{record(row.returns).as_of_date??'日期待核验'}}</small><strong>{{pct(record(row.returns).today)}}</strong></div></div>
+        <p class="small-note">支撑带 {{num(record(record(row.entry_exit_ref).support_zone).low,3)}}–{{num(record(record(row.entry_exit_ref).support_zone).high,3)}} · 压力带 {{num(record(record(row.entry_exit_ref).resistance_zone).low,3)}}–{{num(record(record(row.entry_exit_ref).resistance_zone).high,3)}} · {{record(row.theme_relative_strength).label??'主题相对强弱不足'}}</p>
         <details class="mobile-metrics"><summary>指标与 {{horizon}} 日研究</summary><div class="mobile-price-pair">
           <div><small>MACD DIF / DEA</small><span>{{num(record(row.macd).dif,4)}} / {{num(record(row.macd).dea,4)}}</span></div>
           <div><small>KDJ J / RSI</small><span>{{num(record(row.kdj).j)}} / {{num(record(row.rsi).value)}}</span></div>
           <div><small>均线状态</small><span>{{record(row.ma).label??'未知'}}</span></div><div><small>量能状态</small><span>{{record(row.volume).label??'未知'}}</span></div>
-        </div><p>研究收益 {{pct(forecast(row).expected_return)}} · {{forecast(row).calibration_status??'not_calibrated'}}<br/><small>基准 {{forecast(row).as_of_date??'未知'}}；未校准结果不作为操作指令。</small></p></details>
+        </div><p>研究收益 {{pct(forecast(row).expected_return)}} · {{forecast(row).calibration_status??'not_calibrated'}}<br/><small>基准 {{forecast(row).as_of_date??'未知'}}；未校准结果不作为操作指令。盘中观察不能冒充已校准 EOD 预测。</small></p></details>
         <p class="mobile-reason">{{explainStatus(row)}}</p>
         <small>源时间 {{stamp(record(row.quote).source_time)}} · {{record(row.quote).timestamp_verified===true?'源时间已核验':'源时间未核验'}}</small>
       </article>

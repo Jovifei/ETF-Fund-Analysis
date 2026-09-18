@@ -16,11 +16,15 @@ export function historicalClose(row: Record<string, unknown>): {price: number|nu
 }
 const names: Record<string,string>={
   historical_price_only:'仅历史价格；完整量价资格不足',
+  historical_price_only_stale:'仅历史价格；尾部未认证，展示已过期',
   quote_stale_at_snapshot_generation:'报价在生成快照时已过期',
   quote_unverified_or_degraded:'报价源时间未核验或来源降级',
+  quote_missing_using_confirmed_history:'无报价，使用已确认历史',
   indicator_missing:'指标尚未形成',
   legacy_snapshot_requires_rebuild:'旧快照需要任务重算',
   provisional_unverified_research_only:'临时盘中观察，源时间未核验',
+  provisional_research_only:'临时盘中观察，不是已结算预测',
+  mock:'演示数据，不可操作',
 }
 export function explainStatus(row: Record<string, unknown>): string {
   const key=typeof row.data_status==='string'?row.data_status:'unknown'
