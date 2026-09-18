@@ -19,6 +19,7 @@ describe('responsive read projection, never a strategy', () => {
     expect(explainStatus(row)).toContain('<img src=x>缺量额')
     expect(explainStatus({})).toContain('待核验')
     expect(explainStatus({data_status:'mock',grade_reason:'demo'})).toContain('演示数据，不可操作')
+    expect(explainStatus({data_status:'quote_unverified_or_degraded',quote:{is_mock:true},grade_reason:'demo'})).toContain('演示数据，不可操作')
   })
   it('rejects malformed row containers and identities', () => {
     expect(decisionRows({rows:{length:2}},'')).toEqual([])

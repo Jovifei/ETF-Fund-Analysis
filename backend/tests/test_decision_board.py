@@ -137,6 +137,9 @@ def test_refresh_builds_one_unique_row_per_enabled_instrument_and_never_writes_d
     assert payload["source_status"]["actionable"] is False
     assert all(row["entry_exit_ref"]["actionable"] is False for row in payload["rows"])
     assert all(row["theme_relative_strength"]["actionable"] is False for row in payload["rows"])
+    assert all(row["quote"]["actionable"] is False for row in payload["rows"])
+    assert all(row["quote"]["is_mock"] is True for row in payload["rows"])
+    assert all(row["quote"]["status"] == "mock" for row in payload["rows"])
     assert db_session.scalar(select(func.count(DailyBar.id))) == daily_bars_before
     # Session-scoped SQLite can already hold snapshots from earlier tests or bootstrap.
     # This refresh must add exactly one snapshot and never rewrite daily bars.
@@ -157,6 +160,8 @@ def test_snapshot_read_is_provider_free_and_returns_explicit_stale_missing_state
     assert all(row["forecast"]["return_semantics"]["unit"] == "decimal_ratio" for row in payload["rows"])
     assert all(row["entry_exit_ref"]["actionable"] is False for row in payload["rows"])
     assert all(row["theme_relative_strength"]["actionable"] is False for row in payload["rows"])
+    assert all(row["quote"]["is_mock"] is True for row in payload["rows"])
+    assert all(row["quote"]["status"] == "mock" for row in payload["rows"])
     assert all(row["forecasts"]["1"]["intraday_provisional_used"] is False for row in payload["rows"])
 
 

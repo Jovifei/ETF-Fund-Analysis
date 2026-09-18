@@ -37,7 +37,7 @@ from app.utils.indicators_v05 import calculate_indicators
 from app.utils.numbers import finite_or_none
 from app.utils.support_resistance import build_support_resistance
 
-READ_MODEL_VERSION = "decision-read-v106"
+READ_MODEL_VERSION = "decision-read-v107"
 HORIZONS = (1, 3, 5, 10)
 # Must match docs/INTRADAY_REFRESH_CADENCE.md and refresh_policy windows.
 # Lunch 11:31–12:59 is intentionally absent.  14:50–15:00 is every 2 minutes.
@@ -509,6 +509,8 @@ class DecisionBoardService:
         if stale_history and indicator is not None:
             freshness, data_status = "stale", "historical_price_only_stale"
         source_verified = bool(quote and quote.timestamp_verified and quote.is_realtime and not quote.degraded_reason)
+        quote_source = quote.source if quote is not None else None
+        quote_is_mock = self.settings.market_provider == "mock" or "mock" in str(quote_source or "").lower()
         # Missing settled indicators do not erase independently timestamped
         # intraday research input. Incompatible history still fails closed.
         provisional_status = ({"status": "blocked_history_contract",
@@ -654,10 +656,12 @@ class DecisionBoardService:
                 "chan_basis": "approximation only; no full Chan/CZSC",
             },
             "quote": {
-                "source": quote.source if quote is not None else None,
+                "source": quote_source,
                 "source_time": quote.quote_time.isoformat() if quote is not None else None,
                 "timestamp_verified": bool(quote.timestamp_verified) if quote is not None else False,
                 "is_realtime": source_verified,
+                "is_mock": quote_is_mock,
+                "status": "mock" if quote_is_mock else ("missing" if quote is None else freshness),
                 "actionable": False,
             },
             "provisional": provisional_status,

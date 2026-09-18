@@ -27,7 +27,9 @@ const names: Record<string,string>={
   mock:'演示数据，不可操作',
 }
 export function explainStatus(row: Record<string, unknown>): string {
+  const quote=record(row.quote)
   const key=typeof row.data_status==='string'?row.data_status:'unknown'
   const reason=typeof row.grade_reason==='string'?row.grade_reason:'缺少解释，请在数据健康页核对'
-  return `${names[key]??'数据状态待核验'} · ${key} — ${reason}`
+  const mock=quote.is_mock===true || key==='mock' ? '演示数据，不可操作 · ' : ''
+  return `${mock}${names[key]??'数据状态待核验'} · ${key} — ${reason}`
 }

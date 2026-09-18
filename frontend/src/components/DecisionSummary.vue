@@ -32,7 +32,7 @@ function horizonInput(event:Event){emit('controls',{filter:props.filter,horizon:
           <div><small>均线状态</small><span>{{record(row.ma).label??'未知'}}</span></div><div><small>量能状态</small><span>{{record(row.volume).label??'未知'}}</span></div>
         </div><p>研究收益 {{pct(forecast(row).expected_return)}} · {{forecast(row).calibration_status??'not_calibrated'}}<br/><small>基准 {{forecast(row).as_of_date??'未知'}}；未校准结果不作为操作指令。盘中观察不能冒充已校准 EOD 预测。</small></p></details>
         <p class="mobile-reason">{{explainStatus(row)}}</p>
-        <small>源时间 {{stamp(record(row.quote).source_time)}} · {{record(row.quote).timestamp_verified===true?'源时间已核验':'源时间未核验'}}</small>
+        <small>源时间 {{stamp(record(row.quote).source_time)}} · {{record(row.quote).timestamp_verified===true?'源时间已核验':'源时间未核验'}}{{record(row.quote).is_mock?' · 演示数据，不可操作':''}}</small>
       </article>
     </section>
   </section>
