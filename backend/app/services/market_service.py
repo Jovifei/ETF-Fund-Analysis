@@ -32,10 +32,25 @@ class MarketService:
         self.persist_provider_audits = persist_provider_audits
 
     @staticmethod
+    def quote_operational_grade(verified: bool, reason: str | None) -> dict:
+        """Timestamp-verified quotes can be operational-grade; they are never production-qualified."""
+
+        return {
+            "operational_grade": bool(verified),
+            "visible": True,
+            "production_qualified": False,
+            "reason": reason,
+        }
+
+    @staticmethod
     def _qualify_quote_timestamp(item, fetched_at: datetime) -> tuple[bool, str | None]:
-        source_time = item.quote_time
+        source_time = getattr(item, "quote_time", None)
+        if source_time is None:
+            return False, "quote source timestamp missing"
         if source_time.tzinfo is None:
             source_time = source_time.replace(tzinfo=fetched_at.tzinfo)
+        if fetched_at.tzinfo is None and source_time.tzinfo is not None:
+            fetched_at = fetched_at.replace(tzinfo=source_time.tzinfo)
         age = fetched_at - source_time
         source = str(item.source or "").lower()
         provider_timestamp_capable = source.startswith("tushare:") and "fund_daily" not in source
@@ -53,7 +68,9 @@ class MarketService:
             return False, "quote source timestamp has not completed provider qualification"
         if source_time.date() != fetched_at.date():
             return False, "quote source date is not today"
-        return False, "quote source timestamp is stale or future-dated"
+        if age < timedelta(minutes=-5):
+            return False, "quote source timestamp is in the future"
+        return False, "quote source timestamp is stale"
 
     def sync_instruments(self, db: Session, codes: list[str] | None = None, run_id: str | None = None) -> dict:
         run_id = run_id or uuid4().hex
@@ -296,10 +313,11 @@ class MarketService:
             timestamp_verified, timestamp_reason = self._qualify_quote_timestamp(item, fetched_at)
             effective_realtime = bool(item.is_realtime and timestamp_verified and not item.degraded_reason)
             effective_degraded_reason = item.degraded_reason or timestamp_reason
+            stored_quote_time = item.quote_time if getattr(item, "quote_time", None) is not None else fetched_at
             db.add(
                 QuoteSnapshot(
                     instrument_id=instrument.id,
-                    quote_time=item.quote_time,
+                    quote_time=stored_quote_time,
                     fetched_at=fetched_at,
                     timestamp_verified=timestamp_verified,
                     price=item.price,
