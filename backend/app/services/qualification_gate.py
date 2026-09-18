@@ -4,6 +4,7 @@ import math
 from app.providers.corporate_action_contract import research_return_series_status
 from app.providers.data_contract import VERSION, assess_history
 from app.providers.unit_certification import history_units_independently_certified
+from app.services.pit_oos_harness import evaluate_1430_forecast_use
 from app.services.trading_calendar_service import TradingCalendarService
 
 GATE_VERSION = "qualification-v2-20260912"
@@ -71,7 +72,11 @@ def qualify_1430(settings, quote, now, window, bars=None, indicator=None, unit_c
     # There is no audited PIT/OOS approval artifact in this release. An env
     # boolean or a verified quote must never silently confer that qualification.
     reasons.append("historical_1430_backtest_not_qualified")
+    pit = evaluate_1430_forecast_use()
+    reasons.extend(pit.reasons)
     return {"actionable": False, "input_ready": input_ready, "research_only": True,
             "reasons": list(dict.fromkeys(reasons)), "decision_window": window,
             "historical_1430_backtest": "not_qualified", "gate_version": GATE_VERSION,
-            "data_contract": VERSION}
+            "data_contract": VERSION,
+            "observation_kind": pit.observation_kind,
+            "calibrated_eod": False}
