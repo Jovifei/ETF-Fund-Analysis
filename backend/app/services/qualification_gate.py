@@ -2,6 +2,7 @@
 from datetime import timedelta
 import math
 from app.providers.data_contract import VERSION, assess_history
+from app.providers.unit_certification import history_units_independently_certified
 from app.services.trading_calendar_service import TradingCalendarService
 
 GATE_VERSION = "qualification-v2-20260912"
@@ -39,10 +40,13 @@ def quote_reasons(settings, quote, now, maximum_age_minutes):
         reasons.append("quote_stale")
     return reasons
 
-def qualify_1430(settings, quote, now, window, bars=None, indicator=None):
+def qualify_1430(settings, quote, now, window, bars=None, indicator=None, unit_certification=None):
     strategy = settings.load_strategy()
     reasons = quote_reasons(settings, quote, now, window.get("maximum_quote_age_minutes", 8))
     reasons += assess_history(bars or [])
+    certification = unit_certification if unit_certification is not None else history_units_independently_certified(bars or [])
+    if not getattr(certification, "certified", False):
+        reasons.append("absolute_units_not_independently_certified")
     if not window["inside"]:
         reasons.append("outside_1430_window")
     if indicator is None:
