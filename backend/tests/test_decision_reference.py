@@ -37,3 +37,11 @@ def test_theme_relative_ranks_skip_missing_returns_and_do_not_invent_peers() -> 
     assert "512480.SH" not in ranked
     assert ranked["588000.SH"]["peer_count"] == 1
     assert ranked["588000.SH"]["actionable"] is False
+
+
+def test_entry_exit_never_converts_oscillators_into_a_price() -> None:
+    ref = entry_exit_reference({"macd": {"dif": 0.1}, "kdj": {"j": 80}, "rsi": {"value": 70}})
+    assert ref["support_zone"] is None
+    assert ref["resistance_zone"] is None
+    assert ref["basis"] == "clustered_price_zones_not_oscillator_conversion"
+    assert ref["actionable"] is False
