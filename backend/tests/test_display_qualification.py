@@ -69,6 +69,25 @@ def test_vwap_looking_amount_never_clears_unverified_units() -> None:
     assert price_history_issue([row]) is None
 
 
+def test_missing_volume_is_not_treated_as_zero_session() -> None:
+    row = SimpleNamespace(
+        trade_date=__import__("datetime").date(2026, 7, 20),
+        open=1.2, high=1.21, low=1.19, close=1.2,
+        volume=None, amount=None, source="akshare:em:v101", adjust="none",
+    )
+    reasons = assess_history([row])
+    assert "volume_missing_for_shared_signals" in reasons
+    assert "amount_missing_for_shared_signals" in reasons
+    zero = SimpleNamespace(
+        trade_date=__import__("datetime").date(2026, 7, 21),
+        open=1.2, high=1.21, low=1.19, close=1.2,
+        volume=0.0, amount=0.0, source="akshare:em:v101", adjust="none",
+    )
+    zero_reasons = assess_history([zero])
+    assert "volume_missing_for_shared_signals" not in zero_reasons
+    assert "amount_missing_for_shared_signals" not in zero_reasons
+
+
 def test_1430_gate_stays_false_even_when_inputs_look_ready() -> None:
     settings = get_settings().model_copy(update={"market_provider": "akshare"})
     now = __import__("datetime").datetime(2026, 8, 31, 14, 30, tzinfo=settings.timezone)

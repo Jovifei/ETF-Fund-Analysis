@@ -122,8 +122,10 @@ class KlineStabilizationService:
                     "high": row.high,
                     "low": row.low,
                     "close": row.close,
-                    "volume": row.volume or 0.0,
-                    "amount": row.amount or 0.0,
+                    # Missing volume/amount stay missing. 0 is a real empty
+                    # session, not a stand-in for unknown units or a null bar.
+                    "volume": _finite(row.volume),
+                    "amount": _finite(row.amount),
                 }
                 for row in rows
             ]
@@ -289,6 +291,7 @@ class KlineStabilizationService:
                     ts_int = int(dt.datetime.combine(ts, dt.time()).timestamp())
                 else:
                     ts_int = int(ts)
+                volume = _finite(row.get("volume"))
                 klines.append(
                     chanlun.K线.创建普K(
                         "CHAN",
@@ -297,7 +300,10 @@ class KlineStabilizationService:
                         float(row["high"]),
                         float(row["low"]),
                         float(row["close"]),
-                        float(row.get("volume") or 0.0),
+                        # Third-party chanlun requires a float. Missing volume
+                        # is not a zero session; this stub stays inside the
+                        # adapter and is never written back to DailyBar.
+                        0.0 if volume is None else volume,
                         i,
                         86400,
                     )

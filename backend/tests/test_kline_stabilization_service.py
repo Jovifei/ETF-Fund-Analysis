@@ -172,3 +172,11 @@ def test_kline_summary_api_marks_deprecated(bootstrapped):
         payload = response.json()
         assert payload.get("deprecated") is True
         assert "/etf/" in payload.get("successor", "")
+
+
+def test_missing_volume_is_not_coerced_to_zero() -> None:
+    from app.services.kline_stabilization_service import _finite
+
+    assert _finite(None) is None
+    assert _finite(0.0) == 0.0
+    assert _finite(12.5) == 12.5
