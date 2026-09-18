@@ -21,6 +21,16 @@ def test_doctor_reports_isolation_without_inspecting_login(tmp_path) -> None:
     assert not (root / "runner-home" / ".codex" / "auth.json").exists()
 
 
+def test_work_without_approve_execution_does_not_call_the_model(tmp_path, monkeypatch) -> None:
+    root = bridge.private_root(tmp_path / "isolated")
+    bridge.store_device(root, {"origin": "http://127.0.0.1", "device_token": "fixture-only"})
+    monkeypatch.setattr("sys.argv", [
+        "etf_agent_bridge.py", "--root", str(root), "work", "--model", "unused",
+    ])
+    with pytest.raises(bridge.BridgeError, match="explicit_execution_approval_required"):
+        bridge.main()
+
+
 def test_login_is_a_child_only_environment_and_same_private_runner(tmp_path, monkeypatch):
     root=bridge.private_root(tmp_path/'isolated')
     before=dict(os.environ); calls=[]; native_run=bridge.subprocess.run
