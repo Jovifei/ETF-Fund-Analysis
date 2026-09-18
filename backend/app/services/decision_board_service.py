@@ -39,6 +39,8 @@ from app.utils.support_resistance import build_support_resistance
 
 READ_MODEL_VERSION = "decision-read-v106"
 HORIZONS = (1, 3, 5, 10)
+# Must match docs/INTRADAY_REFRESH_CADENCE.md and refresh_policy windows.
+# Lunch 11:31–12:59 is intentionally absent.  14:50–15:00 is every 2 minutes.
 SLOT_TIMES = (
     "09:30", "10:30", "11:30", "13:00", "13:30", "14:00",
     "14:30", "14:40", "14:50", "14:52", "14:54", "14:56", "14:58", "15:00",
@@ -377,6 +379,20 @@ class DecisionBoardService:
             self._row(db, generated_at, instrument, grades.get(instrument.ts_code), indicators.get(instrument.id), previous_indicators.get(instrument.id), quotes.get(instrument.id), forecasts.get(instrument.id, {}), provisional.get(instrument.id))
             for instrument in instruments
         ]
+        from app.utils.decision_reference import entry_exit_reference, theme_relative_ranks
+        ranks = theme_relative_ranks(rows)
+        for row in rows:
+            row["entry_exit_ref"] = entry_exit_reference(row.get("support_resistance"))
+            row["theme_relative_strength"] = ranks.get(row["ts_code"]) or {
+                "theme_l1": row.get("theme_l1"),
+                "peer_count": 0,
+                "rank": None,
+                "return_5d": row.get("return_5d"),
+                "label": "主题相对强弱不足",
+                "basis": "confirmed_5d_return_inside_theme_not_a_second_grade",
+                "research_only": True,
+                "actionable": False,
+            }
         rows.sort(key=lambda row: (*health_sort_key(row["grade"], row["freshness"]), row["ts_code"]))
         groups = {grade: [row for row in rows if row["grade"] == grade] for grade in GRADE_ORDER}
         groups["数据异常"] = [row for row in rows if row["grade"] == "数据异常"]

@@ -1,4 +1,18 @@
-"""Session-aware refresh cadence; uses the existing scheduler and TaskService locks."""
+"""Session-aware refresh cadence; uses the existing scheduler and TaskService locks.
+
+Asia/Shanghai wall-clock policy for quote/signal/decision-board refresh
+(trading days only; lunch 11:30–13:00 is a hard gap, not a slow poll):
+
+- 09:30, 10:30, 11:30: hourly
+- 13:00, 13:30, 14:00: every 30 minutes
+- 14:30–14:49: every 10 minutes
+- 14:50–15:00: every 2 minutes
+
+Open auction (09:15–09:29) is not a quote-refresh window.  Non-trading days
+return None so the scheduler cannot record a fake session success.  Daily bar
+settlement remains owned by ``settlement.session_refresh_due`` (15:15 cutoff;
+an early same-day attempt cannot complete today's target session).
+"""
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
@@ -32,6 +46,12 @@ def intraday_refresh_minutes(now: datetime, *, is_trade_day: bool) -> int | None
     if time(14, 50) <= clock <= time(15, 0):
         return 2
     return None
+
+
+def session_quote_window_open(now: datetime, *, is_trade_day: bool) -> bool:
+    """True only inside the documented cadence windows, never during lunch or auction."""
+
+    return intraday_refresh_minutes(now, is_trade_day=is_trade_day) is not None
 
 
 @dataclass(frozen=True)

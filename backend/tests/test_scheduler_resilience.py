@@ -19,9 +19,11 @@ SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 def test_intraday_refresh_policy_matches_session_cadence() -> None:
     cases = [
+        (datetime(2026, 8, 31, 9, 20, tzinfo=SHANGHAI), None),
         (datetime(2026, 8, 31, 9, 30, tzinfo=SHANGHAI), 60),
         (datetime(2026, 8, 31, 10, 30, tzinfo=SHANGHAI), 60),
         (datetime(2026, 8, 31, 11, 30, tzinfo=SHANGHAI), 60),
+        (datetime(2026, 8, 31, 12, 0, tzinfo=SHANGHAI), None),
         (datetime(2026, 8, 31, 13, 0, tzinfo=SHANGHAI), 30),
         (datetime(2026, 8, 31, 14, 20, tzinfo=SHANGHAI), 30),
         (datetime(2026, 8, 31, 14, 30, tzinfo=SHANGHAI), 10),
@@ -102,6 +104,7 @@ def _run_fake_tick(
     fail_tasks: set[str] | None = None,
     success_due: set[str] | None = None,
     terminal_due: set[str] | None = None,
+    is_trade_day: bool = True,
 ):
     calls: list[tuple[str, dict]] = []
     fail_tasks = set(fail_tasks or ())
@@ -120,7 +123,7 @@ def _run_fake_tick(
             pass
 
         def decision(self, day):
-            return SimpleNamespace(day=day, is_trade_day=True, verified=True, source="test:XSHG")
+            return SimpleNamespace(day=day, is_trade_day=is_trade_day, verified=True, source="test:XSHG")
 
     class FakeTasks:
         def __init__(self, *_args, **_kwargs):
@@ -160,6 +163,53 @@ def _run_fake_tick(
     finally:
         db.close()
         engine.dispose()
+
+
+def test_tick_skips_quotes_during_lunch_and_open_auction(monkeypatch) -> None:
+    for now in (
+        datetime(2026, 8, 31, 9, 20, tzinfo=SHANGHAI),
+        datetime(2026, 8, 31, 12, 15, tzinfo=SHANGHAI),
+    ):
+        result, calls, claims = _run_fake_tick(
+            monkeypatch,
+            now=now,
+            success_due={"refresh_quotes", "refresh_signals"},
+            terminal_due={"refresh_quotes", "refresh_signals"},
+        )
+        names = [name for name, _ in calls]
+        assert "refresh_quotes" not in names
+        assert "refresh_decision_board" not in names
+        assert claims == set()
+        assert result["trade_day"] is True
+        assert result["failures"] == []
+
+
+def test_tick_does_not_claim_slots_or_fake_success_on_non_trade_days(monkeypatch) -> None:
+    result, calls, claims = _run_fake_tick(
+        monkeypatch,
+        now=datetime(2026, 8, 30, 14, 50, tzinfo=SHANGHAI),
+        success_due={"refresh_quotes", "refresh_decision_board"},
+        terminal_due={"refresh_quotes", "refresh_decision_board"},
+        is_trade_day=False,
+    )
+    names = [name for name, _ in calls]
+    assert "refresh_quotes" not in names
+    assert "refresh_decision_board" not in names
+    assert claims == set()
+    assert result["trade_day"] is False
+    assert result["phase"] == "closed"
+
+
+def test_tick_fires_1450_decision_slot_on_two_minute_cadence(monkeypatch) -> None:
+    result, calls, claims = _run_fake_tick(
+        monkeypatch,
+        now=datetime(2026, 8, 31, 14, 50, 5, tzinfo=SHANGHAI),
+    )
+    names = [name for name, _ in calls]
+    assert "refresh_decision_board" in names
+    assert "refresh_quotes" not in names
+    assert "20260831-1450" in claims
+    assert result["failures"] == []
 
 
 def test_tick_honors_quote_refresh_cadence_between_decision_slots(monkeypatch) -> None:

@@ -30,11 +30,14 @@ A decision-board refresh already performs quote refresh + provisional capture, s
 
 ## Quote cadence
 
-The existing runtime setting `quote_refresh_minutes` is now consumed by the scheduler during an open price session between decision-board slots.
+Session wall-clock policy in `refresh_policy.intraday_refresh_minutes` now owns quote/signal
+refresh during an open Shanghai session (hourly morning, 30 minutes early afternoon,
+10 minutes after 14:30, 2 minutes after 14:50). `quote_refresh_minutes` remains the
+fallback outside those windows. Lunch and open auction are not quote windows.
 
-- Default production value remains 3 minutes.
-- The cadence prefers the last **terminal attempt** (success/failure/partial) to avoid hammering an unavailable upstream every 30 seconds, with the historical last-success value as a compatibility fallback when no terminal attempt exists.
-- Board-slot refresh remains the authoritative quote -> provisional -> snapshot path for decision snapshots.
+- Board-slot refresh remains the authoritative quote -> provisional -> snapshot path.
+- An early daily-bar "success" still cannot complete a later same-day target session;
+  that contract lives in `settlement.session_refresh_due`.
 
 ## Failure and transaction isolation
 

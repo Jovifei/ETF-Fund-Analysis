@@ -221,7 +221,12 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
     calendar_decision = TradingCalendarService(settings, provider).decision(now.date())
     is_trade_day = calendar_decision.is_trade_day
     phase = clock.phase(now, is_trade_day)
-    from app.workspace.refresh_policy import balanced_plan, daily_due, intraday_refresh_minutes
+    from app.workspace.refresh_policy import (
+            balanced_plan,
+            daily_due,
+            intraday_refresh_minutes,
+            session_quote_window_open,
+        )
     balanced = balanced_plan(now, is_trade_day=is_trade_day) if settings.balanced_refresh_enabled else None
     executed: list[str] = []
     failures: list[dict[str, str]] = []
@@ -307,11 +312,10 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
                 refresh_input=True,
             )
 
-        # Honor the existing runtime quote cadence between board slots. A board
-        # refresh already fetches quotes itself, so avoid a duplicate provider
-        # call while an exact/recent slot or queued manual refresh is active.
+        # Honor the session cadence between board slots. Open auction and lunch
+        # are not quote windows; a board refresh already fetches quotes itself.
         if (
-            (balanced.market_open if balanced is not None else clock.price_session_open(now, is_trade_day))
+            session_quote_window_open(now, is_trade_day=is_trade_day)
             and not board_refresh_window
             and _due(_last_attempt_or_success(db, "refresh_quotes"), now, quote_minutes)
         ):
