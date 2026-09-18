@@ -5,6 +5,7 @@ import logging
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 from app.core.config import Settings
@@ -1242,7 +1243,7 @@ def test_scheduler_context_failure_isolated_and_terminal_attempt_throttles_retry
 
     engine, db = _context_session()
     settings = Settings(_env_file=None, market_context_refresh_minutes=15)
-    now = datetime(2026, 8, 28, 10, 0, tzinfo=UTC)
+    now = datetime(2026, 8, 28, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
     calls: list[str] = []
 
     class FakeProvider:
