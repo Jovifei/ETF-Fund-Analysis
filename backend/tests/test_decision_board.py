@@ -124,6 +124,7 @@ def test_refresh_builds_one_unique_row_per_enabled_instrument_and_never_writes_d
 ) -> None:
     service = DecisionBoardService()
     daily_bars_before = db_session.scalar(select(func.count(DailyBar.id)))
+    snapshots_before = db_session.scalar(select(func.count(DecisionBoardSnapshot.id)))
 
     result = service.refresh(db_session, generated_at=datetime(2026, 8, 31, 10, 30, tzinfo=SHANGHAI))
 
@@ -134,8 +135,12 @@ def test_refresh_builds_one_unique_row_per_enabled_instrument_and_never_writes_d
     assert set(payload["groups"]) == {"可加仓", "可入场", "可试探", "观望", "减仓", "数据异常"}
     assert payload["selected_forecast_horizon"] == 1
     assert payload["source_status"]["actionable"] is False
+    assert all(row["entry_exit_ref"]["actionable"] is False for row in payload["rows"])
+    assert all(row["theme_relative_strength"]["actionable"] is False for row in payload["rows"])
     assert db_session.scalar(select(func.count(DailyBar.id))) == daily_bars_before
-    assert db_session.scalar(select(func.count(DecisionBoardSnapshot.id))) == 1
+    # Session-scoped SQLite can already hold snapshots from earlier tests or bootstrap.
+    # This refresh must add exactly one snapshot and never rewrite daily bars.
+    assert db_session.scalar(select(func.count(DecisionBoardSnapshot.id))) == snapshots_before + 1
 
 
 def test_snapshot_read_is_provider_free_and_returns_explicit_stale_missing_state(db_session, bootstrapped, monkeypatch) -> None:
