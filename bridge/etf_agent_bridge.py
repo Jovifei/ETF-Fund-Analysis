@@ -388,6 +388,15 @@ def doctor_status(root: Path) -> dict:
         "computes_official_actions": False,
         "requires_approve_execution": True,
         "max_jobs_per_work": 1,
+        "live_ready": False,
+        "live_login_completed": False,
+        "paid_approval_completed": False,
+        "human_live_steps_pending": [
+            "official_codex_login_0.149.0",
+            "https_origin_pairing",
+            "windows_e_drive_acl_if_needed",
+            "one_paid_approve_execution",
+        ],
     }
 
 

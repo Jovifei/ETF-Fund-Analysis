@@ -18,7 +18,22 @@ def test_doctor_reports_isolation_without_inspecting_login(tmp_path) -> None:
     assert status["requires_approve_execution"] is True
     assert status["max_jobs_per_work"] == 1
     assert status["runner_home_present"] is False
+    assert status["live_ready"] is False
+    assert status["live_login_completed"] is False
+    assert status["paid_approval_completed"] is False
+    assert "official_codex_login_0.149.0" in status["human_live_steps_pending"]
     assert not (root / "runner-home" / ".codex" / "auth.json").exists()
+    assert "login_succeeded" not in status
+    assert "production_ready" not in status
+
+
+def test_fixture_pairing_file_does_not_mark_doctor_live_ready(tmp_path) -> None:
+    root = bridge.private_root(tmp_path / "isolated")
+    bridge.store_device(root, {"origin": "http://127.0.0.1", "device_token": "fixture-only"})
+    status = bridge.doctor_status(root)
+    assert status["paired"] is True
+    assert status["live_ready"] is False
+    assert status["model_login"] == "not_inspected"
 
 
 def test_work_without_approve_execution_does_not_call_the_model(tmp_path, monkeypatch) -> None:
