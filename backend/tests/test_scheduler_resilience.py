@@ -5,10 +5,13 @@ from datetime import datetime
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
+from uuid import uuid4
+
 import app.models  # noqa: F401  # register all ORM tables on Base metadata
 import app.scheduler as scheduler
 from app.core.config import get_settings
 from app.db.base import Base
+from app.models import Instrument, TaskRun
 from app.services.task_service import TaskExecutionError
 from app.workspace.refresh_policy import intraday_refresh_minutes
 from sqlalchemy import create_engine, select
@@ -105,6 +108,8 @@ def _run_fake_tick(
     success_due: set[str] | None = None,
     terminal_due: set[str] | None = None,
     is_trade_day: bool = True,
+    real_pipeline: bool = False,
+    seed=None,
 ):
     calls: list[tuple[str, dict]] = []
     fail_tasks = set(fail_tasks or ())
@@ -138,9 +143,12 @@ def _run_fake_tick(
         def close(self):
             return None
 
-    monkeypatch.setattr(scheduler, "settled_pipeline_tasks",
-        lambda *a, **k: list(scheduler.DAILY_DEPENDENCIES) if "refresh_bars" in success_due else [])
-    monkeypatch.setattr("app.services.settlement.session_refresh_due", lambda *a, **k: False)
+    if not real_pipeline:
+        monkeypatch.setattr(scheduler, "settled_pipeline_tasks",
+            lambda *a, **k: list(scheduler.DAILY_DEPENDENCIES) if "refresh_bars" in success_due else [])
+        monkeypatch.setattr("app.services.settlement.session_refresh_due", lambda *a, **k: False)
+    if seed is not None:
+        seed(db)
     monkeypatch.setattr(scheduler, "session_scope", fake_scope)
     monkeypatch.setattr(scheduler, "TradingCalendarService", FakeCalendar)
     monkeypatch.setattr(scheduler, "TaskService", FakeTasks)
@@ -270,3 +278,62 @@ def test_after_close_pipeline_continues_after_one_layer_and_news_fail(monkeypatc
         "refresh_indicators",
         "refresh_news",
     }
+
+
+def test_tick_after_close_runs_board_when_upstream_succeeded_and_only_intraday_board_exists(monkeypatch) -> None:
+    settings = get_settings()
+    slot_at = datetime(2026, 8, 31, 14, 50, tzinfo=SHANGHAI)
+    eod = datetime(2026, 8, 31, 16, 5, tzinfo=SHANGHAI)
+
+    def seed(db):
+        from app.services.settlement import stamp_output_completion, settled_session
+
+        db.add(Instrument(ts_code="998801.SH", symbol="998801", kind="ETF", name="catch-up", enabled=True))
+        db.flush()
+
+        def stamp(name, at, **extra):
+            target = settled_session(settings, at).isoformat()
+            result = {
+                "status": "succeeded",
+                "requested": 1,
+                "completed": 1,
+                "coverage_complete": True,
+                "target_trade_date": target,
+                **extra,
+            }
+            if name == "refresh_bars":
+                result["coverage"] = [{"ts_code": "998801.SH", "complete": True, "received_through": target}]
+            if name == "refresh_decision_board":
+                result["snapshot_id"] = "intraday-1450"
+            if name in {"refresh_signals", "refresh_sector_snapshots"}:
+                result["created"] = 1
+            result = stamp_output_completion(db, settings, name, result, at)
+            db.add(TaskRun(
+                run_id=uuid4().hex,
+                task_name=name,
+                status=result["status"],
+                started_at=at,
+                finished_at=at,
+                result_json=result,
+            ))
+            db.flush()
+
+        stamp("refresh_decision_board", slot_at)
+        for offset, name in enumerate(("refresh_bars", "refresh_indicators", "refresh_forecasts", "refresh_signals")):
+            stamp(name, eod.replace(hour=15, minute=20 + offset))
+
+    result, calls, claims = _run_fake_tick(
+        monkeypatch,
+        now=eod,
+        real_pipeline=True,
+        seed=seed,
+    )
+    names = [name for name, _ in calls]
+    assert "refresh_bars" not in names
+    assert "refresh_indicators" not in names
+    assert "refresh_forecasts" not in names
+    assert "refresh_decision_board" in names
+    assert "generate_report" in names
+    assert claims == set()
+    assert result["trade_day"] is True
+    assert result["failures"] == []

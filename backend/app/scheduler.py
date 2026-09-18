@@ -190,10 +190,15 @@ def settled_pipeline_tasks(db, settings, now):
     due = {name for name, dependencies in DAILY_DEPENDENCIES.items()
            if session_refresh_due(db, settings, name, now, dependencies=dependencies)}
     # Include descendants of a scheduled recompute, even before that recompute
-    # has committed. Invalidation must not lag by an entire scheduler restart.
-    for name, dependencies in DAILY_DEPENDENCIES.items():
-        if due.intersection(dependencies):
-            due.add(name)
+    # has committed. Repeat until stable so dict order cannot drop board/report
+    # catch-up when only an upstream layer is newly due.
+    changed = True
+    while changed:
+        changed = False
+        for name, dependencies in DAILY_DEPENDENCIES.items():
+            if name not in due and due.intersection(dependencies):
+                due.add(name)
+                changed = True
     return [name for name in DAILY_DEPENDENCIES if name in due]
 
 
@@ -373,6 +378,11 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
         # Each task owns a durable failure record; one failed layer no longer
         # prevents all remaining independent cleanup/report work in this tick.
         if after_close_due:
+            # Each settled layer is independent. Bars/indicator/forecast success
+            # must not skip a missing board: membership in daily_due_tasks is the
+            # only skip gate, and refresh_decision_board is due whenever today's
+            # settled receipt is absent (an early same-day slot cannot complete
+            # that receipt; see settlement.session_refresh_due).
             for task_name, kwargs in (
                 ("refresh_bars", {"lookback_days": 120}),
                 ("refresh_indicators", {}),
@@ -382,7 +392,7 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
                 ("generate_report", {}),
                 ("refresh_sector_snapshots", {}),
             ):
-                if task_name in DAILY_DEPENDENCIES and task_name not in daily_due_tasks:
+                if task_name not in daily_due_tasks:
                     continue
                 _run_guarded(
                     tasks,

@@ -80,3 +80,59 @@ def test_failed_board_remains_due_without_upstream_repeat(isolated):
     done(isolated,'refresh_decision_board',now.replace(hour=16),status='failed',completed=0,coverage_complete=False)
     due=settled_pipeline_tasks(isolated,get_settings(),now)
     assert 'refresh_decision_board' in due and 'refresh_bars' not in due
+
+
+def _stamp_done(db, name, at, **extra):
+    from app.services.settlement import stamp_output_completion, settled_session
+
+    settings = get_settings()
+    target = settled_session(settings, at).isoformat()
+    result = {
+        "status": "succeeded",
+        "requested": 1,
+        "completed": 1,
+        "coverage_complete": True,
+        "target_trade_date": target,
+        **extra,
+    }
+    if name == "refresh_bars":
+        result["coverage"] = [{"ts_code": "998801.SH", "complete": True, "received_through": target}]
+    if name == "refresh_decision_board":
+        result.setdefault("snapshot_id", "slot-receipt")
+    if name in {"refresh_signals", "refresh_sector_snapshots"}:
+        result.setdefault("created", 1)
+    result = stamp_output_completion(db, settings, name, result, at)
+    db.add(TaskRun(
+        run_id=uuid4().hex,
+        task_name=name,
+        status=result["status"],
+        started_at=at,
+        finished_at=at,
+        result_json=result,
+    ))
+    db.flush()
+    return result
+
+
+def test_intraday_board_success_cannot_complete_same_day_settled_board(isolated):
+    settings = get_settings()
+    slot_at = datetime(2026, 9, 14, 14, 50, tzinfo=settings.timezone)
+    eod = datetime(2026, 9, 14, 16, 5, tzinfo=settings.timezone)
+    slot = _stamp_done(isolated, "refresh_decision_board", slot_at)
+    assert slot["coverage_complete"] is True
+    assert slot["target_trade_date"] != "2026-09-14"
+    for offset, name in enumerate(("refresh_bars", "refresh_indicators", "refresh_forecasts", "refresh_signals")):
+        _stamp_done(isolated, name, eod.replace(hour=15, minute=20 + offset))
+    due = settled_pipeline_tasks(isolated, settings, eod)
+    assert "refresh_bars" not in due
+    assert "refresh_indicators" not in due
+    assert "refresh_forecasts" not in due
+    assert "refresh_decision_board" in due
+    assert "generate_report" in due
+    assert session_refresh_due(
+        isolated,
+        settings,
+        "refresh_decision_board",
+        eod,
+        dependencies=DAILY_DEPENDENCIES["refresh_decision_board"],
+    )

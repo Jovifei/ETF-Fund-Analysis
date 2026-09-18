@@ -19,4 +19,6 @@
 
 日线/指标/预测/信号的“今日完成”仍由 `settlement.session_refresh_due` 判定：目标交易日、覆盖范围和 `15:15` 截止。15:00–15:15 不抢跑；昨日成功不能完成今日目标；部分覆盖或失败会按重试间隔补跑，不会被一次过早的 succeeded 挡住。
 
-实现位置：`backend/app/workspace/refresh_policy.py`、`backend/app/services/decision_board_service.py` 的 `SLOT_TIMES`、`backend/app/scheduler.py`。
+决策快照与日线层独立：盘中槽位成功（09:30–15:00）的 `target_trade_date` 仍是上一已结算交易日，不能当作今日 15:15 之后的结算收据。因此日线/指标/预测已经 succeeded 时，只要今日还没有结算合同下的 board 收据，调度仍会补跑 `refresh_decision_board`，不会因为上游成功而跳过缺失的决策板。
+
+实现位置：`backend/app/workspace/refresh_policy.py`、`backend/app/services/decision_board_service.py` 的 `SLOT_TIMES`、`backend/app/scheduler.py`、`backend/app/services/settlement.py`。
