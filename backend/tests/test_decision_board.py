@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -117,6 +117,49 @@ def test_tail_snapshot_after_qualified_date_remains_anomalous(db_session) -> Non
     db_session.execute(delete(DailyBar).where(DailyBar.instrument_id == instrument.id))
     db_session.execute(delete(Instrument).where(Instrument.id == instrument.id))
     db_session.flush()
+
+
+def test_official_split_gap_uses_stale_research_snapshot_not_anomaly(db_session) -> None:
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    existing = db_session.scalar(select(Instrument).where(Instrument.ts_code == "512000.SH"))
+    if existing is not None:
+        db_session.execute(delete(DailyBar).where(DailyBar.instrument_id == existing.id))
+        db_session.delete(existing)
+        db_session.flush()
+    instrument = Instrument(
+        ts_code="512000.SH", symbol="512000", name="official split fixture", kind="ETF", enabled=True
+    )
+    db_session.add(instrument)
+    db_session.flush()
+    start = date(2025, 5, 1)
+    for offset in range(92):
+        current = start + timedelta(days=offset)
+        close = 1.0 + offset * 0.001
+        db_session.add(DailyBar(
+            instrument_id=instrument.id, trade_date=current,
+            open=close, high=close * 1.01, low=close * 0.99, close=close,
+            pre_close=close, volume=1000, amount=2000,
+            source="akshare:em:v101", adjust="none", quality_hash=f"split-{offset}",
+        ))
+    db_session.add_all([
+        DailyBar(instrument_id=instrument.id, trade_date=date(2025, 8, 1), open=1.13, high=1.14, low=1.12, close=1.138,
+                 pre_close=1.13, volume=1000, amount=2000, source="akshare:em:v101", adjust="none", quality_hash="split-before"),
+        DailyBar(instrument_id=instrument.id, trade_date=date(2025, 8, 4), open=0.57, high=0.58, low=0.56, close=0.572,
+                 pre_close=1.138, volume=2000, amount=2000, source="akshare:em:v101", adjust="none", quality_hash="split-after"),
+        DailyBar(instrument_id=instrument.id, trade_date=date(2025, 8, 5), open=0.57, high=0.58, low=0.56, close=0.571,
+                 pre_close=0.572, volume=None, amount=None, source="akshare:sina:v101", adjust="none", quality_hash="split-tail"),
+    ])
+    db_session.flush()
+    outcome = IndicatorService(settings).refresh_all(db_session, run_id="official-split-indicators")
+    assert outcome["created"] == 1
+    payload = DecisionBoardService(settings).refresh(
+        db_session, generated_at=datetime(2025, 8, 6, 14, 30, tzinfo=SHANGHAI)
+    ).payload
+    row = next(item for item in payload["rows"] if item["ts_code"] == instrument.ts_code)
+    assert row["data_status"] == "historical_price_only_stale"
+    assert row["grade"] != "数据异常"
+    assert row["actionable"] is False
+    db_session.rollback()
 
 
 def test_refresh_builds_one_unique_row_per_enabled_instrument_and_never_writes_daily_bars(

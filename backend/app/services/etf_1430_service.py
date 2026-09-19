@@ -299,6 +299,7 @@ class ETF1430WorkbenchService:
         *,
         bars=None,
         indicator=None,
+        ts_code=None,
     ) -> dict[str, Any]:
         from app.services.qualification_gate import qualify_1430
         window = {**self._decision_window(now), "maximum_quote_age_minutes": self.config["thresholds"].get("maximum_quote_age_minutes", 8)}
@@ -315,6 +316,7 @@ class ETF1430WorkbenchService:
             bars=bars,
             indicator=indicator,
             unit_certification=unit_certification,
+            ts_code=ts_code,
         )
 
     def _scenario_candles(self, last_bar: DailyBar, forecasts: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
@@ -400,7 +402,7 @@ class ETF1430WorkbenchService:
         rr = _finite(structure_metrics.get("risk_reward"))
         action = str((current_decision or {}).get("state") or "数据异常")
         now = datetime.now(self.timezone)
-        qualification = self._qualification(quote, now, bars=bars, indicator=indicator)
+        qualification = self._qualification(quote, now, bars=bars, indicator=indicator, ts_code=instrument.ts_code)
         current_price = _finite(quote.price if quote else None) or (_finite(float(bars[-1].close)) if bars else None)
         reasons = [
             f"趋势 {trend_score:.1f}",

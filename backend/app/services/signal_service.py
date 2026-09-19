@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.clock import MarketClock
 from app.core.config import Settings, get_settings
 from app.models import (
+    DailyBar,
     ForecastSnapshot,
     IndicatorSnapshot,
     Instrument,
@@ -351,13 +352,20 @@ class SignalService:
         now = datetime.now(self.settings.timezone)
         instruments = db.scalars(select(Instrument).where(Instrument.enabled.is_(True))).all()
 
-        from app.providers.data_contract import history_issues
+        from app.providers.data_contract import history_issues, qualified_research_history
         blocked = history_issues(db, self.settings, [item.id for item in instruments])
+        stale_scopes: dict[int, dict | None] = {}
         latest_quotes: dict[int, QuoteSnapshot] = {}
         latest_indicators: dict[int, IndicatorSnapshot] = {}
         latest_forecasts: dict[int, dict[int, ForecastSnapshot]] = {}
         previous_signals: dict[int, SignalSnapshot] = {}
         for instrument in instruments:
+            history_rows = db.scalars(
+                select(DailyBar).where(DailyBar.instrument_id == instrument.id).order_by(DailyBar.trade_date)
+            ).all()
+            _, stale_scopes[instrument.id] = qualified_research_history(history_rows, instrument.ts_code)
+            stale = stale_scopes[instrument.id]
+            qualified_through = stale["qualified_through"] if stale else None
             quote = db.scalar(
                 select(QuoteSnapshot)
                 .where(QuoteSnapshot.instrument_id == instrument.id)
@@ -372,14 +380,19 @@ class SignalService:
                 .order_by(IndicatorSnapshot.as_of_date.desc(), IndicatorSnapshot.generated_at.desc())
                 .limit(1)
             )
-            if indicator and instrument.id not in blocked:
+            if indicator and (
+                instrument.id not in blocked
+                or (qualified_through is not None and indicator.as_of_date <= qualified_through)
+            ):
                 latest_indicators[instrument.id] = indicator
             forecasts = db.scalars(
                 select(ForecastSnapshot)
                 .where(ForecastSnapshot.instrument_id == instrument.id)
                 .order_by(ForecastSnapshot.as_of_date.desc(), ForecastSnapshot.generated_at.desc())
             ).all()
-            latest_forecasts[instrument.id] = {} if instrument.id in blocked else self._latest_by_horizon(list(forecasts))
+            if instrument.id in blocked and qualified_through is not None:
+                forecasts = [item for item in forecasts if item.as_of_date <= qualified_through]
+            latest_forecasts[instrument.id] = self._latest_by_horizon(list(forecasts))
             previous = db.scalar(
                 select(SignalSnapshot)
                 .where(SignalSnapshot.instrument_id == instrument.id)

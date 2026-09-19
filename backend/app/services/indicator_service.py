@@ -51,22 +51,31 @@ class IndicatorService:
     def refresh_all(self, db: Session, run_id: str | None = None) -> dict:
         run_id = run_id or uuid4().hex
         instruments = db.scalars(select(Instrument).where(Instrument.enabled.is_(True))).all()
-        from app.providers.data_contract import history_issues
+        from app.providers.data_contract import history_issues, trailing_unverified_history
+        from app.providers.corporate_action_contract import research_history_rows
         issues = history_issues(db, self.settings, [item.id for item in instruments])
         skipped = 0
         failures: list[dict] = []
         computed: dict[int, IndicatorResult] = {}
         metadata: dict[int, tuple[Instrument, date, str]] = {}
         for instrument in instruments:
-            if instrument.id in issues:
-                skipped += 1
-                failures.append({"ts_code": instrument.ts_code, "reason": issues[instrument.id]})
-                continue
-            rows = db.scalars(
+            raw_rows = db.scalars(
                 select(DailyBar)
                 .where(DailyBar.instrument_id == instrument.id)
                 .order_by(DailyBar.trade_date)
             ).all()
+            rows = (
+                raw_rows
+                if self.settings.market_provider == "mock"
+                else research_history_rows(raw_rows, instrument.ts_code)
+            )
+            stale_scope = trailing_unverified_history(rows) if instrument.id in issues else None
+            if instrument.id in issues and stale_scope is None:
+                skipped += 1
+                failures.append({"ts_code": instrument.ts_code, "reason": issues[instrument.id]})
+                continue
+            if stale_scope:
+                rows = [row for row in rows if row.trade_date <= stale_scope["qualified_through"]]
             if len(rows) < 30:
                 skipped += 1
                 failures.append({"ts_code": instrument.ts_code, "reason": "历史 K 线不足 30 根"})

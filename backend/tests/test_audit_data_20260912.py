@@ -5,11 +5,11 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.core.config import get_settings
 from app.providers.akshare import AKShareProvider
-from app.providers.data_contract import assess_history, history_issues, price_history_issue, trailing_unverified_history
+from app.providers.data_contract import assess_history, history_issues, price_history_issue, qualified_research_history, trailing_unverified_history
 from app.services.etf_1430_service import ETF1430WorkbenchService
 from app.utils.input_lineage import history_digest
 from app.utils.feature_store import build_feature_frame
@@ -62,6 +62,74 @@ def test_interleaved_price_only_rows_do_not_get_a_stale_scope():
         bar(2, source='akshare:em:v101'),
     ]
     assert trailing_unverified_history(rows) is None
+
+
+def test_official_split_makes_history_issue_only_the_unverified_tail(db_session):
+    from app.models import DailyBar, Instrument
+
+    existing = db_session.scalar(select(Instrument).where(Instrument.ts_code == "512000.SH"))
+    if existing is not None:
+        db_session.execute(delete(DailyBar).where(DailyBar.instrument_id == existing.id))
+        db_session.delete(existing)
+        db_session.flush()
+    inst = Instrument(ts_code="512000.SH", symbol="512000", name="split fixture", kind="ETF", enabled=True)
+    db_session.add(inst)
+    db_session.flush()
+    db_session.add_all([
+        DailyBar(instrument_id=inst.id, trade_date=date(2025, 8, 1), open=1.13, high=1.14, low=1.12, close=1.138,
+                 volume=1000, amount=2000, source="akshare:em:v101", adjust="none", quality_hash="before"),
+        DailyBar(instrument_id=inst.id, trade_date=date(2025, 8, 4), open=0.57, high=0.58, low=0.56, close=0.572,
+                 volume=2000, amount=2000, source="akshare:em:v101", adjust="none", quality_hash="after"),
+        DailyBar(instrument_id=inst.id, trade_date=date(2025, 8, 5), open=0.57, high=0.58, low=0.56, close=0.571,
+                 volume=None, amount=None, source="akshare:sina:v101", adjust="none", quality_hash="tail"),
+    ])
+    db_session.flush()
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    issues = history_issues(db_session, settings, [inst.id])
+    assert issues[inst.id] == "price_only_history_units_unverified"
+    research_rows, stale_scope = qualified_research_history(
+        db_session.scalars(select(DailyBar).where(DailyBar.instrument_id == inst.id).order_by(DailyBar.trade_date)).all(),
+        inst.ts_code,
+    )
+    assert stale_scope["qualified_through"] == date(2025, 8, 4)
+    assert price_history_issue(research_rows[:2]) is None
+    db_session.rollback()
+
+
+def test_forecast_frame_uses_officially_adjusted_history_before_unverified_tail(db_session):
+    from app.models import DailyBar, Instrument
+    from app.services.forecast_service import ForecastService
+
+    existing = db_session.scalar(select(Instrument).where(Instrument.ts_code == "512000.SH"))
+    if existing is not None:
+        db_session.execute(delete(DailyBar).where(DailyBar.instrument_id == existing.id))
+        db_session.delete(existing)
+        db_session.flush()
+    inst = Instrument(ts_code="512000.SH", symbol="512000", name="split forecast fixture", kind="ETF", enabled=True)
+    db_session.add(inst)
+    db_session.flush()
+    for index in range(210):
+        current = date(2025, 1, 1) + timedelta(days=index)
+        price = 1.2 + index * 0.001
+        db_session.add(DailyBar(
+            instrument_id=inst.id, trade_date=current, open=price, high=price + 0.01,
+            low=price - 0.01, close=price, volume=1000, amount=2000,
+            source="akshare:em:v101", adjust="none", quality_hash=str(index),
+        ))
+    db_session.add_all([
+        DailyBar(instrument_id=inst.id, trade_date=date(2025, 8, 1), open=1.13, high=1.14, low=1.12, close=1.138,
+                 volume=1000, amount=2000, source="akshare:em:v101", adjust="none", quality_hash="split-before"),
+        DailyBar(instrument_id=inst.id, trade_date=date(2025, 8, 4), open=0.57, high=0.58, low=0.56, close=0.572,
+                 volume=2000, amount=2000, source="akshare:em:v101", adjust="none", quality_hash="split-after"),
+        DailyBar(instrument_id=inst.id, trade_date=date(2025, 8, 5), open=0.57, high=0.58, low=0.56, close=0.571,
+                 volume=None, amount=None, source="akshare:sina:v101", adjust="none", quality_hash="split-tail"),
+    ])
+    db_session.flush()
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    frames = ForecastService(settings)._frames(db_session, [inst])
+    assert inst.id in frames
+    assert frames[inst.id].iloc[-1]["trade_date"] == date(2025, 8, 4)
+    db_session.rollback()
 
 @pytest.mark.parametrize('when,stamp',[(datetime(2026,9,12,14,30),datetime(2026,9,12,14,30)), (datetime(2026,9,11,14,30),datetime(2026,9,12,14,30))])
 def test_1430_weekend_future_never_actionable(when,stamp):

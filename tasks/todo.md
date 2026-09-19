@@ -832,3 +832,21 @@ Repair the independently reproduced scheduler, walk-forward, return-series, and 
 - Pre-deployment scope boundary: no database migration or change to the owner's current `main` worktree. Independent unit evidence remains externally required; absent evidence still fails closed and all 14:30 output remains non-actionable.
 - Follow-up RED/GREEN: `TaskService.full_pipeline` also published the board before sector refresh; a behavioral order test failed (`9 < 8`) before moving sector refresh ahead of board publication, then the related 83-test orchestration suite passed.
 - Real public-provider flow in isolated SQLite: 36 instruments; 35/35 daily histories through 2026-09-18 (9,870 bars, all price-only); 35 quotes (all non-realtime/degraded); 200 news rows; 266 sector/concept/market rows; 35 fail-closed `数据异常` signals; stale/non-actionable 35-row board and HTML report. Indicators/forecasts correctly refused unverified quantity history. Workspace `/analysis`, decision overview, and ETF detail displayed the persisted real-source data with unverified labels.
+# Production data qualification repair — 2026-09-20
+
+## Goal
+
+Resolve the four production `unexplained_price_discontinuity` cases without guessing corporate-action ratios, then verify every data-to-UI-to-decision surface before merging and redeploying.
+
+## Plan
+
+- [ ] RED: encode the four production discontinuity fixtures and assert the current gate blocks them with the exact reason.
+- [ ] Research: reconcile each discontinuity against authoritative corporate-action/adjusted-series evidence; keep unresolved symbols blocked.
+- [ ] GREEN: implement the smallest source/contract fix only where independent evidence supports it; preserve raw display history and fail-closed behavior.
+- [ ] Data pipeline: run source fetch, bars, quotes, indicators, forecasts, news, signals, sectors, decision board, and report checks in an isolated database.
+- [ ] UI: verify every enabled route and representative list/detail/decision surface against persisted snapshots and no mock/realtime mislabeling.
+- [ ] Review: full backend/frontend/static/build/diff gates, exact SHA, production backup, diagnostic deploy, public verification, rollback evidence.
+
+## Review
+
+- Pending.

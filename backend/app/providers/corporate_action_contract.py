@@ -8,13 +8,88 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
+from fractions import Fraction
 from types import SimpleNamespace
 
-from app.providers.data_contract import price_history_issue
+from app.providers.data_contract import RESEARCH_ADJUST, finite, price_history_issue
 
 DISPLAY_SERIES = "raw_unadjusted_display"
 RAW_RESEARCH_SERIES = "raw_unadjusted_research"
 RESEARCH_SERIES = "total_return_or_adjusted_research"
+
+
+@dataclass(frozen=True, slots=True)
+class CorporateActionEvent:
+    ts_code: str
+    record_date: date
+    ex_date: date
+    split_ratio: str
+    evidence_id: str
+
+    @property
+    def ratio(self) -> Fraction:
+        numerator, denominator = self.split_ratio.split(":", 1)
+        return Fraction(int(numerator), int(denominator))
+
+
+# These are official fund split notices, not ratios inferred from prices.
+_OFFICIAL_ACTIONS = {
+    "512000.SH": (
+        CorporateActionEvent("512000.SH", date(2025, 8, 1), date(2025, 8, 4), "1:2", "sse_512000_20250729"),
+    ),
+    "512480.SH": (
+        CorporateActionEvent("512480.SH", date(2026, 7, 2), date(2026, 7, 3), "1:2", "sse_512480_20260629"),
+    ),
+    "515880.SH": (
+        CorporateActionEvent("515880.SH", date(2026, 1, 30), date(2026, 2, 3), "1:3", "sse_515880_20260203"),
+        CorporateActionEvent("515880.SH", date(2026, 7, 3), date(2026, 7, 6), "1:2", "sse_515880_20260706"),
+    ),
+    "588200.SH": (
+        CorporateActionEvent("588200.SH", date(2026, 7, 20), date(2026, 7, 21), "1:3", "sse_588200_20260721"),
+    ),
+}
+
+
+def official_corporate_actions(ts_code: str) -> tuple[CorporateActionEvent, ...]:
+    return _OFFICIAL_ACTIONS.get(str(ts_code or "").strip().upper(), ())
+
+
+def research_history_rows(rows, ts_code: str):
+    """Build an evidence-bound split-adjusted research view without mutating raw bars."""
+
+    events = official_corporate_actions(ts_code)
+    ordered = sorted(rows or (), key=lambda row: row.trade_date)
+    if not events:
+        return list(ordered)
+    result = []
+    previous_close = None
+    for row in ordered:
+        price_scale = Fraction(1, 1)
+        for event in events:
+            if row.trade_date < event.ex_date:
+                price_scale *= event.ratio
+        price_multiplier = float(price_scale)
+        volume_multiplier = 1.0 / price_multiplier
+        values = {
+            "trade_date": row.trade_date,
+            "open": float(row.open) * price_multiplier,
+            "high": float(row.high) * price_multiplier,
+            "low": float(row.low) * price_multiplier,
+            "close": float(row.close) * price_multiplier,
+            "pre_close": float(row.pre_close) * price_multiplier if finite(getattr(row, "pre_close", None)) else None,
+            "volume": float(row.volume) * volume_multiplier if finite(getattr(row, "volume", None)) else None,
+            "amount": float(row.amount) if finite(getattr(row, "amount", None)) else None,
+            "pct_change": None,
+            "adjust": RESEARCH_ADJUST,
+            "source": row.source,
+            "fetched_at": getattr(row, "fetched_at", None),
+            "quality_hash": getattr(row, "quality_hash", None),
+        }
+        if previous_close is not None and values["close"] > 0:
+            values["pct_change"] = (values["close"] / previous_close - 1.0) * 100.0
+        previous_close = values["close"]
+        result.append(SimpleNamespace(**values))
+    return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,11 +162,15 @@ def reject_rewritten_history(original_rows, candidate_rows) -> SeriesRewriteDeci
     return SeriesRewriteDecision(True, ())
 
 
-def research_return_series_status(rows, *, announcement=None, adjusted_series=None) -> ResearchReturnSeriesStatus:
+def research_return_series_status(rows, *, ts_code=None, announcement=None, adjusted_series=None) -> ResearchReturnSeriesStatus:
     display_closes = tuple(float(row.close) for row in rows or ())
     reasons: list[str] = ["raw_unadjusted_is_not_total_return"]
-    issue = price_history_issue(rows or [])
+    research_rows = research_history_rows(rows, ts_code) if ts_code else list(rows or ())
+    issue = price_history_issue(research_rows)
     research_allowed = issue is None and bool(rows)
+    if ts_code and official_corporate_actions(ts_code) and issue is None:
+        reasons.append("official_corporate_action_reconciled_for_research")
+        research_allowed = bool(rows)
     if issue:
         reasons.append(issue)
         if issue == "unexplained_price_discontinuity":

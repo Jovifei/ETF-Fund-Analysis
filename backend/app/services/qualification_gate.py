@@ -7,7 +7,7 @@ from app.providers.unit_certification import history_units_independently_certifi
 from app.services.pit_oos_harness import evaluate_1430_forecast_use
 from app.services.trading_calendar_service import TradingCalendarService
 
-GATE_VERSION = "qualification-v3-20260919"
+GATE_VERSION = "qualification-v4-20260920"
 
 def quote_reasons(settings, quote, now, maximum_age_minutes):
     reasons = []
@@ -42,14 +42,14 @@ def quote_reasons(settings, quote, now, maximum_age_minutes):
         reasons.append("quote_stale")
     return reasons
 
-def qualify_1430(settings, quote, now, window, bars=None, indicator=None, unit_certification=None):
+def qualify_1430(settings, quote, now, window, bars=None, indicator=None, unit_certification=None, ts_code=None):
     strategy = settings.load_strategy()
     reasons = quote_reasons(settings, quote, now, window.get("maximum_quote_age_minutes", 8))
     reasons += assess_history(bars or [])
     certification = unit_certification if unit_certification is not None else history_units_independently_certified(bars or [])
     if not getattr(certification, "certified", False):
         reasons.append("absolute_units_not_independently_certified")
-    series = research_return_series_status(bars or [])
+    series = research_return_series_status(bars or [], ts_code=ts_code)
     if not series.research_allowed:
         reasons.append("research_return_series_blocked")
     if not window["inside"]:

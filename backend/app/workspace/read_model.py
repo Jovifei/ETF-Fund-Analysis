@@ -244,7 +244,14 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
     stored = db.scalars(select(DailyBar).where(DailyBar.instrument_id == inst.id, DailyBar.adjust == adjust).order_by(DailyBar.trade_date.desc()).limit(maximum + 1)).all()
     truncated = len(stored) > maximum
     stored = list(reversed(stored[:maximum]))
+    from app.providers.corporate_action_contract import research_history_rows
+    research_stored = (
+        stored
+        if settings.market_provider == "mock"
+        else research_history_rows(stored, code)
+    )
     rows = [{"date": iso(row.trade_date), "open": row.open, "high": row.high, "low": row.low, "close": row.close, "volume": row.volume, "amount": row.amount, "source": row.source} for row in stored]
+    research_rows = [{"date": iso(row.trade_date), "open": row.open, "high": row.high, "low": row.low, "close": row.close, "volume": row.volume, "amount": row.amount, "source": row.source} for row in research_stored]
     if any(any(number(row[key]) is None for key in ("open", "high", "low", "close")) or row["low"] > min(row["open"], row["close"]) or row["high"] < max(row["open"], row["close"]) for row in rows):
         return {"ts_code": code, "interval": interval, "available": False, "bars": [], "reason": "invalid_ohlc", "actionable": False}
     strategy = settings.load_strategy()
@@ -255,8 +262,15 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
         # Core chart fields are price-derived only. Do not publish volume-based
         # outputs or change the persisted shared indicator/strategy snapshots.
         rows = [{**row, "volume": None, "amount": None} for row in rows]
-    series = ([{**row, "indicators": {}, "history_issue": continuity_issue} for row in rows]
-              if continuity_issue else cached_indicator_series(rows, strategy["indicator"]))
+        research_rows = [{**row, "volume": None, "amount": None} for row in research_rows]
+    if continuity_issue:
+        series = [{**row, "indicators": {}, "history_issue": continuity_issue} for row in rows]
+    else:
+        computed = cached_indicator_series(research_rows, strategy["indicator"])
+        series = [
+            {**row, "indicators": computed[index].get("indicators", {}), "history_issue": None}
+            for index, row in enumerate(rows)
+        ]
     now = datetime.now(SHANGHAI)
     for row in series:
         row["is_partial"] = row["date"] == now.date().isoformat() and now.time() < time(15, 0)

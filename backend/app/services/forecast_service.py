@@ -300,16 +300,25 @@ class ForecastService:
         frames: dict[int, pd.DataFrame] = {}
         self._frame_history_hashes = {}
         panel: list[pd.DataFrame] = []
-        from app.providers.data_contract import history_issues
+        from app.providers.data_contract import history_issues, trailing_unverified_history
+        from app.providers.corporate_action_contract import research_history_rows
         issues = history_issues(db, self.settings, [item.id for item in instruments])
         for instrument in instruments:
-            if instrument.id in issues:
-                continue
-            rows = db.scalars(
+            raw_rows = db.scalars(
                 select(DailyBar)
                 .where(DailyBar.instrument_id == instrument.id)
                 .order_by(DailyBar.trade_date)
             ).all()
+            rows = (
+                raw_rows
+                if self.settings.market_provider == "mock"
+                else research_history_rows(raw_rows, instrument.ts_code)
+            )
+            stale_scope = trailing_unverified_history(rows) if instrument.id in issues else None
+            if instrument.id in issues and stale_scope is None:
+                continue
+            if stale_scope:
+                rows = [row for row in rows if row.trade_date <= stale_scope["qualified_through"]]
             if len(rows) < int(self.strategy["forecast"].get("min_history", 180)):
                 continue
             raw = pd.DataFrame(

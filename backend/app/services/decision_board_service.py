@@ -447,11 +447,13 @@ class DecisionBoardService:
         independent_sector = grade_row.get("sector")
         comparison_basis = "previous_saved_confirmed_date_not_intraday_quote"
         from app.providers.data_contract import history_issues, trailing_unverified_history
+        from app.providers.corporate_action_contract import research_history_rows
         blocked = history_issues(db, self.settings, [instrument.id]).get(instrument.id)
         history_rows = db.scalars(
             select(DailyBar).where(DailyBar.instrument_id == instrument.id).order_by(DailyBar.trade_date)
         ).all()
-        stale_history = trailing_unverified_history(history_rows) if blocked else None
+        research_history = research_history_rows(history_rows, instrument.ts_code)
+        stale_history = trailing_unverified_history(research_history) if blocked else None
         from app.services.settlement import settled_session
         from app.services.snapshot_contract import snapshot_issues
         expected_date = None if self.settings.market_provider == "mock" else settled_session(self.settings, generated_at)

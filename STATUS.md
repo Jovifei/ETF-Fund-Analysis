@@ -10,7 +10,7 @@
 
 ## 当前代码
 
-应用/前端版本统一 1.0.5；数据契约 cn-fund-shares-cny-v1.0.3-audit，特征 feature-store-v0.7.3-input-mask，指标 ind-v0.7.3-audit，预测 similarity-corridor-v0.7.3-audit，策略 signal-v0.7.2-qualification-audit。迁移 head 保持 d40609090002。旧快照不能只改版本字段冒充重算。
+应用/前端版本统一 1.0.5；数据契约 cn-fund-shares-cny-v1.0.4-corporate-action-research，特征 feature-store-v0.7.3-input-mask，指标 ind-v0.7.3-audit，预测 similarity-corridor-v0.7.3-audit，策略 signal-v0.7.2-qualification-audit。迁移 head 保持 d40609090002。官方拆分事件只生成独立内存研究序列，原始展示日线不改；旧快照不能只改版本字段冒充重算。
 
 累计修复覆盖新浪资格冻结、价格断点拒绝、量额缺失 mask、全输入哈希、同版本前值、统一结算目标、partial/failed 传播、衍生任务恢复、指数盘后任务、跨进程流水线锁、14:30交易日/未来报价门禁、子进程独立登录、NTFS ACL、无效产物终态、不重复付费以及发布 manifest。
 

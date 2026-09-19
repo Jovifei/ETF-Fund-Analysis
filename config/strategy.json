@@ -1,5 +1,5 @@
 {
-  "market_data_contract_version": "cn-fund-shares-cny-v1.0.3-audit",
+  "market_data_contract_version": "cn-fund-shares-cny-v1.0.4-corporate-action-research",
   "version": "signal-v0.7.2-qualification-audit",
   "indicator_version": "ind-v0.7.3-audit",
   "forecast_version": "similarity-corridor-v0.7.3-audit",

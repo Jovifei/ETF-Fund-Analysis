@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 
 from app.core.config import get_settings
+from app.providers import corporate_action_contract
 from app.providers.corporate_action_contract import (
     RAW_RESEARCH_SERIES,
     RESEARCH_SERIES,
@@ -102,3 +103,23 @@ def test_qualify_1430_blocks_forecast_path_on_unexplained_gap():
     assert result["actionable"] is False
     assert "unexplained_price_discontinuity" in result["reasons"]
     assert "research_return_series_blocked" in result["reasons"]
+
+
+def test_official_split_catalog_research_series_covers_all_production_gap_cases():
+    assert hasattr(corporate_action_contract, "official_corporate_actions")
+    assert hasattr(corporate_action_contract, "research_history_rows")
+    cases = {
+        "512000.SH": (date(2025, 8, 1), 1.138, date(2025, 8, 4), 0.572),
+        "512480.SH": (date(2026, 7, 2), 2.700, date(2026, 7, 3), 1.331),
+        "515880.SH": (date(2026, 7, 3), 1.579, date(2026, 7, 6), 0.757),
+        "588200.SH": (date(2026, 7, 20), 3.539, date(2026, 7, 21), 1.349),
+    }
+    for ts_code, (before_date, before, after_date, after) in cases.items():
+        events = corporate_action_contract.official_corporate_actions(ts_code)
+        assert events
+        rows = [_bar(before_date, before), _bar(after_date, after)]
+        display_closes = tuple(row.close for row in rows)
+        research = corporate_action_contract.research_history_rows(rows, ts_code)
+        assert tuple(row.close for row in rows) == display_closes
+        assert all(row.adjust == "corporate_action_research" for row in research)
+        assert price_history_issue(research) is None

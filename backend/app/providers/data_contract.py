@@ -13,9 +13,10 @@ from sqlalchemy import select
 from app.models import DailyBar, Instrument
 from app.providers.base import ProviderError
 
-VERSION = "cn-fund-shares-cny-v1.0.3-audit"
+VERSION = "cn-fund-shares-cny-v1.0.4-corporate-action-research"
 LEGACY_SOURCES = ("akshare", "tushare", "tushare:fund_daily")
 UNVERIFIED_UNIT_SOURCES = ("akshare:sina:v101", "akshare:sina:v102")
+RESEARCH_ADJUST = "corporate_action_research"
 # Conservative anomaly trigger, NOT proof of a split or continuity certification.
 MAX_UNEXPLAINED_GAP = 0.35
 
@@ -39,7 +40,7 @@ def finite(value):
 def price_history_issue(rows):
     if not rows:
         return "history_missing"
-    if any(row.adjust not in {"none", "qfq", "hfq"} for row in rows):
+    if any(row.adjust not in {"none", "qfq", "hfq", RESEARCH_ADJUST} for row in rows):
         return "unknown_price_basis"
     if len({row.adjust for row in rows}) != 1:
         return "ambiguous_price_basis"
@@ -101,13 +102,17 @@ def history_issues(db, settings, instrument_ids=None):
     if not ids:
         return {}
     from itertools import groupby
+    from app.providers.corporate_action_contract import research_history_rows
+    code_by_id = dict(db.execute(select(Instrument.id, Instrument.ts_code).where(Instrument.id.in_(ids))).all())
     issues = {}
     seen = set()
     query = select(DailyBar).where(DailyBar.instrument_id.in_(ids)).order_by(
         DailyBar.instrument_id, DailyBar.trade_date, DailyBar.adjust).execution_options(yield_per=256)
     for ident, group in groupby(db.scalars(query), key=lambda row: row.instrument_id):
         seen.add(ident)
-        reasons = assess_history(list(group))
+        raw_rows = list(group)
+        research_rows = research_history_rows(raw_rows, code_by_id.get(ident))
+        reasons = assess_history(research_rows)
         if reasons:
             issues[ident] = reasons[0]
     for ident in ids:
@@ -146,6 +151,15 @@ def trailing_unverified_history(rows):
         "tail_rows": len(tail),
         "reasons": reasons or ["unverified_history_tail"],
     }
+
+
+def qualified_research_history(rows, ts_code: str | None = None):
+    """Return the evidence-adjusted research prefix and any stale tail scope."""
+
+    from app.providers.corporate_action_contract import research_history_rows
+
+    research_rows = research_history_rows(rows, ts_code)
+    return research_rows, trailing_unverified_history(research_rows)
 
 def require_current_history(db, settings):
     if settings.market_provider == "mock":
