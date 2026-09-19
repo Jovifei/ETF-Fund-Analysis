@@ -131,6 +131,25 @@ def test_forecast_frame_uses_officially_adjusted_history_before_unverified_tail(
     assert frames[inst.id].iloc[-1]["trade_date"] == date(2025, 8, 4)
     db_session.rollback()
 
+
+def test_preflight_known_stale_history_is_warning_not_core_blocker(monkeypatch, db_session):
+    from app.models import Instrument
+    from app.services.preflight_service import PreflightService
+    import app.providers.data_contract as contract
+
+    inst = Instrument(ts_code="998877.SH", symbol="998877", name="stale preflight fixture", kind="ETF", enabled=True)
+    db_session.add(inst)
+    db_session.flush()
+    monkeypatch.setattr(contract, "history_issues", lambda *args, **kwargs: {inst.id: "price_only_history_units_unverified"})
+    monkeypatch.setattr(contract, "qualified_research_history", lambda *args, **kwargs: ([], {"qualified_through": date(2026, 9, 17)}))
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    result = PreflightService(settings).check_instrument(
+        db_session, inst, at=datetime(2026, 9, 20, 10, 0, tzinfo=settings.timezone)
+    )
+    assert "price_only_history_units_unverified" not in result.missing_core
+    assert any("仅供历史研究" in warning for warning in result.warnings)
+    db_session.rollback()
+
 @pytest.mark.parametrize('when,stamp',[(datetime(2026,9,12,14,30),datetime(2026,9,12,14,30)), (datetime(2026,9,11,14,30),datetime(2026,9,12,14,30))])
 def test_1430_weekend_future_never_actionable(when,stamp):
     settings=get_settings().model_copy(update={'market_provider':'akshare'})

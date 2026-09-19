@@ -51,6 +51,8 @@ class PreflightService:
         if at.tzinfo is None:
             at = at.replace(tzinfo=self.settings.timezone)
         missing_core: list[str] = []
+        missing_optional: list[str] = []
+        warnings: list[str] = []
         from app.providers.data_contract import history_issues, qualified_research_history
         issue = history_issues(db, self.settings, [instrument.id]).get(instrument.id)
         if issue:
@@ -64,9 +66,6 @@ class PreflightService:
                 missing_core.append(issue)
             else:
                 warnings.append(f"{issue}：已知公司行动已对齐，最新未认证尾部仅供历史研究")
-        missing_optional: list[str] = []
-        warnings: list[str] = []
-
         indicator = db.scalar(
             select(IndicatorSnapshot)
             .where(IndicatorSnapshot.instrument_id == instrument.id)
