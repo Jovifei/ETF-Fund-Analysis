@@ -328,7 +328,7 @@ class SignalService:
         previous: SignalSnapshot | None,
         now: datetime,
     ) -> None:
-        if previous is None or item.state == "数据异常":
+        if previous is None or item.state == "数据异常" or previous.state == "数据异常":
             return
         previous_time = previous.as_of_time
         if previous_time.tzinfo is None:
