@@ -5,3 +5,9 @@ def test_stale_completed_outputs_are_partial_not_current_success():
     result = coverage_outcome(4, 4, stale_count=4)
     assert result["status"] == "partial"
     assert result["coverage_complete"] is False
+
+
+def test_stale_outputs_with_no_current_date_completion_are_still_partial():
+    result = coverage_outcome(4, 0, stale_count=4, updated=4)
+    assert result["status"] == "partial"
+    assert result["coverage_complete"] is False

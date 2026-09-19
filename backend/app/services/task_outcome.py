@@ -33,7 +33,7 @@ def coverage_outcome(requested, completed, **metadata):
         return {**metadata, "requested": 0, "completed": 0,
                 "coverage_complete": False, "status": "failed", "reason": "invalid_coverage_counters"}
     stale_count = count(metadata.get("stale_count", 0))
-    status = "partial" if not requested else "failed" if not completed else "succeeded" if completed == requested and not stale_count else "partial"
+    status = "partial" if stale_count else "partial" if not requested else "failed" if not completed else "succeeded" if completed == requested else "partial"
     return {**metadata, "requested": requested, "completed": completed,
             "coverage_complete": bool(requested and completed == requested and not stale_count), "status": status}
 
