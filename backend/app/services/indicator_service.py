@@ -198,6 +198,8 @@ class IndicatorService:
         target = settled_session(self.settings)
         completed = sum(as_of_date == target or self.settings.market_provider == "mock"
                         for _inst, as_of_date, _hash in metadata.values())
+        stale_count = sum(as_of_date != target for _inst, as_of_date, _hash in metadata.values())
         return coverage_outcome(len(instruments), completed, run_id=run_id,
             created=created, updated=max(0, len(computed)-created), skipped=skipped,
-            failures=failures, indicator_version=version, target_trade_date=target.isoformat())
+            failures=failures, indicator_version=version, target_trade_date=target.isoformat(),
+            stale_count=stale_count)

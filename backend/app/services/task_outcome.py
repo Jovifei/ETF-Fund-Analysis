@@ -32,9 +32,10 @@ def coverage_outcome(requested, completed, **metadata):
     except (ValueError, TypeError, OverflowError):
         return {**metadata, "requested": 0, "completed": 0,
                 "coverage_complete": False, "status": "failed", "reason": "invalid_coverage_counters"}
-    status = "partial" if not requested else "failed" if not completed else "succeeded" if completed == requested else "partial"
+    stale_count = count(metadata.get("stale_count", 0))
+    status = "partial" if not requested else "failed" if not completed else "succeeded" if completed == requested and not stale_count else "partial"
     return {**metadata, "requested": requested, "completed": completed,
-            "coverage_complete": bool(requested and completed == requested), "status": status}
+            "coverage_complete": bool(requested and completed == requested and not stale_count), "status": status}
 
 
 def normalize_outcome(result):

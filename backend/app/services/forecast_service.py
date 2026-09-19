@@ -456,6 +456,8 @@ class ForecastService:
         target = settled_session(self.settings)
         completed = sum(frame.iloc[-1]["trade_date"] == target or self.settings.market_provider == "mock"
                         for frame in frames.values())
+        stale_count = sum(frame.iloc[-1]["trade_date"] != target for frame in frames.values())
         return coverage_outcome(len(instruments), completed, run_id=run_id, created=created,
             updated=updated, failures=failures, model_version=model_version,
-            feature_schema_version=feature_schema_version, target_trade_date=target.isoformat())
+            feature_schema_version=feature_schema_version, target_trade_date=target.isoformat(),
+            stale_count=stale_count)
