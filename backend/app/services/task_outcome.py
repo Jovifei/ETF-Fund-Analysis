@@ -59,7 +59,9 @@ def normalize_outcome(result):
     except (ValueError, TypeError, OverflowError):
         return {**result, "status": "failed", "coverage_complete": False, "reason": "invalid_result_counter"}
     if "requested" in result and "completed" in result:
-        coverage = coverage_outcome(result["requested"], result["completed"])
+        coverage = coverage_outcome(
+            result["requested"], result["completed"], stale_count=result.get("stale_count", 0)
+        )
         derived = coverage["status"]
         if coverage.get("reason"):
             return {**result, **coverage}
