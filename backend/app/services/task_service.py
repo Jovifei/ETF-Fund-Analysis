@@ -371,6 +371,11 @@ class TaskService:
                     "failure_class": _failure_class(exc),
                 }
             results["refresh_signals"] = self.signals.refresh_all(db, run_id=run_id)
+            try:
+                results["refresh_sector_snapshots"] = self.market.refresh_sector_snapshots(db, run_id=run_id)
+            except Exception as exc:
+                failed_steps.append("refresh_sector_snapshots")
+                results["refresh_sector_snapshots"] = {"status": "failed", "failure_class": _failure_class(exc)}
             # Bootstrap prepares raw/derived caches; full_pipeline additionally
             # publishes the same canonical board as the workspace worker.
             if task_name == "full_pipeline":
@@ -379,11 +384,6 @@ class TaskService:
                     results["refresh_decision_board"] = {"status": "succeeded", "snapshot_id": built.snapshot.snapshot_id}
                 except Exception as exc:
                     results["refresh_decision_board"] = {"status": "failed", "failure_class": _failure_class(exc)}
-            try:
-                results["refresh_sector_snapshots"] = self.market.refresh_sector_snapshots(db, run_id=run_id)
-            except Exception as exc:
-                failed_steps.append("refresh_sector_snapshots")
-                results["refresh_sector_snapshots"] = {"status": "failed", "failure_class": _failure_class(exc)}
             if task_name == "full_pipeline" or bool(kwargs.get("report", True)):
                 results["generate_report"] = self.reports.generate(db, run_id=run_id)
             from app.services.task_outcome import normalize_outcome

@@ -4,6 +4,8 @@ from types import SimpleNamespace
 
 from app.core.config import get_settings
 from app.providers.corporate_action_contract import (
+    RAW_RESEARCH_SERIES,
+    RESEARCH_SERIES,
     documented_588200_split_fixture,
     reject_rewritten_history,
     research_return_series_status,
@@ -73,6 +75,8 @@ def test_continuous_raw_series_is_not_a_certified_total_return_path():
     assert status.display_allowed is True
     assert status.research_allowed is True
     assert status.total_return_certified is False
+    assert status.series_kind == RAW_RESEARCH_SERIES
+    assert status.series_kind != RESEARCH_SERIES
     assert "raw_unadjusted_is_not_total_return" in status.reasons
     assert price_history_issue(rows) is None
 

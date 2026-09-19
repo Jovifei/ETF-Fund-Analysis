@@ -807,3 +807,28 @@ Allowed code scope: MarketService history upsert, worker summary, Overview index
 - [x] RED：静态 WorkBuddy `api()` 请求未声明 `cache: no-store`，可复现浏览器继续读取旧决策快照；后端旧看板路由也缺少响应缓存合同。
 - [x] GREEN：前端 API/auth 请求固定 `cache: no-store`，后端 bootstrap、decision-board 列表和详情响应固定 `private, no-store`；新增静态与 HTTP 回归。
 - [x] DEPLOY：把缓存修复随新归档部署并用后端 no-store 合同和最新 snapshot_id 完成线上复核；用户登录态页面下一次加载将绕过旧缓存。
+# Bot acceptance-gate repair — 2026-09-19
+
+## Goal
+
+Repair the independently reproduced scheduler, walk-forward, return-series, and unit-certification integration defects without weakening fail-closed research rules or touching the owner's current `main` worktree.
+
+## Plan
+
+- [x] RED: add a scheduler regression proving dependencies run before decision-board/report consumers.
+- [x] RED: add a walk-forward regression rejecting zero folds even with a human approval artifact.
+- [x] RED: add a corporate-action regression keeping raw unadjusted prices out of the adjusted/total-return research series.
+- [x] RED: add a service-path regression proving only explicit independent unit evidence can reach `qualify_1430`.
+- [x] GREEN: implement the smallest fixes and retain `actionable=false` for every unqualified path.
+- [x] REVIEW: remove new diff-check violations and run focused tests, full pytest, compileall, JS tests, Vue tests/typecheck/build, and `git diff --check`.
+
+## Review
+
+- RED receipts: the four new tests failed against the prior implementation (topology false, empty folds approved, raw research type absent, and Workbench certification path absent).
+- Focused repair suites: 29 passed; scheduler/market/Workbench regression suites: 88 passed; final Workbench/unit rerun: 13 passed.
+- Full backend: 1165 tests collected; full pytest reached 100% with `pytest_exit=0` and only environment/deprecation skips or warnings.
+- Static/frontend: compileall exit 0; legacy Node tests 27 passed; Vue tests 36 passed; typecheck and production build exited 0.
+- Diff hygiene: working-tree and baseline-to-working-tree `git diff --check` exited 0 after removing five pre-existing trailing-space violations from `docs/LOCAL_CODEX_BRIDGE.md`.
+- Pre-deployment scope boundary: no database migration or change to the owner's current `main` worktree. Independent unit evidence remains externally required; absent evidence still fails closed and all 14:30 output remains non-actionable.
+- Follow-up RED/GREEN: `TaskService.full_pipeline` also published the board before sector refresh; a behavioral order test failed (`9 < 8`) before moving sector refresh ahead of board publication, then the related 83-test orchestration suite passed.
+- Real public-provider flow in isolated SQLite: 36 instruments; 35/35 daily histories through 2026-09-18 (9,870 bars, all price-only); 35 quotes (all non-realtime/degraded); 200 news rows; 266 sector/concept/market rows; 35 fail-closed `数据异常` signals; stale/non-actionable 35-row board and HTML report. Indicators/forecasts correctly refused unverified quantity history. Workspace `/analysis`, decision overview, and ETF detail displayed the persisted real-source data with unverified labels.

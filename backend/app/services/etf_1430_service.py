@@ -56,9 +56,10 @@ def _iso(value: Any) -> str | None:
 
 
 class ETF1430WorkbenchService:
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(self, settings: Settings | None = None, *, unit_certification_resolver=None) -> None:
         self.settings = settings or get_settings()
         self.strategy = self.settings.load_strategy()
+        self.unit_certification_resolver = unit_certification_resolver
         path = PROJECT_ROOT / "config" / "etf_1430_workbench.json"
         self.config = json.loads(path.read_text(encoding="utf-8"))
         self.timezone = ZoneInfo(str(self.config.get("decision_timezone", "Asia/Shanghai")))
@@ -291,10 +292,30 @@ class ETF1430WorkbenchService:
         inside = time(start_h, start_m) <= current <= time(end_h, end_m)
         return {"inside": inside, "start": self.config["decision_window"]["start"], "target": self.config["decision_window"]["target"], "end": self.config["decision_window"]["end"]}
 
-    def _qualification(self, quote: QuoteSnapshot | None, now: datetime, *, bars=None, indicator=None) -> dict[str, Any]:
+    def _qualification(
+        self,
+        quote: QuoteSnapshot | None,
+        now: datetime,
+        *,
+        bars=None,
+        indicator=None,
+    ) -> dict[str, Any]:
         from app.services.qualification_gate import qualify_1430
         window = {**self._decision_window(now), "maximum_quote_age_minutes": self.config["thresholds"].get("maximum_quote_age_minutes", 8)}
-        return qualify_1430(self.settings, quote, now, window, bars=bars, indicator=indicator)
+        unit_certification = (
+            self.unit_certification_resolver(bars or [])
+            if self.unit_certification_resolver is not None
+            else None
+        )
+        return qualify_1430(
+            self.settings,
+            quote,
+            now,
+            window,
+            bars=bars,
+            indicator=indicator,
+            unit_certification=unit_certification,
+        )
 
     def _scenario_candles(self, last_bar: DailyBar, forecasts: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
         if last_bar is None:

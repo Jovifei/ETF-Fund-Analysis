@@ -68,7 +68,9 @@ def _fold_leaks(fold) -> bool:
 def oos_walk_forward_status(folds, *, approved_artifact=None) -> WalkForwardGate:
     reasons: list[str] = []
     fold_list = list(folds or ())
-    if any(_fold_leaks(fold) for fold in fold_list):
+    if not fold_list:
+        reasons.append("walk_forward_folds_missing")
+    elif any(_fold_leaks(fold) for fold in fold_list):
         reasons.append("walk_forward_train_test_overlap")
     artifact = approved_artifact or {}
     human_approved = bool(artifact.get("approved")) and artifact.get("approved_by") == "human"

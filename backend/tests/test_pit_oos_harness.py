@@ -81,6 +81,20 @@ def test_overlapping_train_test_fold_is_rejected_as_leakage():
     assert "walk_forward_train_test_overlap" in status.reasons
 
 
+def test_human_approval_cannot_approve_an_empty_walk_forward():
+    status = oos_walk_forward_status(
+        [],
+        approved_artifact={
+            "approved": True,
+            "approved_by": "human",
+            "report_hash": "sha256:test",
+        },
+    )
+    assert status.approved is False
+    assert status.fold_count == 0
+    assert "walk_forward_folds_missing" in status.reasons
+
+
 def test_unqualified_similarity_output_cannot_become_actionable():
     result = evaluate_1430_forecast_use(
         query_kind=SESSION_INTRADAY_1430,

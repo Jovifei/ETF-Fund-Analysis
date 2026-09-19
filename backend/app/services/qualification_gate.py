@@ -7,7 +7,7 @@ from app.providers.unit_certification import history_units_independently_certifi
 from app.services.pit_oos_harness import evaluate_1430_forecast_use
 from app.services.trading_calendar_service import TradingCalendarService
 
-GATE_VERSION = "qualification-v2-20260912"
+GATE_VERSION = "qualification-v3-20260919"
 
 def quote_reasons(settings, quote, now, maximum_age_minutes):
     reasons = []

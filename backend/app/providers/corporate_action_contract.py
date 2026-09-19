@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from app.providers.data_contract import price_history_issue
 
 DISPLAY_SERIES = "raw_unadjusted_display"
+RAW_RESEARCH_SERIES = "raw_unadjusted_research"
 RESEARCH_SERIES = "total_return_or_adjusted_research"
 
 
@@ -111,6 +112,6 @@ def research_return_series_status(rows, *, announcement=None, adjusted_series=No
         research_allowed=research_allowed,
         total_return_certified=False,
         display_closes=display_closes,
-        series_kind=DISPLAY_SERIES if not research_allowed else RESEARCH_SERIES,
+        series_kind=RAW_RESEARCH_SERIES if research_allowed else DISPLAY_SERIES,
         reasons=tuple(dict.fromkeys(reasons)),
     )

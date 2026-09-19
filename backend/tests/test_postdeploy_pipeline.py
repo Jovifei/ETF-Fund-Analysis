@@ -51,6 +51,13 @@ def test_board_and_report_have_explicit_upstream_invalidation_contract():
     assert 'refresh_decision_board' in DAILY_DEPENDENCIES['generate_report']
 
 
+def test_settled_pipeline_order_is_topological():
+    ordered = list(DAILY_DEPENDENCIES)
+    positions = {name: index for index, name in enumerate(ordered)}
+    for task_name, dependencies in DAILY_DEPENDENCIES.items():
+        assert all(positions[dependency] < positions[task_name] for dependency in dependencies)
+
+
 def test_new_input_in_same_tick_invalidates_all_downstream_outputs(isolated):
     now = datetime(2026,9,14,17,0,tzinfo=get_settings().timezone)
     for i,name in enumerate(DAILY_DEPENDENCIES):

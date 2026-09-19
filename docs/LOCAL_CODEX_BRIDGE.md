@@ -18,10 +18,10 @@
 
 在 Windows 本机、指向真实 Codex 二进制和真实 HTTPS 源点执行。任何 Cloud Agent / pytest 通过都不算完成。
 
-1. **确认隔离根目录**  
+1. **确认隔离根目录**
    使用独立目录，例如 `E:\AI_Tools\Other\ETF-Agent-Bridge`。不要改父 PowerShell 的 `HOME` / `USERPROFILE`。
 
-2. **如使用 E: 盘，先检查 NTFS ACL**  
+2. **如使用 E: 盘，先检查 NTFS ACL**
    目录须为本人 SID 所有、已保护、无 Everyone/Authenticated Users 继承读取。可用现有 `windows_private_directory` 路径或本机 `icacls` 核对。ACL 不合格时停止，不要为跑通而放宽。
 
 3. **doctor（只检查卫生，不登录）**
@@ -41,7 +41,7 @@ $root = 'E:\AI_Tools\Other\ETF-Agent-Bridge'
 
 必须看到官方登录流程完成。未知 CLI 版本失败；不要换版本绕过。
 
-5. **服务端开关**  
+5. **服务端开关**
    生产/本机服务配置 `WORKSPACE_BRIDGE_ENABLED=true`。浏览器设置页生成一次性配对码。
 
 6. **HTTPS 配对**
@@ -58,7 +58,7 @@ $root = 'E:\AI_Tools\Other\ETF-Agent-Bridge'
 .\.venv\Scripts\python.exe bridge/etf_agent_bridge.py --root $root claim
 ```
 
-8. **一次付费批准后的 work**  
+8. **一次付费批准后的 work**
    明确知道将产生费用后再执行。每个进程最多 1 个任务：
 
 ```powershell
@@ -67,7 +67,7 @@ $root = 'E:\AI_Tools\Other\ETF-Agent-Bridge'
 
 没有 `--approve-execution` 必须失败且不得调用模型。合法 `result.json` 上传失败只重传，不二次付费。
 
-9. **人工审核候选**  
+9. **人工审核候选**
    产出是待审核文本，不是操作信号。`actionable` 保持 false。
 
 ## 本机命令摘要

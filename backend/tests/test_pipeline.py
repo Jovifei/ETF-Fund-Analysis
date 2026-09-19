@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from app.core.config import Settings
 from app.db.session import session_scope
 from app.models import DailyBar, ForecastSnapshot, IndicatorSnapshot, Instrument, SignalSnapshot
@@ -57,3 +59,33 @@ def test_v050_runtime_wiring_remains_selected_for_tasks():
     assert isinstance(service.signals, SignalV05Service)
     assert isinstance(service.backtest, RotationBacktestV05Service)
     assert "backtest_ablation" in service.task_names
+
+
+def test_full_pipeline_refreshes_sector_context_before_publishing_board(monkeypatch, db_session):
+    from app.services.task_service import TaskService
+
+    calls = []
+    service = TaskService(Settings(_env_file=None, market_provider="mock"))
+    succeeded = lambda name: lambda *args, **kwargs: calls.append(name) or {"status": "succeeded"}
+    monkeypatch.setattr(service.market, "sync_instruments", succeeded("sync_instruments"))
+    monkeypatch.setattr(service, "_refresh_market_context", succeeded("refresh_market_context"))
+    monkeypatch.setattr(service.market, "refresh_daily_bars", succeeded("refresh_bars"))
+    monkeypatch.setattr(service.indicators, "refresh_all", succeeded("refresh_indicators"))
+    monkeypatch.setattr(service.forecasts, "refresh_all", succeeded("refresh_forecasts"))
+    monkeypatch.setattr(service.market, "refresh_quotes", succeeded("refresh_quotes"))
+    monkeypatch.setattr(service.news, "refresh", succeeded("refresh_news"))
+    monkeypatch.setattr(service.signals, "refresh_all", succeeded("refresh_signals"))
+    monkeypatch.setattr(service.market, "refresh_sector_snapshots", succeeded("refresh_sector_snapshots"))
+    monkeypatch.setattr(
+        service.decision_board,
+        "refresh",
+        lambda *args, **kwargs: calls.append("refresh_decision_board")
+        or SimpleNamespace(snapshot=SimpleNamespace(snapshot_id="pipeline-order")),
+    )
+    monkeypatch.setattr(service.reports, "generate", succeeded("generate_report"))
+    try:
+        service.run(db_session, "full_pipeline", report=False)
+    finally:
+        service.close()
+
+    assert calls.index("refresh_sector_snapshots") < calls.index("refresh_decision_board")

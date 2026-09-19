@@ -177,11 +177,9 @@ DAILY_DEPENDENCIES = {
     "refresh_indicators": ("refresh_bars",),
     "refresh_forecasts": ("refresh_bars", "refresh_indicators"),
     "refresh_signals": ("refresh_bars", "refresh_indicators", "refresh_forecasts"),
+    "refresh_sector_snapshots": (),
     "refresh_decision_board": ("refresh_bars", "refresh_indicators", "refresh_forecasts", "refresh_signals", "refresh_sector_snapshots"),
     "generate_report": ("refresh_decision_board",),
-    # Optional/slow sector work follows the core publication. Its completion
-    # invalidates the next board, without preventing this tick's blocked view.
-    "refresh_sector_snapshots": (),
 }
 
 
@@ -388,9 +386,9 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
                 ("refresh_indicators", {}),
                 ("refresh_forecasts", {}),
                 ("refresh_signals", {}),
+                ("refresh_sector_snapshots", {}),
                 ("refresh_decision_board", {}),
                 ("generate_report", {}),
-                ("refresh_sector_snapshots", {}),
             ):
                 if task_name not in daily_due_tasks:
                     continue

@@ -10,6 +10,7 @@ from app.providers.unit_certification import (
     history_units_independently_certified,
 )
 from app.services.qualification_gate import qualify_1430
+from app.services.etf_1430_service import ETF1430WorkbenchService
 
 
 def _obs(**kwargs):
@@ -191,3 +192,37 @@ def test_certified_fixture_still_cannot_flip_1430_actionable():
     assert "absolute_units_not_independently_certified" not in result["reasons"]
     assert result["actionable"] is False
     assert "historical_1430_backtest_not_qualified" in result["reasons"]
+
+
+def test_workbench_passes_explicit_independent_unit_certification_to_gate():
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    now = datetime(2026, 8, 31, 14, 30, tzinfo=settings.timezone)
+    quote = SimpleNamespace(
+        source="fixture:realtime",
+        price=1.2,
+        quote_time=now,
+        is_realtime=True,
+        timestamp_verified=True,
+        degraded_reason=None,
+    )
+    certified = certify_absolute_units(
+        _obs(),
+        _obs(
+            source="akshare:em:v101",
+            raw_volume=20.0,
+            raw_amount=2400.0,
+            converted_volume=2000.0,
+            converted_amount=2400.0,
+        ),
+    )
+    result = ETF1430WorkbenchService(
+        settings,
+        unit_certification_resolver=lambda bars: certified,
+    )._qualification(
+        quote,
+        now,
+        bars=[],
+        indicator=None,
+    )
+    assert "absolute_units_not_independently_certified" not in result["reasons"]
+    assert result["actionable"] is False
