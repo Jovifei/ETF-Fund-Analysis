@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.clock import MarketClock
 from app.core.config import Settings, get_settings
 from app.services.trading_calendar_service import TradingCalendarService
-from app.models import ForecastSnapshot, IndicatorSnapshot, Instrument, QuoteSnapshot
+from app.models import DailyBar, ForecastSnapshot, IndicatorSnapshot, Instrument, QuoteSnapshot
 
 
 @dataclass(slots=True)
@@ -51,10 +51,19 @@ class PreflightService:
         if at.tzinfo is None:
             at = at.replace(tzinfo=self.settings.timezone)
         missing_core: list[str] = []
-        from app.providers.data_contract import history_issues
+        from app.providers.data_contract import history_issues, qualified_research_history
         issue = history_issues(db, self.settings, [instrument.id]).get(instrument.id)
         if issue:
-            missing_core.append(issue)
+            rows = db.scalars(
+                select(DailyBar)
+                .where(DailyBar.instrument_id == instrument.id)
+                .order_by(DailyBar.trade_date)
+            ).all()
+            _, stale_scope = qualified_research_history(rows, instrument.ts_code)
+            if stale_scope is None:
+                missing_core.append(issue)
+            else:
+                warnings.append(f"{issue}：已知公司行动已对齐，最新未认证尾部仅供历史研究")
         missing_optional: list[str] = []
         warnings: list[str] = []
 
