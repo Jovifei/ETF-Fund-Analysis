@@ -45,6 +45,50 @@ def test_documented_same_day_second_source_certifies_absolute_units():
     assert "ratio_only" not in " ".join(result.reasons)
 
 
+def test_sina_observed_share_units_can_certify_against_tencent():
+    primary = _obs(
+        source="tencent:stock_zh_a_hist_tx:v101",
+        raw_volume=2000.0,
+        raw_amount=2400.0,
+        converted_volume=2000.0,
+        converted_amount=2400.0,
+    )
+    independent = _obs(
+        source="akshare:sina:v101",
+        raw_volume=2000.0,
+        raw_amount=2400.0,
+        converted_volume=None,
+        converted_amount=None,
+    )
+
+    result = certify_absolute_units(primary, independent)
+
+    assert result.certified is True
+
+
+def test_large_public_source_rounding_stays_within_relative_tolerance():
+    primary = _obs(
+        source="tencent:stock_zh_a_hist_tx:v101",
+        close=1.325,
+        raw_volume=143_640_700.0,
+        raw_amount=189_828_800.0,
+        converted_volume=143_640_700.0,
+        converted_amount=189_828_800.0,
+    )
+    independent = _obs(
+        source="akshare:sina:v101",
+        close=1.325,
+        raw_volume=143_640_727.0,
+        raw_amount=189_828_818.0,
+        converted_volume=None,
+        converted_amount=None,
+    )
+
+    result = certify_absolute_units(primary, independent)
+
+    assert result.certified is True
+
+
 def test_ratio_only_same_vwap_is_sanity_never_qualification():
     primary = _obs()
     # Simultaneous ×100 keeps amount/volume = close, so VWAP still matches.

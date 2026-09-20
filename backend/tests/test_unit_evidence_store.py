@@ -151,3 +151,35 @@ def test_price_only_bar_cannot_be_certified_from_raw_cross_source_observations(d
 
     assert evidence.certified is False
     assert "daily_bar_quantity_missing" in evidence.reasons_json
+
+
+def test_existing_evidence_is_recomputed_when_contract_changes(db_session):
+    instrument = Instrument(ts_code="598885.SH", symbol="598885", name="重算证据", enabled=True)
+    db_session.add(instrument)
+    db_session.flush()
+    bar = _bar(instrument.id, date(2026, 9, 18), "recompute-quality")
+    bar.source = "tencent:stock_zh_a_hist_tx:v101"
+    db_session.add(bar)
+    db_session.flush()
+    primary = UnitObservation(
+        ts_code=instrument.ts_code, trade_date=bar.trade_date, close=1.2,
+        source="tencent:stock_zh_a_hist_tx:v101", raw_volume=2000, raw_amount=2400,
+    )
+    independent = UnitObservation(
+        ts_code=instrument.ts_code, trade_date=bar.trade_date, close=1.2,
+        source="akshare:sina:v101", raw_volume=2000, raw_amount=2400,
+    )
+
+    first = record_unit_evidence(
+        db_session, instrument, bar, primary, independent,
+        primary_upstream="tencent", independent_upstream="sina",
+    )
+    first.certified = False
+    db_session.flush()
+    second = record_unit_evidence(
+        db_session, instrument, bar, primary, independent,
+        primary_upstream="tencent", independent_upstream="sina",
+    )
+
+    assert second.id == first.id
+    assert second.certified is True

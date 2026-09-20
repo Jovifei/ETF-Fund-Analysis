@@ -1,3 +1,16 @@
+# Public unit evidence recomputation — 2026-09-21
+
+## Plan
+
+- [x] Reproduce the production zero-certification result from stored evidence reasons.
+- [x] Add RED tests for Sina observed units, large-value rounding, and stale evidence reuse.
+- [x] Correct the minimal unit contract/tolerance and recompute existing evidence rows.
+- [ ] Run full verification, commit, CI, merge `main`, redeploy, and rerun production certification.
+
+## Review
+
+Focused RED/GREEN evidence suites pass after the correction. Deployment remains pending until the full gates and production rerun complete.
+
 # Tencent public-source evidence closure — 2026-09-21
 
 ## Plan

@@ -7,7 +7,11 @@ configuration, credential, or production state was changed by this probe.
 
 ## Source contracts
 
-- AKShare `fund_etf_hist_sina` documents `volume` as `手` (100-share lots).
+- AKShare `fund_etf_hist_sina` documentation labels `volume` as `手`, but the
+  current runtime response is numerically in shares when compared with the
+  independent Tencent response. This documentation/response conflict is
+  recorded explicitly; the application does not multiply the observed Sina
+  field by 100.
 - AKShare `stock_zh_a_hist_tx` documents its returned `volume` as shares and
   `amount` as CNY after adapter normalization.
 - The application binds both contracts to fixed endpoint/version labels and
@@ -22,13 +26,15 @@ References:
 
 For `510300.SH`, `512480.SH`, `515880.SH`, and `159562.SZ`, the current
 AKShare runtime returned overlapping 2026-09-01 through 2026-09-18 rows from
-Sina and Tencent. The compared rows had identical closes; after converting
-Sina volume from lots to shares, volume and amount ratios stayed within the
-numeric precision of the two public responses. A bounded 35-symbol coverage
+Sina and Tencent. The compared rows had identical closes; the observed volume
+and amount ratios stayed within the numeric precision of the two public
+responses. A bounded 35-symbol coverage
 probe returned 31 symbols on the first attempt; the four transient connection
 timeouts all returned 14 valid rows on one immediate retry.
 
-This is evidence for the adapter contract and source reachability, not a claim
-that all historical dates are certified. Production certification remains
-bound to the exact stored bar hash, same-day pair, and the requested evidence
-range.
+The Sina contract is therefore bound to the observed response plus same-day
+Tencent reconciliation, not to the ambiguous documentation label. A future
+response that differs by a factor of 100 fails the same-day comparison. This
+is evidence for the adapter contract and source reachability, not a claim that
+all historical dates are certified. Production certification remains bound to
+the exact stored bar hash, same-day pair, and requested evidence range.

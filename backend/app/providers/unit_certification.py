@@ -35,12 +35,12 @@ DOCUMENTED_ENDPOINT_FIELDS = {
     },
     "akshare:sina:v101": {
         "volume_raw_field": "volume",
-        "volume_raw_unit": "hand_100_shares",
-        "volume_to_shares": 100,
+        "volume_raw_unit": "shares",
+        "volume_to_shares": 1,
         "amount_raw_field": "amount",
         "amount_raw_unit": "cny",
         "amount_to_cny": 1,
-        "evidence": "akshare_sina_volume_docs_and_tencent_same_day_cross_check_20260921",
+        "evidence": "akshare_sina_observed_response_and_tencent_same_day_cross_check_20260921",
     },
     "tencent:stock_zh_a_hist_tx:v101": {
         "volume_raw_field": "volume",
@@ -65,6 +65,8 @@ DOCUMENTED_ENDPOINT_FIELDS = {
 VWAP_SANITY_TOLERANCE = 0.10
 VOLUME_ABS_TOLERANCE_SHARES = 0.5
 AMOUNT_ABS_TOLERANCE_CNY = 0.5
+VOLUME_REL_TOLERANCE = 1e-6
+AMOUNT_REL_TOLERANCE = 1e-6
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,13 +109,19 @@ def _apply_documented(source: str, raw_volume, raw_amount):
 def _claimed_matches(applied, claimed) -> bool:
     if applied is None or claimed is None:
         return applied is None and claimed is None
-    return abs(float(applied) - float(claimed)) <= VOLUME_ABS_TOLERANCE_SHARES
+    scale = max(abs(float(applied)), abs(float(claimed)))
+    return abs(float(applied) - float(claimed)) <= max(
+        VOLUME_ABS_TOLERANCE_SHARES, scale * VOLUME_REL_TOLERANCE
+    )
 
 
 def _amount_matches(applied, claimed) -> bool:
     if applied is None or claimed is None:
         return applied is None and claimed is None
-    return abs(float(applied) - float(claimed)) <= AMOUNT_ABS_TOLERANCE_CNY
+    scale = max(abs(float(applied)), abs(float(claimed)))
+    return abs(float(applied) - float(claimed)) <= max(
+        AMOUNT_ABS_TOLERANCE_CNY, scale * AMOUNT_REL_TOLERANCE
+    )
 
 
 def _vwap_sane(volume, amount, close) -> bool:

@@ -58,6 +58,15 @@ def record_unit_evidence(db, instrument, bar, primary: UnitObservation, independ
         UnitCertificationEvidence.independent_input_hash == independent_hash,
     ))
     if existing is not None:
+        existing.primary_volume_unit = primary_units[0]
+        existing.primary_amount_unit = primary_units[1]
+        existing.independent_volume_unit = independent_units[0]
+        existing.independent_amount_unit = independent_units[1]
+        existing.converted_volume = result.volume
+        existing.converted_amount = result.amount
+        existing.certified = certified
+        existing.reasons_json = list(dict.fromkeys(reasons))
+        db.flush()
         return existing
     row = UnitCertificationEvidence(
         instrument_id=instrument.id, trade_date=bar.trade_date, adjust=bar.adjust,
