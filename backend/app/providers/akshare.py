@@ -148,6 +148,8 @@ class AKShareProvider(MarketProvider):
                 row.get("volume"),
                 row.get("amount"),
             )
+            raw_volume = finite_or_none(row.get("volume"))
+            raw_amount = finite_or_none(row.get("amount"))
             result.append(
                 BarRecord(
                     ts_code=ts_code,
@@ -162,6 +164,10 @@ class AKShareProvider(MarketProvider):
                     pct_change=None,
                     adjust="none",
                     source=source,
+                    raw_volume=raw_volume,
+                    raw_amount=raw_amount,
+                    source_upstream="sina",
+                    endpoint_version="fund_etf_hist_sina:v101",
                 )
             )
         result.sort(key=lambda item: item.trade_date)

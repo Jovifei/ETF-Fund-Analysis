@@ -33,6 +33,24 @@ DOCUMENTED_ENDPOINT_FIELDS = {
         "amount_to_cny": 1,
         "evidence": "adapter_contract_akshare_em_v101",
     },
+    "akshare:sina:v101": {
+        "volume_raw_field": "volume",
+        "volume_raw_unit": "hand_100_shares",
+        "volume_to_shares": 100,
+        "amount_raw_field": "amount",
+        "amount_raw_unit": "cny",
+        "amount_to_cny": 1,
+        "evidence": "akshare_sina_volume_docs_and_tencent_same_day_cross_check_20260921",
+    },
+    "tencent:stock_zh_a_hist_tx:v101": {
+        "volume_raw_field": "volume",
+        "volume_raw_unit": "shares",
+        "volume_to_shares": 1,
+        "amount_raw_field": "amount",
+        "amount_raw_unit": "cny",
+        "amount_to_cny": 1,
+        "evidence": "akshare_stock_zh_a_hist_tx_adapter_contract_v101",
+    },
     "ftshare:fetch_daily_bars": {
         "volume_raw_field": "volume",
         "volume_raw_unit": "shares",
@@ -108,7 +126,9 @@ def _vwap_sane(volume, amount, close) -> bool:
 
 def _canonical(observation: UnitObservation) -> tuple[float | None, float | None, list[str]]:
     reasons: list[str] = []
-    if observation.source in UNVERIFIED_UNIT_SOURCES:
+    if observation.source in UNVERIFIED_UNIT_SOURCES and (
+        not finite(observation.raw_volume) or not finite(observation.raw_amount)
+    ):
         reasons.append("sina_absolute_units_unverified")
     volume, amount, extra = _apply_documented(observation.source, observation.raw_volume, observation.raw_amount)
     reasons.extend(extra)

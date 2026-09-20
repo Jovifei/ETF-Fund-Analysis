@@ -10,6 +10,7 @@ from app.providers.ftshare import FTShareProvider
 from app.providers.mock import MockProvider
 from app.providers.rss_news import RssNewsProvider
 from app.providers.tushare import TushareProvider
+from app.providers.tencent import TencentProvider
 
 
 def _with_news(provider, settings):
@@ -45,12 +46,12 @@ def build_provider(settings: Settings | None = None) -> MarketProvider:
         # same tier, so a transient upstream block does not force the user to
         # switch tiers; the complete tier below intentionally remains
         # Tushare-first.
-        provider_classes = [AKShareProvider]
+        provider_classes = [AKShareProvider, TencentProvider]
         if settings.tushare_token:
             provider_classes.append(TushareProvider)
         provider_classes.append(FTShareProvider)
     else:
-        provider_classes = (TushareProvider, AKShareProvider, FTShareProvider)
+        provider_classes = (TushareProvider, AKShareProvider, TencentProvider, FTShareProvider)
     for provider_cls in provider_classes:
         if provider_cls is FTShareProvider and not (
             settings.ftshare_enabled and (

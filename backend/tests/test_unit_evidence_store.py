@@ -122,3 +122,32 @@ def test_audited_collection_persists_two_real_upstreams(db_session):
     assert result["certified_rows"] == 1
     assert db_session.query(UnitCertificationEvidence).filter_by(instrument_id=instrument.id).count() == 1
     assert db_session.query(ProviderAudit).filter_by(run_id="evidence-run", operation="certify_units").count() == 2
+
+
+def test_price_only_bar_cannot_be_certified_from_raw_cross_source_observations(db_session):
+    instrument = Instrument(ts_code="598884.SH", symbol="598884", name="价格仅证据", enabled=True)
+    db_session.add(instrument)
+    db_session.flush()
+    bar = DailyBar(
+        instrument_id=instrument.id, trade_date=date(2026, 9, 18), open=1.2,
+        high=1.21, low=1.19, close=1.2, volume=None, amount=None,
+        pct_change=0.1, adjust="none", source="akshare:sina:v101", quality_hash="price-only",
+    )
+    db_session.add(bar)
+    db_session.flush()
+
+    primary = UnitObservation(
+        ts_code=instrument.ts_code, trade_date=bar.trade_date, close=1.2,
+        source="akshare:sina:v101", raw_volume=20, raw_amount=2400,
+    )
+    independent = UnitObservation(
+        ts_code=instrument.ts_code, trade_date=bar.trade_date, close=1.2,
+        source="tencent:stock_zh_a_hist_tx:v101", raw_volume=2000, raw_amount=2400,
+    )
+    evidence = record_unit_evidence(
+        db_session, instrument, bar, primary, independent,
+        primary_upstream="sina", independent_upstream="tencent",
+    )
+
+    assert evidence.certified is False
+    assert "daily_bar_quantity_missing" in evidence.reasons_json

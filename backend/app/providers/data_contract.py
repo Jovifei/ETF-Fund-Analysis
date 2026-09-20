@@ -13,7 +13,7 @@ from sqlalchemy import select
 from app.models import DailyBar, Instrument
 from app.providers.base import ProviderError
 
-VERSION = "cn-fund-shares-cny-v1.0.5-unit-evidence-binding"
+VERSION = "cn-fund-shares-cny-v1.0.6-tencent-unit-evidence"
 LEGACY_SOURCES = ("akshare", "tushare", "tushare:fund_daily")
 UNVERIFIED_UNIT_SOURCES = ("akshare:sina:v101", "akshare:sina:v102")
 RESEARCH_ADJUST = "corporate_action_research"
@@ -26,7 +26,7 @@ class HistoryContractError(ProviderError):
 # These are endpoint-specific normalization contracts, not blanket SDK trust.
 # A new provider must explicitly document its conversion and extend tests here.
 DOCUMENTED_UNIT_SOURCES = frozenset({
-    "akshare:em:v101", "tushare:fund_daily:v101", "ftshare:fetch_daily_bars",
+    "akshare:em:v101", "tencent:stock_zh_a_hist_tx:v101", "tushare:fund_daily:v101", "ftshare:fetch_daily_bars",
 })
 
 def finite(value):

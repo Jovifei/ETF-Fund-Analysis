@@ -35,9 +35,16 @@ def record_unit_evidence(db, instrument, bar, primary: UnitObservation, independ
         raise ValueError("unit evidence trade date mismatch")
     result = certify_absolute_units(primary, independent)
     reasons = list(result.reasons)
+    if bar.volume is None or bar.amount is None or result.volume is None or result.amount is None:
+        reasons.append("daily_bar_quantity_missing")
+    else:
+        if abs(float(bar.volume) - float(result.volume)) > 0.5:
+            reasons.append("daily_bar_volume_binding_mismatch")
+        if abs(float(bar.amount) - float(result.amount)) > 0.5:
+            reasons.append("daily_bar_amount_binding_mismatch")
     if not primary_upstream or not independent_upstream or primary_upstream == independent_upstream:
         reasons.append("independent_observation_not_second_upstream")
-    certified = result.certified and "independent_observation_not_second_upstream" not in reasons
+    certified = result.certified and not reasons
     primary_units = _units(primary.source)
     independent_units = _units(independent.source)
     primary_hash = _observation_hash(primary)

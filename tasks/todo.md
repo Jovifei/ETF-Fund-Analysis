@@ -1,3 +1,24 @@
+# Tencent public-source evidence closure — 2026-09-21
+
+## Plan
+
+- [x] Reproduce current public-source gap and add failing adapter/evidence tests.
+- [x] Add a bounded Tencent daily adapter and preserve raw Sina fields for cross-source evidence.
+- [x] Run focused, full, frontend, static, migration, and provider-coverage checks.
+- [ ] Refresh production through audited tasks, certify only evidence-backed rows, and inspect all gates.
+- [ ] Commit, push, CI, fast-forward `main`, build/deploy the exact SHA, and verify rollback receipt.
+
+## Review
+
+Pending. No production configuration or database writes are performed before the code and tests pass.
+
+## Local review
+
+- RED: the new Tencent adapter test failed at collection before the adapter existed.
+- GREEN: focused evidence/provider suites passed; backend full pytest reached 100% with exit 0.
+- Static/frontend: compileall, Node syntax/tests, Vitest 36/36, vue-tsc, and Vite build passed.
+- Live read-only: Sina/Tencent samples matched after documented unit conversion; bounded coverage retry recovered the four transient timeouts.
+
 # Data Evidence Closure and Production Release — 2026-09-20
 
 ## Scope
