@@ -89,6 +89,29 @@ def test_large_public_source_rounding_stays_within_relative_tolerance():
     assert result.certified is True
 
 
+def test_large_amount_rounding_uses_source_scale():
+    primary = _obs(
+        source="tencent:stock_zh_a_hist_tx:v101",
+        close=1.03625,
+        raw_volume=6_000_000.0,
+        raw_amount=6_217_500.0,
+        converted_volume=6_000_000.0,
+        converted_amount=6_217_500.0,
+    )
+    independent = _obs(
+        source="akshare:sina:v101",
+        close=1.03625,
+        raw_volume=6_000_000.0,
+        raw_amount=6_217_550.0,
+        converted_volume=None,
+        converted_amount=None,
+    )
+
+    result = certify_absolute_units(primary, independent)
+
+    assert result.certified is True
+
+
 def test_ratio_only_same_vwap_is_sanity_never_qualification():
     primary = _obs()
     # Simultaneous ×100 keeps amount/volume = close, so VWAP still matches.
