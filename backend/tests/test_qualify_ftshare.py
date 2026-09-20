@@ -5,7 +5,6 @@ from pathlib import Path
 
 import httpx
 import pytest
-
 from app.core.config import Settings
 from app.providers.base import CapabilityUnavailable
 from app.providers.ftshare import FTShareProvider
@@ -87,3 +86,42 @@ def test_successful_qualification_records_only_typed_observed_fields():
     assert report["unit_findings"] == {}
     assert report["timestamp_findings"] == {}
     assert report["upstream_code"] is None
+
+
+def test_nonempty_operations_cannot_qualify_without_unit_and_timestamp_evidence():
+    module = _module()
+    operations = {
+        "list_instruments": {"status": "ok", "records": 1},
+        "fetch_daily_bars": {"status": "ok", "records": 5, "unit_findings": {}},
+        "fetch_spot_quotes": {"status": "ok", "records": 1, "timestamp_findings": {}},
+    }
+
+    qualified, reasons = module._qualification(operations)
+
+    assert qualified is False
+    assert reasons == [
+        "absolute_units_not_independently_certified",
+        "operational_timestamp_not_qualified",
+    ]
+
+
+def test_explicit_unit_and_timestamp_evidence_can_qualify_available_operations():
+    module = _module()
+    operations = {
+        "list_instruments": {"status": "ok", "records": 1},
+        "fetch_daily_bars": {
+            "status": "ok",
+            "records": 5,
+            "unit_findings": {"independently_certified": True},
+        },
+        "fetch_spot_quotes": {
+            "status": "ok",
+            "records": 1,
+            "timestamp_findings": {"operational_grade": True},
+        },
+    }
+
+    qualified, reasons = module._qualification(operations)
+
+    assert qualified is True
+    assert reasons == []

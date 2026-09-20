@@ -1,6 +1,6 @@
-# 接手入口：v1.0.5 审核修复
+# 接手入口：v1.0.5 资格闭环（2026-09-20）
 
-先读 AGENTS.md → STATUS.md → docs/README.md → docs/CODE_AUDIT_BLOCKERS_20260912.md → docs/audits/CLOSURE_20260913.md。固定应用 SHA 以本轮验收收据和 Codex 接收 Prompt 为准，不从旧 main 或旧 ZIP 覆盖新修复。最终提交后仍需核对远端分支是否有新增改动。
+先读 AGENTS.md → STATUS.md → docs/audits/CORPORATE_ACTIONS_20260920.md → docs/audits/FTSHARE_QUALIFICATION_20260920.md。企业行为修复基线是 `172db210e3e7e4daa252bdd2746466f79e5da595`；接手时重新核对本地 HEAD 与 `origin/main` 的完整 SHA，不要用旧 ZIP、旧 PR 或旧生产收据覆盖当前状态。
 
 ## 认证与数据保护合同
 
@@ -16,7 +16,9 @@
 
 ## 验收顺序
 
-资格拒绝样本与独立真实源对账 → 按目标交易日抓取/衍生任务与重试 → 旧表/详情日期和输入版本一致 → Windows独立登录/ACL与人批准单次任务 → 固定源码/构建/依赖/镜像/迁移收据。日线截止统一15:15，不把15:01取得昨日数据记成今日完成。指数OHLC与实时观察是不同数据路径。
+第二真实源 bounded probe → 同日量额/单位对账 → 按目标交易日抓取和衍生任务 → PIT/OOS walk-forward → 14:30 前瞻观察 → 人工批准。日线截止统一 15:15，不把 15:01 取得的昨日数据记成今日完成。指数 OHLC 与实时观察是不同数据路径。
+
+当前 FTShare 的 Skill 路由实测为 `etf-ohlcs=404`、`etf-candlesticks=405`；应用内固定 Provider 对五只 ETF 的列表、日线、现价探测均为 `CapabilityUnavailable`。不得手工把 `FTSHARE_QUALIFICATION` 改成 `qualified`。资格脚本修复后，即使三项接口都有记录，只要缺独立单位或 operational-grade 时间证据，顶层状态仍必须是 `unqualified`。
 
 API/worker/scheduler须同版本、同有效库，SQLite通过现有文件锁串行流水线及短事务；不把WAL称为无限并发写入或网络文件共享方案。旧路径的写入者必须停止重复调度。优先利用专用PostgreSQL测试与实际部署策略。
 

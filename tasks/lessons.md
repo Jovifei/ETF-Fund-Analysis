@@ -23,3 +23,4 @@
 - 2026-09-11: 公开行情回退不能只看 OHLC 是否返回；新浪历史接口同时返回量/额时，必须用 amount÷volume 与 close 的单位一致性回归校验后再解除 volume_missing 门禁，缺额或偏差过大继续保留 price-only，并在生产用受审计 bars→indicators→forecasts→signals→decision-board 链路重算。
 - 2026-09-11: 原版 WorkBuddy 看板使用的 legacy `/api/decision-board` 不继承 Vue API 的 no-store 约定；数据已落库但浏览器仍可能显示旧快照。凡是可变的 legacy JSON 读路由要同时固定前端 `cache: no-store` 和后端 `Cache-Control: private, no-store`，并用 snapshot_id 做线上回归。
 - 2026-09-18: Composite provider 不能把“非空”当作“合格”；低质量 price-only 或 degraded quote 必须继续尝试后备源，并把最后合格历史快照以 stale/非 actionable 方式展示，不能因行业板块成功而提升 ETF 决策资格。
+- 2026-09-20: Provider 资格脚本也不能把“三项接口非空”当作 qualified；单位与时间证据必须是显式门禁字段，空字典、字段名和均价比值都不是认证。现场接口恢复后仍需独立同日对账。

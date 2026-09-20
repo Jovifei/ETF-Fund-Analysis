@@ -840,13 +840,32 @@ Resolve the four production `unexplained_price_discontinuity` cases without gues
 
 ## Plan
 
-- [ ] RED: encode the four production discontinuity fixtures and assert the current gate blocks them with the exact reason.
-- [ ] Research: reconcile each discontinuity against authoritative corporate-action/adjusted-series evidence; keep unresolved symbols blocked.
-- [ ] GREEN: implement the smallest source/contract fix only where independent evidence supports it; preserve raw display history and fail-closed behavior.
-- [ ] Data pipeline: run source fetch, bars, quotes, indicators, forecasts, news, signals, sectors, decision board, and report checks in an isolated database.
-- [ ] UI: verify every enabled route and representative list/detail/decision surface against persisted snapshots and no mock/realtime mislabeling.
-- [ ] Review: full backend/frontend/static/build/diff gates, exact SHA, production backup, diagnostic deploy, public verification, rollback evidence.
+- [x] RED: encode the four production discontinuity fixtures and assert the current gate blocks them with the exact reason.
+- [x] Research: reconcile each discontinuity against authoritative corporate-action/adjusted-series evidence; keep unresolved symbols blocked.
+- [x] GREEN: implement the smallest source/contract fix only where independent evidence supports it; preserve raw display history and fail-closed behavior.
+- [x] Data pipeline: run source fetch, bars, quotes, indicators, forecasts, news, signals, sectors, decision board, and report checks in an isolated database.
+- [x] UI: verify every enabled route and representative list/detail/decision surface against persisted snapshots and no mock/realtime mislabeling.
+- [x] Review: full backend/frontend/static/build/diff gates, exact SHA, production backup, diagnostic deploy, public verification, rollback evidence.
 
 ## Review
 
-- Pending.
+- Completed through `172db21`: official split evidence is isolated from raw bars, research recomputation no longer becomes `数据异常`, public routes returned 200, and the production board remained stale/non-actionable. The production database backup and rollback source were retained.
+
+# FTShare qualification fail-closed repair — 2026-09-20
+
+## Goal
+
+Prevent a reachable FTShare endpoint from being marked qualified when absolute-unit and timestamp evidence is still absent.
+
+## Plan
+
+- [x] RED: prove three non-empty operations with empty evidence currently produce a false qualification.
+- [x] GREEN: require explicit independent unit and operational timestamp gates in the qualification result.
+- [x] LIVE: run bounded read-only probes and record sanitized endpoint outcomes without changing runtime configuration.
+- [x] REVIEW: run focused and related tests, compile/static checks, full regression, diff review, then update STATUS/HANDOFF.
+
+## Review
+
+- RED failed with missing `_qualification`; GREEN related suite passed 96 tests.
+- Full backend pytest exited 0. `compileall`, Node syntax, scoped Ruff, and `git diff --check` exited 0.
+- Five-symbol application probes returned zero records and `CapabilityUnavailable`; Skill endpoints returned 404/405. FTShare remains disabled/unqualified and no runtime or production state changed.

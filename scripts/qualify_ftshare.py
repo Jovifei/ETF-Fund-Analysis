@@ -102,6 +102,26 @@ def _probe(name: str, operation, report: dict) -> None:
         _clear_unverified_claims(report)
 
 
+def _qualification(operations: dict[str, dict]) -> tuple[bool, list[str]]:
+    reasons: list[str] = []
+    if not all(
+        operations.get(name, {}).get("status") == "ok"
+        and operations.get(name, {}).get("records", 0) > 0
+        for name in ("list_instruments", "fetch_daily_bars", "fetch_spot_quotes")
+    ):
+        reasons.append("required_operation_unavailable")
+
+    unit_findings = operations.get("fetch_daily_bars", {}).get("unit_findings") or {}
+    if unit_findings.get("independently_certified") is not True:
+        reasons.append("absolute_units_not_independently_certified")
+
+    timestamp_findings = operations.get("fetch_spot_quotes", {}).get("timestamp_findings") or {}
+    if timestamp_findings.get("operational_grade") is not True:
+        reasons.append("operational_timestamp_not_qualified")
+
+    return not reasons, reasons
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="bounded read-only FTShare ETF qualification")
     parser.add_argument("--code", default=PROBE_CODE, help="one ETF probe code (default: 510300.SH)")
@@ -150,7 +170,7 @@ def main() -> int:
     finally:
         provider.close()
 
-    qualified = all(operations[key].get("status") == "ok" and operations[key].get("records", 0) > 0 for key in operations)
+    qualified, qualification_reasons = _qualification(operations)
     report = {
         "status": "qualified" if qualified else "unqualified",
         "skill_commit": SKILL_COMMIT,
@@ -163,6 +183,7 @@ def main() -> int:
             "max_date_span_days": settings.ftshare_max_date_span_days,
             "max_response_bytes": settings.ftshare_max_response_bytes,
         },
+        "qualification_reasons": qualification_reasons,
         "operations": operations,
     }
     print(json.dumps(report, ensure_ascii=False, indent=2))
