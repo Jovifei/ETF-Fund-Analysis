@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from app.models import Instrument, UnitCertificationEvidence
+from app.models import DailyBar, Instrument, UnitCertificationEvidence
+from app.providers.composite import CompositeProvider
 from app.providers.unit_certification import (
     DOCUMENTED_ENDPOINT_FIELDS,
     UnitCertification,
@@ -39,6 +40,18 @@ def record_unit_evidence(db, instrument, bar, primary: UnitObservation, independ
     certified = result.certified and "independent_observation_not_second_upstream" not in reasons
     primary_units = _units(primary.source)
     independent_units = _units(independent.source)
+    primary_hash = _observation_hash(primary)
+    independent_hash = _observation_hash(independent)
+    existing = db.scalar(select(UnitCertificationEvidence).where(
+        UnitCertificationEvidence.instrument_id == instrument.id,
+        UnitCertificationEvidence.trade_date == bar.trade_date,
+        UnitCertificationEvidence.adjust == bar.adjust,
+        UnitCertificationEvidence.daily_bar_quality_hash == bar.quality_hash,
+        UnitCertificationEvidence.primary_input_hash == primary_hash,
+        UnitCertificationEvidence.independent_input_hash == independent_hash,
+    ))
+    if existing is not None:
+        return existing
     row = UnitCertificationEvidence(
         instrument_id=instrument.id, trade_date=bar.trade_date, adjust=bar.adjust,
         daily_bar_quality_hash=bar.quality_hash,
@@ -51,12 +64,77 @@ def record_unit_evidence(db, instrument, bar, primary: UnitObservation, independ
         primary_volume_unit=primary_units[0], primary_amount_unit=primary_units[1],
         independent_volume_unit=independent_units[0], independent_amount_unit=independent_units[1],
         converted_volume=result.volume, converted_amount=result.amount,
-        primary_input_hash=_observation_hash(primary), independent_input_hash=_observation_hash(independent),
+        primary_input_hash=primary_hash, independent_input_hash=independent_hash,
         certified=certified, reasons_json=list(dict.fromkeys(reasons)),
     )
     db.add(row)
     db.flush()
     return row
+
+
+def collect_unit_evidence(db, provider, *, codes=None, settled_days: int = 5, run_id: str | None = None):
+    """Collect bounded same-day observations without changing persisted bars."""
+    from app.services.audit_service import AuditTimer, record_provider_audit
+
+    candidates = provider.providers if isinstance(provider, CompositeProvider) else [provider]
+    candidates = [item for item in candidates if hasattr(item, "fetch_daily_bars")]
+    wanted = {value.upper() for value in codes or []}
+    instruments = db.scalars(select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code)).all()
+    if wanted:
+        instruments = [item for item in instruments if item.ts_code.upper() in wanted or item.symbol in wanted]
+    saved = 0
+    failures = []
+    for instrument in instruments:
+        bars = db.scalars(select(DailyBar).where(DailyBar.instrument_id == instrument.id)
+                          .order_by(DailyBar.trade_date.desc()).limit(settled_days)).all()
+        bars.reverse()
+        if not bars:
+            failures.append({"ts_code": instrument.ts_code, "reason": "history_missing"})
+            continue
+        observations = {}
+        for candidate in candidates:
+            records = []
+            error = None
+            timer = AuditTimer()
+            for attempt in range(2):
+                try:
+                    records = list(candidate.fetch_daily_bars(
+                        instrument.ts_code, bars[0].trade_date, bars[-1].trade_date
+                    ))
+                    error = None
+                    break
+                except Exception as exc:
+                    error = exc
+                    if attempt:
+                        break
+            record_provider_audit(db, run_id=run_id or "unit-evidence", operation="certify_units",
+                                  provider=candidate, result=records, error=error, latency_ms=timer.elapsed_ms)
+            for item in records:
+                if item.raw_volume is None or item.raw_amount is None or not item.source_upstream:
+                    continue
+                observations[(item.trade_date, item.source)] = item
+        for bar in bars:
+            primary_row = observations.get((bar.trade_date, bar.source))
+            if primary_row is None:
+                continue
+            independent_row = next((item for (day, _), item in observations.items()
+                                    if day == bar.trade_date and item.source_upstream != primary_row.source_upstream), None)
+            if independent_row is None:
+                continue
+            primary = UnitObservation(instrument.ts_code, bar.trade_date, primary_row.close, primary_row.source,
+                                      primary_row.raw_volume, primary_row.raw_amount,
+                                      primary_row.volume, primary_row.amount)
+            independent = UnitObservation(instrument.ts_code, bar.trade_date, independent_row.close, independent_row.source,
+                                          independent_row.raw_volume, independent_row.raw_amount,
+                                          independent_row.volume, independent_row.amount)
+            evidence = record_unit_evidence(
+                db, instrument, bar, primary, independent,
+                primary_upstream=primary_row.source_upstream,
+                independent_upstream=independent_row.source_upstream,
+            )
+            saved += int(evidence.certified)
+    return {"run_id": run_id, "status": "succeeded" if not failures else "partial",
+            "instruments": len(instruments), "certified_rows": saved, "failures": failures}
 
 
 def _recompute(row, ts_code: str) -> UnitCertification:

@@ -521,6 +521,9 @@ class FTShareProvider(MarketProvider):
                     pct_change=None,
                     adjust="none",
                     source="ftshare:fetch_daily_bars",
+                    raw_volume=volume, raw_amount=amount,
+                    volume_raw_unit="shares", amount_raw_unit="cny",
+                    source_upstream="ftshare", endpoint_version="etf-ohlcs:v1",
                 )
             )
         result.sort(key=lambda item: item.trade_date)

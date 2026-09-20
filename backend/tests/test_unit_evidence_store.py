@@ -1,8 +1,10 @@
 from datetime import date
 
-from app.models import DailyBar, Instrument, UnitCertificationEvidence
+from app.models import DailyBar, Instrument, ProviderAudit, UnitCertificationEvidence
+from app.providers.composite import CompositeProvider
+from app.providers.types import BarRecord
 from app.providers.unit_certification import UnitObservation
-from app.services.unit_evidence_service import certify_stored_history, record_unit_evidence
+from app.services.unit_evidence_service import collect_unit_evidence, certify_stored_history, record_unit_evidence
 
 
 def _observation(source, day, volume=20.0, amount=2.4, ts_code="598881.SH"):
@@ -89,3 +91,34 @@ def test_stored_evidence_recomputes_units_and_certifies_complete_range(db_sessio
     tampered = certify_stored_history(db_session, instrument.id, bars)
     assert tampered.certified is False
     assert "evidence_input_hash_mismatch" in tampered.reasons
+
+
+def test_audited_collection_persists_two_real_upstreams(db_session):
+    instrument = Instrument(ts_code="598883.SH", symbol="598883", name="证据采集", enabled=True)
+    db_session.add(instrument)
+    db_session.flush()
+    day = date(2026, 9, 18)
+    bar = _bar(instrument.id, day, "collection-quality")
+    db_session.add(bar)
+    db_session.flush()
+
+    class Source:
+        def __init__(self, name, source, upstream, raw_volume, raw_amount, volume, amount):
+            self.name, self.source, self.upstream = name, source, upstream
+            self.raw_volume, self.raw_amount, self.volume, self.amount = raw_volume, raw_amount, volume, amount
+        def fetch_daily_bars(self, ts_code, start_date, end_date):
+            return [BarRecord(
+                ts_code=ts_code, trade_date=day, open=1.2, high=1.21, low=1.19, close=1.2,
+                volume=self.volume, amount=self.amount, source=self.source,
+                raw_volume=self.raw_volume, raw_amount=self.raw_amount,
+                source_upstream=self.upstream, endpoint_version="fixture:v1",
+            )]
+
+    provider = CompositeProvider([
+        Source("tushare", "tushare:fund_daily:v101", "tushare", 20, 2.4, 2000, 2400),
+        Source("akshare", "akshare:em:v101", "eastmoney", 20, 2400, 2000, 2400),
+    ])
+    result = collect_unit_evidence(db_session, provider, codes=[instrument.ts_code], run_id="evidence-run")
+    assert result["certified_rows"] == 1
+    assert db_session.query(UnitCertificationEvidence).filter_by(instrument_id=instrument.id).count() == 1
+    assert db_session.query(ProviderAudit).filter_by(run_id="evidence-run", operation="certify_units").count() == 2

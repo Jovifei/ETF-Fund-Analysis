@@ -213,6 +213,10 @@ class AKShareProvider(MarketProvider):
                     pct_change=finite_or_none(first(row, "涨跌幅", "pct_change")),
                     adjust="none",
                     source="akshare:em:v101",
+                    raw_volume=finite_or_none(first(row, "成交量", "volume")),
+                    raw_amount=finite_or_none(row.get("成交额") or row.get("amount")),
+                    volume_raw_unit="hand_100_shares", amount_raw_unit="cny",
+                    source_upstream="eastmoney", endpoint_version="fund_hist_em:v101",
                 )
             )
         result.sort(key=lambda item: item.trade_date)

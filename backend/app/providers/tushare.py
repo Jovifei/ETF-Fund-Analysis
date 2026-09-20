@@ -176,6 +176,10 @@ class TushareProvider(MarketProvider):
                     pct_change=finite_or_none(first(row, "pct_chg", "pct_change")),
                     adjust="none",
                     source="tushare:fund_daily:v101",
+                    raw_volume=finite_or_none(first(row, "vol", "volume")),
+                    raw_amount=finite_or_none(row.get("amount")),
+                    volume_raw_unit="hand_100_shares", amount_raw_unit="thousand_cny",
+                    source_upstream="tushare", endpoint_version="fund_daily:v101",
                 )
             )
         result.sort(key=lambda item: item.trade_date)

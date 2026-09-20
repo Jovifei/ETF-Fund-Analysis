@@ -48,6 +48,12 @@ class BarRecord:
     pct_change: float | None = None
     adjust: str = "none"
     source: str = "unknown"
+    raw_volume: float | None = None
+    raw_amount: float | None = None
+    volume_raw_unit: str | None = None
+    amount_raw_unit: str | None = None
+    source_upstream: str | None = None
+    endpoint_version: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

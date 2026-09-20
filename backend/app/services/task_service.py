@@ -156,6 +156,7 @@ class TaskService:
             "refresh_market_context",
             "refresh_index_history",
             "refresh_bars",
+            "certify_units",
             "refresh_minute_bars",
             "refresh_quotes",
             "refresh_indicators",
@@ -266,6 +267,12 @@ class TaskService:
                 lookback_days=int(kwargs.get("lookback_days", 120)),
                 codes=kwargs.get("codes"),
                 run_id=run_id,
+            )
+        if task_name == "certify_units":
+            from app.services.unit_evidence_service import collect_unit_evidence
+            return collect_unit_evidence(
+                db, self.provider, codes=kwargs.get("codes"),
+                settled_days=int(kwargs.get("settled_days", 5)), run_id=run_id,
             )
         if task_name == "refresh_minute_bars":
             from app.services.market_bar_service import MarketBarService
