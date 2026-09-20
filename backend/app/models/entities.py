@@ -430,6 +430,46 @@ class DailyBar(Base):
     quality_hash: Mapped[str] = mapped_column(String(64), index=True)
 
 
+class UnitCertificationEvidence(Base):
+    __tablename__ = "unit_certification_evidence"
+    __table_args__ = (
+        UniqueConstraint(
+            "instrument_id", "trade_date", "adjust", "daily_bar_quality_hash",
+            "primary_input_hash", "independent_input_hash", name="uq_unit_evidence_binding",
+        ),
+        Index("ix_unit_evidence_instrument_date", "instrument_id", "trade_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id", ondelete="CASCADE"), nullable=False)
+    trade_date: Mapped[date] = mapped_column(Date, nullable=False)
+    adjust: Mapped[str] = mapped_column(String(8), nullable=False)
+    daily_bar_quality_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    primary_source: Mapped[str] = mapped_column(String(64), nullable=False)
+    independent_source: Mapped[str] = mapped_column(String(64), nullable=False)
+    primary_upstream: Mapped[str] = mapped_column(String(64), nullable=False)
+    independent_upstream: Mapped[str] = mapped_column(String(64), nullable=False)
+    primary_endpoint_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    independent_endpoint_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    primary_close: Mapped[float] = mapped_column(Float, nullable=False)
+    independent_close: Mapped[float] = mapped_column(Float, nullable=False)
+    primary_raw_volume: Mapped[float | None] = mapped_column(Float)
+    primary_raw_amount: Mapped[float | None] = mapped_column(Float)
+    independent_raw_volume: Mapped[float | None] = mapped_column(Float)
+    independent_raw_amount: Mapped[float | None] = mapped_column(Float)
+    primary_volume_unit: Mapped[str | None] = mapped_column(String(32))
+    primary_amount_unit: Mapped[str | None] = mapped_column(String(32))
+    independent_volume_unit: Mapped[str | None] = mapped_column(String(32))
+    independent_amount_unit: Mapped[str | None] = mapped_column(String(32))
+    converted_volume: Mapped[float | None] = mapped_column(Float)
+    converted_amount: Mapped[float | None] = mapped_column(Float)
+    primary_input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    independent_input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    certified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    reasons_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class QuoteSnapshot(Base):
     __tablename__ = "quote_snapshots"
     __table_args__ = (Index("ix_quote_instrument_time", "instrument_id", "quote_time"),)

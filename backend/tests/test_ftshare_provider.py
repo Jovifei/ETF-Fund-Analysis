@@ -42,7 +42,13 @@ def test_provider_rejects_non_allowlisted_endpoint():
 
 
 def _provider(handler, **updates):
-    settings = Settings(_env_file=None, ftshare_enabled=True, **updates)
+    values = {
+        "ftshare_enabled": True,
+        "ftshare_daily_qualification": "qualified",
+        "ftshare_quote_qualification": "qualified",
+        **updates,
+    }
+    settings = Settings(_env_file=None, **values)
     client = httpx.Client(transport=httpx.MockTransport(handler), base_url=BASE)
     return FTShareProvider(settings, client=client)
 
@@ -455,12 +461,12 @@ def test_factory_explicit_ftshare_requires_enabled_and_composites_order(monkeypa
     with pytest.raises(CapabilityUnavailable):
         build_provider(Settings(_env_file=None, market_provider="ftshare", ftshare_enabled=False))
     with pytest.raises(CapabilityUnavailable):
-        build_provider(Settings(_env_file=None, market_provider="ftshare", ftshare_enabled=True, ftshare_qualification="unverified"))
-    unqualified = build_provider(Settings(_env_file=None, market_provider="public_composite", ftshare_enabled=True, ftshare_qualification="rejected"))
+        build_provider(Settings(_env_file=None, market_provider="ftshare", ftshare_enabled=True, ftshare_qualification="qualified"))
+    unqualified = build_provider(Settings(_env_file=None, market_provider="public_composite", ftshare_enabled=True, ftshare_qualification="qualified"))
     assert [item.name for item in unqualified.providers] == ["akshare"]
-    provider = build_provider(Settings(_env_file=None, market_provider="public_composite", ftshare_enabled=True, ftshare_qualification="qualified"))
+    provider = build_provider(Settings(_env_file=None, market_provider="public_composite", ftshare_enabled=True, ftshare_daily_qualification="qualified"))
     assert [item.name for item in provider.providers] == ["akshare", "ftshare"]
-    provider = build_provider(Settings(_env_file=None, market_provider="composite", ftshare_enabled=True, ftshare_qualification="qualified"))
+    provider = build_provider(Settings(_env_file=None, market_provider="composite", ftshare_enabled=True, ftshare_quote_qualification="qualified"))
     assert [item.name for item in provider.providers] == ["tushare", "akshare", "ftshare"]
 
 
@@ -479,7 +485,7 @@ def test_public_composite_uses_tushare_only_after_akshare_when_token_is_availabl
             market_provider="public_composite",
             tushare_token="unit-test-token-123456",
             ftshare_enabled=True,
-            ftshare_qualification="qualified",
+            ftshare_daily_qualification="qualified",
         )
     )
 
@@ -495,7 +501,7 @@ def test_new_factory_chains_never_add_mock_even_when_legacy_flag_is_true(monkeyp
     monkeypatch.setattr("app.providers.factory.TushareProvider", type("TS", (Fake,), {"name": "tushare"}))
     monkeypatch.setattr("app.providers.factory.FTShareProvider", type("FT", (Fake,), {"name": "ftshare"}))
     for mode, expected in (("public_composite", ["akshare", "ftshare"]), ("composite", ["tushare", "akshare", "ftshare"])):
-        provider = build_provider(Settings(_env_file=None, market_provider=mode, ftshare_enabled=True, ftshare_qualification="qualified", allow_mock_fallback=True))
+        provider = build_provider(Settings(_env_file=None, market_provider=mode, ftshare_enabled=True, ftshare_daily_qualification="qualified", allow_mock_fallback=True))
         assert [item.name for item in provider.providers] == expected
 
 

@@ -1,3 +1,27 @@
+# Data Evidence Closure and Production Release — 2026-09-20
+
+## Scope
+
+- [x] Confirm clean isolated branch `codex/unit-evidence-closure` from `0ac75fa`.
+- [x] RED: add regressions for empty evidence, false independence, unit mismatch, stale hash, and partial-range certification.
+- [x] GREEN: add audited unit-evidence persistence and recomputed certification lookup.
+- [x] Split FTShare daily-history and quote capability qualification.
+- [x] Extend data-health API and Settings UI with per-instrument gaps and affected calculations.
+- [ ] Run provider probes for benchmark and four split instruments, then enabled universe when safe.
+- [x] Run focused and full backend/frontend/migration checks; production browser acceptance remains a deployment gate.
+- [ ] Record review evidence, commit, push, pass CI, and fast-forward `main`.
+- [ ] Back up production, rehearse migration, build full image, remove source bind, deploy, and verify/rollback as required.
+
+## Review
+
+- Backend full pytest passed twice after dependency completion; final run exited 0.
+- Frontend Vitest 36/36, typecheck, and production build passed.
+- SQLite empty upgrade, downgrade to `d40609090002`, and re-upgrade to `e609200001` passed.
+- Compileall, Node syntax, migration parity, secret scan, and diff check passed.
+- Evidence is recomputed from stored raw fields and closes, bound to the exact daily-bar quality hash, and rejects same-upstream, incomplete-range, stale, or tampered inputs.
+
+---
+
 # QA-R Provider/Data Repair Plan — 2026-09-17
 
 ## Goal

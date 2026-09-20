@@ -448,6 +448,8 @@ class FTShareProvider(MarketProvider):
         return result
 
     def fetch_daily_bars(self, ts_code: str, start_date: date, end_date: date) -> list[BarRecord]:
+        if self.settings.ftshare_daily_qualification != "qualified":
+            raise CapabilityUnavailable("FTShare daily history is unqualified")
         code = normalize_code(ts_code)
         if start_date > end_date:
             raise ProviderError("FTShare daily date range invalid")
@@ -530,6 +532,8 @@ class FTShareProvider(MarketProvider):
         return result
 
     def fetch_spot_quotes(self, codes: list[str]) -> list[QuoteRecord]:
+        if self.settings.ftshare_quote_qualification != "qualified":
+            raise CapabilityUnavailable("FTShare quotes are unqualified")
         if not codes:
             raise CapabilityUnavailable("FTShare spot quotes require ETF codes")
         result: list[QuoteRecord] = []

@@ -114,6 +114,12 @@ class Settings(BaseSettings):
     ftshare_qualification: Literal["unverified", "qualified", "rejected", "unqualified"] = Field(
         default="unverified", validation_alias="FTSHARE_QUALIFICATION"
     )
+    ftshare_daily_qualification: Literal["unverified", "qualified", "rejected", "unqualified"] = Field(
+        default="unverified", validation_alias="FTSHARE_DAILY_QUALIFICATION"
+    )
+    ftshare_quote_qualification: Literal["unverified", "qualified", "rejected", "unqualified"] = Field(
+        default="unverified", validation_alias="FTSHARE_QUOTE_QUALIFICATION"
+    )
     ftshare_base_url: str = Field(
         default="https://market.ft.tech/gateway", validation_alias="FTSHARE_BASE_URL"
     )

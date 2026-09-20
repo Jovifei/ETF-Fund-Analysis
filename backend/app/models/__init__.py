@@ -27,6 +27,7 @@ from app.models.entities import (
     SignalSnapshot,
     SupportResistanceSnapshot,
     TaskRun,
+    UnitCertificationEvidence,
     UserWatchlistEntry,
     MarketBar,
 )
@@ -44,6 +45,7 @@ __all__ = [
     "UserWatchlistEntry", "HoldingImportSession", "HoldingImportCandidate",
     "NewsItem", "RuntimeSetting", "SectorSnapshot", "SupportResistanceSnapshot",
     "TaskRun", "MarketBar", "ProviderAudit", "EventLog", "ReportArtifact",
+    "UnitCertificationEvidence",
     "WorkspaceBridgeDevice", "WorkspaceDataJob", "WorkspaceImportBatch",
     "WorkspacePreference", "WorkspaceResearchJob",
 ]

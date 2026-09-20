@@ -297,17 +297,21 @@ class ETF1430WorkbenchService:
         quote: QuoteSnapshot | None,
         now: datetime,
         *,
+        db=None,
+        instrument_id=None,
         bars=None,
         indicator=None,
         ts_code=None,
     ) -> dict[str, Any]:
         from app.services.qualification_gate import qualify_1430
         window = {**self._decision_window(now), "maximum_quote_age_minutes": self.config["thresholds"].get("maximum_quote_age_minutes", 8)}
-        unit_certification = (
-            self.unit_certification_resolver(bars or [])
-            if self.unit_certification_resolver is not None
-            else None
-        )
+        if self.unit_certification_resolver is not None:
+            unit_certification = self.unit_certification_resolver(bars or [])
+        elif db is not None and instrument_id is not None:
+            from app.services.unit_evidence_service import certify_stored_history
+            unit_certification = certify_stored_history(db, instrument_id, bars or [])
+        else:
+            unit_certification = None
         return qualify_1430(
             self.settings,
             quote,
@@ -402,7 +406,10 @@ class ETF1430WorkbenchService:
         rr = _finite(structure_metrics.get("risk_reward"))
         action = str((current_decision or {}).get("state") or "数据异常")
         now = datetime.now(self.timezone)
-        qualification = self._qualification(quote, now, bars=bars, indicator=indicator, ts_code=instrument.ts_code)
+        qualification = self._qualification(
+            quote, now, db=db, instrument_id=instrument.id, bars=bars,
+            indicator=indicator, ts_code=instrument.ts_code,
+        )
         current_price = _finite(quote.price if quote else None) or (_finite(float(bars[-1].close)) if bars else None)
         reasons = [
             f"趋势 {trend_score:.1f}",

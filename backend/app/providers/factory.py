@@ -30,7 +30,10 @@ def build_provider(settings: Settings | None = None) -> MarketProvider:
     if settings.market_provider == "akshare":
         return _with_news(AKShareProvider(settings), settings)
     if settings.market_provider == "ftshare":
-        if not (settings.ftshare_enabled and settings.ftshare_qualification == "qualified"):
+        if not (settings.ftshare_enabled and (
+            settings.ftshare_daily_qualification == "qualified"
+            or settings.ftshare_quote_qualification == "qualified"
+        )):
             raise CapabilityUnavailable("FTShare provider is disabled or unqualified")
         return _with_news(FTShareProvider(settings), settings)
 
@@ -50,7 +53,10 @@ def build_provider(settings: Settings | None = None) -> MarketProvider:
         provider_classes = (TushareProvider, AKShareProvider, FTShareProvider)
     for provider_cls in provider_classes:
         if provider_cls is FTShareProvider and not (
-            settings.ftshare_enabled and settings.ftshare_qualification == "qualified"
+            settings.ftshare_enabled and (
+                settings.ftshare_daily_qualification == "qualified"
+                or settings.ftshare_quote_qualification == "qualified"
+            )
         ):
             continue
         try:

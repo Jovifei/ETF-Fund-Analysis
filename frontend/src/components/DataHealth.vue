@@ -6,7 +6,8 @@ import {stamp, statusName} from '../lib/format'
 import type {DataJob} from '../lib/types'
 import TaskProgress from './TaskProgress.vue'
 type Panel = {target_trade_date?:string;target_covered_instruments?:number|null;target_missing_instruments?:number|null;last_attempt_summary?:{failures?:{ts_code?:string;context_id?:string;reason:string}[];failures_omitted?:number};key:string;label:string;rows:number;latest_source:string|null;latest_fetch_in_scope?:string|null;oldest_instrument_latest?:string|null;covered_instruments?:number;tracked_instruments?:number;last_success_at?:string|null;status:string;retry_task:string;last_attempt?:{status:string;failed:boolean;started_at:string;finished_at:string|null}|null}
-type Health = {as_of:string;catalog_count:number;tracked_count:number;worker_last_seen_at:string|null;balanced_refresh_enabled:boolean;note:string;panels:Panel[]}
+type Qualification = {ts_code:string;name:string;target_trade_date:string;available_through:string|null;history_rows:number;evidence_covered_rows:number;volume_amount_missing_rows:number;sources:string[];qualified:boolean;reasons:string[];affected_calculations:string[]}
+type Health = {as_of:string;catalog_count:number;tracked_count:number;worker_last_seen_at:string|null;balanced_refresh_enabled:boolean;note:string;panels:Panel[];instrument_qualification:Qualification[]}
 const q=useQuery<Health>('/api/workspace/data-health'), active=ref(''), error=ref(''),pending=ref(false)
 async function refreshTask(panel:Panel){
   if(pending.value)return
@@ -39,6 +40,15 @@ defineExpose({reload:q.refresh})
           <td>{{sourceLabel(p.latest_fetch_in_scope)}}</td>
           <td><span :class="{'warning-notice':p.last_attempt?.failed}">{{p.last_attempt?statusName(p.last_attempt.status):'无任务记录'}}</span><small>成功 {{stamp(p.last_success_at)}}</small><small v-for="(f,i) in p.last_attempt_summary?.failures??[]" :key="i">{{f.ts_code??f.context_id}} · {{f.reason}}</small><small v-if="p.last_attempt_summary?.failures_omitted">另有 {{p.last_attempt_summary.failures_omitted}} 项未展开</small></td>
           <td><button class="button small" :disabled="pending" @click="refreshTask(p)">{{p.retry_task==='recompute'?'重算缓存':'提交补采'}}</button></td>
+        </tr></tbody></table></div>
+      <h3>逐标的资格</h3>
+      <div class="table-scroll"><table><thead><tr><th>标的</th><th>可用截止日</th><th>证据覆盖</th><th>来源</th><th>资格与影响</th></tr></thead>
+        <tbody><tr v-for="item in q.data.value?.instrument_qualification??[]" :key="item.ts_code">
+          <td>{{item.name}}<small>{{item.ts_code}}</small></td>
+          <td>{{item.available_through??'—'}}<small>目标 {{item.target_trade_date}}</small></td>
+          <td>{{item.evidence_covered_rows}} / {{item.history_rows}}<small>量额缺失 {{item.volume_amount_missing_rows}} 条</small></td>
+          <td>{{item.sources.join('、')||'—'}}</td>
+          <td><strong>{{item.qualified?'已认证':'未认证'}}</strong><small v-if="item.reasons.length">{{item.reasons.join('、')}}</small><small v-if="item.affected_calculations.length">影响：{{item.affected_calculations.join('、')}}</small></td>
         </tr></tbody></table></div>
       <p class="small-note">{{q.data.value?.note}}<RouterLink to="/settings">查看数据源与详细任务</RouterLink></p>
     </div>
