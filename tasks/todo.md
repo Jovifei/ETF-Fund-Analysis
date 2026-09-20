@@ -5,11 +5,11 @@
 - [x] Reproduce the production zero-certification result from stored evidence reasons.
 - [x] Add RED tests for Sina observed units, large-value rounding, and stale evidence reuse.
 - [x] Correct the minimal unit contract/tolerance and recompute existing evidence rows.
-- [ ] Run full verification, commit, CI, merge `main`, redeploy, and rerun production certification.
+- [x] Run full verification, commit, CI, merge `main`, redeploy, and rerun production certification.
 
 ## Review
 
-Focused RED/GREEN evidence suites pass after the correction. Deployment remains pending until the full gates and production rerun complete.
+Focused RED/GREEN evidence suites pass after the correction. v1.0.8 production deployment and audited certification are recorded in `docs/PRODUCTION_DEPLOYMENT_RECEIPT_V108_20260921.md`.
 
 # Tencent public-source evidence closure — 2026-09-21
 
@@ -18,12 +18,12 @@ Focused RED/GREEN evidence suites pass after the correction. Deployment remains 
 - [x] Reproduce current public-source gap and add failing adapter/evidence tests.
 - [x] Add a bounded Tencent daily adapter and preserve raw Sina fields for cross-source evidence.
 - [x] Run focused, full, frontend, static, migration, and provider-coverage checks.
-- [ ] Refresh production through audited tasks, certify only evidence-backed rows, and inspect all gates.
-- [ ] Commit, push, CI, fast-forward `main`, build/deploy the exact SHA, and verify rollback receipt.
+- [x] Refresh production through audited tasks, certify only evidence-backed rows, and inspect all gates.
+- [x] Commit, push, CI, fast-forward `main`, build/deploy the exact SHA, and verify rollback receipt.
 
 ## Review
 
-Pending. No production configuration or database writes are performed before the code and tests pass.
+Completed in v1.0.8; see the deployment receipt above.
 
 ## Local review
 
