@@ -17,7 +17,7 @@ from app.workspace.catalog_search import search_terms, matching_reason
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.models import DailyBar, ForecastSnapshot, Holding, IndicatorSnapshot, Instrument, MarketBar, QuoteSnapshot, ReportArtifact, SectorSnapshot, UserWatchlistEntry
+from app.models import DailyBar, DecisionBoardProvisionalInput, ForecastSnapshot, Holding, IndicatorSnapshot, Instrument, MarketBar, QuoteSnapshot, ReportArtifact, SectorSnapshot, UserWatchlistEntry
 from app.services.decision_board_service import DecisionBoardService
 from app.services.factor_analysis_service import DEFAULT_FACTORS
 from app.services.support_resistance_service import SupportResistanceService
@@ -110,7 +110,7 @@ def search_instruments(db: Session, settings: Settings, q: str, limit: int, user
 
 
 def compact_row(row: dict) -> dict:
-    keys = ("ts_code", "name", "kind", "theme_l1", "theme_l2", "grade", "grade_reason", "freshness", "data_status", "return_1d", "return_5d", "returns", "volume", "ma", "macd", "kdj", "rsi", "td", "sector", "chan", "indicator", "quote", "forecasts", "research_only", "entry_exit_ref", "theme_relative_strength", "support_resistance")
+    keys = ("ts_code", "name", "kind", "theme_l1", "theme_l2", "grade", "grade_reason", "freshness", "data_status", "return_1d", "return_5d", "returns", "volume", "ma", "macd", "kdj", "rsi", "td", "sector", "chan", "indicator", "indicator_as_of", "provisional", "quote", "forecasts", "research_only", "entry_exit_ref", "theme_relative_strength", "support_resistance")
     result = {key: row.get(key) for key in keys}
     history = row.get("history") or []
     result["price"] = number(history[-1].get("close")) if history else number((row.get("support_resistance") or {}).get("current_price"))
@@ -198,7 +198,12 @@ def instrument_detail(db: Session, settings: Settings, code: str, user_id: int |
     view_quote = quote_view(quote, settings)
     display_chart = chart_data(db, settings, code, "1d", 60)
     last = ((display_chart or {}).get("bars") or [None])[-1]
-    display_values = indicator.values_json if indicator and not issue else {}
+    decision_provisional = (row or {}).get("provisional") or {}
+    provisional_used = bool(decision_provisional.get("used_for_derived_values"))
+    display_values = (
+        decision_provisional.get("derived", {}).get("indicator_values", {})
+        if provisional_used else indicator.values_json if indicator and not issue else {}
+    )
     if not display_values and last:
         display_values = last["indicators"]
     if view_quote["price"] is None and last:
@@ -215,9 +220,9 @@ def instrument_detail(db: Session, settings: Settings, code: str, user_id: int |
         "snapshot_issues": {"indicator": indicator_issues, "forecasts": forecast_issues},
         "daily_as_of": (display_chart or {}).get("source_as_of") or (last or {}).get("date"),
         "target_trade_date": expected.isoformat() if expected else None,
-        "history_issue": issue, "indicator_basis": "persisted_snapshot" if indicator and not issue else "historical_price_display",
+        "history_issue": issue, "indicator_basis": "intraday_provisional_research" if provisional_used else "persisted_snapshot" if indicator and not issue else "historical_price_display",
         "indicator_values": display_values, "indicator_version": indicator.version if indicator and not issue else settings.load_strategy()["indicator_version"],
-        "indicator_as_of": iso(indicator.as_of_date) if indicator and not issue else (last or {}).get("date"), "forecasts": forecast_rows,
+        "indicator_as_of": decision_provisional.get("observed_at") if provisional_used else iso(indicator.as_of_date) if indicator and not issue else (last or {}).get("date"), "forecasts": forecast_rows,
         "support_resistance": None if issue else SupportResistanceService(settings).latest(db, inst.id),
         "forecast_scenario": DecisionBoardService._forecast_scenario(
             (display_chart or {}).get("bars", []), forecast_rows), "holding": personal,
@@ -256,13 +261,30 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
         return {"ts_code": code, "interval": interval, "available": False, "bars": [], "reason": "invalid_ohlc", "actionable": False}
     strategy = settings.load_strategy()
     from app.providers.data_contract import LEGACY_SOURCES, UNVERIFIED_UNIT_SOURCES, price_history_issue
-    continuity_issue = price_history_issue(stored) if stored else None
+    continuity_issue = price_history_issue(research_stored) if research_stored else None
     legacy_units = settings.market_provider != "mock" and any(row["source"] in LEGACY_SOURCES + UNVERIFIED_UNIT_SOURCES for row in rows)
     if legacy_units:
         # Core chart fields are price-derived only. Do not publish volume-based
         # outputs or change the persisted shared indicator/strategy snapshots.
         rows = [{**row, "volume": None, "amount": None} for row in rows]
         research_rows = [{**row, "volume": None, "amount": None} for row in research_rows]
+    from app.services.decision_board_service import DecisionBoardService
+    provisional = db.scalar(select(DecisionBoardProvisionalInput).where(
+        DecisionBoardProvisionalInput.instrument_id == inst.id,
+    ).order_by(DecisionBoardProvisionalInput.observed_at.desc(), DecisionBoardProvisionalInput.id.desc()).limit(1))
+    provisional_status = DecisionBoardService(settings)._provisional_status(
+        db, inst.id, provisional, datetime.now(settings.timezone)
+    ) if provisional is not None else {"used_for_derived_values": False}
+    if provisional_status.get("used_for_derived_values") and provisional is not None:
+        provisional_bar = {
+            "date": iso(market_time(provisional.observed_at)), "open": provisional.open_price,
+            "high": provisional.high_price, "low": provisional.low_price,
+            "close": provisional.last_price, "volume": provisional.volume,
+            "amount": provisional.amount, "source": provisional.source,
+            "is_provisional": True, "timestamp_verified": bool(provisional.timestamp_verified),
+        }
+        rows.append(provisional_bar)
+        research_rows.append(provisional_bar)
     if continuity_issue:
         series = [{**row, "indicators": {}, "history_issue": continuity_issue} for row in rows]
     else:
@@ -273,7 +295,7 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
         ]
     now = datetime.now(SHANGHAI)
     for row in series:
-        row["is_partial"] = row["date"] == now.date().isoformat() and now.time() < time(15, 0)
+        row["is_partial"] = str(row["date"])[:10] == now.date().isoformat() and now.time() < time(15, 0)
     snapshot = db.scalar(select(IndicatorSnapshot).where(IndicatorSnapshot.instrument_id == inst.id).order_by(IndicatorSnapshot.as_of_date.desc(), IndicatorSnapshot.generated_at.desc(), IndicatorSnapshot.id.desc()).limit(1))
     matches = None
     if snapshot and series and iso(snapshot.as_of_date) == series[-1]["date"]:
@@ -288,13 +310,13 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
     return {
         "ts_code": code, "interval": interval, "available": bool(series), "bars": series[-limit:],
         "adjust": adjust, "currency": "CNY", "source_bars": len(rows), "history_truncated": truncated,
-        "indicator_version": strategy["indicator_version"], "indicator_basis": "shared_python_core_formulas_full_available_history",
+        "indicator_version": strategy["indicator_version"], "indicator_basis": "shared_python_core_formulas_plus_intraday_provisional" if provisional_status.get("used_for_derived_values") else "shared_python_core_formulas_full_available_history",
         "core_snapshot_match": matches, "source_as_of": rows[-1]["date"] if rows else None,
         "history_issue": continuity_issue, "return_basis": "unadjusted_price_not_total_return" if adjust == "none" else adjust,
         "qualification": continuity_issue if continuity_issue else "mock" if mock else "legacy_units_unverified" if legacy_units else "historical_price_only" if price_only else "research_only", "actionable": False,
         "cost_overlay_allowed": adjust == "none", "sr_overlay_allowed": len(adjustments) == 1 and bool(sr),
         "support_resistance": sr if len(adjustments) == 1 else None,
-        "indicator_note": "历史价格指标可展示；量能缺失或旧单位未验证，禁止生成操作级信号。" if price_only else "图表由服务端统一公式生成；支撑压力为当前快照，不是历史当时已知的点位。",
+        "indicator_note": "盘中指标基于临时行情计算，收盘后由正式日线替换；不生成操作级信号。" if provisional_status.get("used_for_derived_values") else "历史价格指标可展示；量能缺失或旧单位未验证，禁止生成操作级信号。" if price_only else "图表由服务端统一公式生成；支撑压力为当前快照，不是历史当时已知的点位。",
     }
 
 

@@ -543,6 +543,17 @@ class DecisionBoardService:
                 ),
             }
             freshness, data_status = "stale", "provisional_unverified_research_only" if not provisional.timestamp_verified else "provisional_research_only"
+        indicator_as_of = (
+            provisional.observed_at.isoformat()
+            if provisional_status["used_for_derived_values"] and provisional is not None
+            else indicator.as_of_date.isoformat() if indicator is not None
+            else (display_history or {}).get("source_as_of")
+        )
+        indicator_display_basis = (
+            "intraday_provisional_research"
+            if provisional_status["used_for_derived_values"]
+            else "historical_price_only" if display_history else "persisted_snapshot"
+        )
         history, confirmed_levels = self._history_and_levels(db, instrument.id)
         if stale_history:
             confirmed_levels = {}
@@ -642,7 +653,7 @@ class DecisionBoardService:
             "sector": metric(grade_row.get("sector"), {"label": "未验证 / 不可用", "status": "missing", "coverage_count": 0}),
             "snapshot_issues": {"indicator": indicator_issues, "forecasts": forecast_issues},
             "indicator_comparison": {
-                "as_of_date": indicator.as_of_date.isoformat() if indicator is not None else (display_history or {}).get("source_as_of"),
+                "as_of_date": indicator_as_of,
                 "previous_as_of_date": (previous_values or {}).get("_as_of_date"),
                 "basis": comparison_basis,
                 "values": {key: {"current": finite_or_none(values.get(key)), "previous": finite_or_none((previous_values or {}).get(key))}
@@ -650,8 +661,8 @@ class DecisionBoardService:
             },
             "indicator": {
                 "version": indicator.version if indicator is not None else None,
-                "as_of_date": indicator.as_of_date.isoformat() if indicator is not None else (display_history or {}).get("source_as_of"),
-                "display_basis": "historical_price_only" if display_history else "persisted_snapshot",
+                "as_of_date": indicator_as_of,
+                "display_basis": indicator_display_basis,
                 "data_quality": indicator.data_quality if indicator is not None else None,
                 "td_label": (grade_row.get("td") or {}).get("label", "—"),
                 "td_basis": "TD9 setup only; TD13 not implemented",

@@ -246,6 +246,8 @@ def test_provisional_input_is_isolated_from_daily_bars(db_session, bootstrapped)
     row = next(item for item in payload["rows"] if item["ts_code"] == "510300.SH")
     assert row["provisional"]["used_for_derived_values"] is True
     assert row["provisional"]["status"] == "computed_unverified_research_only"
+    assert row["indicator"]["display_basis"] == "intraday_provisional_research"
+    assert row["indicator"]["as_of_date"].startswith("2026-08-31T14:30")
 
 
 @pytest.mark.parametrize(

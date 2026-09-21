@@ -13,7 +13,7 @@ from sqlalchemy import select
 from app.models import DailyBar, Instrument
 from app.providers.base import ProviderError
 
-VERSION = "cn-fund-shares-cny-v1.0.9-freshness-recovery"
+VERSION = "cn-fund-shares-cny-v1.0.10-intraday-indicator-view"
 LEGACY_SOURCES = ("akshare", "tushare", "tushare:fund_daily")
 UNVERIFIED_UNIT_SOURCES = ("akshare:sina:v101", "akshare:sina:v102")
 RESEARCH_ADJUST = "corporate_action_research"

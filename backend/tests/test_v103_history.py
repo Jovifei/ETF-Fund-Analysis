@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -39,6 +39,27 @@ def test_missing_volume_does_not_block_price_chart_or_detail(db_session):
     assert detail['forecasts'] == {}
     assert result['bars'][-1]['volume'] is None
     db.rollback()
+
+
+def test_intraday_provisional_updates_daily_chart_indicator_series(db_session):
+    inst = instrument(db_session)
+    settings = get_settings().model_copy(update={'market_provider':'akshare'})
+    from app.services.decision_board_service import DecisionBoardService
+    observed = datetime.now(settings.timezone).replace(second=0, microsecond=0)
+    DecisionBoardService(settings).record_provisional_input(
+        db_session, ts_code=inst.ts_code, observed_at=observed,
+        source='fixture:intraday', timestamp_verified=False,
+        open_price=2.8, high_price=2.9, low_price=2.7, last_price=2.85,
+        volume=1200, amount=3420, pct_change_percent_points=0.5,
+    )
+
+    result = chart_data(db_session, settings, inst.ts_code, '1d', 100)
+
+    assert result['bars'][-1]['is_provisional'] is True
+    assert result['bars'][-1]['date'].startswith(observed.date().isoformat())
+    assert result['bars'][-1]['indicators']['macd_dif'] is not None
+    assert result['source_as_of'].startswith(observed.date().isoformat())
+    assert '盘中指标' in result['indicator_note']
 
 
 def test_legacy_units_only_hide_volume_not_price_indicators(db_session):
