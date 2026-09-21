@@ -34,6 +34,15 @@ class CorporateActionEvent:
 
 # These are official fund split notices, not ratios inferred from prices.
 _OFFICIAL_ACTIONS = {
+    "512200.SH": (
+        CorporateActionEvent("512200.SH", date(2024, 8, 9), date(2024, 8, 12), "100000000:35806260", "sse_512200_20240806_RYUS"),
+    ),
+    "512800.SH": (
+        CorporateActionEvent("512800.SH", date(2025, 7, 4), date(2025, 7, 7), "1:2", "sse_512800_20250707_PJ9L"),
+    ),
+    "515220.SH": (
+        CorporateActionEvent("515220.SH", date(2024, 4, 11), date(2024, 4, 12), "1:2", "sse_515220_20240412_5CZN"),
+    ),
     "512000.SH": (
         CorporateActionEvent("512000.SH", date(2025, 8, 1), date(2025, 8, 4), "1:2", "sse_512000_20250729"),
     ),

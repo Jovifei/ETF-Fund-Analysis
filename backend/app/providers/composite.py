@@ -104,7 +104,8 @@ class CompositeProvider(MarketProvider):
         latest = max((row.trade_date for row in rows), default=None)
         covers_target = latest is not None and latest >= end_date
         if source in DOCUMENTED_UNIT_SOURCES:
-            issue = price_history_issue(rows)
+            from app.providers.corporate_action_contract import research_history_rows
+            issue = price_history_issue(research_history_rows(rows, rows[0].ts_code))
             if issue:
                 return 0, covers_target, issue
             if any(getattr(row, "volume", None) is None or getattr(row, "amount", None) is None for row in rows):

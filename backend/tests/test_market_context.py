@@ -1322,9 +1322,11 @@ def test_scheduler_context_failure_isolated_and_terminal_attempt_throttles_retry
     second = scheduler.tick()
 
     assert "refresh_market_context" in first["executed"]
-    assert [name for name in calls[:5]] == [
+    assert [name for name in calls[:7]] == [
         "sync_instruments",
         "refresh_quotes",
+        "refresh_sector_snapshots",
+        "refresh_decision_board",
         "refresh_market_context",
         "refresh_signals",
         "refresh_news",

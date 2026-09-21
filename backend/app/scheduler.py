@@ -184,6 +184,12 @@ DAILY_DEPENDENCIES = {
 
 
 def settled_pipeline_tasks(db, settings, now):
+    from datetime import time as wall_time
+    local = now.astimezone(settings.timezone) if now.tzinfo else now.replace(tzinfo=settings.timezone)
+    # Long historical repairs hold the shared pipeline lock. Reserve this
+    # window for quotes and board publication, including the lunch catch-up.
+    if wall_time(9, 15) <= local.time().replace(tzinfo=None) < wall_time(15, 15):
+        return []
     from app.services.settlement import session_refresh_due
     due = {name for name, dependencies in DAILY_DEPENDENCIES.items()
            if session_refresh_due(db, settings, name, now, dependencies=dependencies)}
@@ -355,6 +361,12 @@ def _tick_impl(settings, provider, task_holder: list[object | None]) -> dict:
                 )
 
         if not after_close_due:
+            if (session_quote_window_open(now, is_trade_day=is_trade_day)
+                and _due(_last_attempt_or_success(db, "refresh_sector_snapshots"), now,
+                         int(settings.market_context_refresh_minutes))):
+                _run_guarded(tasks, db, "refresh_sector_snapshots", executed=executed, failures=failures)
+                # Publish the new board evidence even when no ETF slot is due.
+                _run_guarded(tasks, db, "refresh_decision_board", executed=executed, failures=failures)
             refresh_optional_context()
 
         if (

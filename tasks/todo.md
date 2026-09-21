@@ -1,3 +1,13 @@
+# Freshness recovery — 2026-09-21
+
+- [x] Trace live ingestion, computation and scheduler outcomes.
+- [x] Reproduce split rejection and intraday historical retry starvation.
+- [x] Apply existing corporate-action research checks during provider selection; register three official events.
+- [ ] Test, CI, merge, deploy and verify per-instrument dates through the published board.
+
+Source notices: SSE 512200_20240806_RYUS, 512800_20250707_PJ9L, 515220_20240412_5CZN.
+Daily research still uses settled bars; live quotes have their own source timestamps.
+
 # Public unit evidence recomputation — 2026-09-21
 
 ## Plan
