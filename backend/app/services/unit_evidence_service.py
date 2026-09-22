@@ -9,17 +9,40 @@ from app.providers.unit_certification import (
     UnitCertification,
     UnitObservation,
     certify_absolute_units,
+    _canonical, _claimed_matches, _amount_matches,
 )
 from app.utils.hashing import stable_hash
+from app.providers.data_contract import finite
 
 
 def _observation_hash(value: UnitObservation) -> str:
+    # SQL Float roundtrips integers as floats. Bind canonical numeric content,
+    # not incidental Python int/float/optional-conversion representations.
+    volume, amount, _ = _canonical(value)
+    def numeric(item):
+        return float(item) if finite(item) else None
     return stable_hash({
         "ts_code": value.ts_code, "trade_date": value.trade_date.isoformat(),
-        "close": value.close, "source": value.source, "raw_volume": value.raw_volume,
-        "raw_amount": value.raw_amount, "converted_volume": value.converted_volume,
-        "converted_amount": value.converted_amount,
+        "close": numeric(value.close), "source": value.source,
+        "raw_volume": numeric(value.raw_volume), "raw_amount": numeric(value.raw_amount),
+        "converted_volume": numeric(volume), "converted_amount": numeric(amount),
     })
+
+
+def _bar_binding_reasons(bar, primary_source, primary_close, result) -> list[str]:
+    reasons = []
+    if bar.source != primary_source:
+        reasons.append("daily_bar_source_binding_mismatch")
+    if not finite(bar.close) or not finite(primary_close) or abs(float(bar.close) - float(primary_close)) > 1e-8:
+        reasons.append("daily_bar_close_binding_mismatch")
+    if not all(finite(value) for value in (bar.volume, bar.amount, result.volume, result.amount)):
+        reasons.append("daily_bar_quantity_missing")
+    else:
+        if not _claimed_matches(bar.volume, result.volume):
+            reasons.append("daily_bar_volume_binding_mismatch")
+        if not _amount_matches(bar.amount, result.amount):
+            reasons.append("daily_bar_amount_binding_mismatch")
+    return reasons
 
 
 def _units(source: str) -> tuple[str | None, str | None]:
@@ -29,19 +52,15 @@ def _units(source: str) -> tuple[str | None, str | None]:
 
 def record_unit_evidence(db, instrument, bar, primary: UnitObservation, independent: UnitObservation,
                          *, primary_upstream: str, independent_upstream: str):
+    if bar.instrument_id != instrument.id:
+        raise ValueError("unit evidence bar instrument mismatch")
     if primary.ts_code != instrument.ts_code or independent.ts_code != instrument.ts_code:
         raise ValueError("unit evidence instrument mismatch")
     if primary.trade_date != bar.trade_date or independent.trade_date != bar.trade_date:
         raise ValueError("unit evidence trade date mismatch")
     result = certify_absolute_units(primary, independent)
     reasons = list(result.reasons)
-    if bar.volume is None or bar.amount is None or result.volume is None or result.amount is None:
-        reasons.append("daily_bar_quantity_missing")
-    else:
-        if abs(float(bar.volume) - float(result.volume)) > 0.5:
-            reasons.append("daily_bar_volume_binding_mismatch")
-        if abs(float(bar.amount) - float(result.amount)) > 0.5:
-            reasons.append("daily_bar_amount_binding_mismatch")
+    reasons.extend(_bar_binding_reasons(bar, primary.source, primary.close, result))
     if not primary_upstream or not independent_upstream or primary_upstream == independent_upstream:
         reasons.append("independent_observation_not_second_upstream")
     certified = result.certified and not reasons
@@ -58,6 +77,8 @@ def record_unit_evidence(db, instrument, bar, primary: UnitObservation, independ
         UnitCertificationEvidence.independent_input_hash == independent_hash,
     ))
     if existing is not None:
+        existing.primary_upstream = primary_upstream
+        existing.independent_upstream = independent_upstream
         existing.primary_volume_unit = primary_units[0]
         existing.primary_amount_unit = primary_units[1]
         existing.independent_volume_unit = independent_units[0]
@@ -92,6 +113,8 @@ def collect_unit_evidence(db, provider, *, codes=None, settled_days: int = 5, ru
     """Collect bounded same-day observations without changing persisted bars."""
     from app.services.audit_service import AuditTimer, record_provider_audit
 
+    if isinstance(settled_days, bool) or not 1 <= settled_days <= 30:
+        raise ValueError("settled_days must be between 1 and 30")
     candidates = provider.providers if isinstance(provider, CompositeProvider) else [provider]
     candidates = [item for item in candidates if hasattr(item, "fetch_daily_bars")]
     wanted = {value.upper() for value in codes or []}
@@ -99,6 +122,7 @@ def collect_unit_evidence(db, provider, *, codes=None, settled_days: int = 5, ru
     if wanted:
         instruments = [item for item in instruments if item.ts_code.upper() in wanted or item.symbol in wanted]
     saved = 0
+    expected_rows = 0
     failures = []
     for instrument in instruments:
         bars = db.scalars(select(DailyBar).where(DailyBar.instrument_id == instrument.id)
@@ -107,6 +131,7 @@ def collect_unit_evidence(db, provider, *, codes=None, settled_days: int = 5, ru
         if not bars:
             failures.append({"ts_code": instrument.ts_code, "reason": "history_missing"})
             continue
+        expected_rows += len(bars)
         observations = {}
         for candidate in candidates:
             records = []
@@ -125,17 +150,26 @@ def collect_unit_evidence(db, provider, *, codes=None, settled_days: int = 5, ru
                         break
             record_provider_audit(db, run_id=run_id or "unit-evidence", operation="certify_units",
                                   provider=candidate, result=records, error=error, latency_ms=timer.elapsed_ms)
+            if error is not None:
+                failures.append({"ts_code": instrument.ts_code, "reason": "independent_provider_failed"})
             for item in records:
+                if item.ts_code != instrument.ts_code or not bars[0].trade_date <= item.trade_date <= bars[-1].trade_date:
+                    failures.append({"ts_code": instrument.ts_code, "reason": "provider_evidence_scope_mismatch"})
+                    continue
                 if item.raw_volume is None or item.raw_amount is None or not item.source_upstream:
                     continue
                 observations[(item.trade_date, item.source)] = item
         for bar in bars:
             primary_row = observations.get((bar.trade_date, bar.source))
             if primary_row is None:
+                failures.append({"ts_code": instrument.ts_code, "trade_date": bar.trade_date.isoformat(),
+                                 "reason": "primary_observation_missing"})
                 continue
             independent_row = next((item for (day, _), item in observations.items()
                                     if day == bar.trade_date and item.source_upstream != primary_row.source_upstream), None)
             if independent_row is None:
+                failures.append({"ts_code": instrument.ts_code, "trade_date": bar.trade_date.isoformat(),
+                                 "reason": "independent_same_day_observation_missing"})
                 continue
             primary = UnitObservation(instrument.ts_code, bar.trade_date, primary_row.close, primary_row.source,
                                       primary_row.raw_volume, primary_row.raw_amount,
@@ -149,7 +183,14 @@ def collect_unit_evidence(db, provider, *, codes=None, settled_days: int = 5, ru
                 independent_upstream=independent_row.source_upstream,
             )
             saved += int(evidence.certified)
-    return {"run_id": run_id, "status": "succeeded" if not failures else "partial",
+            if not evidence.certified:
+                failures.append({"ts_code": instrument.ts_code, "trade_date": bar.trade_date.isoformat(),
+                                 "reason": "unit_evidence_rejected", "reasons": evidence.reasons_json})
+    if not instruments:
+        failures.append({"reason": "enabled_instruments_missing"})
+    status = "succeeded" if expected_rows > 0 and saved == expected_rows and not failures else "partial" if saved else "failed"
+    return {"run_id": run_id, "status": status, "expected_rows": expected_rows,
+            "uncertified_rows": expected_rows - saved,
             "instruments": len(instruments), "certified_rows": saved, "failures": failures}
 
 
@@ -174,9 +215,12 @@ def _recompute(row, ts_code: str) -> UnitCertification:
     if _observation_hash(primary) != row.primary_input_hash or _observation_hash(independent) != row.independent_input_hash:
         return UnitCertification(False, result.volume, result.amount, result.ratio_sanity_passed,
                                  (*result.reasons, "evidence_input_hash_mismatch"))
-    if row.primary_upstream == row.independent_upstream:
+    if not row.primary_upstream or not row.independent_upstream or row.primary_upstream == row.independent_upstream:
         return UnitCertification(False, result.volume, result.amount, result.ratio_sanity_passed,
                                  (*result.reasons, "independent_observation_not_second_upstream"))
+    if not row.certified:
+        return UnitCertification(False, result.volume, result.amount, result.ratio_sanity_passed,
+                                 (*result.reasons, *row.reasons_json, "stored_evidence_rejected"))
     return result
 
 
@@ -185,6 +229,8 @@ def certify_stored_history(db, instrument_id: int, bars) -> UnitCertification:
     if not bars:
         return UnitCertification(False, None, None, False, ("independent_same_day_observation_missing",))
     instrument = db.get(Instrument, instrument_id)
+    if instrument is None or any(getattr(bar, "instrument_id", None) != instrument_id for bar in bars):
+        return UnitCertification(False, None, None, False, ("daily_bar_instrument_binding_mismatch",))
     rows = db.scalars(select(UnitCertificationEvidence).where(
         UnitCertificationEvidence.instrument_id == instrument_id,
         UnitCertificationEvidence.trade_date.in_([bar.trade_date for bar in bars]),
@@ -199,6 +245,10 @@ def certify_stored_history(db, instrument_id: int, bars) -> UnitCertification:
             reasons.append("evidence_binding_stale" if stale else "evidence_range_incomplete")
             continue
         result = _recompute(row, instrument.ts_code if instrument is not None else "unknown")
+        binding = _bar_binding_reasons(bar, row.primary_source, row.primary_close, result)
+        if binding:
+            result = UnitCertification(False, result.volume, result.amount,
+                                       result.ratio_sanity_passed, (*result.reasons, *binding))
         results.append(result)
         reasons.extend(result.reasons)
         if not result.certified:
