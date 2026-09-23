@@ -941,32 +941,24 @@ Prevent a reachable FTShare endpoint from being marked qualified when absolute-u
 
 ## Plan
 
-- [x] Read project rules, latest handoff/receipt, lessons, and project memory; protect the clean primary checkout.
-- [x] Fetch and verify current refs: R1 is already on main; candidate branch is at `9ac2be8587043cfde72798503f33bd89dc5f0ed8`.
-- [x] Verify five successful exact-SHA CI workflows and review the three additional commits/files.
-- [x] Read-only inspect the actual public production containers, source label, mounts, migration, health, backup disk, and host capacity.
-- [x] Update root STATUS/HANDOFF, docs index, and add a release receipt bound to exact source/tree/image/backup/deploy evidence.
-- [x] Run project checks affected by documentation/code identity; account/R1 evidence plus release-contract tests pass 37/37, compileall, Node syntax, typecheck/build (1 GiB Node heap), and diff check pass locally.
-- [x] Fast-forward main and push the reviewed release commit; current main is `2aa684aa9cd9d8d205a775a224ade32f8d9cf563`.
-- [x] Fix Linux backup-script line endings found during pre-deploy; initial shebang failure preserved; `.gitattributes` and regression pass; CI on `d879f54` all green.
-- [x] Commit/push the build-only Node/Cargo caps; local typecheck/build and focused 37-test suite pass.
-- [x] Lower the build-only Node heap cap to the measured 512 MiB local limit; local typecheck/build and focused 37-test suite pass.
-- [x] Add a GitHub Actions step to export the smoke-tested, SHA/tree-labeled image with a SHA-256 sidecar; run `35843677296` passed and its artifact was downloaded and checked.
-- [x] Back up production; gzip/SHA-256/perms pass; restore the dump in an isolated no-egress PostgreSQL copy (106 tables, migration `e609200001`).
-- [x] Rehearse candidate image migration/diagnostics on the copy, deploy the full image with source mounts absent, and verify API/worker/scheduler/routes; no rollback was needed.
-- [ ] Update the mapped Obsidian checkpoint and mirror only allowlisted project docs after DryRuns; verify both results.
-- [ ] Final review: source SHA, remote main, deployed revision/image, backup checksum/restore evidence, docs, memory result, and unresolved data-qualification boundary.
+- [x] Read project rules, latest handoff/receipt, lessons, and project memory; preserve the primary checkout until its state was checked.
+- [x] Verify R1 is an ancestor of main, review candidate `9ac2be8587043cfde72798503f33bd89dc5f0ed8`, and confirm the exact-SHA CI records.
+- [x] Inspect the public production target, image/source labels, mounts, migration, health, backup, and capacity; leave the stale unrelated Compose root untouched.
+- [x] Fix shell line endings and bounded CI build resources; export a smoke-tested, source/tree-labeled image artifact with checksums.
+- [x] Back up production and verify checksum/permissions; restore a copy in an isolated no-egress PostgreSQL environment and rehearse migration/diagnostics.
+- [x] Deploy the verified full image and check API, worker, scheduler, routes, static asset, auth response, migration, and source-mount absence.
+- [x] Update `STATUS.md`, `HANDOFF.md`, docs index, account handoff, and the production deployment receipt; push main docs commit `cc658676e10766b44a485599c615a6a71a023c0f`.
+- [x] Synchronize the mapped Obsidian checkpoint after fresh DryRun/target checks and mirror allowlisted docs; verify hashes and preserve the unrelated Tesla pending checkpoint.
+- [x] Fast-forward the original clean checkout from `825767c` to `cc658676e10766b44a485599c615a6a71a023c0f`; verify it is clean.
+- [x] Final review exact main/document SHA versus deployed application SHA/tree/image, backup/restore evidence, public health, memory sync, and open data gates.
 
 ## Review
 
-Pending Obsidian synchronization and the final docs-only commit/CI review.
-
-- Main is at `0dbd3fee58a3f5e080aacbcd8eae8d5964aec54f`; original primary checkout remains untouched at its earlier SHA and is behind origin/main.
-- Public health is v1.0.8; the active production API/worker/scheduler image has OCI revision `825767c`, migration `e609200001`, and mounts only reports/backups. A separate older Compose project/root has stale bind-mounted services and many untracked paths; it is not the public target and must remain untouched.
-- Production host has 1.8 GiB RAM and concurrent services. Remote builds triggered kernel OOM despite 0.6 CPU/1.6 GiB cgroup limits; stop compiling there and deploy only the checksum-verified artifact from a CI image whose smoke passed.
-- First backup attempt stopped before script body: the archived shebang resolved to `bash\r`. No dump was created. A regression reproduced CRLF in all nine shell entrypoints; `.gitattributes` now pins LF and the new test passed.
-- Three remote builds hit exit 137 during Vue typecheck (1.2/1.5 GiB and 1.6 GiB with 1 GiB Node heap); a fourth 512 MiB Node-heap attempt coincided with a kernel OOM and scheduler restart. All failures are retained; no candidate image was deployed.
-- OOM kernel records timestamped the UID 10001 Python kill at 16:46 and scheduler start at 16:48. API stayed healthy, worker restart count stayed 0, scheduler is currently running; post-restart scheduler logs contained 23 ProviderError-class lines. The exact Python container attribution is probable from timing, not proven by a per-process container mapping.
-- GitHub CI run `35843677296` on `0dbd3fe` built and smoke-tested the image artifact; ZIP/image SHA-256, source SHA/tree, and loaded Docker image ID matched. PostgreSQL restore copy upgrade/check and packaged workspace smoke passed.
-- Production `/api/health` is `ok`, root HTTP 200, Profile asset HTTP 200/immutable, unauthenticated account GET 401; API/worker healthy and scheduler running, all on the deployed source-labeled image.
-- Real-data qualification remains UNKNOWN; no business rows were audited or recertified.
+- Current main/document HEAD: `cc658676e10766b44a485599c615a6a71a023c0f`. Runtime application image is intentionally bound to source SHA `0dbd3fee58a3f5e080aacbcd8eae8d5964aec54f`, tree `f8607b3de8decde6065ccc559c5c26b0262b8e6b`; the later main commit contains documentation/status only.
+- Exact-source CI records on `0dbd3fe`: run `35843677296` (CI), `35843677328` (workspace CI), and `35843677240` (platform audit), all success. Local GitHub CLI refresh was unavailable because this host has no `gh` login; the release receipt retains the previously verified run IDs and conclusions.
+- Production image `etf-workspace:production-0dbd3fe`, ID `sha256:251a0623c694b07525bd398b52f41eecc17ec3d1216912c6d593b704fc8ae81a`, has matching OCI revision/tree labels. API, worker, and one scheduler use this image; only reports/backups are mounted from host. The separate stale Compose root was not modified.
+- Backup `backups/fund_decision_20260923_141523_Q1UTbz.sql.gz`, SHA-256 `f1136db243b7b6913bdaf9bb902b88ab4e94e90f334350dcd88d0cc7a56d742f`; gzip and sidecar checks passed. Restore-copy rehearsal: 106 tables, Alembic `e609200001`, upgrade/check and packaged smoke passed; no production rows were written by the rehearsal.
+- Public health was rechecked during closeout: HTTP 200, `status=ok`, production, `public_composite`, auth enabled, API version `1.0.8`. Prior deploy checks also verified root and Profile asset 200, unauthenticated account API 401, API/worker healthy, scheduler running (no healthcheck configured).
+- Four production-host frontend builds ended exit 137; the last coincided with a kernel kill of UID 10001 Python and scheduler restart. API remained healthy and worker did not restart; scheduler recovered, and deployment then used the hosted CI artifact with no further host builds. Exact killed-process/container attribution was not proven; the timing correlation and subsequent `ProviderError` count are retained in the deployment receipt. No rollback was needed.
+- Obsidian checkpoint was applied through a fresh, hash-guarded DryRun plan because the generic pending checkpoint belonged to `tesla-speed`; the unrelated queue was preserved. The project checkpoint load passed, and mirror copied 37 allowlisted documents with zero skipped; three critical mirrored document hashes matched.
+- Real-data qualification remains **UNKNOWN**. No production data audit/recertification, provider fetch, certified/hash/raw OHLCV edit, account write, or model call was performed. R2–R6 and A-U4/A-U5 remain open; no forecast/actionability gate was loosened.
