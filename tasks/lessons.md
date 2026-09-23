@@ -1,7 +1,7 @@
 # Lessons
 
 - 2026-09-23: Windows checkout settings can leave tracked `.sh` files as CRLF in the Git blob; Linux then fails before the script body with `/usr/bin/env: bash\r`. Pin `*.sh text eol=lf` in `.gitattributes` and assert shell entrypoints contain no CR byte; `shellcheck` alone does not catch the shebang failure.
-- 2026-09-23: A green CI image build can exceed a small production host's cgroup during Vue typechecking. Set a build-stage-only Node heap ceiling, keep Docker build CPU/memory bounded, and verify the production service before replacing any container; do not raise limits until the host can safely provide them.
+- 2026-09-23: A green CI image build can exceed a small production host's cgroup during Vue typechecking or native wheel compilation. Set build-stage-only Node/Cargo limits, keep Docker build CPU/memory bounded, and verify production before replacing containers; do not raise limits until the host can safely provide them.
 
 - 2026-09-21: 验收更新必须对账抓取、计算、发布、页面四层；部分失败的历史补抓不得长期占用盘中流水线。数据源选择与业务计算必须使用同一官方企业行为研究视图。
 

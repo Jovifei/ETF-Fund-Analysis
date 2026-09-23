@@ -8,6 +8,7 @@ COPY frontend ./
 RUN npm run typecheck && npm run build
 
 FROM python:3.12-slim AS builder
+ENV CARGO_BUILD_JOBS=1
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \

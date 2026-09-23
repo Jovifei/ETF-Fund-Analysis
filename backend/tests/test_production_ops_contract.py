@@ -52,3 +52,4 @@ def test_production_dockerfile_installs_the_wheel_built_from_current_source() ->
 def test_frontend_builder_caps_node_heap_for_small_production_hosts() -> None:
     source = (ROOT / "backend" / "Dockerfile").read_text(encoding="utf-8")
     assert "ENV NODE_OPTIONS=--max-old-space-size=1024" in source
+    assert "ENV CARGO_BUILD_JOBS=1" in source
