@@ -1,5 +1,7 @@
 # Lessons
 
+- 2026-09-23: Windows checkout settings can leave tracked `.sh` files as CRLF in the Git blob; Linux then fails before the script body with `/usr/bin/env: bash\r`. Pin `*.sh text eol=lf` in `.gitattributes` and assert shell entrypoints contain no CR byte; `shellcheck` alone does not catch the shebang failure.
+
 - 2026-09-21: 验收更新必须对账抓取、计算、发布、页面四层；部分失败的历史补抓不得长期占用盘中流水线。数据源选择与业务计算必须使用同一官方企业行为研究视图。
 
 - 2026-09-21: 公共源量额对账要同时使用小数绝对阈值和规模相关相对阈值；只用固定 0.5 元会误拒绝大成交额的正常整数舍入，但相对阈值必须保持在远低于数量级错误的范围。

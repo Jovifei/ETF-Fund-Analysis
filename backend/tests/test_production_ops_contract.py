@@ -12,6 +12,16 @@ def test_backup_script_forces_owner_only_permissions() -> None:
     assert 'chmod 600 "$pending/archive.sql.gz" "$pending/archive.sha256"' in source
 
 
+def test_linux_shell_entrypoints_use_lf_line_endings() -> None:
+    scripts = [
+        *(ROOT / "deploy" / "aliyun").glob("*.sh"),
+        *(ROOT / "scripts").glob("*.sh"),
+    ]
+    assert scripts
+    for path in scripts:
+        assert b"\r" not in path.read_bytes(), f"{path.relative_to(ROOT)} must use LF for Linux shebangs"
+
+
 def test_aliyun_deploy_hardens_server_local_private_directories() -> None:
     source = (ROOT / "deploy" / "aliyun" / "deploy.sh").read_text(encoding="utf-8")
     assert "umask 077" in source

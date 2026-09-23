@@ -937,3 +937,27 @@ Prevent a reachable FTShare endpoint from being marked qualified when absolute-u
 - RED failed with missing `_qualification`; GREEN related suite passed 96 tests.
 - Full backend pytest exited 0. `compileall`, Node syntax, scoped Ruff, and `git diff --check` exited 0.
 - Five-symbol application probes returned zero records and `CapabilityUnavailable`; Skill endpoints returned 404/405. FTShare remains disabled/unqualified and no runtime or production state changed.
+# R1 + A-U1–A-U3 merge, release, docs, and project memory — 2026-09-23
+
+## Plan
+
+- [x] Read project rules, latest handoff/receipt, lessons, and project memory; protect the clean primary checkout.
+- [x] Fetch and verify current refs: R1 is already on main; candidate branch is at `9ac2be8587043cfde72798503f33bd89dc5f0ed8`.
+- [x] Verify five successful exact-SHA CI workflows (plus fresh main CI; one run still in progress) and review the three additional commits/files.
+- [ ] Read-only inspect production source/containers/health and the latest backup; establish a restorable rollback point.
+- [ ] Update root STATUS/HANDOFF, docs index, and add a concise release receipt bound to exact source/tree/image/backup/deploy evidence.
+- [x] Run project checks affected by documentation/code identity; account/R1 evidence tests pass 30/30, compileall and diff check pass.
+- [x] Fast-forward main and push the reviewed release commit; remote main reads back `9ac2be8587043cfde72798503f33bd89dc5f0ed8`.
+- [ ] Fix and revalidate the Linux backup-script line endings found during pre-deploy; preserve the initial shebang failure and rerun CI on the fix SHA.
+- [ ] Back up production, rehearse restore/diagnosis safely, deploy the full image with source mounts absent, verify API/worker/scheduler/routes/data state, and roll back on failure.
+- [ ] Update the mapped Obsidian checkpoint and mirror only allowlisted project docs after DryRuns; verify both results.
+- [ ] Final review: source SHA, remote main, deployed revision/image, backup checksum/restore evidence, docs, memory result, and unresolved data-qualification boundary.
+
+## Review
+
+Pending execution. Do not represent CI, image build, backup, merge, deploy, or memory synchronization as complete until its own evidence is captured.
+
+- Main fast-forward completed; original primary checkout remains untouched at its previously checked-out SHA and is now behind origin/main.
+- Public health is v1.0.8; the active production API/worker/scheduler image has OCI revision `825767c`, migration `e609200001`, and mounts only reports/backups. A separate older Compose project/root has stale bind-mounted services and many untracked paths; it is not the public target and must remain untouched.
+- Production host has 1.8 GiB RAM, low current headroom, and concurrent services. Schedule image build/switch only after rechecking scheduler load and available memory; never stop unrelated projects to make room.
+- First backup attempt stopped before script body: the archived shebang resolved to `bash\r`. No dump was created. A regression reproduced CRLF in all nine shell entrypoints; `.gitattributes` now pins LF and the new test passed.
