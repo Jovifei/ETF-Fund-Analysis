@@ -949,7 +949,8 @@ Prevent a reachable FTShare endpoint from being marked qualified when absolute-u
 - [x] Run project checks affected by documentation/code identity; account/R1 evidence plus release-contract tests pass 37/37, compileall, Node syntax, typecheck/build (1 GiB Node heap), and diff check pass locally.
 - [x] Fast-forward main and push the reviewed release commit; remote main reads back `9ac2be8587043cfde72798503f33bd89dc5f0ed8`.
 - [x] Fix Linux backup-script line endings found during pre-deploy; initial shebang failure preserved; `.gitattributes` and regression pass; CI on `d879f54` all green.
-- [ ] Commit/push the build-only Node heap cap; wait for exact-SHA CI before rebuilding the image.
+- [x] Commit/push the build-only Node/Cargo caps (`b240dcc`); exact-SHA CI passed.
+- [ ] Lower the build-only Node heap cap to the measured 512 MiB local limit; rerun focused tests and CI before image build.
 - [x] Back up production; gzip/SHA-256/perms pass; restore the dump in an isolated no-egress PostgreSQL copy (106 tables, migration `e609200001`).
 - [ ] Rehearse candidate image migration/diagnostics on the copy, deploy the full image with source mounts absent, verify API/worker/scheduler/routes, and roll back on failure.
 - [ ] Update the mapped Obsidian checkpoint and mirror only allowlisted project docs after DryRuns; verify both results.
