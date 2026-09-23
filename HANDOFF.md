@@ -1,6 +1,10 @@
-# 接手入口：v1.0.5 资格闭环（2026-09-20）
+# 当前接手入口：R1 与 A-U1–A-U3 生产版（2026-09-23）
 
-先读 AGENTS.md → STATUS.md → docs/audits/CORPORATE_ACTIONS_20260920.md → docs/audits/FTSHARE_QUALIFICATION_20260920.md。企业行为修复基线是 `172db210e3e7e4daa252bdd2746466f79e5da595`；接手时重新核对本地 HEAD 与 `origin/main` 的完整 SHA，不要用旧 ZIP、旧 PR 或旧生产收据覆盖当前状态。
+先读 `AGENTS.md`、本页、`STATUS.md`、[本次生产收据](docs/PRODUCTION_DEPLOYMENT_RECEIPT_AU_20260923.md)、[A-U1–A-U3 接收合同](docs/UI_ACCOUNT_HANDOFF_20260923.md)。当前部署源码固定为 `0dbd3fee58a3f5e080aacbcd8eae8d5964aec54f`，tree 为 `f8607b3de8decde6065ccc559c5c26b0262b8e6b`，镜像 ID 为 `sha256:251a0623c694b07525bd398b52f41eecc17ec3d1216912c6d593b704fc8ae81a`；API/worker/scheduler 同镜像，数据库 head `e609200001`。R1 在此前已合并；本次 A-U1–A-U3 与构建/运维脚本修复随后快进到 `main`。
+
+本次没读取或修改生产业务行，没有刷新真实 Provider，也没有重标 certified/hash/原始 OHLCV。真实数据资格保持 **UNKNOWN**，不能从健康检查或 CI 通过推导交易资格。接下来按顺序完成 R2 更新及时性、R3 详情空态/决策解释、R4 价格研究基准和完整缠论、R5 真人本地 Codex；真实数据复审和后续发布作为 R6 单独授权。账户邮箱/短信/微信验证、找回和永久删除仍未实现；当前账户关闭只停止登录并保留数据。
+
+## 原有数据保护与回滚合同
 
 ## 认证与数据保护合同
 

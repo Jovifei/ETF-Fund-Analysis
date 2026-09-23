@@ -945,25 +945,28 @@ Prevent a reachable FTShare endpoint from being marked qualified when absolute-u
 - [x] Fetch and verify current refs: R1 is already on main; candidate branch is at `9ac2be8587043cfde72798503f33bd89dc5f0ed8`.
 - [x] Verify five successful exact-SHA CI workflows and review the three additional commits/files.
 - [x] Read-only inspect the actual public production containers, source label, mounts, migration, health, backup disk, and host capacity.
-- [ ] Update root STATUS/HANDOFF, docs index, and add a concise release receipt bound to exact source/tree/image/backup/deploy evidence.
+- [x] Update root STATUS/HANDOFF, docs index, and add a release receipt bound to exact source/tree/image/backup/deploy evidence.
 - [x] Run project checks affected by documentation/code identity; account/R1 evidence plus release-contract tests pass 37/37, compileall, Node syntax, typecheck/build (1 GiB Node heap), and diff check pass locally.
 - [x] Fast-forward main and push the reviewed release commit; current main is `2aa684aa9cd9d8d205a775a224ade32f8d9cf563`.
 - [x] Fix Linux backup-script line endings found during pre-deploy; initial shebang failure preserved; `.gitattributes` and regression pass; CI on `d879f54` all green.
 - [x] Commit/push the build-only Node/Cargo caps; local typecheck/build and focused 37-test suite pass.
 - [x] Lower the build-only Node heap cap to the measured 512 MiB local limit; local typecheck/build and focused 37-test suite pass.
-- [ ] Export the smoke-tested, SHA/tree-labeled image as a checksum-bound GitHub Actions artifact so production does not compile; workflow change is staged for this release.
+- [x] Add a GitHub Actions step to export the smoke-tested, SHA/tree-labeled image with a SHA-256 sidecar; run `35843677296` passed and its artifact was downloaded and checked.
 - [x] Back up production; gzip/SHA-256/perms pass; restore the dump in an isolated no-egress PostgreSQL copy (106 tables, migration `e609200001`).
-- [ ] Rehearse candidate image migration/diagnostics on the copy, deploy the full image with source mounts absent, verify API/worker/scheduler/routes, and roll back on failure.
+- [x] Rehearse candidate image migration/diagnostics on the copy, deploy the full image with source mounts absent, and verify API/worker/scheduler/routes; no rollback was needed.
 - [ ] Update the mapped Obsidian checkpoint and mirror only allowlisted project docs after DryRuns; verify both results.
 - [ ] Final review: source SHA, remote main, deployed revision/image, backup checksum/restore evidence, docs, memory result, and unresolved data-qualification boundary.
 
 ## Review
 
-Pending execution. Do not represent CI, image build, backup, merge, deploy, or memory synchronization as complete until its own evidence is captured.
+Pending Obsidian synchronization and the final docs-only commit/CI review.
 
-- Main is at `2aa684aa9cd9d8d205a775a224ade32f8d9cf563`; original primary checkout remains untouched at its earlier SHA and is behind origin/main.
+- Main is at `0dbd3fee58a3f5e080aacbcd8eae8d5964aec54f`; original primary checkout remains untouched at its earlier SHA and is behind origin/main.
 - Public health is v1.0.8; the active production API/worker/scheduler image has OCI revision `825767c`, migration `e609200001`, and mounts only reports/backups. A separate older Compose project/root has stale bind-mounted services and many untracked paths; it is not the public target and must remain untouched.
 - Production host has 1.8 GiB RAM and concurrent services. Remote builds triggered kernel OOM despite 0.6 CPU/1.6 GiB cgroup limits; stop compiling there and deploy only the checksum-verified artifact from a CI image whose smoke passed.
 - First backup attempt stopped before script body: the archived shebang resolved to `bash\r`. No dump was created. A regression reproduced CRLF in all nine shell entrypoints; `.gitattributes` now pins LF and the new test passed.
 - Three remote builds hit exit 137 during Vue typecheck (1.2/1.5 GiB and 1.6 GiB with 1 GiB Node heap); a fourth 512 MiB Node-heap attempt coincided with a kernel OOM and scheduler restart. All failures are retained; no candidate image was deployed.
 - OOM kernel records timestamped the UID 10001 Python kill at 16:46 and scheduler start at 16:48. API stayed healthy, worker restart count stayed 0, scheduler is currently running; post-restart scheduler logs contained 23 ProviderError-class lines. The exact Python container attribution is probable from timing, not proven by a per-process container mapping.
+- GitHub CI run `35843677296` on `0dbd3fe` built and smoke-tested the image artifact; ZIP/image SHA-256, source SHA/tree, and loaded Docker image ID matched. PostgreSQL restore copy upgrade/check and packaged workspace smoke passed.
+- Production `/api/health` is `ok`, root HTTP 200, Profile asset HTTP 200/immutable, unauthenticated account GET 401; API/worker healthy and scheduler running, all on the deployed source-labeled image.
+- Real-data qualification remains UNKNOWN; no business rows were audited or recertified.
