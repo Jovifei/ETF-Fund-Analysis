@@ -73,7 +73,12 @@ jobs:
           docker compose config >/dev/null
           docker compose -f deploy/compose.workspace.yml config >/dev/null
       - name: Build production image
-        run: docker build -f backend/Dockerfile -t china-fund-decision:ci .
+        run: |
+          tree=$(git rev-parse 'HEAD^{tree}')
+          docker build -f backend/Dockerfile \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --label "com.joviluma.source-tree=${tree}" \
+            -t china-fund-decision:ci .
       - name: Smoke test production image
         run: |
           docker network create ci-smoke
@@ -117,6 +122,21 @@ jobs:
           docker rm "$cid"
           docker run --rm china-fund-decision:ci python -c 'import importlib.metadata as m,json;print(json.dumps([{"name":d.metadata["Name"],"version":d.version} for d in m.distributions()]))' > /tmp/runtime-packages.json
           python scripts/release_manifest.py --image-id "$id" --runtime-packages /tmp/runtime-packages.json --output /tmp/release-inventory.json
+      - name: Export smoke-tested production image
+        if: success()
+        run: |
+          docker save china-fund-decision:ci | gzip -1 > /tmp/production-image.tar.gz
+          gzip -t /tmp/production-image.tar.gz
+          sha256sum /tmp/production-image.tar.gz > /tmp/production-image.tar.gz.sha256
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: production-image-${{ github.run_id }}
+          path: |
+            /tmp/production-image.tar.gz
+            /tmp/production-image.tar.gz.sha256
+            /tmp/release-inventory.json
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         if: always()
         with:
