@@ -26,3 +26,25 @@ test('indicator manager changes panes without replacing candles or issuing write
  }
  expect(errors).toEqual([]);expect(writes).toEqual([])
 })
+
+
+test('indicator menu fits a short viewport and its last control is reachable',async({page},info)=>{
+ await page.setViewportSize({width:390,height:600})
+ await page.goto('/etf/512480.SH')
+ const picker=page.getByTestId('indicator-picker'),summary=picker.locator('summary')
+ await expect(page.getByTestId('etf-chart').locator('canvas').first()).toBeVisible()
+ await summary.scrollIntoViewIfNeeded()
+ await summary.evaluate(el=>{const r=el.getBoundingClientRect();window.scrollBy(0,r.bottom-(innerHeight-24))})
+ await summary.click()
+ const menu=picker.locator('.indicator-menu')
+ await expect.poll(()=>menu.evaluate(el=>{
+  const r=el.getBoundingClientRect()
+  return Math.max(12-r.left,r.right-(innerWidth-12),12-r.top,r.bottom-(innerHeight-12))
+ })).toBeLessThanOrEqual(1)
+ const restore=menu.getByRole('button',{name:'恢复默认指标',exact:true})
+ await restore.scrollIntoViewIfNeeded();await expect(restore).toBeInViewport()
+ await restore.click();await expect(picker).toHaveAttribute('open')
+ await page.screenshot({path:info.outputPath('indicator-menu-short-390.png')})
+ await page.keyboard.press('Escape');await expect(picker).not.toHaveAttribute('open')
+ await expect(summary).toBeFocused()
+})
