@@ -19,6 +19,7 @@ from app.db.session import init_db, session_scope
 from app.services.holding_import_service import HoldingImportService
 from app.services.runtime_service import RuntimeService
 from app.workspace.api import router as workspace_router
+from app.workspace.account_api import router as account_router
 from app.workspace.ui import WorkspaceMiddleware
 
 settings = get_settings()
@@ -95,6 +96,7 @@ app.include_router(api_router)
 app.include_router(workbench_1430_router)
 app.include_router(workbench_kline_router)
 app.include_router(workspace_router)
+app.include_router(account_router)
 
 
 @app.get("/", include_in_schema=False)
