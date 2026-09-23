@@ -943,13 +943,15 @@ Prevent a reachable FTShare endpoint from being marked qualified when absolute-u
 
 - [x] Read project rules, latest handoff/receipt, lessons, and project memory; protect the clean primary checkout.
 - [x] Fetch and verify current refs: R1 is already on main; candidate branch is at `9ac2be8587043cfde72798503f33bd89dc5f0ed8`.
-- [x] Verify five successful exact-SHA CI workflows (plus fresh main CI; one run still in progress) and review the three additional commits/files.
-- [ ] Read-only inspect production source/containers/health and the latest backup; establish a restorable rollback point.
+- [x] Verify five successful exact-SHA CI workflows and review the three additional commits/files.
+- [x] Read-only inspect the actual public production containers, source label, mounts, migration, health, backup disk, and host capacity.
 - [ ] Update root STATUS/HANDOFF, docs index, and add a concise release receipt bound to exact source/tree/image/backup/deploy evidence.
-- [x] Run project checks affected by documentation/code identity; account/R1 evidence tests pass 30/30, compileall and diff check pass.
+- [x] Run project checks affected by documentation/code identity; account/R1 evidence plus release-contract tests pass 37/37, compileall, Node syntax, typecheck/build (1 GiB Node heap), and diff check pass locally.
 - [x] Fast-forward main and push the reviewed release commit; remote main reads back `9ac2be8587043cfde72798503f33bd89dc5f0ed8`.
-- [ ] Fix and revalidate the Linux backup-script line endings found during pre-deploy; preserve the initial shebang failure and rerun CI on the fix SHA.
-- [ ] Back up production, rehearse restore/diagnosis safely, deploy the full image with source mounts absent, verify API/worker/scheduler/routes/data state, and roll back on failure.
+- [x] Fix Linux backup-script line endings found during pre-deploy; initial shebang failure preserved; `.gitattributes` and regression pass; CI on `d879f54` all green.
+- [ ] Commit/push the build-only Node heap cap; wait for exact-SHA CI before rebuilding the image.
+- [x] Back up production; gzip/SHA-256/perms pass; restore the dump in an isolated no-egress PostgreSQL copy (106 tables, migration `e609200001`).
+- [ ] Rehearse candidate image migration/diagnostics on the copy, deploy the full image with source mounts absent, verify API/worker/scheduler/routes, and roll back on failure.
 - [ ] Update the mapped Obsidian checkpoint and mirror only allowlisted project docs after DryRuns; verify both results.
 - [ ] Final review: source SHA, remote main, deployed revision/image, backup checksum/restore evidence, docs, memory result, and unresolved data-qualification boundary.
 
@@ -957,7 +959,8 @@ Prevent a reachable FTShare endpoint from being marked qualified when absolute-u
 
 Pending execution. Do not represent CI, image build, backup, merge, deploy, or memory synchronization as complete until its own evidence is captured.
 
-- Main fast-forward completed; original primary checkout remains untouched at its previously checked-out SHA and is now behind origin/main.
+- Main is at `d879f541926d58338e9b977eca7459325f5fdbdd`; original primary checkout remains untouched at its earlier SHA and is behind origin/main.
 - Public health is v1.0.8; the active production API/worker/scheduler image has OCI revision `825767c`, migration `e609200001`, and mounts only reports/backups. A separate older Compose project/root has stale bind-mounted services and many untracked paths; it is not the public target and must remain untouched.
 - Production host has 1.8 GiB RAM, low current headroom, and concurrent services. Schedule image build/switch only after rechecking scheduler load and available memory; never stop unrelated projects to make room.
 - First backup attempt stopped before script body: the archived shebang resolved to `bash\r`. No dump was created. A regression reproduced CRLF in all nine shell entrypoints; `.gitattributes` now pins LF and the new test passed.
+- First and second image builds hit exit 137 during Vue typecheck at 1.2 and 1.5 GiB caps. The 1 GiB Node heap cap passes locally; a third bounded image build is pending its own code commit and CI.

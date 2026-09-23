@@ -1,6 +1,7 @@
 # Build the UI once. The final image does not run Node or mount source code.
 FROM node:22-bookworm-slim AS frontend-builder
 WORKDIR /workspace/frontend
+ENV NODE_OPTIONS=--max-old-space-size=1024
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --ignore-scripts
 COPY frontend ./
