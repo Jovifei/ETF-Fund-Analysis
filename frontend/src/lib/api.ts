@@ -46,6 +46,8 @@ export function errorText(error: unknown): string {
   if (error instanceof DOMException && error.name === 'AbortError') return '请求已取消或超时，请重试。'
   if (error instanceof ApiError) {
     if (error.status === 401) return '登录已失效，请重新登录。'
+    const accountErrors: Record<string,string> = {current_password_invalid:'当前密码不正确，未执行修改。',account_reauthentication_limited:'验证失败次数过多，请在 15 分钟后重试。',new_password_unchanged:'新密码不能与当前密码相同。',last_active_admin_protected:'最后一个管理员不能注销。请先由另一管理员接管。',invalid_account_request:'账户输入不符合要求；请检查昵称、密码长度和确认内容。',account_request_too_large:'账户请求过大，未执行操作。'}
+    if (accountErrors[error.code]) return accountErrors[error.code]
     if (error.code === 'plus_feature_required') return '管理员已将此研究功能设为 Plus 权益；请在个人中心查看账户分类。'
     if (error.code === 'ai_endpoint_not_in_admin_allowlist') return '该模型服务地址尚未由管理员加入 HTTPS 域名白名单。'
     if (error.code === 'ai_profile_revision_changed') return '模型配置已变更，本次旧任务没有使用新密钥执行。请检查配置后重新提交。'

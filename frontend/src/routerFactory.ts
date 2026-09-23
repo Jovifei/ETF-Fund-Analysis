@@ -27,7 +27,7 @@ const router = createRouter({ history, scrollBehavior: (to, from, saved) => {
   { path: '/factors', component: () => import('./views/Factors.vue'), meta: { title: '因子研究' } },
   { path: '/settings', component: () => import('./views/Settings.vue'), meta: { title: '设置与连接' } },
   { path: '/system', redirect: '/settings' },
-  { path: '/profile', component: () => import('./views/Settings.vue'), meta: { title: '个人中心' } },
+  { path: '/profile', component: () => import('./views/Profile.vue'), meta: { title: '个人中心' } },
   { path: '/legacy', redirect: '/history' },
   { path: '/workbench/1430', redirect: '/decision/1430' },
   { path: '/workbench/kline', redirect: '/analysis' },

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChartBar, ChartData } from '../src/lib/types'
-const mocked = vi.hoisted(() => ({ definitions: [] as any[], overlayDefinitions: [] as any[], chart: { setPriceVolumePrecision: vi.fn(), applyNewData: vi.fn(), createIndicator: vi.fn(), createOverlay: vi.fn(), subscribeAction: vi.fn(), unsubscribeAction: vi.fn(), setBarSpace: vi.fn(), scrollToRealTime: vi.fn(), resize: vi.fn() }, disposed: vi.fn() }))
+const mocked = vi.hoisted(() => ({ definitions: [] as any[], overlayDefinitions: [] as any[], chart: { setPriceVolumePrecision: vi.fn(), applyNewData: vi.fn(), createIndicator: vi.fn(), createOverlay: vi.fn(), subscribeAction: vi.fn(), unsubscribeAction: vi.fn(), setBarSpace: vi.fn(), scrollToRealTime: vi.fn(), resize: vi.fn(), removeIndicator: vi.fn(), removeOverlay: vi.fn() }, disposed: vi.fn() }))
 vi.mock('klinecharts', () => ({ init: () => mocked.chart, dispose: mocked.disposed, registerIndicator: (v: any) => mocked.definitions.push(v), registerOverlay: (v: any) => mocked.overlayDefinitions.push(v), ActionType: { OnCrosshairChange: 'crosshair' } }))
 import { ChartAdapter, groupsForLevel, projectBars } from '../src/lib/chartAdapter'
 const bar: ChartBar = { date: '2026-09-01', open: 2, high: 3, low: 1, close: 2.5, volume: 5, amount: 10, indicators: { macd_hist: .012345, kdj_k: 72.234, rsi14: 61.278, ma20: null, boll_upper: 3.45678, boll_mid: 2.12345, boll_lower: .79012 } }
@@ -34,4 +34,21 @@ it('research zones keep prices but omit dense method labels below 600px',()=>{
   const text=wide.find((x:any)=>x.type==='text')
   expect(text.attrs.text).toBe('support methods')
   expect(text.styles.backgroundColor).toBe('transparent')
+})
+
+// A-U2: change view layers without rebuilding the chart or jumping to latest.
+it('indicator and volume toggles preserve chart position and server payload',()=>{
+ const data={ts_code:'512480.SH',interval:'1d',available:true,bars:[bar],cost_overlay_allowed:false} as ChartData
+ const adapter=new ChartAdapter(document.createElement('div'),data,null,()=>{})
+ mocked.chart.scrollToRealTime.mockClear();mocked.chart.applyNewData.mockClear();mocked.disposed.mockClear()
+ adapter.setIndicatorSelection(['BOLL'],false)
+ expect(mocked.chart.removeIndicator).toHaveBeenCalledWith('server_volume','VOL')
+ expect(mocked.chart.createIndicator).toHaveBeenCalledWith('SERVER_BOLL',true,{id:'candle_pane'})
+ expect(mocked.chart.scrollToRealTime).not.toHaveBeenCalled()
+ expect(mocked.chart.applyNewData).not.toHaveBeenCalled()
+ expect(mocked.disposed).not.toHaveBeenCalled()
+ adapter.setStudySelection([])
+ expect(mocked.chart.removeOverlay).toHaveBeenCalledWith({groupId:'server_research_studies'})
+ expect(mocked.disposed).not.toHaveBeenCalled()
+ adapter.destroy()
 })

@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { LayoutDashboard, ChartCandlestick, Star, BriefcaseBusiness, Sparkles, BookOpen, Newspaper, Sigma, Settings, LogOut, PanelLeft, Menu, X, ChevronRight, UserRound, CircleHelp, Clock3 } from 'lucide-vue-next'
 import GlobalSearch from './components/GlobalSearch.vue'
 import Login from './components/Login.vue'
+import WorkspaceBoot from './components/WorkspaceBoot.vue'
 import { useSession } from './stores/session'
 import { api, errorText } from './lib/api'
 import type { Status } from './lib/types'
@@ -71,7 +72,7 @@ onMounted(async () => { if (typeof window.matchMedia==='function') {
 onBeforeUnmount(() => { narrowQuery?.removeEventListener('change',breakpointChanged);document.body.classList.remove('mobile-navigation-open'); clearInterval(timer); window.removeEventListener('workspace-preferences', applyPreferences); window.removeEventListener('session-expired', expire); window.removeEventListener('keydown', escape) })
 </script>
 <template>
-<div v-if="!session.ready" class="boot-state" role="status">正在连接私有研究工作站…</div>
+<WorkspaceBoot v-if="!session.ready"/>
 <Login v-else-if="!session.authenticated"/>
 <div v-else class="workspace" :class="[`sidebar-${sidebar}`, { 'mobile-open': mobileOpen, 'reduce-motion': reduced }]" :key="`session-${session.generation}`">
   <a class="skip-link" href="#main-content">跳到主要内容</a>
@@ -87,3 +88,7 @@ onBeforeUnmount(() => { narrowQuery?.removeEventListener('change',breakpointChan
   <footer class="workspace-footer"><span>ETF Research · {{ status?.workspace_version ?? 'workspace' }}</span><span>Asia/Shanghai · 研究非投资指令 · 历史 14:30 回测尚未取得资格</span></footer></div>
 </div>
 </template>
+
+<style scoped>
+.workspace{animation:workspace-reveal .22s ease-out}@keyframes workspace-reveal{from{opacity:.25;transform:translateY(3px)}to{opacity:1;transform:none}}.workspace.reduce-motion{animation:none}@media(prefers-reduced-motion:reduce){.workspace{animation:none}}
+</style>

@@ -1,0 +1,5 @@
+<script setup lang="ts">
+import {Compass} from 'lucide-vue-next'
+</script>
+<template><div class="boot-state account-boot" role="status" aria-live="polite"><div class="boot-compass" aria-hidden="true"><Compass :size="56"/></div><h1>ETF <span>Research</span></h1><p>正在读取账户状态</p><small>验证完成后进入你的私有研究工作站</small></div></template>
+<style scoped>.account-boot{flex-direction:column;gap:16px;background:radial-gradient(ellipse at 50% 40%,#13313b,#0b1018 66%);min-height:100dvh;text-align:center;padding:24px}.boot-compass{display:grid;place-items:center;width:98px;height:98px;border:1px solid #366474;border-radius:50%;color:#77d0e2;animation:boot-pulse 1.4s ease-in-out infinite;margin-bottom:8px}.account-boot h1{font-size:clamp(30px,6vw,48px);letter-spacing:-1px}.account-boot h1 span{font-weight:400;color:#8ad4e4}.account-boot p{color:#b0bcc6;margin:0}.account-boot small{color:#8e9ca8}@keyframes boot-pulse{50%{opacity:.5;transform:scale(.96)}}@media(prefers-reduced-motion:reduce){.boot-compass{animation:none}}</style>
