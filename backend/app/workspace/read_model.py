@@ -230,21 +230,22 @@ def instrument_detail(db: Session, settings: Settings, code: str, user_id: int |
     }
 
 
-def chart_data(db: Session, settings: Settings, code: str, interval: str, limit: int) -> dict | None:
+def chart_data(db: Session, settings: Settings, code: str, interval: str, limit: int, *, as_of: datetime | None = None) -> dict | None:
+    as_of = market_time(as_of or datetime.now(SHANGHAI))
     if interval in ("1w", "1mo"):
         from app.workspace.candle_periods import transform_chart
-        raw=chart_data(db,settings,code,"1d",workspace_settings().chart_history_limit)
-        return transform_chart(raw,interval,settings.load_strategy()["indicator"],limit) if raw else None
+        raw=chart_data(db,settings,code,"1d",workspace_settings().chart_history_limit,as_of=as_of)
+        return transform_chart(raw,interval,settings.load_strategy()["indicator"],limit,now=as_of) if raw else None
     inst = db.scalar(select(Instrument).where(Instrument.ts_code == code, Instrument.kind.in_(("ETF", "LOF"))))
     if inst is None:
         return None
     if interval != "1d":
         rows = list(reversed(db.scalars(select(MarketBar).where(MarketBar.instrument_id == inst.id, MarketBar.interval == interval).order_by(MarketBar.bar_time.desc()).limit(limit)).all()))
-        return {"ts_code": code, "interval": interval, "available": bool(rows), "bars": [{"date": iso(market_time(row.bar_time)), "open": row.open, "high": row.high, "low": row.low, "close": row.close, "volume": row.volume, "amount": row.amount, "source": row.source, "indicators": {}} for row in rows], "reason": None if rows else "minute_data_unavailable", "qualification": "unverified", "cost_overlay_allowed": False, "sr_overlay_allowed": False, "actionable": False, "indicator_note": "分钟指标尚未取得统一口径资格，不用日线指标代替。"}
+        return {"ts_code": code, "interval": interval, "available": bool(rows), "bars": [{"date": iso(market_time(row.bar_time)), "open": row.open, "high": row.high, "low": row.low, "close": row.close, "volume": row.volume, "amount": row.amount, "source": row.source, "indicators": {}} for row in rows], "reason": None if rows else "minute_data_unavailable", "qualification": "unverified", "as_of": iso(as_of), "computed_at": iso(datetime.now(SHANGHAI)), "source_as_of": iso(market_time(rows[-1].bar_time)) if rows else None, "cost_overlay_allowed": False, "sr_overlay_allowed": False, "actionable": False, "indicator_note": "分钟指标尚未取得统一口径资格，不用日线指标代替。"}
     adjustments = list(db.scalars(select(DailyBar.adjust).where(DailyBar.instrument_id == inst.id).distinct()))
     adjust = "none" if "none" in adjustments else adjustments[0] if len(adjustments) == 1 else None
     if adjust is None:
-        return {"ts_code": code, "interval": interval, "available": False, "bars": [], "reason": "missing_or_ambiguous_price_basis", "actionable": False}
+        return {"ts_code": code, "interval": interval, "available": False, "bars": [], "reason": "missing_or_ambiguous_price_basis", "as_of": iso(as_of), "computed_at": iso(datetime.now(SHANGHAI)), "actionable": False}
     maximum = workspace_settings().chart_history_limit
     stored = db.scalars(select(DailyBar).where(DailyBar.instrument_id == inst.id, DailyBar.adjust == adjust).order_by(DailyBar.trade_date.desc()).limit(maximum + 1)).all()
     truncated = len(stored) > maximum
@@ -258,7 +259,7 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
     rows = [{"date": iso(row.trade_date), "open": row.open, "high": row.high, "low": row.low, "close": row.close, "volume": row.volume, "amount": row.amount, "source": row.source} for row in stored]
     research_rows = [{"date": iso(row.trade_date), "open": row.open, "high": row.high, "low": row.low, "close": row.close, "volume": row.volume, "amount": row.amount, "source": row.source} for row in research_stored]
     if any(any(number(row[key]) is None for key in ("open", "high", "low", "close")) or row["low"] > min(row["open"], row["close"]) or row["high"] < max(row["open"], row["close"]) for row in rows):
-        return {"ts_code": code, "interval": interval, "available": False, "bars": [], "reason": "invalid_ohlc", "actionable": False}
+        return {"ts_code": code, "interval": interval, "available": False, "bars": [], "reason": "invalid_ohlc", "as_of": iso(as_of), "computed_at": iso(datetime.now(SHANGHAI)), "actionable": False}
     strategy = settings.load_strategy()
     from app.providers.data_contract import LEGACY_SOURCES, UNVERIFIED_UNIT_SOURCES, price_history_issue
     continuity_issue = price_history_issue(research_stored) if research_stored else None
@@ -273,7 +274,7 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
         DecisionBoardProvisionalInput.instrument_id == inst.id,
     ).order_by(DecisionBoardProvisionalInput.observed_at.desc(), DecisionBoardProvisionalInput.id.desc()).limit(1))
     provisional_status = DecisionBoardService(settings)._provisional_status(
-        db, inst.id, provisional, datetime.now(settings.timezone)
+        db, inst.id, provisional, as_of
     ) if provisional is not None else {"used_for_derived_values": False}
     if provisional_status.get("used_for_derived_values") and provisional is not None:
         provisional_bar = {
@@ -293,9 +294,9 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
             {**row, "indicators": computed[index].get("indicators", {}), "history_issue": None}
             for index, row in enumerate(rows)
         ]
-    now = datetime.now(SHANGHAI)
+    now = as_of.astimezone(SHANGHAI)
     for row in series:
-        row["is_partial"] = str(row["date"])[:10] == now.date().isoformat() and now.time() < time(15, 0)
+        row["is_partial"] = str(row["date"])[:10] == now.date().isoformat() and now.time() < time(15, 15)
     snapshot = db.scalar(select(IndicatorSnapshot).where(IndicatorSnapshot.instrument_id == inst.id).order_by(IndicatorSnapshot.as_of_date.desc(), IndicatorSnapshot.generated_at.desc(), IndicatorSnapshot.id.desc()).limit(1))
     matches = None
     if snapshot and series and iso(snapshot.as_of_date) == series[-1]["date"]:
@@ -312,6 +313,7 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
         "adjust": adjust, "currency": "CNY", "source_bars": len(rows), "history_truncated": truncated,
         "indicator_version": strategy["indicator_version"], "indicator_basis": "shared_python_core_formulas_plus_intraday_provisional" if provisional_status.get("used_for_derived_values") else "shared_python_core_formulas_full_available_history",
         "core_snapshot_match": matches, "source_as_of": rows[-1]["date"] if rows else None,
+        "as_of": iso(as_of), "computed_at": iso(datetime.now(SHANGHAI)),
         "history_issue": continuity_issue, "return_basis": "unadjusted_price_not_total_return" if adjust == "none" else adjust,
         "qualification": continuity_issue if continuity_issue else "mock" if mock else "legacy_units_unverified" if legacy_units else "historical_price_only" if price_only else "research_only", "actionable": False,
         "cost_overlay_allowed": adjust == "none", "sr_overlay_allowed": len(adjustments) == 1 and bool(sr),

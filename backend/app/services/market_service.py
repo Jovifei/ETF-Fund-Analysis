@@ -53,7 +53,10 @@ class MarketService:
             fetched_at = fetched_at.replace(tzinfo=source_time.tzinfo)
         age = fetched_at - source_time
         source = str(item.source or "").lower()
-        provider_timestamp_capable = source.startswith("tushare:") and "fund_daily" not in source
+        provider_timestamp_capable = (
+            (source.startswith("tushare:") and "fund_daily" not in source)
+            or source == "sina:hq_sinajs:v1"
+        )
         verified = bool(
             item.is_realtime
             and provider_timestamp_capable

@@ -53,13 +53,38 @@ def test_intraday_provisional_updates_daily_chart_indicator_series(db_session):
         volume=1200, amount=3420, pct_change_percent_points=0.5,
     )
 
-    result = chart_data(db_session, settings, inst.ts_code, '1d', 100)
+    result = chart_data(db_session, settings, inst.ts_code, '1d', 100, as_of=observed)
 
     assert result['bars'][-1]['is_provisional'] is True
     assert result['bars'][-1]['date'].startswith(observed.date().isoformat())
     assert result['bars'][-1]['indicators']['macd_dif'] is not None
     assert result['source_as_of'].startswith(observed.date().isoformat())
+    assert result['as_of'] == observed.isoformat()
+    assert datetime.fromisoformat(result['computed_at']).tzinfo is not None
+    assert datetime.fromisoformat(result['computed_at']) >= observed
     assert '盘中指标' in result['indicator_note']
+
+
+def test_same_day_daily_bar_is_partial_through_1515_settlement_cutoff(db_session):
+    from zoneinfo import ZoneInfo
+
+    inst = instrument(db_session)
+    settings = get_settings().model_copy(update={'market_provider':'akshare'})
+    as_of = datetime(2026, 9, 23, 15, 5, tzinfo=ZoneInfo('Asia/Shanghai'))
+    db_session.add(DailyBar(
+        instrument_id=inst.id, trade_date=as_of.date(), open=2.8, high=2.9, low=2.7,
+        close=2.85, volume=1000, amount=2850, source='akshare:em:v101',
+        adjust='none', quality_hash='current-session',
+    ))
+    db_session.flush()
+
+    partial = chart_data(db_session, settings, inst.ts_code, '1d', 100, as_of=as_of)
+    settled = chart_data(db_session, settings, inst.ts_code, '1d', 100,
+                         as_of=as_of.replace(hour=15, minute=15))
+
+    assert partial['bars'][-1]['date'] == as_of.date().isoformat()
+    assert partial['bars'][-1]['is_partial'] is True
+    assert settled['bars'][-1]['is_partial'] is False
 
 
 def test_legacy_units_only_hide_volume_not_price_indicators(db_session):

@@ -9,6 +9,7 @@ from app.providers.composite import CompositeProvider
 from app.providers.ftshare import FTShareProvider
 from app.providers.mock import MockProvider
 from app.providers.rss_news import RssNewsProvider
+from app.providers.sina import SinaProvider
 from app.providers.tushare import TushareProvider
 from app.providers.tencent import TencentProvider
 
@@ -41,17 +42,13 @@ def build_provider(settings: Settings | None = None) -> MarketProvider:
     providers: list[MarketProvider] = []
     errors: list[str] = []
     if settings.market_provider == "public_composite":
-        # The usable/free tier keeps AKShare as the primary public source.  A
-        # configured Tushare token is an explicit second candidate for the
-        # same tier, so a transient upstream block does not force the user to
-        # switch tiers; the complete tier below intentionally remains
-        # Tushare-first.
-        provider_classes = [AKShareProvider, TencentProvider]
+        # Try public timestamped quotes before the optional permission-gated source.
+        provider_classes = [AKShareProvider, SinaProvider, TencentProvider]
         if settings.tushare_token:
             provider_classes.append(TushareProvider)
         provider_classes.append(FTShareProvider)
     else:
-        provider_classes = (TushareProvider, AKShareProvider, TencentProvider, FTShareProvider)
+        provider_classes = (TushareProvider, AKShareProvider, SinaProvider, TencentProvider, FTShareProvider)
     for provider_cls in provider_classes:
         if provider_cls is FTShareProvider and not (
             settings.ftshare_enabled and (

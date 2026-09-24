@@ -962,3 +962,31 @@ Prevent a reachable FTShare endpoint from being marked qualified when absolute-u
 - Four production-host frontend builds ended exit 137; the last coincided with a kernel kill of UID 10001 Python and scheduler restart. API remained healthy and worker did not restart; scheduler recovered, and deployment then used the hosted CI artifact with no further host builds. Exact killed-process/container attribution was not proven; the timing correlation and subsequent `ProviderError` count are retained in the deployment receipt. No rollback was needed.
 - Obsidian checkpoint was applied through a fresh, hash-guarded DryRun plan because the generic pending checkpoint belonged to `tesla-speed`; the unrelated queue was preserved. The project checkpoint load passed, and mirror copied 37 allowlisted documents with zero skipped; three critical mirrored document hashes matched.
 - Real-data qualification remains **UNKNOWN**. No production data audit/recertification, provider fetch, certified/hash/raw OHLCV edit, account write, or model call was performed. R2–R6 and A-U4/A-U5 remain open; no forecast/actionability gate was loosened.
+# R2 可见页面数据及时性与一致性 — 2026-09-23
+
+## Goal
+
+让总览与 ETF 详情在前台按有界周期读取新数据；切后台停止轮询，回前台立即读取；保留最后成功快照并显示数据时间。页面 GET 不抓取 Provider、不写数据库，不改变行情资格和 actionable。
+
+## Plan
+
+- [x] 确认 `main` 干净，建立从 `a687f17` 开始的独立 worktree 与功能分支。
+- [x] 阅读 R2 路线、刷新政策、read model、总览/详情查询及现有回归测试。
+- [x] 核实生产源分层：东财请求被远端断连；Sina HTTPS 返回样本标的及源时间；Tushare ETF 实时接口返回权限不可用；THS ETF 接口仅有净值、不作为行情价。
+- [x] RED：详情页三项刷新回归先失败：缺少 60 秒到期刷新、回到可见页立即刷新；卸载清理现状通过。
+- [x] GREEN：用一个可复用 composable 管理轮询；应用到总览和详情，保持 GET、现有读取合同和研究门禁。
+- [x] 补齐详情各模块展示时间与 snapshot 身份，缺失时保持 UNKNOWN，不用 fetched_at 冒充 source_time。
+- [x] 后端读模型新增/对齐固定 `as_of` 的展示元数据；只做只读计算，不写库、不调用 Provider。
+- [x] RED/GREEN：添加 Sina HTTPS 行情适配器，注册到免费 Composite 回退链，并允许其精确版本源时间通过 operational-grade 校验；量额保持空值、production-qualified/actionable 仍为 false。
+- [x] 生产端点探针揭示 Sina 必须使用 `/list=代码,...` 路径而非 `?list=`；先记录夹具合同失败，再修正 URL 并用真实响应验证 5/5 请求代码。
+- [x] RED/GREEN：Tushare 权限失败用 allowlist 安全码穿过适配器和 Composite 审计，不保留响应正文或凭证。
+- [x] 隔离入库/展示回归：验证 Sina 时间、来源、空量额和 fail-closed 决策输出。
+- [x] 运行完整后端、前端类型/构建、受影响浏览器矩阵、静态检查与 `git diff --check`；保留首次失败及条件跳过。
+- [ ] 交易时段对 Sina 全链做有界只读探测；生产备份/恢复演练、CI 镜像和部署须在确认本批发布授权后执行。
+
+## Review
+
+- 聚焦 provider/quote/task 审计 16 passed；最终全量 pytest `1235 passed / 14 skipped / 0 failed / 0 errors`。首轮全量 5 项失败是旧 Provider 顺序断言和全构造失败模拟漏 Sina；更新测试合同后修复。新增流式上限回归先复现读取了第 3 个超限块，改造后只读取至 1MB 边界。14 项 skip 均为环境条件（未配置 TEST_POSTGRES_URL、平台文件模式/symlink 能力不可用）。
+- 前端 Vitest 53/53；普通/认证/响应式浏览器 19/19、5/5、18/18；typecheck、production build、compileall、legacy Node 39/39、secret scan、Ruff 新增文件检查和 `git diff --check` 均通过。构建仅有既存 Login 动态/静态重复导入警告。
+- 初次系统 `python` 因未加载项目 venv 缺 SQLAlchemy，随后改用 worktree `.venv`；未将其记为产品失败。第一次 Sina 夹具只验证了自己构造的 query 参数，生产探针返回空记录；核对响应后改为 `/list=...` 并确认真实端点在开盘前返回 5/5 上一交易日行情时间。无新增依赖或软件安装。
+- 生产只读探针未读写数据库。2026-09-24 开盘前端点源时间仍为 2026-09-23；今天盘中及时性尚未实证。没有修改 production-qualified/certified/actionable；没有进行生产部署。

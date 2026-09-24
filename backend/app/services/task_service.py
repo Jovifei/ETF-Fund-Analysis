@@ -67,6 +67,52 @@ def _failure_class(exc: BaseException) -> str:
     return identifier[:128]
 
 
+def _provider_failure_audits(provider) -> list[dict]:
+    traces = getattr(provider, "last_trace", None)
+    if not isinstance(traces, list):
+        return []
+    rows = []
+    allowed_statuses = {
+        "unsupported", "failed", "partial", "fallback_partial", "fallback_used",
+        "quality_fallback", "superseded", "empty", "ok",
+    }
+    for trace in traces:
+        provider_name = str(getattr(trace, "provider", ""))
+        operation = str(getattr(trace, "operation", ""))
+        status = str(getattr(trace, "status", ""))
+        reason = str(getattr(trace, "reason", "") or "")
+        if not provider_name or not operation or status not in allowed_statuses:
+            continue
+        sensitive = re.search(
+            r"(?i)(password|token|secret|cookie|authorization|bearer|https?://|@|\b\d{6,}\b)",
+            reason,
+        )
+        safe_reason = (
+            reason[:64]
+            if len(reason) <= 64
+            and re.fullmatch(r"[A-Za-z0-9_.:= -]*", reason)
+            and not sensitive
+            else "provider_failure"
+        )
+        try:
+            latency_ms = max(0.0, float(getattr(trace, "latency_ms", 0.0)))
+        except (TypeError, ValueError, OverflowError):
+            latency_ms = None
+        try:
+            record_count = max(0, int(getattr(trace, "record_count", 0)))
+        except (TypeError, ValueError, OverflowError):
+            record_count = 0
+        rows.append({
+            "operation": operation[:64],
+            "provider": provider_name[:32],
+            "status": status,
+            "latency_ms": latency_ms,
+            "record_count": record_count,
+            "reason": safe_reason or None,
+        })
+    return rows
+
+
 @contextmanager
 def _task_lock(db: Session):
     dialect = db.get_bind().dialect.name
@@ -413,7 +459,7 @@ class TaskService:
         started_at: datetime,
         finished_at: datetime,
         failure_class: str,
-        provider_audit: dict | None = None,
+        provider_audit: list[dict] | dict | None = None,
     ) -> None:
         """Persist a minimal failure audit after the caller transaction is broken.
 
@@ -438,7 +484,8 @@ class TaskService:
             recovery_db.add(task)
             recovery_db.flush()
             if provider_audit is not None:
-                recovery_db.add(ProviderAudit(run_id=run_id, **provider_audit))
+                audits = provider_audit if isinstance(provider_audit, list) else [provider_audit]
+                recovery_db.add_all(ProviderAudit(run_id=run_id, **audit) for audit in audits)
                 recovery_db.flush()
             emit_event(
                 recovery_db,
@@ -483,6 +530,9 @@ class TaskService:
             run_id = requested_run_id or uuid4().hex
             started = datetime.now(self.settings.timezone)
             task = None
+            traces = getattr(self.provider, "last_trace", None)
+            if isinstance(traces, list):
+                traces.clear()
             if self.execution_policy.persist_task_runs:
                 task = (
                     db.scalar(
@@ -568,15 +618,10 @@ class TaskService:
                 logger.error("Task %s (%s) failed: %s", task_name, run_id, _failure_class(exc))
                 failure_class = _failure_class(exc)
                 if self.execution_policy.persist_task_runs:
-                    self._persist_failed_run(
-                        db,
-                        run_id=run_id,
-                        task_name=task_name,
-                        started_at=started,
-                        finished_at=datetime.now(started.tzinfo),
-                        failure_class=failure_class,
-                        provider_audit=(
-                        {
+                    provider_audit = _provider_failure_audits(self.provider)
+                    context_outcome = getattr(getattr(exc, "outcome", None), "provider_calls", 0)
+                    if task_name == "refresh_market_context" and context_outcome and not provider_audit:
+                        provider_audit = [{
                             "operation": "fetch_market_context",
                             "provider": str(getattr(self.provider, "name", type(self.provider).__name__))[:32],
                             "status": (
@@ -590,12 +635,14 @@ class TaskService:
                                 if getattr(exc, "exception_class", "") == "CapabilityUnavailable"
                                 else failure_class
                             ),
-                        }
-                        if (
-                            task_name == "refresh_market_context"
-                            and getattr(getattr(exc, "outcome", None), "provider_calls", 0) > 0
-                        )
-                            else None
-                        ),
+                        }]
+                    self._persist_failed_run(
+                        db,
+                        run_id=run_id,
+                        task_name=task_name,
+                        started_at=started,
+                        finished_at=datetime.now(started.tzinfo),
+                        failure_class=failure_class,
+                        provider_audit=provider_audit,
                     )
                 raise TaskExecutionError(run_id, failure_class) from None

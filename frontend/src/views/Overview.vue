@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onActivated, onDeactivated, onBeforeUnmount, ref, nextTick } from 'vue'
+import { computed, onActivated, onDeactivated, ref, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { RefreshCw } from 'lucide-vue-next'
 import { useQuery } from '../lib/query'
+import { useVisibleRefresh } from '../lib/useVisibleRefresh'
 import { api, errorText } from '../lib/api'
 import { num, pct, direction, stamp, record, numeric } from '../lib/format'
 import { useSession } from '../stores/session'
@@ -71,15 +72,14 @@ async function syncDiscovery() {
   catch (e) { error.value = errorText(e) } finally { busy.value = false }
 }
 async function reload() { await Promise.all([market.reload(), sectors.reload(), discovery.reload(), board.value?.reload(), contextHistory.reload(), indexCache.reload(), dataHealth.value?.reload()]) }
-let timer: ReturnType<typeof setInterval> | undefined, scrollY = 0
+function refreshVisible() { return Promise.all([market.refresh(), sectors.refresh(), discovery.refresh(), board.value?.refresh(), contextHistory.refresh(), indexCache.refresh(), dataHealth.value?.reload()]) }
+useVisibleRefresh(refreshVisible)
+let scrollY = 0
 onActivated(async () => {
   await nextTick()
   if (!route.hash) window.scrollTo(0, scrollY)
-  clearInterval(timer)
-  timer = setInterval(() => { if (!document.hidden) void reload() }, 60000)
 })
-onDeactivated(() => { scrollY = window.scrollY; clearInterval(timer) })
-onBeforeUnmount(() => clearInterval(timer))
+onDeactivated(() => { scrollY = window.scrollY })
 async function recompute(){if(busy.value)return;busy.value=true;error.value='';try{const r=await api<{job:DataJob}>('/api/workspace/data-jobs',{method:'POST',body:{task:'recompute',request_key:crypto.randomUUID()}});activeTasks.value=[r.job.job_id];notice.value='已排队重算已存历史：不重新取行情，不调用模型。完成后点击重新读取；可在设置查看任务。'}catch(e){error.value=errorText(e)}finally{busy.value=false}}
 </script>
 <template><section>

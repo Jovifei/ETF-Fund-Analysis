@@ -16,7 +16,23 @@ from app.providers.types import (
 class ProviderError(RuntimeError):
     """Sanitized provider failure with an optional allowlisted upstream code."""
 
-    _SAFE_CODES = frozenset({"UPSTREAM_REJECTED"})
+    _SAFE_CODES = frozenset({
+        "UPSTREAM_REJECTED",
+        "CREDENTIALS_MISSING",
+        "PERMISSION_OR_CREDENTIALS_DENIED",
+        "RATE_LIMITED",
+        "RESPONSE_TOO_LARGE",
+        "INVALID_RESPONSE_SCHEMA",
+        "ENDPOINT_UNAVAILABLE",
+        "UPSTREAM_HTTP_REJECTED",
+        "PROVIDER_DEADLINE_EXCEEDED",
+        "SINA_QUOTE_TIMEOUT",
+        "SINA_QUOTE_TRANSPORT_FAILED",
+        "SINA_QUOTE_UPSTREAM_REJECTED",
+        "SINA_QUOTE_RESPONSE_TOO_LARGE",
+        "SINA_QUOTE_RESPONSE_INVALID",
+    })
+    _SAFE_MESSAGES = {code.lower(): code for code in _SAFE_CODES}
 
     def __init__(
         self,
@@ -29,6 +45,8 @@ class ProviderError(RuntimeError):
         # report vocabulary.  Values outside the explicit allowlist are never
         # retained, so raw provider response details cannot escape by accident.
         candidate = safe_code if safe_code is not None else upstream_code
+        if candidate not in self._SAFE_CODES:
+            candidate = self._SAFE_MESSAGES.get(str(message))
         self.safe_code = candidate if candidate in self._SAFE_CODES else None
         self.upstream_code = self.safe_code
         super().__init__(message)

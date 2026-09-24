@@ -63,6 +63,17 @@ def test_tushare_realtime_inside_window_is_timestamp_verified_not_production_qua
     assert grade["visible"] is True
 
 
+def test_sina_quote_timestamp_is_operational_but_not_production_qualified():
+    fetched = datetime(2026, 8, 31, 14, 32, tzinfo=SHANGHAI)
+    item = _item(source="sina:hq_sinajs:v1", quote_time=fetched - timedelta(seconds=10))
+    verified, reason = MarketService._qualify_quote_timestamp(item, fetched)
+    assert verified is True
+    assert reason is None
+    grade = MarketService.quote_operational_grade(verified, reason)
+    assert grade["operational_grade"] is True
+    assert grade["production_qualified"] is False
+
+
 def test_em_quote_with_a_clock_is_still_not_provider_timestamp_qualified():
     fetched = datetime(2026, 8, 31, 14, 32, tzinfo=SHANGHAI)
     item = _item(source="akshare:em:v101", quote_time=fetched, is_realtime=False)

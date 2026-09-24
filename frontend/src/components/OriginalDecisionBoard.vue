@@ -33,7 +33,7 @@ function receive(event: MessageEvent) {
 watch([q.data,outlook.data, q.error, horizon, filter, revision, () => favorites.entries, () => favorites.busy], deliver)
 onMounted(() => {window.addEventListener('message', receive);favorites.ensure().catch(e=>{favoriteError.value=errorText(e)})})
 onBeforeUnmount(() => window.removeEventListener('message', receive))
-defineExpose({ reload:()=>Promise.all([q.reload(),outlook.reload()]) })
+defineExpose({ reload:()=>Promise.all([q.reload(),outlook.reload()]), refresh:()=>Promise.all([q.refresh(),outlook.refresh()]) })
 </script>
 <template><section id="etf-decisions" class="card section original-board" aria-labelledby="decision-heading">
   <div class="card-header"><div><h2 id="decision-heading">ETF 决策快照</h2><p>原版五档分组与指标模板 · 点击基金进入同一工作站分析</p></div>

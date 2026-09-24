@@ -28,6 +28,15 @@ def test_month_and_current_period_partial_are_not_forecast_horizons():
     assert result[1]['volume'] is None
 
 
+def test_period_remains_partial_until_daily_settlement_cutoff():
+    before=datetime(2026,9,4,15,5,tzinfo=ZoneInfo('Asia/Shanghai'))
+    settled=before.replace(minute=15)
+    partial=aggregate_bars(rows(),'1w',now=before)
+    complete=aggregate_bars(rows(),'1w',now=settled)
+    assert partial[-1]['is_partial'] is True
+    assert complete[-1]['is_partial'] is False
+
+
 def test_daily_identity_and_invalid_period_rejected():
     import pytest
     raw=rows()

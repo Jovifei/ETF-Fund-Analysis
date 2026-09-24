@@ -298,6 +298,7 @@ def test_factory_aggregate_errors_never_include_provider_exception_text(monkeypa
 
     monkeypatch.setattr("app.providers.factory.TushareProvider", fail)
     monkeypatch.setattr("app.providers.factory.AKShareProvider", fail)
+    monkeypatch.setattr("app.providers.factory.SinaProvider", fail)
     monkeypatch.setattr("app.providers.factory.TencentProvider", fail)
     monkeypatch.setattr("app.providers.factory.FTShareProvider", fail)
     with pytest.raises(ProviderError) as raised:
@@ -457,6 +458,7 @@ def test_factory_explicit_ftshare_requires_enabled_and_composites_order(monkeypa
             self.settings = settings
 
     monkeypatch.setattr("app.providers.factory.AKShareProvider", type("AK", (Fake,), {"name": "akshare"}))
+    monkeypatch.setattr("app.providers.factory.SinaProvider", type("SI", (Fake,), {"name": "sina"}))
     monkeypatch.setattr("app.providers.factory.TushareProvider", type("TS", (Fake,), {"name": "tushare"}))
     monkeypatch.setattr("app.providers.factory.FTShareProvider", type("FT", (Fake,), {"name": "ftshare"}))
     monkeypatch.setattr("app.providers.factory.TencentProvider", type("TX", (Fake,), {"name": "tencent"}))
@@ -465,11 +467,11 @@ def test_factory_explicit_ftshare_requires_enabled_and_composites_order(monkeypa
     with pytest.raises(CapabilityUnavailable):
         build_provider(Settings(_env_file=None, market_provider="ftshare", ftshare_enabled=True, ftshare_qualification="qualified"))
     unqualified = build_provider(Settings(_env_file=None, market_provider="public_composite", ftshare_enabled=True, ftshare_qualification="qualified"))
-    assert [item.name for item in unqualified.providers] == ["akshare", "tencent"]
+    assert [item.name for item in unqualified.providers] == ["akshare", "sina", "tencent"]
     provider = build_provider(Settings(_env_file=None, market_provider="public_composite", ftshare_enabled=True, ftshare_daily_qualification="qualified"))
-    assert [item.name for item in provider.providers] == ["akshare", "tencent", "ftshare"]
+    assert [item.name for item in provider.providers] == ["akshare", "sina", "tencent", "ftshare"]
     provider = build_provider(Settings(_env_file=None, market_provider="composite", ftshare_enabled=True, ftshare_quote_qualification="qualified"))
-    assert [item.name for item in provider.providers] == ["tushare", "akshare", "tencent", "ftshare"]
+    assert [item.name for item in provider.providers] == ["tushare", "akshare", "sina", "tencent", "ftshare"]
 
 
 def test_public_composite_uses_tushare_only_after_akshare_when_token_is_available(monkeypatch):
@@ -478,6 +480,7 @@ def test_public_composite_uses_tushare_only_after_akshare_when_token_is_availabl
             self.settings = settings
 
     monkeypatch.setattr("app.providers.factory.AKShareProvider", type("AK", (Fake,), {"name": "akshare"}))
+    monkeypatch.setattr("app.providers.factory.SinaProvider", type("SI", (Fake,), {"name": "sina"}))
     monkeypatch.setattr("app.providers.factory.TushareProvider", type("TS", (Fake,), {"name": "tushare"}))
     monkeypatch.setattr("app.providers.factory.TencentProvider", type("TX", (Fake,), {"name": "tencent"}))
     monkeypatch.setattr("app.providers.factory.FTShareProvider", type("FT", (Fake,), {"name": "ftshare"}))
@@ -492,7 +495,7 @@ def test_public_composite_uses_tushare_only_after_akshare_when_token_is_availabl
         )
     )
 
-    assert [item.name for item in provider.providers] == ["akshare", "tencent", "tushare", "ftshare"]
+    assert [item.name for item in provider.providers] == ["akshare", "sina", "tencent", "tushare", "ftshare"]
 
 
 def test_new_factory_chains_never_add_mock_even_when_legacy_flag_is_true(monkeypatch):
@@ -501,10 +504,14 @@ def test_new_factory_chains_never_add_mock_even_when_legacy_flag_is_true(monkeyp
             self.settings = settings
 
     monkeypatch.setattr("app.providers.factory.AKShareProvider", type("AK", (Fake,), {"name": "akshare"}))
+    monkeypatch.setattr("app.providers.factory.SinaProvider", type("SI", (Fake,), {"name": "sina"}))
     monkeypatch.setattr("app.providers.factory.TushareProvider", type("TS", (Fake,), {"name": "tushare"}))
     monkeypatch.setattr("app.providers.factory.TencentProvider", type("TX", (Fake,), {"name": "tencent"}))
     monkeypatch.setattr("app.providers.factory.FTShareProvider", type("FT", (Fake,), {"name": "ftshare"}))
-    for mode, expected in (("public_composite", ["akshare", "tencent", "ftshare"]), ("composite", ["tushare", "akshare", "tencent", "ftshare"])):
+    for mode, expected in ((
+        "public_composite", ["akshare", "sina", "tencent", "ftshare"]),
+        ("composite", ["tushare", "akshare", "sina", "tencent", "ftshare"]),
+    ):
         provider = build_provider(Settings(_env_file=None, market_provider=mode, ftshare_enabled=True, ftshare_daily_qualification="qualified", allow_mock_fallback=True))
         assert [item.name for item in provider.providers] == expected
 

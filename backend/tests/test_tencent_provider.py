@@ -65,7 +65,7 @@ def test_public_composite_contains_tencent_independent_candidate() -> None:
     provider = build_provider(Settings(_env_file=None, market_provider="public_composite"))
 
     assert isinstance(provider, CompositeProvider)
-    assert [item.name for item in provider.providers] == ["akshare", "tencent"]
+    assert [item.name for item in provider.providers] == ["akshare", "sina", "tencent"]
 
 
 def test_tencent_endpoint_contract_is_explicit() -> None:

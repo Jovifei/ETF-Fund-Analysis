@@ -220,6 +220,7 @@ class TushareProvider(MarketProvider):
         if name != "rt_etf_k" or not codes:
             return []
         rows = []
+        safe_failures: list[tuple[str, bool]] = []
         fields = "ts_code,name,pre_close,high,open,low,close,vol,amount,trade_time"
         for exchange in ("SH", "SZ"):
             group = [code for code in dict.fromkeys(codes) if code.endswith("." + exchange)]
@@ -231,7 +232,19 @@ class TushareProvider(MarketProvider):
             try:
                 rows.extend(self._records(self.pro.rt_etf_k(**params)))
             except Exception as exc:
+                safe_code = getattr(exc, "safe_code", None)
+                if safe_code in ProviderError._SAFE_CODES:
+                    safe_failures.append((safe_code, isinstance(exc, CapabilityUnavailable)))
                 logger.info("Tushare ETF realtime %s unavailable: %s", exchange, type(exc).__name__)
+        if not rows and safe_failures:
+            safe_code, unsupported = next(
+                (item for item in safe_failures if item[0] == "PERMISSION_OR_CREDENTIALS_DENIED"),
+                safe_failures[0],
+            )
+            error = CapabilityUnavailable if unsupported or safe_code in {
+                "CREDENTIALS_MISSING", "ENDPOINT_UNAVAILABLE", "PERMISSION_OR_CREDENTIALS_DENIED",
+            } else ProviderError
+            raise error(safe_code.lower(), safe_code=safe_code) from None
         return rows
 
     @staticmethod

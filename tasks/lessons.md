@@ -36,3 +36,6 @@
 - 2026-09-11: 原版 WorkBuddy 看板使用的 legacy `/api/decision-board` 不继承 Vue API 的 no-store 约定；数据已落库但浏览器仍可能显示旧快照。凡是可变的 legacy JSON 读路由要同时固定前端 `cache: no-store` 和后端 `Cache-Control: private, no-store`，并用 snapshot_id 做线上回归。
 - 2026-09-18: Composite provider 不能把“非空”当作“合格”；低质量 price-only 或 degraded quote 必须继续尝试后备源，并把最后合格历史快照以 stale/非 actionable 方式展示，不能因行业板块成功而提升 ETF 决策资格。
 - 2026-09-20: Provider 资格脚本也不能把“三项接口非空”当作 qualified；单位与时间证据必须是显式门禁字段，空字典、字段名和均价比值都不是认证。现场接口恢复后仍需独立同日对账。
+- 2026-09-24: 当生产数据不更新时，分别核实网络端点、Provider 注册、业务资格、持久化和页面读模型；不能把“缺依赖”当默认解释。可显示的实时源时间不等于量额认证或 actionable。
+- 2026-09-24: Provider mock 必须断言完整 URL 路径和查询合同，并用有界真实响应交叉核对；如果测试夹具照抄适配器当前参数，错误的 query/path 也会被错误地“验证”为正确。
+- 2026-09-24: 响应大小上限必须在流式读取中执行；先完整 `get()` 再检查长度不能约束下载/解压内存。按小块累计，到阈值即停止并关闭流。

@@ -38,7 +38,7 @@ def aggregate_bars(rows: list[dict], period: str, *, now: datetime | None=None) 
             low=min(r['low'] for r in bars),close=bars[-1]['close'],volume=total('volume'),amount=total('amount'),
             source=' + '.join(sorted({str(r.get('source','unknown')) for r in bars})),
             period_start=start.isoformat(),period_end=end.isoformat(),source_bar_count=len(bars),
-            is_partial=any(r.get('is_partial',False) for r in bars) or now.date()<end or (now.date()==end and now.time()<time(15)),
+            is_partial=any(r.get('is_partial',False) for r in bars) or now.date()<end or (now.date()==end and now.time()<time(15,15)),
             coverage_note='仅聚合已有交易日；缺失日不补K线，首尾周期可能不完整'))
     return result
 
@@ -97,8 +97,9 @@ def chart_studies(rows: list[dict], config: dict, period: str) -> dict:
     return result
 
 
-def transform_chart(result: dict, period: str, config: dict, limit: int=500) -> dict:
-    bars=aggregate_bars(result.get('bars',[]),period)
+def transform_chart(result: dict, period: str, config: dict, limit: int=500, *, now: datetime | None=None) -> dict:
+    assessed_at=now or datetime.now(TZ)
+    bars=aggregate_bars(result.get('bars',[]),period,now=assessed_at)
     series=(bars if period=="1d" and bars and "indicators" in bars[-1] else cached_indicator_series(bars,config)) if bars else []
     if result.get("history_issue"):
         series = [{**bar, "indicators": {}} for bar in bars]
@@ -106,6 +107,7 @@ def transform_chart(result: dict, period: str, config: dict, limit: int=500) -> 
     else:
         studies=chart_studies(series,config,period)
     return {**result,'interval':period,'bars':series[-limit:],'studies':studies,
+        'computed_at':datetime.now(TZ).isoformat(),
         'core_snapshot_match': result.get('core_snapshot_match') if period=='1d' else None,
         'indicator_basis':'same_server_formulas_on_'+period,'support_resistance':studies,
         'sr_overlay_allowed':bool(studies.get('levels')),'actionable':False,

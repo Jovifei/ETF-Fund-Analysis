@@ -29,6 +29,9 @@ _SAFE_FAILURE_CLASSES = frozenset(
 
 
 def _safe_failure_label(error: BaseException) -> str:
+    code = getattr(error, "safe_code", None)
+    if code in ProviderError._SAFE_CODES:
+        return code
     name = type(error).__name__
     return name if name in _SAFE_FAILURE_CLASSES else "ProviderError"
 
