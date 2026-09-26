@@ -98,6 +98,33 @@ describe('detail data refresh lifecycle', () => {
     expect(wrapper.text()).toContain('当前没有可用预测')
   })
 
+  it('labels a disabled catalog item while preserving its available quote', async () => {
+    const implementation = vi.mocked(api).getMockImplementation()!
+    vi.mocked(api).mockImplementation(async path => {
+      if (path.includes('/chart?')) return implementation(path)
+      const value = await implementation(path) as typeof detail
+      return { ...value, instrument: { ...detail.instrument, enabled: false }, availability: {
+        ...detail.availability, instrument: { status: 'disabled', reason_code: 'instrument_disabled' },
+      } }
+    })
+    const wrapper = await openDetail()
+    expect(wrapper.text()).toContain('该标的未启用研究池')
+    expect(wrapper.text()).toContain('4.000')
+  })
+
+  it('explains an empty history without replacing price with a fake candle', async () => {
+    const implementation = vi.mocked(api).getMockImplementation()!
+    vi.mocked(api).mockImplementation(async path => {
+      if (path.includes('/chart?')) return { ...chart, available: false, bars: [], reason: 'history_not_prepared', as_of: new URL(path, 'http://localhost').searchParams.get('as_of') }
+      const value = await implementation(path) as typeof detail
+      return { ...value, availability: { ...detail.availability, history: { status: 'unavailable', reason_code: 'history_not_prepared' } } }
+    })
+    const wrapper = await openDetail()
+    expect(wrapper.text()).toContain('尚未准备历史行情')
+    expect(wrapper.text()).toContain('4.000')
+    expect(wrapper.text()).not.toContain('0.000')
+  })
+
   it('re-reads quote and chart after one visible refresh interval', async () => {
     const wrapper = await openDetail()
     expect(api).toHaveBeenCalledTimes(2)
