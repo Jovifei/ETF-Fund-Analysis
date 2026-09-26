@@ -38,6 +38,24 @@ def test_quote_view_marks_degraded_unverified_as_visible() -> None:
     assert view["is_mock"] is False
 
 
+def test_quote_view_marks_any_observation_after_the_shared_read_time_stale() -> None:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    read_as_of = datetime(2026, 8, 31, 10, 0, tzinfo=ZoneInfo('Asia/Shanghai'))
+    quote = _quote(
+        quote_time=read_as_of.replace(minute=1), timestamp_verified=True,
+        is_realtime=True, degraded_reason=None,
+    )
+
+    view = quote_view(quote, settings, as_of=read_as_of)
+
+    assert view['status'] == 'stale'
+    assert view['is_realtime'] is False
+    assert view['actionable'] is False
+
+
 def test_compact_row_keeps_degraded_status_and_derived_research_fields() -> None:
     row = compact_row({
         "ts_code": "510300.SH",

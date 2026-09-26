@@ -37,7 +37,7 @@ from app.utils.indicators_v05 import calculate_indicators
 from app.utils.numbers import finite_or_none
 from app.utils.support_resistance import build_support_resistance
 
-READ_MODEL_VERSION = "decision-read-v107"
+READ_MODEL_VERSION = "decision-read-v108-research-basis"
 HORIZONS = (1, 3, 5, 10)
 # Must match docs/INTRADAY_REFRESH_CADENCE.md and refresh_policy windows.
 # Lunch 11:31–12:59 is intentionally absent.  14:50–15:00 is every 2 minutes.
@@ -446,8 +446,8 @@ class DecisionBoardService:
         grade_row = grade_row or {}
         independent_sector = grade_row.get("sector")
         comparison_basis = "previous_saved_confirmed_date_not_intraday_quote"
-        from app.providers.data_contract import history_issues, trailing_unverified_history
         from app.providers.corporate_action_contract import research_history_rows
+        from app.providers.data_contract import history_issues, trailing_unverified_history
         blocked = history_issues(db, self.settings, [instrument.id]).get(instrument.id)
         history_rows = db.scalars(
             select(DailyBar).where(DailyBar.instrument_id == instrument.id).order_by(DailyBar.trade_date)
@@ -811,6 +811,9 @@ class DecisionBoardService:
     def _derive_provisional(self, db: Session, instrument_id: int, row) -> dict | None:
         """Compute a temporary research view without mutating DailyBar or snapshots."""
 
+        instrument = db.get(Instrument, instrument_id)
+        if instrument is None:
+            return None
         history = db.scalars(
             select(DailyBar)
             .where(DailyBar.instrument_id == instrument_id, DailyBar.trade_date < row.observed_at.date())
@@ -818,6 +821,19 @@ class DecisionBoardService:
         ).all()
         if len(history) < 30:
             return None
+        adjustments = {item.adjust for item in history}
+        if len(adjustments) != 1:
+            return None
+        from types import SimpleNamespace
+        provisional_history_row = SimpleNamespace(
+            trade_date=row.observed_at.date(), open=row.open_price, high=row.high_price,
+            low=row.low_price, close=row.last_price, pre_close=None, volume=row.volume,
+            amount=row.amount, source=row.source, adjust=next(iter(adjustments)),
+            fetched_at=row.created_at, quality_hash=None,
+        )
+        source_rows = [*history, provisional_history_row]
+        from app.providers.corporate_action_contract import research_history_rows
+        research_rows = source_rows if self.settings.market_provider == "mock" else research_history_rows(source_rows, instrument.ts_code)
         raw = pd.DataFrame(
             [
                 {
@@ -829,18 +845,7 @@ class DecisionBoardService:
                     "volume": item.volume,
                     "amount": item.amount,
                 }
-                for item in history
-            ]
-            + [
-                {
-                    "trade_date": row.observed_at.date(),
-                    "open": row.open_price,
-                    "high": row.high_price,
-                    "low": row.low_price,
-                    "close": row.last_price,
-                    "volume": row.volume,
-                    "amount": row.amount,
-                }
+                for item in research_rows
             ]
         )
         try:

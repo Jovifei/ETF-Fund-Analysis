@@ -12,7 +12,7 @@ test('detail shows a newly read snapshot within one visible refresh interval', a
     await route.fulfill({
       json: {
         instrument: { ts_code: '512480.SH', name: '半导体ETF', kind: 'ETF', theme_l1: '科技', theme_l2: '半导体' },
-        decision: null, snapshot_id: `snapshot-${detailReads}`, decision_time: `2026-09-23T10:00:${String(detailReads).padStart(2, '0')}+08:00`,
+        decision: null, snapshot_id: `snapshot-${detailReads}`, decision_time: `2026-09-23T10:00:${String(detailReads).padStart(2, '0')}+08:00`, read_as_of: `2026-09-23T10:00:${String(detailReads).padStart(2, '0')}+08:00`,
         quote: { price: 1 + detailReads / 100, change_ratio: 0, status: 'recent_observation', source_time: `2026-09-23T10:00:${String(detailReads).padStart(2, '0')}+08:00`, fetched_at: `2026-09-23T10:00:${String(detailReads).padStart(2, '0')}+08:00`, source: 'fixture' },
         indicator_values: {}, indicator_version: null, indicator_as_of: '2026-09-22', forecasts: {},
         support_resistance: null, holding: null, forecast_scenario: null,
@@ -24,7 +24,7 @@ test('detail shows a newly read snapshot within one visible refresh interval', a
     await route.fulfill({
       json: {
         ts_code: '512480.SH', interval: '1d', available: false, bars: [], reason: 'fixture',
-        source_as_of: `2026-09-2${2 + chartReads}`, as_of: '2026-09-23T10:00:00+08:00',
+        source_as_of: `2026-09-2${2 + chartReads}`, as_of: new URL(route.request().url()).searchParams.get('as_of'),
         computed_at: `2026-09-23T10:00:${String(chartReads).padStart(2, '0')}+08:00`,
       },
     })

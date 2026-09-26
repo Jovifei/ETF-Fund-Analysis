@@ -46,7 +46,7 @@ def test_daily_identity_and_invalid_period_rejected():
 
 def test_studies_use_price_pivots_not_oscillator_values_and_are_research_only():
     import math
-    from datetime import date,timedelta
+    from datetime import date, timedelta
     raw=[dict(date=(date(2025,1,1)+timedelta(days=i)).isoformat(),open=100+math.sin(i)*2,close=100+math.sin(i)*2,high=104+math.sin(i)*2,low=96+math.sin(i)*2,volume=None,amount=None,source='fixture') for i in range(130)]
     result=chart_studies(raw,{},'1d')
     assert result['actionable'] is False
@@ -55,3 +55,20 @@ def test_studies_use_price_pivots_not_oscillator_values_and_are_research_only():
     assert result['volume_profile_approx'] is None
     assert result['chan_zone_approx']['qualified'] is False
     assert any(item['key']=='kdj_j' and '价格' in item['explanation'] for item in result['readings'])
+
+
+def test_chart_studies_preserve_unknown_volume_when_building_price_research(monkeypatch):
+    import pandas as pd
+    from app.workspace import candle_periods
+
+    captured = {}
+    def capture(frame):
+        captured['volume'] = frame['volume'].tolist()
+        return {'levels': [], 'trend_lines': [], 'volume_profile_approx': None}
+    monkeypatch.setattr(candle_periods, 'build_support_resistance', capture)
+
+    candle_periods.chart_studies(rows(), {}, '1d')
+
+    assert captured['volume'][0:2] == [100, 200]
+    assert pd.isna(captured['volume'][2])
+    assert captured['volume'][3] == 400

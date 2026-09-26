@@ -1,10 +1,10 @@
-"""支撑/压力唯一计算与读取入口（support-resistance-v2-input-mask）。
+"""支撑/压力唯一计算与读取入口（support-resistance-v3-research-price-basis）。
 
 全系统的支撑压力只在这里计算并落库（SupportResistanceSnapshot），
 决策总表 / 14:30 工作台 / ETF 详情一律读取快照，禁止各自从日线重算。
 
 统一输入口径（修复方案 P0-5）：
-* 回溯窗口 250 根已存日线；原始价格口径不能混合；
+* 回溯窗口 250 根已存日线；按统一公司行为研究口径计算，原始行情不改写；
 * 保留真实 ``amount/volume`` 的空值与零值，不估算或填零；
 * 参数来自 ``config/etf_1430_workbench.json`` 的 ``support_resistance`` 块。
 """
@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -26,7 +25,7 @@ from app.utils.support_resistance import build_support_resistance
 
 logger = logging.getLogger(__name__)
 
-METHOD_VERSION = "support-resistance-v2-input-mask"
+METHOD_VERSION = "support-resistance-v3-research-price-basis"
 DEFAULT_WINDOW = 250
 
 _EMPTY_PAYLOAD: dict[str, Any] = {
@@ -62,22 +61,35 @@ class SupportResistanceService:
     # -------------------------------------------------------------- 数据准备
 
     def _sr_frame(self, db: Session, instrument_id: int, *, window: int = DEFAULT_WINDOW) -> pd.DataFrame:
-        """Bounded raw history; unknown units may not feed weighted methods."""
+        """Bounded research history; unknown units may not feed weighted methods."""
+        from app.providers.corporate_action_contract import official_corporate_actions, research_history_rows
         from app.providers.data_contract import finite, price_history_issue, row_units_verified
         from app.utils.input_lineage import history_digest
         rows = list(reversed(db.scalars(select(DailyBar)
             .where(DailyBar.instrument_id == instrument_id)
             .order_by(DailyBar.trade_date.desc(), DailyBar.id.desc()).limit(window)).all()))
+        instrument = db.get(Instrument, instrument_id)
+        research_rows = rows if self.settings.market_provider == "mock" or instrument is None else research_history_rows(rows, instrument.ts_code)
+        adjustments = {row.adjust for row in rows}
+        split_evidence = (
+            [event.evidence_id for event in official_corporate_actions(instrument.ts_code)]
+            if instrument is not None and adjustments == {"none"} and self.settings.market_provider != "mock"
+            else []
+        )
+        basis_id = stable_hash({"instrument": instrument.ts_code if instrument else instrument_id,
+                                "adjustments": sorted(adjustments), "split_evidence": split_evidence,
+                                "method_version": METHOD_VERSION})
         records = []
-        for row in rows:
-            units_ok = row_units_verified(row) or (self.settings.market_provider == "mock" and "mock" in row.source)
+        for source_row, row in zip(rows, research_rows, strict=True):
+            units_ok = row_units_verified(source_row) or (self.settings.market_provider == "mock" and "mock" in source_row.source)
             records.append({"trade_date": row.trade_date, "open": row.open, "high": row.high,
                 "low": row.low, "close": row.close,
                 "volume": row.volume if units_ok and finite(row.volume) and row.volume >= 0 else None,
                 "amount": row.amount if units_ok and finite(row.amount) and row.amount >= 0 else None})
         frame = pd.DataFrame(records)
-        frame.attrs["history_issue"] = price_history_issue(rows)
-        frame.attrs["input_hash"] = history_digest(rows)
+        frame.attrs["history_issue"] = price_history_issue(research_rows)
+        frame.attrs["input_hash"] = stable_hash({"raw_history_hash": history_digest(rows), "price_basis_id": basis_id})
+        frame.attrs["price_basis_id"] = basis_id
         frame.attrs["contains_mock"] = any("mock" in str(row.source).lower() for row in rows)
         return frame
 
@@ -173,13 +185,11 @@ class SupportResistanceService:
         if (snapshot is None or snapshot.method_version != METHOD_VERSION
                 or snapshot.config_hash != self.config_hash):
             return None
-        from app.utils.input_lineage import history_digest
-        rows = db.scalars(select(DailyBar).where(DailyBar.instrument_id == instrument_id)
-            .order_by(DailyBar.trade_date.desc(), DailyBar.id.desc()).limit(DEFAULT_WINDOW)).all()
-        if not rows or rows[0].trade_date != snapshot.as_of_date:
+        frame = self._sr_frame(db, instrument_id)
+        if frame.empty or frame.iloc[-1]["trade_date"] != snapshot.as_of_date:
             return None
         payload = dict(snapshot.payload_json or {})
-        if payload.get("input_hash") != history_digest(list(reversed(rows))):
+        if payload.get("input_hash") != frame.attrs.get("input_hash"):
             return None
         payload.setdefault("snapshot_as_of_date", snapshot.as_of_date.isoformat())
         payload["snapshot_source"] = "persisted_snapshot"

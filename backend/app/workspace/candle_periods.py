@@ -7,8 +7,9 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from app.workspace.chart import cached_indicator_series, number
+from app.utils.hashing import stable_hash
 from app.utils.support_resistance import build_support_resistance
+from app.workspace.chart import cached_indicator_series, number
 
 PERIODS=('1d','1w','1mo')
 TZ=ZoneInfo('Asia/Shanghai')
@@ -76,8 +77,7 @@ def chart_studies(rows: list[dict], config: dict, period: str) -> dict:
     frame=pd.DataFrame([{**row,**row.get('indicators',{}),'trade_date':row['date'],'atr14':row.get('indicators',{}).get('atr')} for row in series])
     if len(frame) and 'volume' in frame:
         values=pd.to_numeric(frame['volume'],errors='coerce')
-        # Incomplete turnover does not justify a volume-at-price distribution.
-        frame['volume']=0 if values.isna().any() else values
+        frame['volume']=values
     result=build_support_resistance(frame)
     # Existing deterministic price algorithm is reused, without promoting any
     # cached/manual/aggregated source to actionable or PIT backtest qualification.
@@ -99,16 +99,42 @@ def chart_studies(rows: list[dict], config: dict, period: str) -> dict:
 
 def transform_chart(result: dict, period: str, config: dict, limit: int=500, *, now: datetime | None=None) -> dict:
     assessed_at=now or datetime.now(TZ)
-    bars=aggregate_bars(result.get('bars',[]),period,now=assessed_at)
-    series=(bars if period=="1d" and bars and "indicators" in bars[-1] else cached_indicator_series(bars,config)) if bars else []
+    raw_bars=aggregate_bars(result.get('bars',[]),period,now=assessed_at)
+    research_source=result.get('research_bars') or result.get('bars',[])
+    research_bars=aggregate_bars(research_source,period,now=assessed_at)
     if result.get("history_issue"):
-        series = [{**bar, "indicators": {}} for bar in bars]
+        research_series = [{**bar, "indicators": {}} for bar in research_bars]
         studies = {"levels": [], "readings": [], "qualified": False, "actionable": False, "reason": result["history_issue"]}
     else:
-        studies=chart_studies(series,config,period)
-    return {**result,'interval':period,'bars':series[-limit:],'studies':studies,
-        'computed_at':datetime.now(TZ).isoformat(),
-        'core_snapshot_match': result.get('core_snapshot_match') if period=='1d' else None,
-        'indicator_basis':'same_server_formulas_on_'+period,'support_resistance':studies,
-        'sr_overlay_allowed':bool(studies.get('levels')),'actionable':False,
-        'indicator_note':'日/周/月K按实际历史OHLC聚合；指标按所选周期重算。价位为当前研究参考，不是历史当时已知的交易信号；振荡器只确认价格拐点。'}
+        research_series=(research_bars if period=="1d" and research_bars and "indicators" in research_bars[-1]
+                         else cached_indicator_series(research_bars,config)) if research_bars else []
+        studies=chart_studies(research_series,config,period)
+    research_by_date={bar['date']:bar for bar in research_series}
+    raw_overlay_allowed=bool(result.get('raw_overlay_allowed',True)) and all(bar['date'] in research_by_date for bar in raw_bars)
+    bars=[{**bar,"indicators":research_by_date[bar['date']].get('indicators',{}) if raw_overlay_allowed else {}}
+          for bar in raw_bars]
+    research_support=studies
+    raw_support=research_support if raw_overlay_allowed else None
+    series_id=stable_hash({"base_input_hash":result.get("input_hash"),"interval":period,
+                           "research_price_basis_id":result.get("research_price_basis_id"),
+                           "indicator_version":result.get("indicator_version"),
+                           "chart_contract_version":"chart-read-v1.1.0"})
+    studies={**studies,"input_hash":result.get("input_hash"),"series_id":series_id,
+             "price_basis_id":result.get("research_price_basis_id"),"interval":period}
+    payload = {**result, 'interval': period, 'bars': bars[-limit:],
+        'research_bars': research_series[-limit:], 'studies': studies,
+        'series_id': series_id, 'computed_at': datetime.now(TZ).isoformat(),
+        'core_snapshot_match': result.get('core_snapshot_match') if period == '1d' else None,
+        'indicator_basis': f"server_formulas_{period}_on_{result.get('research_price_basis', 'source_price')}",
+        'support_resistance': raw_support, 'research_support_resistance': research_support,
+        'sr_overlay_allowed': bool(raw_overlay_allowed and studies.get('levels')),
+        'research_sr_overlay_allowed': bool(studies.get('levels')),
+        'raw_overlay_allowed': raw_overlay_allowed,
+        'raw_overlay_reason': result.get('raw_overlay_reason') or (None if raw_overlay_allowed else 'price_basis_mismatch'),
+        'basis_transition': bool(result.get('raw_overlay_reason') == 'price_basis_mismatch'),
+        'research_cost_overlay_allowed': bool(result.get('research_cost_overlay_allowed')),
+        'actionable': False,
+        'indicator_note': '日/周/月K按实际历史OHLC聚合；指标按同一拆分调整研究序列重算。价位为当前研究参考，不是历史当时已知的交易信号。'}
+    if payload['basis_transition'] and result.get('indicator_note'):
+        payload['indicator_note'] = result['indicator_note']
+    return payload

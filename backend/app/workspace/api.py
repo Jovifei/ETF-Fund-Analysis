@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.core.security import optional_current_user, require_private_access, require_admin
+from app.core.security import optional_current_user, require_admin, require_private_access
 from app.db.session import get_db
-from app.models import AuthUser
+from app.models import AuthUser, Instrument
 from app.workspace import read_model
 from app.workspace.actions_api import router as actions_router
 from app.workspace.bridge_api import router as device_router
@@ -18,6 +20,11 @@ private_router = APIRouter(prefix="/api", dependencies=[Depends(require_private_
 DB = Annotated[Session, Depends(get_db)]
 Config = Annotated[Settings, Depends(get_settings)]
 User = Annotated[AuthUser | None, Depends(optional_current_user)]
+
+
+def _instrument_missing_reason(db: Session, code: str) -> str:
+    record = db.scalar(select(Instrument).where(Instrument.ts_code == code.upper()))
+    return "instrument_not_in_catalog" if record is None else "unsupported_instrument_type"
 
 
 @private_router.get("/search/instruments")
@@ -37,18 +44,22 @@ def overview(db: DB, settings: Config, user: User, horizon: int = Query(default=
 def detail(code: str, db: DB, settings: Config, user: User) -> dict:
     result = read_model.instrument_detail(db, settings, code.upper(), user.id if user else None)
     if result is None:
-        raise HTTPException(404, "ETF/LOF 不在已同步目录中")
+        raise HTTPException(404, _instrument_missing_reason(db, code))
     return result
 
 
 @private_router.get("/workspace/instruments/{code}/chart")
-def chart(code: str, db: DB, settings: Config, user: User, interval: Literal["1d", "1w", "1mo", "30m", "60m"] = "1d", limit: int = Query(default=260, ge=30, le=1500)) -> dict:
-    result = read_model.chart_data(db, settings, code.upper(), interval, limit)
+def chart(code: str, db: DB, settings: Config, user: User, interval: str = "1d", limit: int = Query(default=260, ge=30, le=1500), as_of: datetime | None = Query(default=None)) -> dict:
+    if interval not in {"1d", "1w", "1mo", "30m", "60m"}:
+        raise HTTPException(422, "unsupported_chart_interval")
+    if as_of is not None and read_model.market_time(as_of) > read_model.market_time(datetime.now(read_model.SHANGHAI)):
+        raise HTTPException(422, "as_of_in_future")
+    result = read_model.chart_data(db, settings, code.upper(), interval, limit, as_of=as_of)
     if result is None:
-        raise HTTPException(404, "ETF/LOF 不在已同步目录中")
+        raise HTTPException(404, _instrument_missing_reason(db, code))
     if interval=="1d":
         from app.workspace.candle_periods import transform_chart
-        result=transform_chart(result,interval,settings.load_strategy()["indicator"],limit)
+        result=transform_chart(result,interval,settings.load_strategy()["indicator"],limit,now=as_of)
     return result
 
 
@@ -75,6 +86,7 @@ def factors(db: DB, settings: Config, user: User) -> dict:
 private_router.include_router(actions_router)
 private_router.include_router(revision_router)
 from app.workspace.journal import router as journal_router
+
 private_router.include_router(journal_router)
 # Machine credentials never inherit the legacy browser authentication path.
 router = APIRouter()
@@ -103,9 +115,10 @@ def discovery_refresh(db: DB, admin: Annotated[AuthUser | None, Depends(require_
 
 @private_router.get("/workspace/indexes")
 def index_summaries(db: DB, settings: Config, user: User) -> dict:
-    from app.workspace import index_history
-    from app.models import MarketContextRegistry
     from sqlalchemy import select
+
+    from app.models import MarketContextRegistry
+    from app.workspace import index_history
     rows=db.scalars(select(MarketContextRegistry).where(MarketContextRegistry.context_kind=='index',MarketContextRegistry.enabled.is_(True))).all()
     items=[]
     for row in rows:
@@ -142,8 +155,9 @@ def history_preparation(db: DB, admin: Annotated[AuthUser | None, Depends(requir
 @private_router.get("/workspace/research-outlook")
 def research_outlook(db: DB, settings: Config, user: User, code: str|None=Query(default=None,pattern=r"^\d{6}\.(SH|SZ|BJ)$")):
     from sqlalchemy import select
+
     from app.models import Instrument
-    from app.workspace.research_outlook import read,VERSION
+    from app.workspace.research_outlook import VERSION, read
     codes=[code] if code else list(db.scalars(select(Instrument.ts_code).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code).limit(200)))
     return {'items':read(db,codes),'model_version':VERSION,'horizons':[1,5,20],'provider_called':False,'actionable':False}
 
@@ -153,13 +167,16 @@ def news_status(db: DB, settings: Config, user: User):
     from app.workspace.news_status import read
     return read(db, settings=settings)
 
-from app.workspace.ai_api import router as ai_router, members as member_router
+from app.workspace.ai_api import members as member_router
+from app.workspace.ai_api import router as ai_router
+
 private_router.include_router(ai_router)
 private_router.include_router(member_router)
 
 @private_router.get("/workspace/market-context")
 def context_read_view(db: DB, settings: Config, response: Response, user: User) -> dict:
     from datetime import datetime
+
     from app.services.market_context_service import MarketContextService
     from app.workspace.display_freshness import context_display
     now = datetime.now(settings.timezone)

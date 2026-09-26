@@ -1,11 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { api, abortAllRequests, csrfToken, ApiError } from '../src/lib/api'
+import { api, abortAllRequests, csrfToken, ApiError, errorText } from '../src/lib/api'
 afterEach(() => { abortAllRequests(); vi.unstubAllGlobals(); document.cookie = 'fund-csrf=; Max-Age=0' })
 describe('same-origin API boundary', () => {
   it('parses only the dedicated CSRF cookie', () => { expect(csrfToken('fund-session=hidden; fund-csrf=test-proof')).toBe('test-proof'); expect(csrfToken('unrelated=bad')).toBe('') })
   it('does not attach secrets or a body to GET', async () => { const fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ items: [] }) }); vi.stubGlobal('fetch', fetch); await api('/api/search/instruments?q=ETF'); const opts = fetch.mock.calls[0][1]; expect(opts.credentials).toBe('same-origin'); expect(opts.headers.Authorization).toBeUndefined(); expect(opts.body).toBeUndefined(); expect(opts.cache).toBe('no-store') })
   it('sends CSRF for explicit writes and emits session expiry', async () => { document.cookie = 'fund-csrf=proof'; const listener = vi.fn(); window.addEventListener('session-expired', listener); const fetch = vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({ detail: 'session_expired' }) }); vi.stubGlobal('fetch', fetch); await expect(api('/api/holdings/512480.SH', { method: 'DELETE' })).rejects.toBeInstanceOf(ApiError); expect(fetch.mock.calls[0][1].headers['X-CSRF-Token']).toBe('proof'); expect(listener).toHaveBeenCalledOnce(); window.removeEventListener('session-expired', listener) })
   it('rejects other origins before network', async () => { const fetch = vi.fn(); vi.stubGlobal('fetch', fetch); await expect(api('https://example.com/api/x')).rejects.toBeInstanceOf(ApiError); expect(fetch).not.toHaveBeenCalled() })
+  it('explains missing ETF catalog entries and unsupported chart periods', () => {
+    expect(errorText(new ApiError(404, 'instrument_not_in_catalog'))).toContain('不在已同步证券目录')
+    expect(errorText(new ApiError(422, 'unsupported_chart_interval'))).toContain('该图表周期暂不支持')
+  })
+  it('keeps authentication, server and timeout errors distinguishable', () => {
+    expect(errorText(new ApiError(401, 'session_expired'))).toContain('登录已失效')
+    expect(errorText(new ApiError(500, 'http_500'))).toContain('http_500')
+    expect(errorText(new DOMException('timeout', 'AbortError'))).toContain('超时')
+  })
 })
 
 it('does not deliver private JSON after logout during body parsing', async () => {

@@ -123,3 +123,18 @@ def test_official_split_catalog_research_series_covers_all_production_gap_cases(
         assert tuple(row.close for row in rows) == display_closes
         assert all(row.adjust == "corporate_action_research" for row in research)
         assert price_history_issue(research) is None
+
+
+def test_source_adjusted_prices_are_not_adjusted_again_or_mixed():
+    rows = [
+        _bar(date(2026, 7, 2), 1.0, high=1.02, low=0.98, adjust='qfq'),
+        _bar(date(2026, 7, 3), 1.0, high=1.02, low=0.98, adjust='qfq'),
+    ]
+
+    research = corporate_action_contract.research_history_rows(rows, '512480.SH')
+
+    assert [row.close for row in research] == [1.0, 1.0]
+    assert {row.adjust for row in research} == {'qfq'}
+    mixed = [rows[0], _bar(date(2026, 7, 3), 1.0, adjust='none')]
+    assert corporate_action_contract.research_history_rows(mixed, '512480.SH') == mixed
+    assert price_history_issue(mixed) == 'ambiguous_price_basis'

@@ -7,12 +7,11 @@ from datetime import date, timedelta
 
 import pandas as pd
 import pytest
+from app.core.config import get_settings
+from app.main import app
+from app.utils.indicators import calculate_indicators
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-
-from app.main import app
-from app.core.config import get_settings
-from app.utils.indicators import calculate_indicators
 
 
 def test_workspace_search_is_available_bounded_and_read_only(bootstrapped):
@@ -67,3 +66,23 @@ def test_workspace_unknown_api_is_not_a_successful_spa_page():
     with TestClient(app) as client:
         assert client.get('/api/workspace/does-not-exist').status_code == 404
         assert client.get('/workspace-assets/does-not-exist.js').status_code == 404
+
+
+def test_detail_and_chart_errors_have_stable_reason_codes(bootstrapped):
+    with TestClient(app) as client:
+        missing = client.get('/api/workspace/instruments/999999.SH')
+        invalid_period = client.get('/api/workspace/instruments/510300.SH/chart?interval=2h')
+        pinned = client.get('/api/workspace/instruments/510300.SH/chart', params={
+            'interval': '1d', 'as_of': '2026-09-23T10:00:00+08:00',
+        })
+        future = client.get('/api/workspace/instruments/510300.SH/chart', params={
+            'interval': '1d', 'as_of': '2030-01-01T10:00:00+08:00',
+        })
+    assert missing.status_code == 404
+    assert missing.json()['detail'] == 'instrument_not_in_catalog'
+    assert invalid_period.status_code == 422
+    assert invalid_period.json()['detail'] == 'unsupported_chart_interval'
+    assert pinned.status_code == 200
+    assert pinned.json()['as_of'] == '2026-09-23T10:00:00+08:00'
+    assert future.status_code == 422
+    assert future.json()['detail'] == 'as_of_in_future'

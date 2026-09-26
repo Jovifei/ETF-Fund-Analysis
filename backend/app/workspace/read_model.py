@@ -13,15 +13,28 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 from sqlalchemy import case, func, or_, select
-from app.workspace.catalog_search import search_terms, matching_reason
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.models import DailyBar, DecisionBoardProvisionalInput, ForecastSnapshot, Holding, IndicatorSnapshot, Instrument, MarketBar, QuoteSnapshot, ReportArtifact, SectorSnapshot, UserWatchlistEntry
+from app.models import (
+    DailyBar,
+    DecisionBoardProvisionalInput,
+    DecisionBoardSnapshot,
+    ForecastSnapshot,
+    Holding,
+    IndicatorSnapshot,
+    Instrument,
+    MarketBar,
+    QuoteSnapshot,
+    ReportArtifact,
+    SectorSnapshot,
+    UserWatchlistEntry,
+)
 from app.services.decision_board_service import DecisionBoardService
 from app.services.factor_analysis_service import DEFAULT_FACTORS
 from app.services.support_resistance_service import SupportResistanceService
 from app.utils.hashing import stable_hash
+from app.workspace.catalog_search import matching_reason, search_terms
 from app.workspace.chart import CORE_FIELDS, cached_indicator_series, number
 from app.workspace.config import workspace_settings
 
@@ -41,6 +54,11 @@ def iso(value):
 def market_time(value):
     if value is None:
         return None
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            return None
     return value if value.tzinfo else value.replace(tzinfo=SHANGHAI)
 
 
@@ -55,13 +73,14 @@ def latest_rows(db: Session, model, ids: list[int], *ordering, partitions=None) 
     return {row.instrument_id: row for row in rows}
 
 
-def quote_view(quote, settings: Settings) -> dict:
+def quote_view(quote, settings: Settings, *, as_of: datetime | None = None) -> dict:
     if quote is None:
         return {"price": None, "status": "missing", "source_time": None, "source": None, "actionable": False}
     mock = settings.market_provider == "mock" or "mock" in str(quote.source).lower()
     observed = market_time(quote.quote_time)
-    age = (datetime.now(UTC) - observed).total_seconds() if observed else None
-    state = "mock" if mock else "unverified" if not quote.timestamp_verified else "degraded" if quote.degraded_reason else "stale" if age is None or age < -60 or age > 600 else "observed"
+    reference = market_time(as_of or datetime.now(UTC))
+    age = (reference.astimezone(UTC) - observed.astimezone(UTC)).total_seconds() if observed else None
+    state = "mock" if mock else "unverified" if not quote.timestamp_verified else "degraded" if quote.degraded_reason else "stale" if age is None or age < 0 or age > 600 else "observed"
     price = number(quote.price)
     if isinstance(quote.price, bool) or price is None or price <= 0:
         price, state = None, "invalid"
@@ -72,6 +91,30 @@ def quote_view(quote, settings: Settings) -> dict:
         "source": quote.source, "timestamp_verified": bool(quote.timestamp_verified),
         "is_realtime": bool(quote.is_realtime and state == "observed"), "is_mock": mock,
         "actionable": False,
+    }
+
+
+def _decision_delta(db: Session, current: dict | None) -> dict:
+    if not current or not current.get("snapshot_id"):
+        return {"status": "unavailable", "reason_code": "decision_not_generated"}
+    snapshots = list(db.scalars(select(DecisionBoardSnapshot).order_by(
+        DecisionBoardSnapshot.generated_at.desc(), DecisionBoardSnapshot.id.desc()
+    ).limit(20)))
+    current_index = next((i for i, item in enumerate(snapshots) if item.snapshot_id == current["snapshot_id"]), None)
+    if current_index is None or current_index + 1 >= len(snapshots):
+        return {"status": "unavailable", "reason_code": "no_previous_snapshot"}
+    previous = snapshots[current_index + 1]
+    previous_row = next((item for item in (previous.payload_json or {}).get("rows", [])
+                         if item.get("ts_code") == current.get("ts_code")), None)
+    if previous_row is None:
+        return {"status": "unavailable", "reason_code": "instrument_absent_from_previous_snapshot",
+                "previous_snapshot_id": previous.snapshot_id}
+    return {
+        "status": "available", "previous_snapshot_id": previous.snapshot_id,
+        "previous_grade": previous_row.get("grade"), "current_grade": current.get("grade"),
+        "grade_changed": previous_row.get("grade") != current.get("grade"),
+        "previous_data_status": previous_row.get("data_status"), "current_data_status": current.get("data_status"),
+        "data_status_changed": previous_row.get("data_status") != current.get("data_status"),
     }
 
 
@@ -171,20 +214,30 @@ def holdings_view(db: Session, settings: Settings, user_id: int | None) -> dict:
     }
 
 
-def instrument_detail(db: Session, settings: Settings, code: str, user_id: int | None) -> dict | None:
+def instrument_detail(db: Session, settings: Settings, code: str, user_id: int | None, *, as_of: datetime | None = None) -> dict | None:
+    read_as_of = market_time(as_of or datetime.now(SHANGHAI)).astimezone(SHANGHAI)
     inst = db.scalar(select(Instrument).where(Instrument.ts_code == code, Instrument.kind.in_(("ETF", "LOF"))))
     if inst is None:
         return None
     row = DecisionBoardService(settings).read_instrument(db, code)
+    decision_after_read = bool(row and market_time(row.get("generated_at")) > read_as_of)
+    if decision_after_read:
+        row = None
     indicator = db.scalar(select(IndicatorSnapshot).where(IndicatorSnapshot.instrument_id == inst.id).order_by(IndicatorSnapshot.as_of_date.desc(), IndicatorSnapshot.generated_at.desc(), IndicatorSnapshot.id.desc()).limit(1))
     quote = latest_rows(db, QuoteSnapshot, [inst.id], QuoteSnapshot.quote_time.desc()).get(inst.id)
     forecasts = latest_rows(db, ForecastSnapshot, [inst.id], ForecastSnapshot.as_of_date.desc(), ForecastSnapshot.generated_at.desc(), partitions=[ForecastSnapshot.instrument_id, ForecastSnapshot.horizon])
-    from app.services.snapshot_contract import snapshot_issues
     from app.services.settlement import settled_session
-    expected = None if settings.market_provider == "mock" else settled_session(settings)
+    from app.services.snapshot_contract import snapshot_issues
+    expected = None if settings.market_provider == "mock" else settled_session(settings, read_as_of)
     indicator_issues = snapshot_issues(indicator, settings, expected, kind="indicator")
+    if indicator is not None and market_time(indicator.generated_at) > read_as_of:
+        indicator_issues = [*indicator_issues, "indicator_snapshot_after_read_time"]
     forecast_issues = {str(h): snapshot_issues(forecasts.get((inst.id, h)), settings, expected, kind="forecast")
                        for h in (1, 3, 5, 10)}
+    for horizon in (1, 3, 5, 10):
+        forecast = forecasts.get((inst.id, horizon))
+        if forecast is not None and market_time(forecast.generated_at) > read_as_of:
+            forecast_issues[str(horizon)] = [*forecast_issues[str(horizon)], "forecast_snapshot_after_read_time"]
     if indicator_issues:
         indicator = None
     forecast_rows = {}
@@ -195,17 +248,14 @@ def instrument_detail(db: Session, settings: Settings, code: str, user_id: int |
             forecast_rows[str(horizon)]["as_of_date"] = iso(item.as_of_date)
     from app.providers.data_contract import history_issues
     issue = history_issues(db, settings, [inst.id]).get(inst.id)
-    view_quote = quote_view(quote, settings)
-    display_chart = chart_data(db, settings, code, "1d", 60)
-    last = ((display_chart or {}).get("bars") or [None])[-1]
-    decision_provisional = (row or {}).get("provisional") or {}
-    provisional_used = bool(decision_provisional.get("used_for_derived_values"))
-    display_values = (
-        decision_provisional.get("derived", {}).get("indicator_values", {})
-        if provisional_used else indicator.values_json if indicator and not issue else {}
-    )
-    if not display_values and last:
-        display_values = last["indicators"]
+    view_quote = quote_view(quote, settings, as_of=read_as_of)
+    display_chart = chart_data(db, settings, code, "1d", 60, as_of=read_as_of)
+    raw_chart_bars = (display_chart or {}).get("bars") or []
+    research_chart_bars = (display_chart or {}).get("research_bars") or raw_chart_bars
+    last = (raw_chart_bars or [None])[-1]
+    research_last = (research_chart_bars or [None])[-1]
+    display_values = (research_last or {}).get("indicators") or (indicator.values_json if indicator and not issue else {})
+    indicator_as_of = research_last["date"] if research_last and display_values else iso(indicator.as_of_date) if indicator and not issue else None
     if view_quote["price"] is None and last:
         view_quote = {**view_quote, "price": last["close"], "status": "historical_close",
                       "source": last["source"], "source_time": last["date"],
@@ -213,25 +263,64 @@ def instrument_detail(db: Session, settings: Settings, code: str, user_id: int |
     if issue:
         forecast_rows = {}
     personal = next((item for item in holdings_view(db, settings, user_id)["items"] if item["ts_code"] == code), None)
+    indicator_available = any(number(value) is not None for value in display_values.values())
+    history_reason = (display_chart or {}).get("reason") if not (display_chart or {}).get("available") else None
+    volume_missing = (display_chart or {}).get("qualification") in {"legacy_units_unverified", "historical_price_only"} or any(
+        bar.get("volume") is None for bar in (display_chart or {}).get("bars", [])
+    )
+    chart_available = bool((display_chart or {}).get("available"))
+    chart_history_issue = (display_chart or {}).get("history_issue")
+    decision_reason = "decision_snapshot_after_read_time" if decision_after_read else None if row else "decision_not_generated"
+    forecast_reason = (
+        None if forecast_rows else "forecast_snapshot_after_read_time"
+        if any("forecast_snapshot_after_read_time" in reasons for reasons in forecast_issues.values())
+        else issue or "forecast_not_generated"
+    )
+    availability = {
+        "instrument": {"status": "active" if inst.enabled else "disabled", "reason_code": None if inst.enabled else "instrument_disabled"},
+        "price": {"status": "available" if view_quote["price"] is not None else "unavailable", "reason_code": None if view_quote["price"] is not None else "quote_unavailable"},
+        "history": {"status": "blocked" if chart_history_issue else "available" if chart_available else "unavailable",
+                    "reason_code": chart_history_issue or (None if chart_available else history_reason or "history_not_prepared")},
+        "price_basis": {"status": "unknown" if not chart_available else "aligned" if (display_chart or {}).get("raw_overlay_allowed", True) else "separate",
+                         "reason_code": chart_history_issue or (display_chart or {}).get("raw_overlay_reason") or (None if chart_available else history_reason)},
+        "indicators": {"status": "blocked" if chart_history_issue else "available" if indicator_available else "unavailable",
+                        "reason_code": chart_history_issue or (None if indicator_available else "indicator_values_unavailable")},
+        "volume": {"status": "blocked" if chart_history_issue else "unavailable" if volume_missing else "available",
+                   "reason_code": chart_history_issue or ("volume_missing_or_unverified" if volume_missing else None)},
+        "forecasts": {"status": "blocked" if issue else "available" if forecast_rows else "unavailable",
+                       "reason_code": forecast_reason},
+        "decision": {"status": "available" if row else "unavailable",
+                     "reason_code": decision_reason},
+    }
+    decision_explanation = {
+        "conclusion": row.get("grade") if row else None,
+        "primary_basis": row.get("grade_reason") if row else None,
+        "comparison": {"status": "unavailable", "reason_code": decision_reason} if decision_after_read else _decision_delta(db, row),
+        "evidence_caveats": [item["reason_code"] for item in availability.values() if item.get("reason_code")],
+        "computed_at": row.get("generated_at") if row else None,
+        "actionable": False,
+    }
     return {
-        "instrument": {"ts_code": code, "name": inst.name, "kind": inst.kind, "theme_l1": inst.theme_l1, "theme_l2": inst.theme_l2, "benchmark": inst.benchmark},
+        "instrument": {"ts_code": code, "name": inst.name, "kind": inst.kind, "theme_l1": inst.theme_l1, "theme_l2": inst.theme_l2, "benchmark": inst.benchmark, "enabled": bool(inst.enabled)},
         "decision": compact_row(row) if row else None, "snapshot_id": (row or {}).get("snapshot_id"),
         "decision_time": (row or {}).get("generated_at"), "quote": view_quote,
+        "availability": availability, "decision_explanation": decision_explanation,
         "snapshot_issues": {"indicator": indicator_issues, "forecasts": forecast_issues},
-        "daily_as_of": (display_chart or {}).get("source_as_of") or (last or {}).get("date"),
+        "read_as_of": iso(read_as_of), "daily_as_of": (display_chart or {}).get("source_as_of") or (last or {}).get("date"),
         "target_trade_date": expected.isoformat() if expected else None,
-        "history_issue": issue, "indicator_basis": "intraday_provisional_research" if provisional_used else "persisted_snapshot" if indicator and not issue else "historical_price_display",
-        "indicator_values": display_values, "indicator_version": indicator.version if indicator and not issue else settings.load_strategy()["indicator_version"],
-        "indicator_as_of": decision_provisional.get("observed_at") if provisional_used else iso(indicator.as_of_date) if indicator and not issue else (last or {}).get("date"), "forecasts": forecast_rows,
-        "support_resistance": None if issue else SupportResistanceService(settings).latest(db, inst.id),
+        "history_issue": issue, "indicator_basis": (display_chart or {}).get("indicator_basis") or ("persisted_snapshot" if indicator and not issue else "historical_price_display"),
+        "indicator_input_hash": (display_chart or {}).get("input_hash"), "chart_series_id": (display_chart or {}).get("series_id"),
+        "indicator_values": display_values, "indicator_version": (display_chart or {}).get("indicator_version") or (indicator.version if indicator and not issue else settings.load_strategy()["indicator_version"]),
+        "indicator_as_of": indicator_as_of, "forecasts": forecast_rows,
+        "support_resistance": None if issue or not (display_chart or {}).get("raw_overlay_allowed", True) else SupportResistanceService(settings).latest(db, inst.id),
         "forecast_scenario": DecisionBoardService._forecast_scenario(
-            (display_chart or {}).get("bars", []), forecast_rows), "holding": personal,
+            (display_chart or {}).get("research_bars", []), forecast_rows), "holding": personal,
         "actionable": False, "research_only": True,
     }
 
 
 def chart_data(db: Session, settings: Settings, code: str, interval: str, limit: int, *, as_of: datetime | None = None) -> dict | None:
-    as_of = market_time(as_of or datetime.now(SHANGHAI))
+    as_of = market_time(as_of or datetime.now(SHANGHAI)).astimezone(SHANGHAI)
     if interval in ("1w", "1mo"):
         from app.workspace.candle_periods import transform_chart
         raw=chart_data(db,settings,code,"1d",workspace_settings().chart_history_limit,as_of=as_of)
@@ -240,35 +329,37 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
     if inst is None:
         return None
     if interval != "1d":
-        rows = list(reversed(db.scalars(select(MarketBar).where(MarketBar.instrument_id == inst.id, MarketBar.interval == interval).order_by(MarketBar.bar_time.desc()).limit(limit)).all()))
+        rows = list(reversed(db.scalars(select(MarketBar).where(
+            MarketBar.instrument_id == inst.id, MarketBar.interval == interval, MarketBar.bar_time <= as_of
+        ).order_by(MarketBar.bar_time.desc()).limit(limit)).all()))
         return {"ts_code": code, "interval": interval, "available": bool(rows), "bars": [{"date": iso(market_time(row.bar_time)), "open": row.open, "high": row.high, "low": row.low, "close": row.close, "volume": row.volume, "amount": row.amount, "source": row.source, "indicators": {}} for row in rows], "reason": None if rows else "minute_data_unavailable", "qualification": "unverified", "as_of": iso(as_of), "computed_at": iso(datetime.now(SHANGHAI)), "source_as_of": iso(market_time(rows[-1].bar_time)) if rows else None, "cost_overlay_allowed": False, "sr_overlay_allowed": False, "actionable": False, "indicator_note": "分钟指标尚未取得统一口径资格，不用日线指标代替。"}
-    adjustments = list(db.scalars(select(DailyBar.adjust).where(DailyBar.instrument_id == inst.id).distinct()))
+    adjustments = list(db.scalars(select(DailyBar.adjust).where(
+        DailyBar.instrument_id == inst.id, DailyBar.trade_date <= as_of.date()
+    ).distinct()))
+    if not adjustments:
+        return {"ts_code": code, "interval": interval, "available": False, "bars": [], "reason": "history_not_prepared", "as_of": iso(as_of), "computed_at": iso(datetime.now(SHANGHAI)), "actionable": False}
     adjust = "none" if "none" in adjustments else adjustments[0] if len(adjustments) == 1 else None
     if adjust is None:
         return {"ts_code": code, "interval": interval, "available": False, "bars": [], "reason": "missing_or_ambiguous_price_basis", "as_of": iso(as_of), "computed_at": iso(datetime.now(SHANGHAI)), "actionable": False}
     maximum = workspace_settings().chart_history_limit
-    stored = db.scalars(select(DailyBar).where(DailyBar.instrument_id == inst.id, DailyBar.adjust == adjust).order_by(DailyBar.trade_date.desc()).limit(maximum + 1)).all()
+    stored = db.scalars(select(DailyBar).where(
+        DailyBar.instrument_id == inst.id, DailyBar.adjust == adjust, DailyBar.trade_date <= as_of.date()
+    ).order_by(DailyBar.trade_date.desc()).limit(maximum + 1)).all()
     truncated = len(stored) > maximum
     stored = list(reversed(stored[:maximum]))
-    from app.providers.corporate_action_contract import research_history_rows
+    from app.providers.corporate_action_contract import official_corporate_actions, research_history_rows
     research_stored = (
         stored
-        if settings.market_provider == "mock"
+        if settings.market_provider == "mock" or adjust != "none"
         else research_history_rows(stored, code)
     )
+    research_objects = list(research_stored)
     rows = [{"date": iso(row.trade_date), "open": row.open, "high": row.high, "low": row.low, "close": row.close, "volume": row.volume, "amount": row.amount, "source": row.source} for row in stored]
     research_rows = [{"date": iso(row.trade_date), "open": row.open, "high": row.high, "low": row.low, "close": row.close, "volume": row.volume, "amount": row.amount, "source": row.source} for row in research_stored]
     if any(any(number(row[key]) is None for key in ("open", "high", "low", "close")) or row["low"] > min(row["open"], row["close"]) or row["high"] < max(row["open"], row["close"]) for row in rows):
         return {"ts_code": code, "interval": interval, "available": False, "bars": [], "reason": "invalid_ohlc", "as_of": iso(as_of), "computed_at": iso(datetime.now(SHANGHAI)), "actionable": False}
     strategy = settings.load_strategy()
     from app.providers.data_contract import LEGACY_SOURCES, UNVERIFIED_UNIT_SOURCES, price_history_issue
-    continuity_issue = price_history_issue(research_stored) if research_stored else None
-    legacy_units = settings.market_provider != "mock" and any(row["source"] in LEGACY_SOURCES + UNVERIFIED_UNIT_SOURCES for row in rows)
-    if legacy_units:
-        # Core chart fields are price-derived only. Do not publish volume-based
-        # outputs or change the persisted shared indicator/strategy snapshots.
-        rows = [{**row, "volume": None, "amount": None} for row in rows]
-        research_rows = [{**row, "volume": None, "amount": None} for row in research_rows]
     from app.services.decision_board_service import DecisionBoardService
     provisional = db.scalar(select(DecisionBoardProvisionalInput).where(
         DecisionBoardProvisionalInput.instrument_id == inst.id,
@@ -277,6 +368,7 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
         db, inst.id, provisional, as_of
     ) if provisional is not None else {"used_for_derived_values": False}
     if provisional_status.get("used_for_derived_values") and provisional is not None:
+        from types import SimpleNamespace
         provisional_bar = {
             "date": iso(market_time(provisional.observed_at)), "open": provisional.open_price,
             "high": provisional.high_price, "low": provisional.low_price,
@@ -284,41 +376,109 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
             "amount": provisional.amount, "source": provisional.source,
             "is_provisional": True, "timestamp_verified": bool(provisional.timestamp_verified),
         }
-        rows.append(provisional_bar)
-        research_rows.append(provisional_bar)
+        provisional_object = SimpleNamespace(
+            trade_date=market_time(provisional.observed_at).date(), open=provisional.open_price,
+            high=provisional.high_price, low=provisional.low_price, close=provisional.last_price,
+            pre_close=None, volume=provisional.volume, amount=provisional.amount,
+            source=provisional.source, adjust=adjust, fetched_at=provisional.created_at,
+            quality_hash=None,
+        )
+        research_provisional = provisional_object if settings.market_provider == "mock" or adjust != "none" else research_history_rows([provisional_object], code)[0]
+        research_provisional_bar = {
+            **provisional_bar, "open": research_provisional.open, "high": research_provisional.high,
+            "low": research_provisional.low, "close": research_provisional.close,
+            "volume": research_provisional.volume, "amount": research_provisional.amount,
+        }
+        provisional_day = provisional_bar["date"][:10]
+        same_day_index = next((i for i, bar in enumerate(rows) if bar["date"][:10] == provisional_day), None)
+        if same_day_index is not None and as_of.date().isoformat() == provisional_day and as_of.time() >= time(15, 15):
+            provisional_status = {**provisional_status, "status": "settled_daily_preferred", "used_for_derived_values": False, "reason": "settled_daily_bar_preferred"}
+        elif same_day_index is None:
+            rows.append(provisional_bar)
+            research_rows.append(research_provisional_bar)
+            research_objects.append(research_provisional)
+        else:
+            rows[same_day_index] = provisional_bar
+            research_rows[same_day_index] = research_provisional_bar
+            research_objects[same_day_index] = research_provisional
+    if any(any(number(row[key]) is None for key in ("open", "high", "low", "close")) or row["low"] > min(row["open"], row["close"]) or row["high"] < max(row["open"], row["close"]) for row in rows):
+        return {"ts_code": code, "interval": interval, "available": False, "bars": [], "reason": "invalid_ohlc", "as_of": iso(as_of), "computed_at": iso(datetime.now(SHANGHAI)), "actionable": False}
+    legacy_units = settings.market_provider != "mock" and any(row["source"] in LEGACY_SOURCES + UNVERIFIED_UNIT_SOURCES for row in rows)
+    if legacy_units:
+        rows = [{**row, "volume": None, "amount": None} for row in rows]
+        research_rows = [{**row, "volume": None, "amount": None} for row in research_rows]
+    continuity_issue = price_history_issue(research_objects) if research_objects else None
     if continuity_issue:
-        series = [{**row, "indicators": {}, "history_issue": continuity_issue} for row in rows]
+        research_series = [{**row, "indicators": {}, "history_issue": continuity_issue} for row in research_rows]
     else:
         computed = cached_indicator_series(research_rows, strategy["indicator"])
-        series = [
-            {**row, "indicators": computed[index].get("indicators", {}), "history_issue": None}
-            for index, row in enumerate(rows)
-        ]
+        research_series = [{**row, "indicators": computed[index].get("indicators", {}), "history_issue": None}
+                           for index, row in enumerate(research_rows)]
+    price_basis_changed = any(
+        number(raw.get(key)) is not None and number(research.get(key)) is not None
+        and abs(float(raw[key]) - float(research[key])) > 1e-12
+        for raw, research in zip(rows, research_rows, strict=True) for key in ("open", "high", "low", "close")
+    )
+    raw_overlay_allowed = not price_basis_changed and continuity_issue is None and len(rows) == len(research_rows)
+    series = [
+        {**row, "indicators": research_series[index]["indicators"] if raw_overlay_allowed else {},
+         "history_issue": continuity_issue}
+        for index, row in enumerate(rows)
+    ]
     now = as_of.astimezone(SHANGHAI)
     for row in series:
         row["is_partial"] = str(row["date"])[:10] == now.date().isoformat() and now.time() < time(15, 15)
+    for row in research_series:
+        row["is_partial"] = str(row["date"])[:10] == now.date().isoformat() and now.time() < time(15, 15)
+    basis_events = [] if settings.market_provider == "mock" or adjust != "none" else [event.evidence_id for event in official_corporate_actions(code)]
+    research_price_basis = "official_split_adjusted_price_research_not_total_return" if price_basis_changed else f"source_adjustment:{adjust}"
+    research_price_basis_id = stable_hash({"code": code, "adjust": adjust, "basis": research_price_basis, "events": basis_events})
+    quality_hashes = {item.trade_date.isoformat(): item.quality_hash for item in stored}
+    input_rows = []
+    for item in rows:
+        input_row = {key: item.get(key) for key in ("date", "open", "high", "low", "close", "volume", "amount", "source")}
+        input_row["quality_hash"] = None if item.get("is_provisional") else quality_hashes.get(item["date"][:10])
+        if item.get("is_provisional") and provisional is not None:
+            input_row["provisional_id"] = provisional.id
+        input_rows.append(input_row)
+    input_hash = stable_hash({"ts_code": code, "adjust": adjust, "rows": input_rows})
+    series_id = stable_hash({"base_input_hash": input_hash, "interval": interval,
+                             "research_price_basis_id": research_price_basis_id,
+                             "indicator_version": strategy["indicator_version"],
+                             "chart_contract_version": "chart-read-v1.1.0"})
     snapshot = db.scalar(select(IndicatorSnapshot).where(IndicatorSnapshot.instrument_id == inst.id).order_by(IndicatorSnapshot.as_of_date.desc(), IndicatorSnapshot.generated_at.desc(), IndicatorSnapshot.id.desc()).limit(1))
     matches = None
-    if snapshot and series and iso(snapshot.as_of_date) == series[-1]["date"]:
+    if snapshot and research_series and iso(snapshot.as_of_date) == research_series[-1]["date"]:
         values = snapshot.values_json or {}
-        comparable = [key for key in CORE_FIELDS if number(values.get(key)) is not None and series[-1]["indicators"].get(key) is not None]
-        matches = all(abs(float(values[key]) - series[-1]["indicators"][key]) <= (0.011 if key.startswith(("kdj", "rsi")) else 0.00011) for key in comparable) if comparable else None
+        comparable = [key for key in CORE_FIELDS if number(values.get(key)) is not None and research_series[-1]["indicators"].get(key) is not None]
+        matches = all(abs(float(values[key]) - research_series[-1]["indicators"][key]) <= (0.011 if key.startswith(("kdj", "rsi")) else 0.00011) for key in comparable) if comparable else None
     mock = settings.market_provider == "mock" or any("mock" in str(row["source"]).lower() for row in rows)
     sr = SupportResistanceService(settings).latest(db, inst.id)
     price_only = legacy_units or any(row["volume"] is None for row in rows)
-    if price_only or continuity_issue:
+    if price_only or continuity_issue or not raw_overlay_allowed:
         sr = None
+    latest_raw_close = number(rows[-1]["close"]) if rows else None
+    latest_research_close = number(research_rows[-1]["close"]) if research_rows else None
+    research_cost_overlay_allowed = adjust == "none" and latest_raw_close is not None and latest_research_close is not None and abs(latest_raw_close - latest_research_close) <= 1e-12
     return {
         "ts_code": code, "interval": interval, "available": bool(series), "bars": series[-limit:],
+        "research_bars": research_series[-limit:],
+        "reason": "history_qualification_blocked" if continuity_issue else None,
         "adjust": adjust, "currency": "CNY", "source_bars": len(rows), "history_truncated": truncated,
-        "indicator_version": strategy["indicator_version"], "indicator_basis": "shared_python_core_formulas_plus_intraday_provisional" if provisional_status.get("used_for_derived_values") else "shared_python_core_formulas_full_available_history",
+        "indicator_version": strategy["indicator_version"], "indicator_basis": "shared_python_core_formulas_on_research_price_series",
+        "input_hash": input_hash, "series_id": series_id,
+        "chart_contract_version": "chart-read-v1.1.0", "display_price_basis": f"source_adjustment:{adjust}",
+        "research_price_basis": research_price_basis, "research_price_basis_id": research_price_basis_id,
+        "research_basis_evidence_ids": basis_events, "raw_overlay_allowed": raw_overlay_allowed,
+        "raw_overlay_reason": "history_qualification_blocked" if continuity_issue else "price_basis_mismatch" if price_basis_changed else None,
         "core_snapshot_match": matches, "source_as_of": rows[-1]["date"] if rows else None,
         "as_of": iso(as_of), "computed_at": iso(datetime.now(SHANGHAI)),
         "history_issue": continuity_issue, "return_basis": "unadjusted_price_not_total_return" if adjust == "none" else adjust,
         "qualification": continuity_issue if continuity_issue else "mock" if mock else "legacy_units_unverified" if legacy_units else "historical_price_only" if price_only else "research_only", "actionable": False,
-        "cost_overlay_allowed": adjust == "none", "sr_overlay_allowed": len(adjustments) == 1 and bool(sr),
-        "support_resistance": sr if len(adjustments) == 1 else None,
-        "indicator_note": "盘中指标基于临时行情计算，收盘后由正式日线替换；不生成操作级信号。" if provisional_status.get("used_for_derived_values") else "历史价格指标可展示；量能缺失或旧单位未验证，禁止生成操作级信号。" if price_only else "图表由服务端统一公式生成；支撑压力为当前快照，不是历史当时已知的点位。",
+        "cost_overlay_allowed": adjust == "none", "research_cost_overlay_allowed": research_cost_overlay_allowed,
+        "sr_overlay_allowed": raw_overlay_allowed and len(adjustments) == 1 and bool(sr),
+        "support_resistance": sr if raw_overlay_allowed and len(adjustments) == 1 else None,
+        "indicator_note": "拆分调整研究序列与原始行情的价格口径不同；原始图已隐藏未映射的指标和支撑压力，切换到研究序列可查看。" if price_basis_changed else "盘中指标基于临时行情计算，收盘后由正式日线替换；不生成操作级信号。" if provisional_status.get("used_for_derived_values") else "历史价格指标可展示；量能缺失或旧单位未验证，禁止生成操作级信号。" if price_only else "图表由服务端统一公式生成；支撑压力为当前快照，不是历史当时已知的点位。",
     }
 
 

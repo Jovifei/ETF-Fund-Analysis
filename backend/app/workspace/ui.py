@@ -5,12 +5,12 @@ import re
 from pathlib import Path
 
 from starlette.responses import FileResponse, JSONResponse, RedirectResponse
-from app.workspace.original_board import original_board_frame
 
 from app.workspace.config import workspace_settings
+from app.workspace.original_board import original_board_frame
 
 DIST = Path(__file__).resolve().parents[1] / "workspace_dist"
-UI_PATHS = frozenset({"/login", "/register", "/", "/matrix", "/boards", "/analysis", "/watchlist", "/holdings", "/ai", "/research", "/research/news", "/review", "/factors", "/history", "/settings", "/profile", "/system", "/decision/1430"})
+UI_PATHS = frozenset({"/login", "/register", "/", "/matrix", "/boards", "/analysis", "/watchlist", "/holdings", "/ai", "/research", "/research/news", "/review", "/factors", "/history", "/settings", "/profile", "/system", "/decision/1430", "/legacy", "/workbench/1430", "/workbench/kline"})
 
 
 class WorkspaceMiddleware:

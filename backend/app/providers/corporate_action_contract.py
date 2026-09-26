@@ -70,6 +70,8 @@ def research_history_rows(rows, ts_code: str):
     ordered = sorted(rows or (), key=lambda row: row.trade_date)
     if not events:
         return list(ordered)
+    if {getattr(row, "adjust", "none") for row in ordered} != {"none"}:
+        return list(ordered)
     result = []
     previous_close = None
     for row in ordered:

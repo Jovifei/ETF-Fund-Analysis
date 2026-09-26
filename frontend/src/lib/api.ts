@@ -46,6 +46,13 @@ export function errorText(error: unknown): string {
   if (error instanceof DOMException && error.name === 'AbortError') return '请求已取消或超时，请重试。'
   if (error instanceof ApiError) {
     if (error.status === 401) return '登录已失效，请重新登录。'
+    const workspaceErrors: Record<string, string> = {
+      instrument_not_in_catalog: '该标的不在已同步证券目录；搜索目录不会自动抓取数据。',
+      unsupported_instrument_type: '当前研究工作站只支持场内 ETF/LOF。',
+      unsupported_chart_interval: '该图表周期暂不支持，请选择日、周、月或已接入的分钟周期。',
+      as_of_in_future: '图表读取时点不能晚于服务器当前时间，请刷新后重试。',
+    }
+    if (workspaceErrors[error.code]) return workspaceErrors[error.code]
     const accountErrors: Record<string,string> = {current_password_invalid:'当前密码不正确，未执行修改。',account_reauthentication_limited:'验证失败次数过多，请在 15 分钟后重试。',new_password_unchanged:'新密码不能与当前密码相同。',last_active_admin_protected:'最后一个管理员不能注销。请先由另一管理员接管。',invalid_account_request:'账户输入不符合要求；请检查昵称、密码长度和确认内容。',account_request_too_large:'账户请求过大，未执行操作。'}
     if (accountErrors[error.code]) return accountErrors[error.code]
     if (error.code === 'plus_feature_required') return '管理员已将此研究功能设为 Plus 权益；请在个人中心查看账户分类。'
