@@ -279,6 +279,22 @@ def test_sr_latest_fails_closed_when_current_payload_is_tampered(isolated):
     assert not db.new and not db.dirty
 
 
+def test_sr_latest_fails_closed_when_revision_evidence_is_tampered(isolated):
+    from app.models import SupportResistanceSnapshotRevision
+
+    db, inst = isolated
+    add_bar(db, inst, day=date(2026, 9, 11), close=2.0, high=2.1, low=1.9)
+    service = SupportResistanceService()
+    service.compute(db, inst.id)
+    revision = db.query(SupportResistanceSnapshotRevision).one()
+    revision.payload_json = {**revision.payload_json, "tampered": True}
+    db.flush()
+    db.expire_all()
+
+    assert service.latest(db, inst.id) is None
+    assert not db.new and not db.dirty
+
+
 def test_sr_revision_publication_failure_keeps_previous_current(monkeypatch, isolated):
     from app.models import SupportResistanceSnapshotRevision
     from app.utils.hashing import stable_hash
@@ -300,8 +316,9 @@ def test_sr_revision_publication_failure_keeps_previous_current(monkeypatch, iso
 
     monkeypatch.setattr(db, "add", fail_revision)
     with pytest.raises(RuntimeError, match="revision publication failed"):
-        revised_service.compute(db, inst.id)
-    db.rollback()
+        with db.begin_nested():
+            revised_service.compute(db, inst.id)
+    db.expire_all()
 
     current = service.latest(db, inst.id)
     assert current is not None

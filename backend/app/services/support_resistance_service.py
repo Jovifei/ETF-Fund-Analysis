@@ -66,6 +66,26 @@ def _snapshot_revision_id(
     })
 
 
+def _revision_is_self_consistent(
+    revision: SupportResistanceSnapshotRevision,
+    *,
+    expected_revision_id: str,
+) -> bool:
+    """Validate immutable evidence content and its content-addressed identity."""
+    if stable_hash(revision.payload_json) != revision.payload_hash:
+        return False
+    derived_revision_id = _snapshot_revision_id(
+        instrument_id=revision.instrument_id,
+        as_of_date=revision.as_of_date,
+        method_version=revision.method_version,
+        config_hash=revision.config_hash,
+        price_basis_id=revision.price_basis_id,
+        input_hash=revision.input_hash,
+        payload_hash=revision.payload_hash,
+    )
+    return derived_revision_id == revision.revision_id == expected_revision_id
+
+
 class SupportResistanceService:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
@@ -313,7 +333,8 @@ class SupportResistanceService:
         revision = db.scalar(select(SupportResistanceSnapshotRevision).where(
             SupportResistanceSnapshotRevision.revision_id == revision_id
         ))
-        if revision is None or revision.payload_hash != payload_hash:
+        if (revision is None or revision.payload_hash != payload_hash
+                or not _revision_is_self_consistent(revision, expected_revision_id=revision_id)):
             return None
         payload.setdefault("snapshot_as_of_date", snapshot.as_of_date.isoformat())
         payload["revision_id"] = revision_id
