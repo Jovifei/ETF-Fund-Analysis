@@ -1,3 +1,36 @@
+# 当前接手入口：R4B 本地接受完成，C2D 文档对账（2026-09-28）
+
+## 先读
+
+1. [R4B final acceptance](docs/audits/R4B_FINAL_ACCEPTANCE_20260928.md)
+2. [R2–R4B reconciliation](docs/audits/R2_R4B_RECONCILIATION_20260927.md)
+3. [R4B 实现与最终 addendum](docs/09-RPT-R4B箱体与支撑压力验收.md)
+4. 本页与 `AGENTS.md`
+
+## 两个必须分开的身份
+
+### 当前运行生产
+
+- SHA `0dbd3fee58a3f5e080aacbcd8eae8d5964aec54f`
+- tree `f8607b3de8decde6065ccc559c5c26b0262b8e6b`
+- Alembic `e609200001`
+- 生产状态未被本阶段改变。
+
+### 已接受但未部署的本地 R2–R4B
+
+- SHA `43bfbf6929a70f520c216b759edbaa433e920e91`
+- tree `12d217af3edbe34c67bc36e75b4395ab4917b001`
+- 候选 Alembic `g8b9c0d1e2f3`
+- `R4B=ACCEPTED_LOCAL`; `M0_TECHNICAL_GATE=PASS`; `M0_FINAL_STATUS=PENDING_C2D_RECONCILIATION`
+- 真实数据资格 `UNKNOWN`；`actionable=false`；canonical action unchanged。
+
+C2D 需完成文档、收据和入口对账，并交远端复核。R4C M1 只能从上述精确候选继续；不能把生产 head 改成候选 head，也不能把本地接受写成已部署。
+
+## 保护边界
+
+继续保留原生产备份、认证、真实数据、Provider、PIT/OOS、人工批准和部署门禁。不要 reset/clean/stash 主工作区，不读取或回显凭据，不执行生产迁移。
+
+---
 # 当前接手入口：R4B 日线结构本地实现分支（2026-09-27）
 
 当前分支 `codex/r4b-price-structure`，从 R2–R4A 文档提交 `4d8fa1a4b7c5fc8dc3d0066c74dc86cd9092df18`（tree `6400437180c62052936f443f423910fd2a841ac6`）继续。R4B 应用最终 SHA `8a5b575904c4cbc5a2d63e53a8521076c80904e1`，tree `1fc3d4657dba7f9e0f0ec5d06875eaaa45c98d83`。读取[R4B实现与测试收据](docs/09-RPT-R4B箱体与支撑压力验收.md)和[逐页状态矩阵](docs/10-TST-R4B逐页状态验收矩阵.md)。

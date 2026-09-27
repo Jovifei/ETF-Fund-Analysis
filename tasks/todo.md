@@ -1061,3 +1061,18 @@ Prevent a reachable FTShare endpoint from being marked qualified when absolute-u
 - Final local application checks after the correction: pytest 1270 total / 1256 passed / 14 environment skips / 0 failures / 0 errors; compileall, Node syntax, Node 39/39, Vitest 63/63, typecheck/build, and `git diff --check` passed.
 - Browser rerun on the corrected source: ordinary 26/26 on isolated port 18084, authenticated 5/5, responsive 18/18; the pre-existing listener on 18082 was left untouched. Browser evidence and JUnit are under `E:\Claude_allow\Download\ETF_R4B_QA_20260927`.
 - Vite reported only the existing Login.vue static/dynamic duplicate-import warning; pytest emitted existing dependency deprecation warnings. No frontend source or dependency changed.
+
+# C2D R4B documentation reconciliation — 2026-09-28
+
+## Plan
+
+- [x] Bind the accepted local application candidate `43bfbf6` / tree `12d217a` and final migration head `g8b9c0d1e2f3`.
+- [x] Add authoritative R4B acceptance and R2–R4B reconciliation records.
+- [x] Preserve the historical R4B receipt and append the final independent acceptance addendum.
+- [x] Refresh STATUS, HANDOFF, docs README, and the R4C plan without changing production identity.
+- [ ] Commit and push the documentation-only handoff.
+- [ ] Obtain independent remote C2D review before R4C M1.
+
+## Review
+
+Application code is unchanged in this worktree. Production remains SHA `0dbd3fe` / tree `f8607b3`; real-data qualification remains UNKNOWN; no production or automatic-trading action is permitted.

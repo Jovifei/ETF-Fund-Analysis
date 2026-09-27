@@ -62,3 +62,25 @@ R4B 首次发布后追加的只读线上检查发现：既有 PostgreSQL `suppor
 修复只将方法版本改为 `support-resistance-v4-structure`（31 字符），没有新增迁移或改变算法、快照结构、参数、canonical decision、预测校准及 `actionable=false`。新增列宽回归先失败（37 > 32），修复后支撑压力与快照专项 27/27 通过；修复版全量 pytest 为 1270 项，1256 passed、14 环境跳过、0 failures/errors；前端 63/63，普通/认证/响应式浏览器 26/5/18 通过，Node 39/39、typecheck、构建和 compileall 通过。
 
 上述为修复版本地验收。**在修复版固定 SHA 的 CI 镜像、备份副本演练、生产切换和受审计刷新任务完成前，不宣称 R4B 生产快照已恢复。**真实行情资格仍 UNKNOWN。生产部署收据与后续任务执行结果将在门禁完成后补充。
+
+## Final independent acceptance addendum — 2026-09-28
+
+The earlier R4B implementation and test totals above are preserved as historical producer evidence. Later independent review findings were resolved through the C1 → C2C.2 chain and the final candidate below; no earlier receipt was deleted or rewritten.
+
+### Accepted local candidate
+
+- Application SHA: `43bfbf6929a70f520c216b759edbaa433e920e91`
+- Application tree: `12d217af3edbe34c67bc36e75b4395ab4917b001`
+- Candidate Alembic head: `g8b9c0d1e2f3`
+- Final full pytest: 1279 tests, 0 failures, 0 errors, 15 condition skips.
+- Compileall, Node syntax, relevant Ruff, secret scan and diff check: PASS.
+- Isolated PostgreSQL 16 migration and revision roundtrip: PASS.
+- Final receipt: [R4B final acceptance](audits/R4B_FINAL_ACCEPTANCE_20260928.md).
+
+### Current boundary
+
+`R4B=ACCEPTED_LOCAL`; `M0_TECHNICAL_GATE=PASS`; `M0_FINAL_STATUS=PENDING_C2D_RECONCILIATION`. The accepted candidate has not been merged into the deployed production identity. Production remains SHA `0dbd3fee58a3f5e080aacbcd8eae8d5964aec54f`, tree `f8607b3de8decde6065ccc559c5c26b0262b8e6b`, Alembic `e609200001`. Real-data qualification remains `UNKNOWN`, canonical action is unchanged, and `actionable=false`.
+
+### Independent review result
+
+The remote review closed the application gates for replay/window, basis identity, immutable revisions, PostgreSQL migration/roundtrip, and final full regression. C2D documentation reconciliation is the next stage; R4C remains closed until C2D is independently reviewed.

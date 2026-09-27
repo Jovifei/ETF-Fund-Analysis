@@ -1,3 +1,21 @@
+# 当前交付与接手（2026-09-28）
+
+## 生产收据与已接受本地候选
+
+生产仍绑定 [R1 + A-U1–A-U3 production receipt](PRODUCTION_DEPLOYMENT_RECEIPT_AU_20260923.md)：SHA `0dbd3fee58a3f5e080aacbcd8eae8d5964aec54f`、tree `f8607b3de8decde6065ccc559c5c26b0262b8e6b`、Alembic `e609200001`。真实数据资格仍为 `UNKNOWN`。
+
+R2–R4B 已完成独立本地接受，但候选尚未部署：SHA `43bfbf6929a70f520c216b759edbaa433e920e91`、tree `12d217af3edbe34c67bc36e75b4395ab4917b001`、候选 Alembic `g8b9c0d1e2f3`。完整收据：[R4B final acceptance](audits/R4B_FINAL_ACCEPTANCE_20260928.md)；阶段对账：[R2–R4B reconciliation](audits/R2_R4B_RECONCILIATION_20260927.md)；历史实现与最终 addendum：[R4B receipt](09-RPT-R4B箱体与支撑压力验收.md)。
+
+`R4B=ACCEPTED_LOCAL`，`M0_TECHNICAL_GATE=PASS`，当前正在完成 `C2D` 文档与证据对账。生产没有使用候选 migration head，canonical action 未改变，`actionable=false`。R4C 计划已绑定该接受候选，但 R4C M1 尚未开始。
+
+## 入口
+
+- [当前状态](../STATUS.md)
+- [当前交接](../HANDOFF.md)
+- [R4B final acceptance](audits/R4B_FINAL_ACCEPTANCE_20260928.md)
+- [R2–R4B reconciliation](audits/R2_R4B_RECONCILIATION_20260927.md)
+
+---
 # 文档入口：当前生产版、研究资格与本地研发（2026-09-27）
 
 当前 main 已部署 R1 单位证据绑定与 A-U1–A-U3 账户/指标工作流。源码、镜像、备份和公网验收绑定在[生产收据](PRODUCTION_DEPLOYMENT_RECEIPT_AU_20260923.md)。应用包为1.0.5，生产 health 配置返回1.0.8；以收据的完整源码 SHA/tree 与镜像 ID识别代码，不用显示版本单独认定身份。真实数据资格仍为 UNKNOWN。

@@ -1,3 +1,20 @@
+# 当前状态：R4B 本地接受完成，C2D 文档对账进行中（2026-09-28）
+
+## 生产身份（保持不变）
+
+公网生产仍运行应用 SHA `0dbd3fee58a3f5e080aacbcd8eae8d5964aec54f`、tree `f8607b3de8decde6065ccc559c5c26b0262b8e6b`，镜像 `sha256:251a0623c694b07525bd398b52f41eecc17ec3d1216912c6d593b704fc8ae81a`，Alembic head `e609200001`。本轮没有合并、部署、生产数据库写入或 Provider 请求。
+
+## 接受的本地工程身份
+
+R2–R4B 已在独立 worktree 通过远端 ChatGPT 独立审查与最终平台门禁。最终应用候选为 SHA `43bfbf6929a70f520c216b759edbaa433e920e91`、tree `12d217af3edbe34c67bc36e75b4395ab4917b001`，候选迁移 head `g8b9c0d1e2f3`。最终 JUnit 为 1279 tests、0 failures、0 errors、15 条件跳过；SQLite 与隔离 PostgreSQL 16 migration/roundtrip 通过，compileall、Node、相关 Ruff、secret scan、diff check 通过。权威收据见 [R4B final acceptance](docs/audits/R4B_FINAL_ACCEPTANCE_20260928.md) 和 [R2–R4B reconciliation](docs/audits/R2_R4B_RECONCILIATION_20260927.md)。
+
+当前阶段：`R4B=ACCEPTED_LOCAL`，`M0_TECHNICAL_GATE=PASS`，`M0_FINAL_STATUS=PENDING_C2D_RECONCILIATION`。C2D 只对账文档与收据，R4C 尚未开始。真实数据资格保持 **UNKNOWN**，`actionable=false`，canonical action 未改变。
+
+## 下一步
+
+完成 C2D 文档对账并交远端独立审查；审查通过后才进入 R4C M1 引擎/方言资格。接受的本地候选不等于生产部署身份。
+
+---
 # 当前状态：R4B 日线结构本地实现与验收完成（2026-09-27）
 
 R4B 在隔离分支 `codex/r4b-price-structure` 完成：分型/平台按右侧两根确认；独立触碰和方法贡献分开；实测 Wilder ATR14 代替收盘价 2% 估算；日线箱体增加证据哈希、状态回放、结算日/盘中临时状态分离，并绑定研究价格口径。现有支撑压力快照方法版本为 `support-resistance-v4-structure`（满足既有 PostgreSQL `VARCHAR(32)`），图表合同升级到 `chart-read-v1.2.0`；无数据库迁移，箱体不接入 canonical decision，`actionable=false`。
