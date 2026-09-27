@@ -1222,3 +1222,4 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 ## Review
 
 - Selection candidate: CZSC `1.0.1` + `r4c-observed-revision-v1`; runtime remains disabled and engine confirmation remains unknown.
+- Selection evidence tip `ec26d2791ccb62f658aeba3517ef3e320c320926` (tree `3b33e26a91afe8e1a3d155c60bd0797ef50d1eef`) is pushed; remote selection review is now the only open gate.
