@@ -17,7 +17,8 @@ def test_inventory_is_metadata_only_and_never_upgrades_data():
     assert 'published_image_digest_missing' in value['missing']
     assert not value['release_inventory_complete'] and not value['production_deployed']
     assert value['data_qualification']=='not_asserted'
-    assert value['migration_heads']==['e609200001']
+    # C2C adds the immutable revision migration on top of the previous head.
+    assert value['migration_heads']==['g8b9c0d1e2f3']
     assert all(set(row)=={'name','version'} for row in value['python_resolved'])
     assert not any('.env' in path or 'auth.json' in path for path in value['source_hashes'])
 
