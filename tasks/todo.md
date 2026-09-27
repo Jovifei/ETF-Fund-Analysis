@@ -1037,5 +1037,5 @@ Prevent a reachable FTShare endpoint from being marked qualified when absolute-u
 - App commits: `5600d92243290dffe9e7de6d6af53fea9d48bc22`, `0e5759b706fde8ea4e678f28ef53b7b8d77ec3a7`, `8a5b575904c4cbc5a2d63e53a8521076c80904e1`; final app tree `1fc3d4657dba7f9e0f0ec5d06875eaaa45c98d83`.
 - Final full pytest: 1269 total, 1255 passed, 14 environment skips, 0 failures/errors. Frontend 63/63, ordinary/auth/responsive E2E 26/5/18; Node 39/39, typecheck/build/compileall/secret scan passed.
 - First failures and reruns are recorded in `docs/09-RPT-R4B箱体与支撑压力验收.md`; browser screenshots/traces and JUnit are outside the repo under `E:\Claude_allow\Download\ETF_R4B_QA_20260927`.
-- Obsidian checkpoint and document mirror status are recorded after their wrapper verification; the unrelated Tesla pending checkpoint is preserved.
+- Obsidian progress/decision/workflow slots were applied after two identical hash-guarded DryRuns; the checkpoint wrapper's internal Apply conflicted, so the same verified plan was applied through its guarded `apply-sync.ps1`. The no-argument mirror wrapper copied four selected documents after DryRun. The unrelated Tesla pending checkpoint hash remained unchanged.
 - Remote CI, main integration, production deployment, and real-data qualification remain pending separate gates.
