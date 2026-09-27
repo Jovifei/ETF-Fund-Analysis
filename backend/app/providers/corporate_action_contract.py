@@ -67,7 +67,6 @@ def research_price_basis(
     ts_code: str,
     adjustment: str | None,
     *,
-    price_changed: bool,
     effective_through: date | None = None,
     consider_corporate_actions: bool = True,
 ) -> dict[str, object]:
@@ -82,17 +81,20 @@ def research_price_basis(
     ]
     effective_ids = [event.evidence_id for event in effective_events]
     normalized_adjustment = adjustment or "ambiguous"
-    if normalized_adjustment == "none" and price_changed and effective_ids:
+    use_official_research_adjustment = (
+        normalized_adjustment == "none" and consider_corporate_actions and bool(effective_ids)
+    )
+    if use_official_research_adjustment:
         basis = "official_split_adjusted_price_research_not_total_return"
     else:
         basis = f"source_adjustment:{normalized_adjustment}"
     descriptor = {
         "code": str(ts_code or "").strip().upper(),
-        "series_kind": RESEARCH_SERIES if price_changed and effective_ids else RAW_RESEARCH_SERIES,
+        "series_kind": RESEARCH_SERIES if use_official_research_adjustment else RAW_RESEARCH_SERIES,
         "adjustment_contract_version": "corporate-action-research-v1",
         "adjustment": normalized_adjustment,
         "basis": basis,
-        "effective_evidence_ids": effective_ids,
+        "effective_evidence_ids": effective_ids if use_official_research_adjustment else [],
     }
     return {**descriptor, "price_basis_id": stable_hash(descriptor)}
 

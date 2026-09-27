@@ -433,7 +433,6 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
     basis_descriptor = build_research_price_basis(
         code,
         adjust,
-        price_changed=price_basis_changed,
         effective_through=as_of.date(),
         consider_corporate_actions=settings.market_provider != "mock",
     )

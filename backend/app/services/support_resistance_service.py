@@ -92,7 +92,6 @@ class SupportResistanceService:
         basis_descriptor = research_price_basis(
             instrument.ts_code if instrument else str(instrument_id),
             adjust,
-            price_changed=price_changed,
             effective_through=last_settled_date,
             consider_corporate_actions=self.settings.market_provider != "mock",
         )

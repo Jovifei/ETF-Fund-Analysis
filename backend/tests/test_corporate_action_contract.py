@@ -144,13 +144,13 @@ def test_price_basis_contract_is_independent_of_read_window_and_tracks_effective
     from app.providers.corporate_action_contract import research_price_basis
 
     wide = research_price_basis(
-        "512480.SH", "none", price_changed=True, effective_through=date(2026, 9, 27)
+        "512480.SH", "none", effective_through=date(2026, 9, 27)
     )
     narrow = research_price_basis(
-        "512480.SH", "none", price_changed=True, effective_through=date(2026, 9, 27)
+        "512480.SH", "none", effective_through=date(2026, 9, 27)
     )
     before_event = research_price_basis(
-        "512480.SH", "none", price_changed=True, effective_through=date(2026, 7, 2)
+        "512480.SH", "none", effective_through=date(2026, 7, 2)
     )
 
     assert wide["price_basis_id"] == narrow["price_basis_id"]
