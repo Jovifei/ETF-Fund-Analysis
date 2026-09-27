@@ -49,3 +49,46 @@ def test_support_resistance_fails_closed_on_short_history():
     assert result["qualified"] is False
     assert result["reason"] == "history_too_short"
     assert result["levels"] == []
+
+
+def test_missing_atr_field_uses_observed_ohlc_atr_not_price_percentage():
+    frame = _frame()
+    expected = frame["atr"].iloc[-1]
+    frame = frame.drop(columns=["atr", "atr14"], errors="ignore")
+
+    result = build_support_resistance(frame)
+
+    assert result["atr14"] == round(float(expected), 6)
+    assert result["atr_basis"] == "wilder_14_from_ohlc"
+    assert result["atr14"] != round(float(frame.iloc[-1]["close"]) * 0.02, 6)
+
+
+def test_support_resistance_exposes_pivot_touches_separately_from_references():
+    result = build_support_resistance(_frame())
+
+    assert result["structural_levels"]
+    assert result["dynamic_references"]
+    assert result["volatility_references"]
+    assert all(level["category"] == "price_structure" for level in result["structural_levels"])
+    assert all(level["touch_count"] <= len(level["touch_ids"]) for level in result["structural_levels"])
+
+
+def test_oscillator_confirmations_add_features_but_not_independent_touches():
+    from app.utils.support_resistance import _pivot_indexes
+
+    frame = _frame()
+    index = _pivot_indexes(frame["high"], window=2, kind="high")[-1]
+    frame.loc[index - 1, "macd_hist"] = 1.0
+    frame.loc[index, "macd_hist"] = 2.0
+    frame.loc[index + 1, "macd_hist"] = 1.0
+    frame.loc[index, "macd_dif"] = 1.0
+    frame.loc[index, "macd_dea"] = 0.0
+    frame.loc[index, "kdj_j"] = 90.0
+    frame.loc[index, "rsi14"] = 70.0
+
+    result = build_support_resistance(frame)
+    touch_id = f"pivot:high:{frame.iloc[index]['trade_date']}"
+    level = next(item for item in result["structural_levels"] if touch_id in item["touch_ids"])
+
+    assert level["confirmations"] >= 4
+    assert level["touch_count"] == len(level["touch_ids"])

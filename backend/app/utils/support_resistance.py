@@ -20,6 +20,8 @@ class _Candidate:
     price: float
     method: str
     weight: float
+    event_id: str | None = None
+    category: str = "price_reference"
 
 
 def _number(value: Any) -> float | None:
@@ -181,8 +183,10 @@ def _cluster(candidates: Iterable[_Candidate], *, current: float, tolerance: flo
         total_weight = sum(item.weight for item in group)
         price = sum(item.price * item.weight for item in group) / max(total_weight, 1e-9)
         methods = sorted({item.method for item in group})
+        categories = {item.category for item in group}
         distance = price / current - 1 if current > 0 else 0
         strength = min(100.0, 14.0 * total_weight + 5.0 * len(methods))
+        touch_ids = sorted({item.event_id for item in group if item.event_id})
         # 区域 = 聚类成员的实际价格跨度（半透明区域渲染的依据）。
         zone_low = min(item.price for item in group)
         zone_high = max(item.price for item in group)
@@ -193,6 +197,11 @@ def _cluster(candidates: Iterable[_Candidate], *, current: float, tolerance: flo
                 "strength": round(strength, 1),
                 "methods": methods,
                 "confirmations": len(group),
+                "confirmations_semantics": "method_contribution_count_not_independent_touch_count",
+                "category": next(iter(categories)) if len(categories) == 1 else "mixed_reference",
+                "touch_count": len(touch_ids),
+                "touch_ids": touch_ids,
+                "source_ids": touch_ids,
                 "distance_pct": round(distance * 100, 3),
                 "zone_low": round(zone_low, 6),
                 "zone_high": round(zone_high, 6),
@@ -220,8 +229,19 @@ def build_support_resistance(
             "chan_zone_approx": None,
         }
     current = float(frame.iloc[-1]["close"])
-    atr = _number(frame.iloc[-1].get("atr14")) or current * 0.02
-    tolerance = max(current * float(config.get("cluster_tolerance_pct", 0.006)), atr * 0.30)
+    atr = _number(frame.iloc[-1].get("atr14"))
+    atr_basis = "indicator_atr14" if atr is not None else None
+    if atr is None:
+        atr = _number(frame.iloc[-1].get("atr"))
+        atr_basis = "indicator_atr" if atr is not None else None
+    if atr is None and {"high", "low", "close"}.issubset(frame.columns):
+        from app.utils.indicators import _atr
+
+        measured = _atr(frame["high"].astype(float), frame["low"].astype(float), frame["close"].astype(float), 14)
+        atr = _number(measured.iloc[-1])
+        atr_basis = "wilder_14_from_ohlc" if atr is not None else None
+    atr = atr if atr is not None and atr > 0 else None
+    tolerance = max(current * float(config.get("cluster_tolerance_pct", 0.006)), atr * 0.30 if atr else 0.0)
     pivot_window = int(config.get("pivot_window", 2))
     high_indexes = _pivot_indexes(frame["high"], window=pivot_window, kind="high")
     low_indexes = _pivot_indexes(frame["low"], window=pivot_window, kind="low")
@@ -234,9 +254,10 @@ def build_support_resistance(
             if index < minimum_index:
                 continue
             price = float(frame.iloc[index][column])
-            candidates.append(_Candidate(price, "确认分形高点" if kind == "high" else "确认分形低点", 1.0))
+            event_id = f"pivot:{kind}:{frame.iloc[index]['trade_date']}"
+            candidates.append(_Candidate(price, "确认分形高点" if kind == "high" else "确认分形低点", 1.0, event_id, "price_structure"))
             for method in _indicator_confirmations(frame, index, kind):
-                candidates.append(_Candidate(price, method, 1.25))
+                candidates.append(_Candidate(price, method, 1.25, event_id, "price_structure"))
 
     # TD9 价格确认：卖出 setup 计数 >= 8 的 bar 的高点是潜在耗竭压力，
     # 买入 setup 计数 >= 8 的 bar 的低点是潜在耗竭支撑。计数来自特征 frame
@@ -247,26 +268,27 @@ def build_support_resistance(
         for index in range(minimum_index, len(frame)):
             if sell_values.iloc[index] >= 8:
                 price = float(frame.iloc[index]["high"])
-                candidates.append(_Candidate(price, "TD9卖出耗竭确认", 1.1))
+                candidates.append(_Candidate(price, "TD9卖出耗竭确认", 1.1, f"td9:sell:{frame.iloc[index]['trade_date']}", "price_structure"))
     if "td_buy_setup" in frame.columns:
         buy_values = frame["td_buy_setup"].fillna(0).astype(float)
         for index in range(minimum_index, len(frame)):
             if buy_values.iloc[index] >= 8:
                 price = float(frame.iloc[index]["low"])
-                candidates.append(_Candidate(price, "TD9买入耗竭确认", 1.1))
+                candidates.append(_Candidate(price, "TD9买入耗竭确认", 1.1, f"td9:buy:{frame.iloc[index]['trade_date']}", "price_structure"))
 
     current_row = frame.iloc[-1]
     for window in (5, 10, 20, 30, 60):
         value = _number(current_row.get(f"ma{window}"))
         if value:
-            candidates.append(_Candidate(value, f"MA{window}", 0.75 if window < 20 else 1.0))
+            candidates.append(_Candidate(value, f"MA{window}", 0.75 if window < 20 else 1.0, category="dynamic_reference"))
     for column, method in (("boll_lower", "布林下轨"), ("boll_upper", "布林上轨")):
         value = _number(current_row.get(column))
         if value:
-            candidates.append(_Candidate(value, method, 0.9))
-    for multiple in (1.0, 2.0):
-        candidates.append(_Candidate(current - atr * multiple, f"ATR-{multiple:g}", 0.7))
-        candidates.append(_Candidate(current + atr * multiple, f"ATR+{multiple:g}", 0.7))
+            candidates.append(_Candidate(value, method, 0.9, category="dynamic_reference"))
+    if atr is not None:
+        for multiple in (1.0, 2.0):
+            candidates.append(_Candidate(current - atr * multiple, f"ATR-{multiple:g}", 0.7, category="volatility_reference"))
+            candidates.append(_Candidate(current + atr * multiple, f"ATR+{multiple:g}", 0.7, category="volatility_reference"))
 
     for window in (20, 55, 120):
         sample = frame.tail(min(window, len(frame)))
@@ -322,15 +344,25 @@ def build_support_resistance(
         candidates.append(_Candidate(float(line["projected_price"]), line["label"], 1.0))
 
     levels = _cluster(candidates, current=current, tolerance=tolerance)
+    category_levels = {
+        category: _cluster((item for item in candidates if item.category == category), current=current, tolerance=tolerance)
+        for category in {item.category for item in candidates}
+    }
     supports = sorted((item for item in levels if item["price"] <= current), key=lambda item: item["price"], reverse=True)
     resistances = sorted((item for item in levels if item["price"] > current), key=lambda item: item["price"])
     return {
         "qualified": True,
         "current_price": round(current, 6),
-        "atr14": round(float(atr), 6),
+        "atr14": round(float(atr), 6) if atr is not None else None,
+        "atr_basis": atr_basis,
         "cluster_tolerance": round(tolerance, 6),
-        "default_zone_tolerance": round(max(tolerance, float(atr) * 0.15), 6),
+        "default_zone_tolerance": round(max(tolerance, float(atr) * 0.15 if atr is not None else tolerance), 6),
         "levels": levels,
+        "structural_levels": category_levels.get("price_structure", []),
+        "dynamic_references": category_levels.get("dynamic_reference", []),
+        "volatility_references": category_levels.get("volatility_reference", []),
+        "price_references": category_levels.get("price_reference", []),
+        "confirmations_semantics": "method_contribution_count_not_independent_touch_count",
         "nearest_support": supports[0] if supports else None,
         "nearest_resistance": resistances[0] if resistances else None,
         "support_levels": supports[:6],
