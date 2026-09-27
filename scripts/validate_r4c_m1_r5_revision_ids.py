@@ -32,6 +32,19 @@ def canonical_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
 
 
+def collision_count(mapping: defaultdict[str, set[str]]) -> int:
+    return sum(1 for values in mapping.values() if len(values) > 1)
+
+
+def collision_checker_self_test() -> dict[str, Any]:
+    """Prove the checker catches two distinct canonical preimages sharing a weak ID."""
+    mapping: defaultdict[str, set[str]] = defaultdict(set)
+    mapping["injected-weak-id"].add(canonical_json({"preimage": "A"}))
+    mapping["injected-weak-id"].add(canonical_json({"preimage": "B"}))
+    count = collision_count(mapping)
+    return {"detected": count == 1, "collision_count": count}
+
+
 def observation_payload(rows: list[dict[str, Any]], cutoff: int) -> dict[str, Any]:
     input_payload = [
         {
@@ -179,9 +192,9 @@ def build_history(rows: list[dict[str, Any]]) -> dict[str, Any]:
         seen.update(current)
 
     collision_counts = {
-        "observation_id": sum(1 for values in observation_collisions.values() if len(values) > 1),
-        "structure_key": sum(1 for values in structure_collisions.values() if len(values) > 1),
-        "revision_id": sum(1 for values in revision_collisions.values() if len(values) > 1),
+        "observation_id": collision_count(observation_collisions),
+        "structure_key": collision_count(structure_collisions),
+        "revision_id": collision_count(revision_collisions),
     }
     return {
         "observation_count": len(observation_ledger),
@@ -262,6 +275,7 @@ def measure(rows: list[dict[str, Any]]) -> dict[str, Any]:
 def main() -> None:
     rows = make_rows(FIXTURE_SIZE)
     sensitivity = namespace_sensitivity(rows)
+    self_test = collision_checker_self_test()
     first = measure(rows)
     second = measure(rows)
     output = {
@@ -278,6 +292,7 @@ def main() -> None:
         "same_input_same_history": first["history"]["history_digest"] == second["history"]["history_digest"],
         "history": first["history"],
         "namespace_sensitivity": sensitivity,
+        "collision_checker_self_test": self_test,
         "budget": first["budget"],
         "resource_budget_proposal": RESOURCE_BUDGET,
         "engine_confirmation": "unknown",
@@ -294,6 +309,7 @@ def main() -> None:
             "same_input_same_history": output["same_input_same_history"],
             "history": output["history"],
             "namespace_sensitivity": output["namespace_sensitivity"],
+            "collision_checker_self_test": output["collision_checker_self_test"],
             "resource_budget_proposal": output["resource_budget_proposal"],
             "engine_confirmation": output["engine_confirmation"],
             "application_observation_status": output["application_observation_status"],

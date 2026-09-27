@@ -1205,3 +1205,4 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 ## Review
 
 - Pending R5.2 method correction and remote review. No runtime/dependency/provider/production change is allowed.
+- R5.2 review identified one remaining bounded gap: add an injected weak-ID collision self-test proving raw canonical preimages are actually compared.
