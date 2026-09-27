@@ -1208,3 +1208,17 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 
 - Pending R5.2 method correction and remote review. No runtime/dependency/provider/production change is allowed.
 - R5.2 review identified one remaining bounded gap: add an injected weak-ID collision self-test proving raw canonical preimages are actually compared.
+
+# R4C M1 engine/dialect selection review — 2026-09-28
+
+## Plan
+
+- [x] Record remote `M1_SELECTION_READINESS=READY` after R5.2.1 evidence review.
+- [x] Compare legacy chanlun and CZSC against the frozen M1 contract.
+- [x] Freeze CZSC + observed-revision dialect metadata in disabled config and selection evidence.
+- [ ] Commit/push selection evidence and obtain independent remote selection review.
+- [ ] Keep M2, runtime integration, dependencies, database/API/frontend, Provider, real data, actionable, and production changes forbidden.
+
+## Review
+
+- Selection candidate: CZSC `1.0.1` + `r4c-observed-revision-v1`; runtime remains disabled and engine confirmation remains unknown.

@@ -1,12 +1,34 @@
 {
   "enabled": false,
   "qualification_status": "BLOCKED",
-  "engine_id": null,
-  "engine_version": null,
-  "upstream_sha": null,
+  "selection_status": "SELECTED_DISABLED",
+  "engine_id": "czsc",
+  "engine_version": "1.0.1",
+  "upstream_sha": "90372af035f01ed9f05070eadddd265b91c84d24",
   "artifact_sha256": null,
-  "dialect_version": null,
-  "supported_capabilities": [],
+  "artifact_sha256_by_platform": {
+    "windows_cp310_abi3": "18f3fb6c38f8834b8b94e35b990a9632d24e46e269bdf4d94b3aa401ce8f4581",
+    "linux_manylinux_x86_64_cp310_abi3": "2c65d266bd58b51960be505678f2daae69892ca4031808eeeef2ccbc2848c036"
+  },
+  "dialect_version": "r4c-observed-revision-v1",
+  "supported_capabilities": [
+    "fx_observed_revision",
+    "bi_observed_revision",
+    "zs_observed_revision",
+    "cross_platform_semantic_parity",
+    "unknown_volume_fail_closed"
+  ],
+  "selection_contract": {
+    "engine_confirmation": "unknown",
+    "application_observation_status": "observed",
+    "unknown_volume_policy": "fail_closed",
+    "revision_history": "append_only_observed_revisions",
+    "resource_budget": {
+      "warm_300_ms_max": 250,
+      "prefix_sweep_ms_max": 2000,
+      "peak_rss_bytes_max": 402653184
+    }
+  },
   "reason_codes": [
     "SOURCE_MAPPING_BLOCKED",
     "CURRENT_INTEGRATION_COUNTS_ONLY",
