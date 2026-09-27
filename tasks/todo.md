@@ -1143,3 +1143,4 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 ## Review
 
 - R4 harness/specification are authored locally but not yet committed or executed. No project runtime/dependency/provider/production change is allowed.
+- Initial disposable probes exposed two methodology gaps before final acceptance: snapshots lacked an explicit `prefix_end_bar_id`, and RSS was unavailable. The harness is being corrected and both platforms will be rerun from the new committed identity; the initial JSONs remain outside the repository as historical diagnostics.

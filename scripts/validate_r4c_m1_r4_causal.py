@@ -80,6 +80,48 @@ def json_digest(value: Any) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def current_peak_rss_bytes() -> tuple[int | None, str | None]:
+    """Read an OS-level peak working-set/RSS value without a new dependency."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            class ProcessMemoryCounters(ctypes.Structure):
+                _fields_ = [
+                    ("cb", ctypes.c_ulong),
+                    ("page_fault_count", ctypes.c_ulong),
+                    ("peak_working_set_size", ctypes.c_size_t),
+                    ("working_set_size", ctypes.c_size_t),
+                    ("quota_peak_paged_pool_usage", ctypes.c_size_t),
+                    ("quota_paged_pool_usage", ctypes.c_size_t),
+                    ("quota_peak_non_paged_pool_usage", ctypes.c_size_t),
+                    ("quota_non_paged_pool_usage", ctypes.c_size_t),
+                    ("pagefile_usage", ctypes.c_size_t),
+                    ("peak_pagefile_usage", ctypes.c_size_t),
+                ]
+
+            counters = ProcessMemoryCounters()
+            counters.cb = ctypes.sizeof(counters)
+            process = ctypes.windll.kernel32.GetCurrentProcess()
+            ok = ctypes.windll.psapi.GetProcessMemoryInfo(
+                process, ctypes.byref(counters), counters.cb
+            )
+            if ok:
+                return int(counters.peak_working_set_size), "windows_peak_working_set"
+        except Exception:  # noqa: BLE001 - measurement must not affect the probe
+            pass
+
+    status_path = "/proc/self/status"
+    try:
+        for line in Path(status_path).read_text(encoding="utf-8").splitlines():
+            if line.startswith("VmHWM:") or line.startswith("VmRSS:"):
+                value = line.split()[1]
+                return int(value) * 1024, f"linux_{line.split(':', 1)[0].lower()}"
+    except Exception:  # noqa: BLE001 - measurement must not affect the probe
+        pass
+    return None, None
+
+
 def value_or_none(value: Any) -> Any:
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
@@ -185,7 +227,10 @@ def safe_snapshot(rows: list[dict[str, Any]]) -> dict[str, Any]:
 def annotate_prefix_ledger(rows: list[dict[str, Any]]) -> dict[str, Any]:
     snapshots: dict[str, dict[str, Any]] = {}
     for end in range(MIN_PREFIX, len(rows) + 1):
-        snapshots[str(end)] = safe_snapshot(rows[:end])
+        current = safe_snapshot(rows[:end])
+        current["prefix_end_index"] = end - 1
+        current["prefix_end_bar_id"] = f"{rows[end - 1]['dt'].isoformat()}#{rows[end - 1]['index']:04d}"
+        snapshots[str(end)] = current
 
     all_prefixes = list(range(MIN_PREFIX, len(rows) + 1))
     for end in all_prefixes:
@@ -313,13 +358,7 @@ def resource_probe(rows: list[dict[str, Any]]) -> dict[str, Any]:
     warm_start = time.perf_counter_ns()
     full = safe_snapshot(rows)
     warm_ms = (time.perf_counter_ns() - warm_start) / 1_000_000
-    rss_bytes: int | None = None
-    try:
-        import psutil  # type: ignore[import-not-found]
-
-        rss_bytes = int(psutil.Process(os.getpid()).memory_info().rss)
-    except Exception:  # noqa: BLE001 - optional measurement only
-        pass
+    rss_bytes, rss_method = current_peak_rss_bytes()
     return {
         "cold_import_ms": round(cold_ms, 3),
         "cold_import_exit_code": cold.returncode,
@@ -327,6 +366,7 @@ def resource_probe(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "warm_full_run_ms": round(warm_ms, 3),
         "warm_full_run_status": full.get("status"),
         "peak_rss_bytes_observed": rss_bytes,
+        "peak_rss_method": rss_method,
     }
 
 

@@ -13,10 +13,10 @@ The harness records:
 
 - source commit and environment identity;
 - every prefix from the minimum probe history through bar 300;
-- normalized FX/BI/ZS geometry, source endpoints, candidate causal IDs, first/last observation, changes, and removals;
+- normalized FX/BI/ZS geometry, source endpoints, explicit `prefix_end_bar_id`, candidate causal IDs, first/last observation, changes, and removals;
 - normal full suffix versus future-only suffix mutation at cutoffs 80, 160, and 240;
 - separate positive-volume, true-zero-volume, and unknown-volume inputs;
-- cold import/startup, warm full-run time, observed RSS when available, and failure status.
+- cold import/startup, warm full-run time, OS-level peak working-set/RSS, and failure status.
 
 ## Causal ledger contract
 
