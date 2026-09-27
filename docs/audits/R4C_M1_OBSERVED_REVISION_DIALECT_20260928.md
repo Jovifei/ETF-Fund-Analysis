@@ -41,6 +41,19 @@ The proposal is intentionally an M1 review item, not a production SLA:
 
 Independent review must freeze or reject these limits after reading the Windows/Linux measurements. The runtime config remains disabled and engine-less.
 
+## R5 execution receipt
+
+The committed validator is `f344514d69b14805a9d112190ab228569cb6dc42`, tree `406b6bb4df5a8b14a4ac0efa2038f5babbceba2d`, with script SHA-256 `D2F516F4CF2F185414393F03024ED70441674D42B822CBDB57A3D93FD88191E1`. It ran only with the pinned CZSC wheels in disposable Windows/Linux environments.
+
+| Environment | JSON SHA-256 | Semantic digest | Observations | Records | Revisions | Collisions |
+|---|---|---|---:|---:|---:|---:|
+| Windows CPython 3.12 | `794B13380449FE4E0634266EC309318B0DBC45554AA54943E4A65EA2D75EB50F` | `bc21ba9c16f0756682a9a1c0bccf142b21c889b2fa6bbd7bb99e524f9ba1ef8c` | 281 | 6604 | 6568 | 0 |
+| Linux Python 3.12 | `C1C65C42E95649F0D9BC4B0901FC1AF78F319210CC831C177A828586240BA0B3` | same | 281 | 6604 | 6568 | 0 |
+
+Both same-input reruns were deterministic. Transition counts matched across platforms: `OBSERVED_NEW=87`, `OBSERVED_UNCHANGED=6481`, `OBSERVED_ABSENT=36`; 21 reappearances were retained as new observation bindings. No historical revision was overwritten. The proposed resource limits passed on both platforms: Windows warm `4.582 ms`, prefix sweep `1301.901 ms`, peak working set `138,805,248` bytes; Linux warm `4.150 ms`, prefix sweep `1249.783 ms`, peak `VmHWM` `217,919,488` bytes.
+
+`engine_confirmation` remains `unknown`, while `application_observation_status` is `observed`. This is an evidence-only observed-revision validation, not engine selection or runtime integration. M1 remains `CLOSED_BLOCKED` and M2 remains false until independent review accepts the dialect and its resource proposal.
+
 ## Exit boundary
 
 M1 can move to `READY_FOR_SELECTION_REVIEW` only if deterministic IDs are collision-free, the observed-revision history faithfully preserves absence/reappearance, cross-platform parity holds, unknown volume remains fail-closed, and the resource proposal is accepted. Even then `M2_GO=false`; engine selection and M2 implementation require a separate reviewed authorization.

@@ -1156,11 +1156,12 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - [x] Record remote M1-R4 methodology PASS while preserving M1 `CLOSED_BLOCKED` and M2 false.
 - [x] Bind the R5 base `ce7de47b9e168239c8fdbded221822f98359caa6` / tree `95e68e23d146f9012622c00c8cabaf2e645a8b02`.
 - [x] Write the observation/structure/revision identity specification and validation harness before execution.
-- [ ] Commit/push the R5 method freeze before disposable Windows/Linux execution.
-- [ ] Validate deterministic IDs, observed transitions, absence/reappearance, collision corpus, cross-platform parity, and proposed resource budget.
-- [ ] Update evidence docs/config only; keep `enabled=false`, no engine, and no application integration.
+- [x] Commit/push the R5 method freeze before disposable Windows/Linux execution.
+- [x] Validate deterministic IDs, observed transitions, absence/reappearance, collision corpus, cross-platform parity, and proposed resource budget.
+- [x] Update evidence docs/config only; keep `enabled=false`, no engine, and no application integration.
 - [ ] Commit/push R5 evidence and obtain independent remote review before any engine-selection or M2 plan.
 
 ## Review
 
 - R4 methodology was independently accepted (`M1_R4_METHOD=PASS`); R5 artifacts are being prepared from the exact accepted evidence tip. No runtime/dependency/provider/production change is allowed.
+- R5 Windows/Linux semantic digest matches `bc21ba9c16f0756682a9a1c0bccf142b21c889b2fa6bbd7bb99e524f9ba1ef8c`; both runs report 281 observations, 6604 records, 6568 revisions, zero collisions, 21 reappearances, and passing proposed resource limits.
