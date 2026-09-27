@@ -53,3 +53,27 @@ The implementation review is bound to CZSC source commit `90372af035f01ed9f05070
 | `crates/czsc-core/src/objects/bar.rs` | `5462A555BEBDEDE6B7ABDC4D1F3B8C0F879700927A808A362A90066D55E4EA77` | `RawBar.vol` and `amount` are mandatory `f64`; an unknown volume cannot enter the native constructor. |
 
 The exact lifecycle locations are `analyze/mod.rs:178-235, 241-314, 524-534, 684-685`, `analyze/utils.rs:31-50, 177-242, 264-443`, `objects/fx.rs:37-194`, `objects/bi.rs:33-161, 308-315`, `objects/zs.rs:21-107`, and `objects/bar.rs:34-108`. No source field or test establishes a permanent engine confirmation timestamp, repaint-free revision, or native stable ID.
+
+## R4 execution receipt
+
+The final committed methodology is `9de3b2679c3c07810688560411b91392db34b3b9`, tree `df1f289b9dbd5ab237cd8ac5f77f4d4f83a5e837`, with probe file SHA-256 `108FE8AA3B156363555AB43D5993707422B331C487B26FFAD6E97A8F9C5DD7CF`. The exact pinned wheels were hash-verified before each disposable run:
+
+- Windows cp310-abi3 wheel: `18F3FB6C38F8834B8B94E35B990A9632D24E46E269BDF4D94B3AA401CE8F4581`.
+- Linux manylinux x86_64 wheel: `2C65D266BD58B51960BE505678F2DAAE69892CA4031808EEEEF2CCBC2848C036`.
+
+Final output bindings:
+
+| Environment | JSON SHA-256 | Semantic digest | Prefix ledger digest | Final counts |
+|---|---|---|---|---|
+| Windows CPython 3.12 | `49C7A99530438FBFA5369BA6C51E475E28FF9B3E1FE27F4BE99B5A7EDAA02B60` | `7be7357d6135b4822bb8f2fd3e6db3e08572dd2781d583355293502df169a4cb` | `24d17f84d5d3bf01059e9affb72dde0a24cbad7be939eba8fd526383cf106adc` | 49 FX / 1 BI / 1 ZS |
+| Linux Python 3.12 | `FD6E067904FEC335B7FC065372C5E39AAB8FDD359CF4482F63CA9F5245BC395D` | same | same | 49 FX / 1 BI / 1 ZS |
+
+The semantic and prefix digests match across platforms. Platform metadata is kept outside those digests. The prefix ledger contains explicit `prefix_end_bar_id`; a 20-bar prefix records `2026-01-20T00:00:00#0019`.
+
+Resource measurements were recorded in both environments: Windows cold import `894.260 ms`, warm full run `4.618 ms`, full prefix sweep `1,134.520 ms`, peak working set `138,428,416` bytes, output `7,443,352` bytes; Linux cold import `451.103 ms`, warm full run `3.973 ms`, full prefix sweep `996.280 ms`, peak `VmHWM` `218,566,656` bytes, output `7,443,286` bytes. These are measurements, not an adopted production budget; independent review must decide whether and how they become a gate.
+
+Volume semantics remain explicit: positive and true-zero inputs produce the same normalized digest `9cc896bbe195c04ecbbb72904c86ab5b0990c28594e1030883bfe0f1dc7cf8f6`; unknown volume fails at the native constructor with `TypeError: argument 'vol': must be real number, not NoneType`. No unknown value was coerced to zero.
+
+Future-only suffix results are not a qualification pass. With cutoffs 80/160/240, normal suffixes removed 1/1/2 prior candidate identities and added 1/1/1; mutating only bars after the cutoff removed 6/22/39 prior identities. No same candidate identity was classified as merely changed. This is direct evidence that the current engine can rebuild or remove earlier structures when later bars arrive; it does not establish a repaint-safe or permanent confirmation contract.
+
+**R4 result:** `M1=CLOSED_BLOCKED`. The config remains disabled and engine-less. Causal confirmation, repaint/replacement, stable identity, and a reviewed resource budget remain open; no M2, runtime integration, dependency, Provider, real-data, canonical-action, actionable, or production change was made.

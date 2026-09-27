@@ -1133,14 +1133,17 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 
 - [x] Read the remote M1-R4 plan and bind the exact base `208d7c10c98d686321d4774fd3bd2ba489b45ab9` / tree `55503f9d19299dee5b15f8f587df8aa4cf033f0d`.
 - [x] Write the deterministic causal probe and specification before any Windows/Linux execution.
-- [ ] Commit the exact harness/specification and release its SHA/tree for independent review before execution.
-- [ ] Inspect pinned CZSC implementation semantics at source commit `90372af035f01ed9f05070eadddd265b91c84d24` and record source-bound lifecycle findings.
-- [ ] Run the committed harness only in disposable Windows/Linux environments with exact pinned artifacts.
-- [ ] Verify per-bar prefix ledger, suffix/future mutation, candidate stable IDs, volume semantics, resources, and normalized parity.
-- [ ] Update M1 evidence/config only; keep `enabled=false`, no engine, real data UNKNOWN, and production unchanged.
+- [x] Commit the exact harness/specification and release its SHA/tree for independent review before execution.
+- [x] Inspect pinned CZSC implementation semantics at source commit `90372af035f01ed9f05070eadddd265b91c84d24` and record source-bound lifecycle findings.
+- [x] Run the committed harness only in disposable Windows/Linux environments with exact pinned artifacts.
+- [x] Verify per-bar prefix ledger, suffix/future mutation, candidate stable IDs, volume semantics, resources, and normalized parity.
+- [x] Update M1 evidence/config only; keep `enabled=false`, no engine, real data UNKNOWN, and production unchanged.
 - [ ] Commit/push the evidence result and obtain independent remote M1-R4 review before any further phase.
 
 ## Review
 
-- R4 harness/specification are authored locally but not yet committed or executed. No project runtime/dependency/provider/production change is allowed.
-- Initial disposable probes exposed two methodology gaps before final acceptance: snapshots lacked an explicit `prefix_end_bar_id`, and RSS was unavailable. The harness is being corrected and both platforms will be rerun from the new committed identity; the initial JSONs remain outside the repository as historical diagnostics.
+- Final methodology commit `9de3b2679c3c07810688560411b91392db34b3b9` / tree `df1f289b9dbd5ab237cd8ac5f77f4d4f83a5e837` is pushed; final probe SHA-256 is `108FE8AA3B156363555AB43D5993707422B331C487B26FFAD6E97A8F9C5DD7CF`.
+- Windows/Linux semantic digest and full prefix ledger digest match; final JSON hashes are `49C7A99530438FBFA5369BA6C51E475E28FF9B3E1FE27F4BE99B5A7EDAA02B60` and `FD6E067904FEC335B7FC065372C5E39AAB8FDD359CF4482F63CA9F5245BC395D`.
+- Source review and execution show no permanent confirmation, stable native IDs, or repaint-safe lifecycle; future suffix mutations remove prior structures. Unknown volume fails explicitly, positive/zero digests match, and resource measurements are recorded without adopting a budget.
+- Validation: probe syntax compile, JSON parse, semantic/prefix parity, resource fields, volume boundary, and `git diff --check` passed. No project runtime/dependency/Provider/production change.
+- M1 remains `CLOSED_BLOCKED`; pending final evidence commit and independent remote M1-R4 review.
