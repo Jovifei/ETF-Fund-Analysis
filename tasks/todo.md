@@ -1148,3 +1148,19 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - Validation: probe syntax compile, JSON parse, semantic/prefix parity, resource fields, volume boundary, and `git diff --check` passed. No project runtime/dependency/Provider/production change.
 - M1 remains `CLOSED_BLOCKED`; pending final evidence commit and independent remote M1-R4 review.
 - Final evidence receipt commit `d3bd40b50359e4f5e7f047e292dbc8b803b4af7b` (tree `d920ed1cdc5954816c0b50635c23b33c9b785e64`) is pushed to `codex/r4c-m1`; remote review is now the only open gate.
+
+# R4C M1-R5 observed-revision dialect and deterministic IDs — 2026-09-28
+
+## Plan
+
+- [x] Record remote M1-R4 methodology PASS while preserving M1 `CLOSED_BLOCKED` and M2 false.
+- [x] Bind the R5 base `ce7de47b9e168239c8fdbded221822f98359caa6` / tree `95e68e23d146f9012622c00c8cabaf2e645a8b02`.
+- [x] Write the observation/structure/revision identity specification and validation harness before execution.
+- [ ] Commit/push the R5 method freeze before disposable Windows/Linux execution.
+- [ ] Validate deterministic IDs, observed transitions, absence/reappearance, collision corpus, cross-platform parity, and proposed resource budget.
+- [ ] Update evidence docs/config only; keep `enabled=false`, no engine, and no application integration.
+- [ ] Commit/push R5 evidence and obtain independent remote review before any engine-selection or M2 plan.
+
+## Review
+
+- R4 methodology was independently accepted (`M1_R4_METHOD=PASS`); R5 artifacts are being prepared from the exact accepted evidence tip. No runtime/dependency/provider/production change is allowed.
