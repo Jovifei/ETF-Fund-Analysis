@@ -1117,7 +1117,7 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - [x] Reconcile the OSS evidence addendum and task ledger without changing application/runtime files.
 - [x] Validate JSON, Markdown evidence references, Python syntax, and diff hygiene; commit and push the isolated evidence correction.
 - [x] Commit and push the exact evidence correction to `codex/r4c-m1`.
-- [ ] Send the exact commit and receipts to remote ChatGPT for independent R3.2 review.
+- [x] Send the exact commit and receipts to remote ChatGPT for independent R3.2 review.
 
 ## Review
 
@@ -1125,4 +1125,21 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - Runtime and OSS receipts bind commit `f6501bd233701f7f1becfc681bc0918223898edd`, probe SHA-256 `95B5C5A6FAB20E95312100AE0D2BE54935998B2EFD8881009455234ED924E9E2`, code-defined fixture, and unchanged historical JSON hashes. The hard-coded JSON platform label is explicitly non-authoritative for Linux.
 - Validation: JSON parse, probe syntax compile, evidence-reference checks, and `git diff --check` passed; no application/runtime/dependency/Provider/production change.
 - Evidence correction commit `2a05c5801653dcf71748d23ff2b883dbdb1376ba` (tree `842bb789ee01e4f102bd84d151970a61ce5316e0`) is pushed to `codex/r4c-m1`.
-- Pending independent remote R3.2 review.
+- Remote iteration 44 independently reviewed the receipt and marked `M1_R3_2=PASS`; M1 remains `CLOSED_BLOCKED` because causal, repaint, stable-ID, and complete resource gates are still open.
+
+# R4C M1-R4 causal/lifecycle qualification — 2026-09-28
+
+## Plan
+
+- [x] Read the remote M1-R4 plan and bind the exact base `208d7c10c98d686321d4774fd3bd2ba489b45ab9` / tree `55503f9d19299dee5b15f8f587df8aa4cf033f0d`.
+- [x] Write the deterministic causal probe and specification before any Windows/Linux execution.
+- [ ] Commit the exact harness/specification and release its SHA/tree for independent review before execution.
+- [ ] Inspect pinned CZSC implementation semantics at source commit `90372af035f01ed9f05070eadddd265b91c84d24` and record source-bound lifecycle findings.
+- [ ] Run the committed harness only in disposable Windows/Linux environments with exact pinned artifacts.
+- [ ] Verify per-bar prefix ledger, suffix/future mutation, candidate stable IDs, volume semantics, resources, and normalized parity.
+- [ ] Update M1 evidence/config only; keep `enabled=false`, no engine, real data UNKNOWN, and production unchanged.
+- [ ] Commit/push the evidence result and obtain independent remote M1-R4 review before any further phase.
+
+## Review
+
+- R4 harness/specification are authored locally but not yet committed or executed. No project runtime/dependency/provider/production change is allowed.
