@@ -85,6 +85,7 @@ def current_peak_rss_bytes() -> tuple[int | None, str | None]:
     if sys.platform == "win32":
         try:
             import ctypes
+            from ctypes import wintypes
 
             class ProcessMemoryCounters(ctypes.Structure):
                 _fields_ = [
@@ -102,8 +103,17 @@ def current_peak_rss_bytes() -> tuple[int | None, str | None]:
 
             counters = ProcessMemoryCounters()
             counters.cb = ctypes.sizeof(counters)
-            process = ctypes.windll.kernel32.GetCurrentProcess()
-            ok = ctypes.windll.psapi.GetProcessMemoryInfo(
+            psapi = ctypes.WinDLL("psapi.dll")
+            kernel32 = ctypes.WinDLL("kernel32.dll")
+            psapi.GetProcessMemoryInfo.argtypes = [
+                wintypes.HANDLE,
+                ctypes.POINTER(ProcessMemoryCounters),
+                wintypes.DWORD,
+            ]
+            psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+            kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+            process = kernel32.GetCurrentProcess()
+            ok = psapi.GetProcessMemoryInfo(
                 process, ctypes.byref(counters), counters.cb
             )
             if ok:
