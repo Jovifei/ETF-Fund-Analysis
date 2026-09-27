@@ -138,3 +138,22 @@ def test_source_adjusted_prices_are_not_adjusted_again_or_mixed():
     mixed = [rows[0], _bar(date(2026, 7, 3), 1.0, adjust='none')]
     assert corporate_action_contract.research_history_rows(mixed, '512480.SH') == mixed
     assert price_history_issue(mixed) == 'ambiguous_price_basis'
+
+
+def test_price_basis_contract_is_independent_of_read_window_and_tracks_effective_events():
+    from app.providers.corporate_action_contract import research_price_basis
+
+    wide = research_price_basis(
+        "512480.SH", "none", price_changed=True, effective_through=date(2026, 9, 27)
+    )
+    narrow = research_price_basis(
+        "512480.SH", "none", price_changed=True, effective_through=date(2026, 9, 27)
+    )
+    before_event = research_price_basis(
+        "512480.SH", "none", price_changed=True, effective_through=date(2026, 7, 2)
+    )
+
+    assert wide["price_basis_id"] == narrow["price_basis_id"]
+    assert wide["effective_evidence_ids"] == ["sse_512480_20260629"]
+    assert before_event["effective_evidence_ids"] == []
+    assert before_event["price_basis_id"] != wide["price_basis_id"]

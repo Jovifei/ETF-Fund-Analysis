@@ -68,7 +68,7 @@ class SupportResistanceService:
     def _sr_frame(self, db: Session, instrument_id: int, *, window: int = DEFAULT_WINDOW,
                   as_of: datetime | None = None) -> pd.DataFrame:
         """Bounded research history; unknown units may not feed weighted methods."""
-        from app.providers.corporate_action_contract import official_corporate_actions, research_history_rows
+        from app.providers.corporate_action_contract import research_history_rows, research_price_basis
         from app.providers.data_contract import finite, price_history_issue, row_units_verified
         from app.utils.input_lineage import history_digest
         assessed_at = as_of or datetime.now(SHANGHAI)
@@ -82,11 +82,6 @@ class SupportResistanceService:
         instrument = db.get(Instrument, instrument_id)
         research_rows = rows if self.settings.market_provider == "mock" or instrument is None else research_history_rows(rows, instrument.ts_code)
         adjustments = {row.adjust for row in rows}
-        split_evidence = (
-            [event.evidence_id for event in official_corporate_actions(instrument.ts_code)]
-            if instrument is not None and adjustments == {"none"} and self.settings.market_provider != "mock"
-            else []
-        )
         adjust = next(iter(adjustments)) if len(adjustments) == 1 else None
         price_changed = any(
             finite(getattr(source_row, key, None)) and finite(getattr(row, key, None))
@@ -94,10 +89,15 @@ class SupportResistanceService:
             for source_row, row in zip(rows, research_rows, strict=True)
             for key in ("open", "high", "low", "close")
         )
-        basis = "official_split_adjusted_price_research_not_total_return" if price_changed else f"source_adjustment:{adjust or 'ambiguous'}"
-        basis_id = stable_hash({"code": instrument.ts_code if instrument else str(instrument_id),
-                                "adjust": adjust, "basis": basis,
-                                "events": split_evidence if adjust == "none" else []})
+        basis_descriptor = research_price_basis(
+            instrument.ts_code if instrument else str(instrument_id),
+            adjust,
+            price_changed=price_changed,
+            effective_through=last_settled_date,
+            consider_corporate_actions=self.settings.market_provider != "mock",
+        )
+        basis = str(basis_descriptor["basis"])
+        basis_id = str(basis_descriptor["price_basis_id"])
         records = []
         for source_row, row in zip(rows, research_rows, strict=True):
             units_ok = row_units_verified(source_row) or (self.settings.market_provider == "mock" and "mock" in source_row.source)

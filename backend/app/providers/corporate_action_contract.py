@@ -63,6 +63,40 @@ def official_corporate_actions(ts_code: str) -> tuple[CorporateActionEvent, ...]
     return _OFFICIAL_ACTIONS.get(str(ts_code or "").strip().upper(), ())
 
 
+def research_price_basis(
+    ts_code: str,
+    adjustment: str | None,
+    *,
+    price_changed: bool,
+    effective_through: date | None = None,
+    consider_corporate_actions: bool = True,
+) -> dict[str, object]:
+    """Return stable economic basis identity, independent of a read window."""
+
+    from app.utils.hashing import stable_hash
+
+    events = official_corporate_actions(ts_code) if consider_corporate_actions else ()
+    effective_events = [
+        event for event in events
+        if effective_through is None or event.ex_date <= effective_through
+    ]
+    effective_ids = [event.evidence_id for event in effective_events]
+    normalized_adjustment = adjustment or "ambiguous"
+    if normalized_adjustment == "none" and price_changed and effective_ids:
+        basis = "official_split_adjusted_price_research_not_total_return"
+    else:
+        basis = f"source_adjustment:{normalized_adjustment}"
+    descriptor = {
+        "code": str(ts_code or "").strip().upper(),
+        "series_kind": RESEARCH_SERIES if price_changed and effective_ids else RAW_RESEARCH_SERIES,
+        "adjustment_contract_version": "corporate-action-research-v1",
+        "adjustment": normalized_adjustment,
+        "basis": basis,
+        "effective_evidence_ids": effective_ids,
+    }
+    return {**descriptor, "price_basis_id": stable_hash(descriptor)}
+
+
 def research_history_rows(rows, ts_code: str):
     """Build an evidence-bound split-adjusted research view without mutating raw bars."""
 

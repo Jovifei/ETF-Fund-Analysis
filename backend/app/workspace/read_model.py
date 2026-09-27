@@ -347,7 +347,7 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
     ).order_by(DailyBar.trade_date.desc()).limit(maximum + 1)).all()
     truncated = len(stored) > maximum
     stored = list(reversed(stored[:maximum]))
-    from app.providers.corporate_action_contract import official_corporate_actions, research_history_rows
+    from app.providers.corporate_action_contract import research_history_rows, research_price_basis as build_research_price_basis
     research_stored = (
         stored
         if settings.market_provider == "mock" or adjust != "none"
@@ -430,9 +430,16 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
         row["is_partial"] = str(row["date"])[:10] == now.date().isoformat() and now.time() < time(15, 15)
     for row in research_series:
         row["is_partial"] = str(row["date"])[:10] == now.date().isoformat() and now.time() < time(15, 15)
-    basis_events = [] if settings.market_provider == "mock" or adjust != "none" else [event.evidence_id for event in official_corporate_actions(code)]
-    research_price_basis = "official_split_adjusted_price_research_not_total_return" if price_basis_changed else f"source_adjustment:{adjust}"
-    research_price_basis_id = stable_hash({"code": code, "adjust": adjust, "basis": research_price_basis, "events": basis_events})
+    basis_descriptor = build_research_price_basis(
+        code,
+        adjust,
+        price_changed=price_basis_changed,
+        effective_through=as_of.date(),
+        consider_corporate_actions=settings.market_provider != "mock",
+    )
+    research_price_basis = str(basis_descriptor["basis"])
+    research_price_basis_id = str(basis_descriptor["price_basis_id"])
+    basis_events = list(basis_descriptor.get("effective_evidence_ids", []))
     quality_hashes = {item.trade_date.isoformat(): item.quality_hash for item in stored}
     input_rows = []
     for item in rows:
