@@ -1,7 +1,6 @@
 """Read-model regressions from the September 14 audit; no provider or production DB."""
 from datetime import date, datetime, timedelta
 from types import SimpleNamespace
-import math
 
 import pandas as pd
 import pytest
@@ -220,7 +219,7 @@ def test_sr_same_day_revisions_are_append_only_and_previous_payload_remains_read
     add_bar(db, inst, day=date(2026, 9, 11), close=2.0, high=2.1, low=1.9)
     service = SupportResistanceService()
 
-    first = service.compute(db, inst.id)
+    service.compute(db, inst.id)
     first_revision = db.query(SupportResistanceSnapshotRevision).one()
     first_payload_hash = first_revision.payload_hash
 
@@ -366,9 +365,9 @@ def test_legacy_board_is_explained_without_mutating_the_saved_record(isolated):
 
 
 def test_verified_instant_is_compared_in_market_timezone():
-    from datetime import timezone
+    from datetime import UTC
     now=datetime(2026,9,14,0,2,tzinfo=get_settings().timezone)
-    quote=SimpleNamespace(quote_time=now.astimezone(timezone.utc),fetched_at=now,
+    quote=SimpleNamespace(quote_time=now.astimezone(UTC),fetched_at=now,
         timestamp_verified=True,is_realtime=True,degraded_reason=None)
     state,_=DecisionBoardService._status(object(),quote,now)
     # This is a freshness helper, not the trading-session/actionable gate.

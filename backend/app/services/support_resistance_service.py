@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, time, timedelta, timezone
+from datetime import UTC, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -125,12 +125,6 @@ class SupportResistanceService:
         research_rows = rows if self.settings.market_provider == "mock" or instrument is None else research_history_rows(rows, instrument.ts_code)
         adjustments = {row.adjust for row in rows}
         adjust = next(iter(adjustments)) if len(adjustments) == 1 else None
-        price_changed = any(
-            finite(getattr(source_row, key, None)) and finite(getattr(row, key, None))
-            and abs(float(getattr(source_row, key)) - float(getattr(row, key))) > 1e-12
-            for source_row, row in zip(rows, research_rows, strict=True)
-            for key in ("open", "high", "low", "close")
-        )
         basis_descriptor = research_price_basis(
             instrument.ts_code if instrument else str(instrument_id),
             adjust,
@@ -223,7 +217,7 @@ class SupportResistanceService:
             existing.source_bars = bars
             existing.computed_by = computed_by
             existing.method_version = METHOD_VERSION
-            existing.generated_at = datetime.now(timezone.utc)
+            existing.generated_at = datetime.now(UTC)
         else:
             db.add(
                 SupportResistanceSnapshot(
