@@ -89,7 +89,7 @@
 
 ## 7. R4B：可重复的箱体与支撑压力算法
 
-以下为拟实施算法，不是已经验证有效的交易策略。
+截至 2026-09-27，R4B 的日线研究初版已在隔离分支本地实现并完成测试。实现收据：[R4B 箱体与支撑压力验收](09-RPT-R4B箱体与支撑压力验收.md)；页面状态证据：[R4B 逐页矩阵](10-TST-R4B逐页状态验收矩阵.md)。以下是已锁定的工程研究合同，不是已经验证有效的交易策略，也没有进入 main 或生产。
 
 ### 7.1 区分三类结构
 
@@ -104,7 +104,7 @@
 5. 状态机至少包含 candidate、confirmed、breakout_attempt、breakout_confirmed、failed_breakout、invalidated、expired。触线、盘中越界、收盘确认不可混为一谈；量能资格不足时该确认特征单独不可用。
 6. 输出 lower/upper/mid、origin_at、confirmed_at、valid_from/valid_until、touch_count、breakout_state、source_ids、algorithm/config/input_hash。strength 标为规则分，未做样本外校准不显示为成功率。
 
-新增模块建议：services/structure_service.py、utils/price_structure.py、结构输出 schema 和对应 tests。先保留现有 SR 作基线对照，不能静默替换所有正式信号。
+当前代码将纯算法放在 `backend/app/utils/price_structure.py`，由现有 `SupportResistanceService` 计算并复用快照 JSON，不新增表或迁移；旧 SR 结果仍作为兼容基线保留，日线箱体不接入 canonical decision。完整缠论、中枢引擎与周/月箱体留在 R4C/后续版本。
 
 ### 7.3 绘图和验收
 

@@ -1,4 +1,12 @@
-# 当前状态：R2–R4A 本地实现与验收完成（2026-09-26）
+# 当前状态：R4B 日线结构本地实现与验收完成（2026-09-27）
+
+R4B 在隔离分支 `codex/r4b-price-structure` 完成：分型/平台按右侧两根确认；独立触碰和方法贡献分开；实测 Wilder ATR14 代替收盘价 2% 估算；日线箱体增加证据哈希、状态回放、结算日/盘中临时状态分离，并绑定研究价格口径。现有支撑压力快照方法版本升级到 `support-resistance-v4-price-structure`，图表合同升级到 `chart-read-v1.2.0`；无数据库迁移，箱体不接入 canonical decision，`actionable=false`。
+
+最终应用提交 `8a5b575904c4cbc5a2d63e53a8521076c80904e1`，tree `1fc3d4657dba7f9e0f0ec5d06875eaaa45c98d83`。后端全量 pytest：1269 项，1255 通过、14 条件跳过、0 失败/错误；前端 Vitest 63/63、普通/认证/响应式浏览器 26/5/18 通过；typecheck、构建、compileall、Node 39/39、安全扫描通过。收据与证据路径见 [R4B验收收据](docs/09-RPT-R4B箱体与支撑压力验收.md) 和[逐页状态矩阵](docs/10-TST-R4B逐页状态验收矩阵.md)。
+
+代码仅在本地隔离分支，尚未推送、CI、合并 main 或部署。main 当前工作副本仍在 `c63f669095e6eb44e1e9c185deecf0f7af02b27c`；真实行情资格 **UNKNOWN**，生产未重新检查。本地 Mock/合成数据验收不授予真实资格。下一步为核对远端状态并走发布门禁，发布后再进入 R4C。
+
+## 上一阶段：R2–R4A 本地实现（2026-09-26）
 
 本地隔离分支 `codex/r2-freshness-lifecycle` 从 `main` 基线 `c63f669095e6eb44e1e9c185deecf0f7af02b27c` 完成详情/图表同读时、模块级可用性、决策变化说明和原始/拆分调整研究序列分离。应用提交 `8b52d39d22ebb21a41e269ab9ce9863b85dd3b83`（tree `d7ce9c857f48a99e130cf6060700974213c4e9c0`），补充前端状态回归提交 `f4286d590fd6f9565192754e40c553048286823d`。最终本机全量 pytest 为 1250 项，1236 通过、14 条件跳过、0 失败/错误；前端 62/62、普通/认证/响应式浏览器 20/20、5/5、18/18 通过。详情见 [R2–R4A 实现收据](docs/R2_R3_R4A_IMPLEMENTATION_RECEIPT_20260926.md) 与[路由矩阵](docs/ROUTE_ACCEPTANCE_R2_R4A_20260926.md)。
 

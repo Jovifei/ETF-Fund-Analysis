@@ -1016,3 +1016,26 @@ Prevent a reachable FTShare endpoint from being marked qualified when absolute-u
 - 应用提交 `8b52d39d22ebb21a41e269ab9ce9863b85dd3b83`（tree `d7ce9c857f48a99e130cf6060700974213c4e9c0`）；后续测试提交 `f4286d590fd6f9565192754e40c553048286823d`。`main` 仍在 `c63f669`，本轮未推送、合并或部署。
 - 真实行情资格仍 UNKNOWN；未连接 Provider、未改认证/原始 OHLCV、未提高 `actionable` 或预测校准。生产部署仍待后续独立发布授权/收据。
 - Obsidian 写入已回读加载成功；实现收据和路由矩阵的源文件/镜像 SHA-256 相等。固定 pending 文件仍属于 `tesla-speed`，保留原内容和时间戳。
+
+# R4B price structures — 2026-09-27
+
+## Plan
+
+- [x] Verify the isolated baseline and add failing tests for duplicate pivot confirmations, fabricated ATR, and missing pivot time evidence.
+- [x] Implement deterministic daily pivots, deduplicated touch evidence, and box qualification as pure functions with frozen research parameters.
+- [x] Implement box lifecycle replay with settled-bar confirmation and intraday-only breakout attempt display.
+- [x] Persist versioned structure payloads through the audited support/resistance refresh; keep GET read-only and canonical decisions unchanged.
+- [x] Add bounded box overlays and evidence text to the existing chart; guard price-basis and interval mismatches.
+- [x] Verify algorithm, snapshot/API, and browser behavior; preserve first failures, reruns, and environment skips.
+- [x] Update receipt, route matrix, STATUS, HANDOFF, and mapped Obsidian project notes; review and commit each independently accepted batch.
+- [ ] Recheck exact SHA and CI; handle push, main merge, and production rollout only under the release gate stated in this plan.
+
+## Review
+
+- Branch: `codex/r4b-price-structure`; base: `4d8fa1a4b7c5fc8dc3d0066c74dc86cd9092df18` (tree `6400437180c62052936f443f423910fd2a841ac6`).
+- Working tree was clean before branching. Primary checkout and other worktrees were left untouched.
+- App commits: `5600d92243290dffe9e7de6d6af53fea9d48bc22`, `0e5759b706fde8ea4e678f28ef53b7b8d77ec3a7`, `8a5b575904c4cbc5a2d63e53a8521076c80904e1`; final app tree `1fc3d4657dba7f9e0f0ec5d06875eaaa45c98d83`.
+- Final full pytest: 1269 total, 1255 passed, 14 environment skips, 0 failures/errors. Frontend 63/63, ordinary/auth/responsive E2E 26/5/18; Node 39/39, typecheck/build/compileall/secret scan passed.
+- First failures and reruns are recorded in `docs/09-RPT-R4B箱体与支撑压力验收.md`; browser screenshots/traces and JUnit are outside the repo under `E:\Claude_allow\Download\ETF_R4B_QA_20260927`.
+- Obsidian checkpoint and document mirror status are recorded after their wrapper verification; the unrelated Tesla pending checkpoint is preserved.
+- Remote CI, main integration, production deployment, and real-data qualification remain pending separate gates.
