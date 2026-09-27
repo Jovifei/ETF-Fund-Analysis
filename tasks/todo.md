@@ -1186,6 +1186,11 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - R5.1 Windows/Linux semantic digest matches `9346d77b4d0477a3434238924b4b63c939c098feb9f27321313de79bf28f8b54`; three collision namespaces are zero, namespace sensitivity passes, and proposed resource limits pass. R5.1 method commit `f151e262d97f0f20addc1faf4773dfcb46742d8a` is pushed; independent selection-readiness review remains open.
 - R5.1 evidence tip `aa824ba48a91a11d4d3f7ea053639fa23532bd60` (tree `406a1ae96514134d6bc4a63a6076ae44e50cfef0`) is pushed to `codex/r4c-m1`.
 
+# R4C M1-R5.2 collision-preimage correction — review
+
+- R5.2 method commit `ce1a03a9a95b1a108823465128a09ea39ea2966a` / tree `b4348edbe3d418b6070369262a0c6880286e9485` is pushed.
+- Raw canonical preimages now back all three collision maps; Windows/Linux semantic digest remains equal and all namespace collision counts are zero. Pending independent selection-readiness review.
+
 # R4C M1-R5.2 collision-preimage correction — 2026-09-28
 
 ## Plan

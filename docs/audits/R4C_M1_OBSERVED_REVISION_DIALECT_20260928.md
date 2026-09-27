@@ -66,6 +66,12 @@ The authoritative checked-out method file SHA is `D2F516F4CF2F185414393F03024ED7
 
 R5.2 corrects collision validation to retain canonical JSON preimages in each namespace map. An ID is now a collision only when the same ID maps to different raw canonical payloads; a hash of the payload is not used as the collision preimage.
 
+## R5.2 collision-preimage receipt
+
+The corrected method is `ce1a03a9a95b1a108823465128a09ea39ea2966a`, tree `b4348edbe3d418b6070369262a0c6880286e9485`, method SHA-256 `4FEEEA4340EDE67A82ED4E6C9984F525DEAA5BD3CA53D488B698665503907AFC`. Final Windows/Linux JSON hashes are `EC590CAF5F004D88C72B1AD22F3E0007E2B9E2E9B6268D1252BEA63D9825F67E` and `F3969E718BFFC8422C2040C58046DEEDC6519EFD43EA93FA425ACD4DFE9CDA04`; semantic digest remains `9346d77b4d0477a3434238924b4b63c939c098feb9f27321313de79bf28f8b54` on both platforms.
+
+Each namespace now maps its ID to the raw canonical JSON preimage. Windows/Linux both report observation, structure, and revision collision counts of zero; namespace sensitivity, 281 observation rows, 6604 records, 6568 revisions, 36 absence transitions, 21 reappearances, and the accepted resource budget remain passing. Engine confirmation remains `unknown`; M1 remains `CLOSED_BLOCKED` and M2 false.
+
 ## R5.1 identity-hardening receipt
 
 The corrected method is committed at `f151e262d97f0f20addc1faf4773dfcb46742d8a`, tree `dfbee537778920ad1745ccbf558e72631a6beca6`, with script SHA-256 `544156B9A865D7768635F6CF0A20513947F00AD49EB676082C04B35E269D3883`. The final evidence tip is `3751476667e087de159a8dd73f3f6dd7e760babc` / tree `f14c75aa36856a6e8b4fa51f57436884dbc7586b` before this R5.1 receipt update.
