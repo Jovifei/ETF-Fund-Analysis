@@ -1,7 +1,7 @@
 """append-only support/resistance snapshot revisions
 
 Revision ID: g8b9c0d1e2f3
-Revises: f7a8b9c0d1e2
+Revises: 0a9b1c2d3e4f, e609200001
 """
 from collections.abc import Sequence
 

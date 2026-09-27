@@ -238,6 +238,13 @@ def test_sr_same_day_revisions_are_append_only_and_previous_payload_remains_read
     assert revisions[0].payload_json != revisions[1].payload_json
     assert revisions[0].revision_id != revisions[1].revision_id
     assert second["method_version"] == revisions[1].method_version
+    current = service.latest(db, inst.id)
+    assert current is not None
+    assert current["revision_id"] == revisions[1].revision_id
+
+    db.delete(revisions[1])
+    db.flush()
+    assert service.latest(db, inst.id) is None
     assert not db.new and not db.dirty
 
 def test_daily_close_wins_over_an_old_quote_and_labels_the_return_date(isolated):

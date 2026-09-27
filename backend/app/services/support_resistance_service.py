@@ -44,6 +44,28 @@ _EMPTY_PAYLOAD: dict[str, Any] = {
 }
 
 
+def _snapshot_revision_id(
+    *,
+    instrument_id: int,
+    as_of_date,
+    method_version: str,
+    config_hash: str | None,
+    price_basis_id: str | None,
+    input_hash: str | None,
+    payload_hash: str,
+) -> str:
+    return stable_hash({
+        "instrument_id": instrument_id,
+        "interval": "1d",
+        "as_of_date": as_of_date,
+        "method_version": method_version,
+        "config_hash": config_hash,
+        "price_basis_id": price_basis_id,
+        "input_hash": input_hash,
+        "payload_hash": payload_hash,
+    })
+
+
 class SupportResistanceService:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
@@ -140,16 +162,15 @@ class SupportResistanceService:
         payload_hash = stable_hash(payload)
         input_hash = payload.get("input_hash")
         price_basis_id = payload.get("price_basis_id")
-        revision_id = stable_hash({
-            "instrument_id": instrument_id,
-            "interval": "1d",
-            "as_of_date": as_of_date,
-            "method_version": METHOD_VERSION,
-            "config_hash": self.config_hash,
-            "price_basis_id": price_basis_id,
-            "input_hash": input_hash,
-            "payload_hash": payload_hash,
-        })
+        revision_id = _snapshot_revision_id(
+            instrument_id=instrument_id,
+            as_of_date=as_of_date,
+            method_version=METHOD_VERSION,
+            config_hash=self.config_hash,
+            price_basis_id=price_basis_id,
+            input_hash=input_hash,
+            payload_hash=payload_hash,
+        )
         if db.scalar(select(SupportResistanceSnapshotRevision).where(
             SupportResistanceSnapshotRevision.revision_id == revision_id
         )) is None:
@@ -279,7 +300,23 @@ class SupportResistanceService:
         payload = dict(snapshot.payload_json or {})
         if payload.get("input_hash") != frame.attrs.get("input_hash"):
             return None
+        payload_hash = stable_hash(payload)
+        revision_id = _snapshot_revision_id(
+            instrument_id=instrument_id,
+            as_of_date=snapshot.as_of_date,
+            method_version=snapshot.method_version,
+            config_hash=snapshot.config_hash,
+            price_basis_id=payload.get("price_basis_id"),
+            input_hash=payload.get("input_hash"),
+            payload_hash=payload_hash,
+        )
+        revision = db.scalar(select(SupportResistanceSnapshotRevision).where(
+            SupportResistanceSnapshotRevision.revision_id == revision_id
+        ))
+        if revision is None or revision.payload_hash != payload_hash:
+            return None
         payload.setdefault("snapshot_as_of_date", snapshot.as_of_date.isoformat())
+        payload["revision_id"] = revision_id
         payload["snapshot_source"] = "persisted_snapshot"
         return payload
 
