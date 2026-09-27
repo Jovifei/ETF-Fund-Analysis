@@ -1,4 +1,10 @@
-# 当前接手入口：R1 与 A-U1–A-U3 生产版（2026-09-23）
+# 当前接手入口：R2–R4A 本地实现分支（2026-09-26）
+
+本地代码在隔离 worktree 分支 `codex/r2-freshness-lifecycle`，基线 `c63f669095e6eb44e1e9c185deecf0f7af02b27c`。R2–R4A 应用代码提交 `8b52d39d22ebb21a41e269ab9ce9863b85dd3b83`，tree `d7ce9c857f48a99e130cf6060700974213c4e9c0`；前端补充状态测试提交 `f4286d590fd6f9565192754e40c553048286823d`。读取[实现收据](docs/R2_R3_R4A_IMPLEMENTATION_RECEIPT_20260926.md)和[路由验收矩阵](docs/ROUTE_ACCEPTANCE_R2_R4A_20260926.md)查看本机命令、首轮失败、最终通过与条件跳过。
+
+`main` 仍是 `c63f669`，本地分支未推送/合并/部署；真实数据资格仍 UNKNOWN。无需继续修改已关闭的 60 秒可见刷新。本阶段后续路线为 R4B 箱体/结构位 → R4C 缠论 → N1 新闻证据 → R5 Bridge → R6 数据资格和样本外研究。部署要使用新 SHA 对应的完整 CI 镜像，并先完成独立的备份/恢复和运行验收。
+
+## 2026-09-23 接收与生产背景
 
 先读 `AGENTS.md`、本页、`STATUS.md`、[本次生产收据](docs/PRODUCTION_DEPLOYMENT_RECEIPT_AU_20260923.md)、[A-U1–A-U3 接收合同](docs/UI_ACCOUNT_HANDOFF_20260923.md)。当前部署源码固定为 `0dbd3fee58a3f5e080aacbcd8eae8d5964aec54f`，tree 为 `f8607b3de8decde6065ccc559c5c26b0262b8e6b`，镜像 ID 为 `sha256:251a0623c694b07525bd398b52f41eecc17ec3d1216912c6d593b704fc8ae81a`；API/worker/scheduler 同镜像，数据库 head `e609200001`。R1 在此前已合并；本次 A-U1–A-U3 与构建/运维脚本修复随后快进到 `main`。
 

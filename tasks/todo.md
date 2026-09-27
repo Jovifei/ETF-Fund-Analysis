@@ -990,3 +990,29 @@ Prevent a reachable FTShare endpoint from being marked qualified when absolute-u
 - 前端 Vitest 53/53；普通/认证/响应式浏览器 19/19、5/5、18/18；typecheck、production build、compileall、legacy Node 39/39、secret scan、Ruff 新增文件检查和 `git diff --check` 均通过。构建仅有既存 Login 动态/静态重复导入警告。
 - 初次系统 `python` 因未加载项目 venv 缺 SQLAlchemy，随后改用 worktree `.venv`；未将其记为产品失败。第一次 Sina 夹具只验证了自己构造的 query 参数，生产探针返回空记录；核对响应后改为 `/list=...` 并确认真实端点在开盘前返回 5/5 上一交易日行情时间。无新增依赖或软件安装。
 - 生产只读探针未读写数据库。2026-09-24 开盘前端点源时间仍为 2026-09-23；今天盘中及时性尚未实证。没有修改 production-qualified/certified/actionable；没有进行生产部署。
+
+# R2–R4A 详情一致性与图表口径 — 2026-09-26
+
+## Plan
+
+- [x] RED：固定 `as_of` 复现详情/图表输入错位、同日临时/正式 K 重复、缺量被转零、复权重复应用以及未来日线/快照泄漏。
+- [x] GREEN：详情和图表共享同一读时；当日未结算正式行被合格临时行替换，15:15 后正式行优先；输入 hash/series ID绑定读入数据。
+- [x] GREEN：增加逐模块可用性原因及研究决策对比；错误保留上次有效详情、局部模块失败不遮整页，页面 GET 保持只读。
+- [x] GREEN：原始与拆分调整研究序列独立；周/月从研究日线聚合；缺量保留 NULL；来源 qfq/hfq 不重复乘拆分因子。
+- [x] Verify：完整 pytest、前端单测/类型检查/构建、Node、普通/认证/响应式浏览器与路由矩阵通过；首次失败和环境跳过留存。
+- [x] Docs：仓库状态/交接、实现收据、路由验收表已更新；Obsidian ETF 进度/决策/工作流通过专用 DryRun checkpoint 更新，4份文档经镜像 DryRun 后同步；Tesla pending 保留未动。
+- [x] Commit：应用提交与后续测试提交已落在隔离分支；未推送、未合并 main、未部署。
+
+## Review
+
+- 基线：隔离分支 `codex/r2-freshness-lifecycle`，基线 `c63f669095e6eb44e1e9c185deecf0f7af02b27c`；起始工作区干净。
+- 初始专项基线：后端 `18 passed`；前端 detail/chart `7 passed`。测试环境：该 worktree `.venv`。
+- RED 证据：新增盘中/正式 K 场景先有3项失败；模块资格场景先有2项失败；复权/量能场景先复现研究序列缺失、来源 `qfq` 被重复调整和 NULL 被置零。
+- 后端最终全量：`full-pytest-release2.xml`，1250 tests，1236 passed、14 条件 skip、0 failures/errors。首轮完整测试曾有1项旧夹具缺少 `research_bars`；兼容旧载荷后专项及最终全量通过。
+- 前端：Vitest 62/62；vue-tsc、Vite build、compileall、`node --check` 和 legacy Node 39/39 通过。Vite 仅保留 Login 静态/动态重复导入提示。
+- 浏览器：普通20/20、认证5/5、响应式18/18；全路由矩阵覆盖当前直接页及旧路由重定向。所有浏览器使用 mock 与临时 SQLite。
+- 首轮普通浏览器2项失败来自测试夹具缺少 `read_as_of` 及把精确路由服务器的未知URL当作SPA页面；补齐夹具并按中间件白名单定义重测后，20项全过。失败截图/trace保存在 E 盘证据目录。
+- SQLite及业务链路测试通过；PostgreSQL条件因 `TEST_POSTGRES_URL` 未配置跳过，Windows symlink/Unix-only检查按平台跳过。没有引入迁移。
+- 应用提交 `8b52d39d22ebb21a41e269ab9ce9863b85dd3b83`（tree `d7ce9c857f48a99e130cf6060700974213c4e9c0`）；后续测试提交 `f4286d590fd6f9565192754e40c553048286823d`。`main` 仍在 `c63f669`，本轮未推送、合并或部署。
+- 真实行情资格仍 UNKNOWN；未连接 Provider、未改认证/原始 OHLCV、未提高 `actionable` 或预测校准。生产部署仍待后续独立发布授权/收据。
+- Obsidian 写入已回读加载成功；实现收据和路由矩阵的源文件/镜像 SHA-256 相等。固定 pending 文件仍属于 `tesla-speed`，保留原内容和时间戳。

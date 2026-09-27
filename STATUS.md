@@ -1,4 +1,12 @@
-# 当前状态：R1 + A-U1–A-U3 已合并并部署（2026-09-23）
+# 当前状态：R2–R4A 本地实现与验收完成（2026-09-26）
+
+本地隔离分支 `codex/r2-freshness-lifecycle` 从 `main` 基线 `c63f669095e6eb44e1e9c185deecf0f7af02b27c` 完成详情/图表同读时、模块级可用性、决策变化说明和原始/拆分调整研究序列分离。应用提交 `8b52d39d22ebb21a41e269ab9ce9863b85dd3b83`（tree `d7ce9c857f48a99e130cf6060700974213c4e9c0`），补充前端状态回归提交 `f4286d590fd6f9565192754e40c553048286823d`。最终本机全量 pytest 为 1250 项，1236 通过、14 条件跳过、0 失败/错误；前端 62/62、普通/认证/响应式浏览器 20/20、5/5、18/18 通过。详情见 [R2–R4A 实现收据](docs/R2_R3_R4A_IMPLEMENTATION_RECEIPT_20260926.md) 与[路由矩阵](docs/ROUTE_ACCEPTANCE_R2_R4A_20260926.md)。
+
+本阶段只提交到本地隔离分支；`main` 未改变，未推送、合并或部署。真实行情资格仍为 **UNKNOWN**；没有请求生产 Provider、修改原始 OHLCV/认证、生产数据库或提升 `actionable`。生产最后一次身份记录见下方 2026-09-23 收据段，本阶段没有重新查询生产。
+
+复权序列、决策读模型及支撑压力版本已升级；部署后旧衍生快照将 fail-closed，需经现有受审计刷新链重算后再作为当前数据展示。本次未新增数据库迁移。
+
+## 上一份主线/生产收据（2026-09-23）
 
 公网生产已运行主线应用 SHA `0dbd3fee58a3f5e080aacbcd8eae8d5964aec54f`、tree `f8607b3de8decde6065ccc559c5c26b0262b8e6b`，镜像 ID `sha256:251a0623c694b07525bd398b52f41eecc17ec3d1216912c6d593b704fc8ae81a`。API/worker/scheduler 同一镜像，只有 reports/backups 持久目录挂载；Alembic 为 `e609200001`。GitHub CI 通过后以 smoke-tested OCI 工件在生产加载，部署和备份细节见[生产收据](docs/PRODUCTION_DEPLOYMENT_RECEIPT_AU_20260923.md)。
 
