@@ -72,6 +72,8 @@ The corrected method is `ce1a03a9a95b1a108823465128a09ea39ea2966a`, tree `b4348e
 
 Each namespace now maps its ID to the raw canonical JSON preimage. Windows/Linux both report observation, structure, and revision collision counts of zero; namespace sensitivity, 281 observation rows, 6604 records, 6568 revisions, 36 absence transitions, 21 reappearances, and the accepted resource budget remain passing. Engine confirmation remains `unknown`; M1 remains `CLOSED_BLOCKED` and M2 false.
 
+R5.2.1 adds a checker self-test with an injected weak ID: two distinct canonical preimages map to the same test ID and the checker reports `collision_count=1` on both Windows and Linux. This proves the collision checker can detect a collision rather than merely reporting the production SHA-256 corpus as collision-free. The production namespace formulas remain unchanged.
+
 ## R5.1 identity-hardening receipt
 
 The corrected method is committed at `f151e262d97f0f20addc1faf4773dfcb46742d8a`, tree `dfbee537778920ad1745ccbf558e72631a6beca6`, with script SHA-256 `544156B9A865D7768635F6CF0A20513947F00AD49EB676082C04B35E269D3883`. The final evidence tip is `3751476667e087de159a8dd73f3f6dd7e760babc` / tree `f14c75aa36856a6e8b4fa51f57436884dbc7586b` before this R5.1 receipt update.

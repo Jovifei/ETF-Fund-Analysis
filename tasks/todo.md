@@ -1191,6 +1191,7 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - R5.2 method commit `ce1a03a9a95b1a108823465128a09ea39ea2966a` / tree `b4348edbe3d418b6070369262a0c6880286e9485` is pushed.
 - Raw canonical preimages now back all three collision maps; Windows/Linux semantic digest remains equal and all namespace collision counts are zero. Pending independent selection-readiness review.
 - R5.2 evidence tip `a0ae620dd01d80fbef84c95eae5ce21909d2e5d3` (tree `5ba7c185b37cabcf6065039fd1b88fae2756035e`) is pushed to `codex/r4c-m1`.
+- R5.2.1 collision-checker self-test is passing on both disposable platforms; pending final independent selection-readiness review.
 
 # R4C M1-R5.2 collision-preimage correction — 2026-09-28
 
