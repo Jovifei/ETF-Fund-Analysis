@@ -38,6 +38,7 @@ function safeUrl(value: unknown) { try { const u = new URL(String(value)); retur
     </div>
     <div class="card-body">
       <p>{{health.data.value?.note}}</p>
+      <p v-if="health.error.value" role="alert">采集状态读取失败：{{health.error.value}} <button class="text-button" @click="health.reload">重新读取状态</button></p>
       <p v-for="source in health.data.value?.sources??[]" :key="source.source">
         {{source.source}}：{{source.count}}条 · 最新发布时间 {{publicationStamp(source.latest_published_at)}} · {{sourceAgeLabel(source.latest_published_at)}}<br>
         <small>最后抓取 {{stamp(source.last_fetched_at)}}（不替代发布时间）</small>

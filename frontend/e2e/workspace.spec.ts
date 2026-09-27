@@ -23,6 +23,8 @@ test('overview → search four actions → chart; navigation alone does not call
   expect(writes).toEqual([])
   await page.goto(`/etf/${code}`)
   await expect(page.getByTestId('etf-chart').locator('canvas').first()).toBeVisible()
+  await expect(page.getByTestId('chart-box-evidence')).toBeVisible()
+  await expect(page.getByTestId('chart-box-evidence')).toContainText('箱体研究')
   await expect(page.getByTestId('chart-indicators')).toContainText('MACD_HIST')
   await expect(page.getByText('图表初始化失败', { exact: false })).toHaveCount(0)
   const chart = page.getByTestId('etf-chart'); await chart.hover(); await page.mouse.wheel(0, -300)

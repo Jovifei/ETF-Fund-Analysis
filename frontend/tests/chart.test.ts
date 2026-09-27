@@ -15,10 +15,32 @@ describe('ChartAdapter has no independent indicator formulas', () => {
     const data = { ts_code: '512480.SH', interval: '1d', available: true, bars: [bar, { ...bar, date: '2026-09-02', close: 2.6 }], sr_overlay_allowed: true,
       support_resistance: { levels: [{ price: 2.2, kind: 'support', methods: ['MA20'], zone_low: 2.1, zone_high: 2.3 }] },
       studies: { trend_lines: [{ start_date: '2026-09-01', end_date: '2026-09-02', start_price: 2, end_price: 2.6 }] } } as any
-    const adapter = new ChartAdapter(document.createElement('div'), data, null, () => {}, ['MA', 'PIVOT'])
+    const adapter = new ChartAdapter(document.createElement('div'), data, null, () => {}, ['MA', 'DERIVED'])
     const overlays = mocked.chart.createOverlay.mock.calls.map(call => call[0])
     expect(overlays.some((item: any) => item.name === 'priceLine' && item.styles?.line?.style === 'dashed')).toBe(true)
     expect(overlays.some((item: any) => item.name === 'segment' && item.styles?.line?.style === 'dashed')).toBe(true)
+    adapter.destroy()
+  })
+
+  it('draws only date-bounded daily box overlays and separates pre-confirmation from confirmed time', () => {
+    const bars = ['2026-09-01', '2026-09-02', '2026-09-03'].map(date => ({ ...bar, date }))
+    const data = { ts_code: '512480.SH', interval: '1d', available: true, bars,
+      price_structures: { qualified: true, interval: '1d', actionable: false, source_as_of_date: '2026-09-03', boxes: [{
+        kind: 'daily_box', structure_id: 'box-a', lower: 2, upper: 3, mid: 2.5, origin_at: '2026-09-01',
+        confirmed_at: '2026-09-02', valid_until: null, state: 'confirmed', source_ids: ['touch-a', 'touch-b'],
+        touch_count: 2, upper_touch_count: 1, lower_touch_count: 1, volume_confirmation_available: false,
+      }] } } as any
+    const adapter = new ChartAdapter(document.createElement('div'), data, null, () => {}, ['BOX'])
+    const boxes = mocked.chart.createOverlay.mock.calls.map(call => call[0]).filter((item: any) => item.name === 'researchBox')
+
+    expect(boxes).toHaveLength(2)
+    expect(boxes[0].points.map((point: any) => point.timestamp)).toEqual([
+      projectBars([bars[0]])[0].timestamp, projectBars([bars[1]])[0].timestamp,
+    ])
+    expect(boxes[0].extendData.dashed).toBe(true)
+    expect(boxes[1].points[0].timestamp).toBe(projectBars([bars[1]])[0].timestamp)
+    expect(boxes[1].points[1].timestamp).toBe(projectBars([bars[2]])[0].timestamp)
+    expect(boxes[1].extendData.dashed).toBe(false)
     adapter.destroy()
   })
 })

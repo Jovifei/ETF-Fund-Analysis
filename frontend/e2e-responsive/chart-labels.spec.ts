@@ -8,7 +8,7 @@ test('narrow chart keeps server price lines and exposes long evidence outside ca
   await chart.screenshot({path:info.outputPath('narrow-chart-price-lines.png')})
   await evidence.locator('summary').click()
   await expect(evidence.locator('li').first()).toBeVisible()
-  await expect(evidence).toContainText('不改变服务端价位或资格')
+  await expect(evidence).toContainText('结构价位只计独立价格触碰')
   await evidence.screenshot({path:info.outputPath('narrow-chart-level-evidence.png')})
   expect(await page.evaluate(()=>Math.max(document.body.scrollWidth,document.documentElement.scrollWidth)-innerWidth)).toBeLessThanOrEqual(1)
 })
