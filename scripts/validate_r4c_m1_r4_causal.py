@@ -382,7 +382,9 @@ def resource_probe(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 def main() -> None:
     rows = make_rows()
+    prefix_start = time.perf_counter_ns()
     ledger = annotate_prefix_ledger(rows)
+    prefix_sweep_ms = (time.perf_counter_ns() - prefix_start) / 1_000_000
     suffix = compare_future_suffix(rows)
     volumes = volume_probe(rows)
     resources = resource_probe(rows)
@@ -413,6 +415,9 @@ def main() -> None:
         "stable_id_status": "CANDIDATE_VALIDATION_ONLY",
         "application_integration": "NOT_RUN",
     }
+    output["resource"]["causal_prefix_sweep_ms"] = round(prefix_sweep_ms, 3)
+    serialized = json.dumps(output, ensure_ascii=False, indent=2, sort_keys=True, default=str)
+    output["resource"]["output_size_bytes"] = len(serialized.encode("utf-8"))
     print(json.dumps(output, ensure_ascii=False, indent=2, sort_keys=True, default=str))
 
 

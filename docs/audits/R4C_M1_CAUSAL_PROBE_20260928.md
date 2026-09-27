@@ -17,6 +17,7 @@ The harness records:
 - normal full suffix versus future-only suffix mutation at cutoffs 80, 160, and 240;
 - separate positive-volume, true-zero-volume, and unknown-volume inputs;
 - cold import/startup, warm full-run time, OS-level peak working-set/RSS, and failure status.
+- causal prefix-sweep wall time and serialized output size.
 
 ## Causal ledger contract
 
@@ -37,3 +38,18 @@ For each cutoff, the harness compares the structure set visible through the cuto
 ## Required exit boundary
 
 Only a complete and independently reviewed result can move M1 to `READY_FOR_SELECTION_REVIEW`. If causal confirmation, repaint/replacement, stable identity, volume semantics, or resource evidence remains unresolved, M1 stays `CLOSED_BLOCKED`. The committed qualification config remains disabled and engine-less throughout this stage.
+
+## Pinned source lifecycle findings
+
+The implementation review is bound to CZSC source commit `90372af035f01ed9f05070eadddd265b91c84d24` and the following source blobs downloaded from that commit:
+
+| Source | SHA-256 | Findings |
+|---|---|---|
+| `crates/czsc-core/src/analyze/mod.rs` | `CD6665045961FB485E8E04D00E4DA9B3CC7EDE22AD46435BE5270BEBE1CF00EF` | `new` feeds every bar through `update_bar`; same-`dt` bars replace the current bar; `__update_bi` can pop a broken last BI; `finished_bis` drops the last BI when `bars_ubi.len() < 5`; `zs_list` is recomputed from finished BIs; history is pruned. |
+| `crates/czsc-core/src/analyze/utils.rs` | `D9245CBC6D70CD140077A73105F65FA630DF93DDAE5F0C0A9B2DA31616ED56E1` | FX uses a three-NewBar window; BI selects later opposite FX and requires `bars_a.len() >= min_bi_len`; ZS is rebuilt by popping/merging the current last ZS; inclusion merges can retain one ID and truncate element provenance. |
+| `crates/czsc-core/src/objects/fx.rs` | `A1BD56921E6151C55AA0946D2CBE8D76DDAD595FF6DE56EE3E71820E119A44F4` | FX has `dt/mark/high/low/elements`, but no confirmation, revision, or stable ID. |
+| `crates/czsc-core/src/objects/bi.rs` | `824FD03C8BE86AE80085DB84242815AC222B9D1B46BA397744DFFBBA3F4CB315` | BI has `fx_a/fx_b/fxs/direction/bars`; source endpoints are derived from FX elements; no confirmation or stable ID. |
+| `crates/czsc-core/src/objects/zs.rs` | `CF63B3434C410C5A7BCB7243C8DE4637B826D5933F29E7013F374B12EA006E98` | ZS has BI list, interval and bounds, but no persistent identity or confirmation state. |
+| `crates/czsc-core/src/objects/bar.rs` | `5462A555BEBDEDE6B7ABDC4D1F3B8C0F879700927A808A362A90066D55E4EA77` | `RawBar.vol` and `amount` are mandatory `f64`; an unknown volume cannot enter the native constructor. |
+
+The exact lifecycle locations are `analyze/mod.rs:178-235, 241-314, 524-534, 684-685`, `analyze/utils.rs:31-50, 177-242, 264-443`, `objects/fx.rs:37-194`, `objects/bi.rs:33-161, 308-315`, `objects/zs.rs:21-107`, and `objects/bar.rs:34-108`. No source field or test establishes a permanent engine confirmation timestamp, repaint-free revision, or native stable ID.
