@@ -36,6 +36,21 @@ def _box_bars(rows: int = 120) -> pd.DataFrame:
     return frame
 
 
+def _boundary_box_bars(rows: int = 142) -> pd.DataFrame:
+    frame = pd.DataFrame({
+        "trade_date": pd.bdate_range("2026-01-05", periods=rows).date,
+        "open": [103.0] * rows,
+        "high": [104.0] * rows,
+        "low": [102.0] * rows,
+        "close": [103.0] * rows,
+        "volume": [None] * rows,
+        "amount": [None] * rows,
+    })
+    frame.loc[[21, 80], "high"] = 106.0
+    frame.loc[[40, 70], "low"] = 100.0
+    return frame
+
+
 def test_equal_extreme_plateau_is_one_pivot_confirmed_two_bars_after_its_end():
     result = build_price_structures(_bars(), instrument="510300.SH", price_basis_id="basis-a")
 
@@ -89,6 +104,45 @@ def test_confirmed_box_matches_replay_of_its_confirmation_prefix():
     assert replayed["confirmed_at"] == full["confirmed_at"]
     assert replayed["lower"] == full["lower"]
     assert replayed["upper"] == full["upper"]
+
+
+def test_default_120_confirmed_box_survives_discovery_window_roll_before_expiry():
+    frame = _boundary_box_bars()
+    prefix = build_price_structures(frame.iloc[:130], instrument="510300.SH", price_basis_id="basis-a")
+    rolled = build_price_structures(frame, instrument="510300.SH", price_basis_id="basis-a")
+
+    assert len(prefix["boxes"]) == 1
+    assert prefix["boxes"][0]["state"] == "confirmed"
+    assert prefix["boxes"][0]["confirmed_at"] < str(frame.iloc[141]["trade_date"])
+    assert prefix["boxes"][0]["valid_until"] is None
+    assert rolled["boxes"]
+    assert rolled["boxes"][0]["structure_id"] == prefix["boxes"][0]["structure_id"]
+    assert rolled["boxes"][0]["confirmed_at"] == prefix["boxes"][0]["confirmed_at"]
+
+
+def test_default_120_structure_identity_and_events_are_prefix_stable():
+    frame = _boundary_box_bars()
+    prefix_box = build_price_structures(
+        frame.iloc[:130], instrument="510300.SH", price_basis_id="basis-a"
+    )["boxes"][0]
+    rolled_box = build_price_structures(
+        frame, instrument="510300.SH", price_basis_id="basis-a"
+    )["boxes"][0]
+
+    assert rolled_box["structure_id"] == prefix_box["structure_id"]
+    assert rolled_box["origin_at"] == prefix_box["origin_at"]
+    assert rolled_box["confirmed_at"] == prefix_box["confirmed_at"]
+    assert rolled_box["source_ids"] == prefix_box["source_ids"]
+    assert rolled_box["state_events"][:len(prefix_box["state_events"])] == prefix_box["state_events"]
+
+
+def test_default_120_expiry_is_a_lifecycle_transition_after_window_roll():
+    frame = _boundary_box_bars(143)
+    box = build_price_structures(frame, instrument="510300.SH", price_basis_id="basis-a")["boxes"][0]
+
+    assert box["state"] == "expired"
+    assert box["valid_until"] == str(frame.iloc[-1]["trade_date"])
+    assert box["state_events"][-1]["state"] == "expired"
 
 
 def test_structure_and_transition_hashes_bind_only_inputs_available_at_each_date():

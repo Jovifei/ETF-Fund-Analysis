@@ -342,21 +342,52 @@ def build_price_structures(
     boxes: list[dict[str, Any]] = []
     cursor = max(20, start_window)
     last_failure = "insufficient_independent_touches"
-    while cursor < len(rows):
-        found, found_index, last_failure = _first_confirmed_box(rows, pivots, atrs, settings,
-            instrument, price_basis_id, input_hash, prefix_hashes, start_window, cursor)
-        if found is None or found_index is None:
-            break
-        found.pop("_upper_events")
-        found.pop("_lower_events")
-        box = replay_box_lifecycle(found, rows, start_index=found_index, pivots=pivots,
+
+    # Discover structures at each historical cutoff using the bounded window,
+    # then carry confirmed identities forward through the full lifecycle. A
+    # later discovery window must not erase a still-live earlier structure.
+    discovered: dict[str, tuple[dict[str, Any], int]] = {}
+    for cutoff in range(max(30, int(settings["pivot_window"]) * 2 + 1), len(rows) + 1):
+        cutoff_rows = rows[:cutoff]
+        cutoff_atrs = atrs[:cutoff]
+        cutoff_pivots = [pivot for pivot in pivots if pivot["confirmed_index"] < cutoff]
+        cutoff_window = max(0, cutoff - int(settings["candidate_window"]))
+        cutoff_cursor = max(20, cutoff_window)
+        while cutoff_cursor < cutoff:
+            found, found_index, last_failure = _first_confirmed_box(
+                cutoff_rows, cutoff_pivots, cutoff_atrs, settings, instrument,
+                price_basis_id, input_hash, prefix_hashes, cutoff_window, cutoff_cursor
+            )
+            if found is None or found_index is None:
+                break
+            structure_id = str(found["structure_id"])
+            discovered.setdefault(structure_id, (found, found_index))
+            probe = dict(found)
+            probe.pop("_upper_events", None)
+            probe.pop("_lower_events", None)
+            probe = replay_box_lifecycle(
+                probe, cutoff_rows, start_index=found_index, pivots=cutoff_pivots,
+                tolerance=float(found["confirmation_tolerance"]), config=settings,
+                prefix_hashes=prefix_hashes,
+            )
+            if probe["valid_until"] is None:
+                break
+            cutoff_cursor = next(
+                (index + 1 for index, row in enumerate(cutoff_rows)
+                 if row["trade_date"] == probe["valid_until"]),
+                cutoff,
+            )
+
+    for found, found_index in sorted(discovered.values(), key=lambda item: item[1]):
+        found.pop("_upper_events", None)
+        found.pop("_lower_events", None)
+        box = replay_box_lifecycle(
+            found, rows, start_index=found_index, pivots=pivots,
             tolerance=float(found["confirmation_tolerance"]), config=settings,
-            prefix_hashes=prefix_hashes, provisional_bar=provisional_bar if not boxes else None)
+            prefix_hashes=prefix_hashes, provisional_bar=provisional_bar if not boxes else None,
+        )
         box["source_ids"] = sorted(set(box["source_ids"]))
         boxes.append(box)
-        if box["valid_until"] is None:
-            break
-        cursor = next((index + 1 for index, row in enumerate(rows) if row["trade_date"] == box["valid_until"]), len(rows))
     result["boxes"] = boxes
     if not boxes and pivots:
         end = len(rows) - 1
