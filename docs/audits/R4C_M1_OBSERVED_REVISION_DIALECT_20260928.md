@@ -57,3 +57,9 @@ Both same-input reruns were deterministic. Transition counts matched across plat
 ## Exit boundary
 
 M1 can move to `READY_FOR_SELECTION_REVIEW` only if deterministic IDs are collision-free, the observed-revision history faithfully preserves absence/reappearance, cross-platform parity holds, unknown volume remains fail-closed, and the resource proposal is accepted. Even then `M2_GO=false`; engine selection and M2 implementation require a separate reviewed authorization.
+
+## R5.1 identity hardening boundary
+
+The R5.1 validator must use a dialect-native, namespaced `structure_key` that binds instrument, interval, engine ID/version, dialect ID, config ID, price basis, structure kind, direction/mark, and causal endpoint identities. Observation, structure, and revision IDs must each be checked against canonical preimages in separate collision maps. Every cutoff receives an observation ledger row even when no structure exists; absence is an adjacent transition, and reappearance creates a new observation binding. The validator must prove namespace sensitivity and keep `engine_confirmation=unknown`.
+
+The authoritative checked-out method file SHA is `D2F516F4CF2F185414393F03024ED70441674D42B822CBDB57A3D93FD88191E1`. The earlier bounded chunk release was serialized as text and had a separate transport hash `17F28DA499CD255DDCF0C17ADFB30F3A6D76F31B9C0253DCE55A244214D1D004`; that transport hash is not the committed file SHA.

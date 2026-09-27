@@ -1166,3 +1166,20 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - R4 methodology was independently accepted (`M1_R4_METHOD=PASS`); R5 artifacts are being prepared from the exact accepted evidence tip. No runtime/dependency/provider/production change is allowed.
 - R5 Windows/Linux semantic digest matches `bc21ba9c16f0756682a9a1c0bccf142b21c889b2fa6bbd7bb99e524f9ba1ef8c`; both runs report 281 observations, 6604 records, 6568 revisions, zero collisions, 21 reappearances, and passing proposed resource limits.
 - R5 evidence tip `a40e5c3693090be6b1825190392ae98edb800141` (tree `b83383143e7a36e85b3240c4088b684b2d21e6fa`) is pushed; independent remote review is the only remaining gate.
+
+# R4C M1-R5.1 identity hardening — 2026-09-28
+
+## Plan
+
+- [x] Record remote R5 receipt PASS while keeping R5 method `CHANGES_REQUIRED`, M1 blocked, and M2 false.
+- [x] Bind the R5.1 base `3751476667e087de159a8dd73f3f6dd7e760babc` / tree `f14c75aa36856a6e8b4fa51f57436884dbc7586b`.
+- [ ] Namespace `structure_key` with instrument/interval/engine/version/dialect/config/basis and causal endpoints.
+- [ ] Add explicit observation records for all cutoffs, including zero-structure observations.
+- [ ] Validate observation, structure, and revision collision namespaces against canonical preimages.
+- [ ] Add namespace-sensitivity checks and correct raw-script versus chunk-release hash labels.
+- [ ] Commit the corrected method before disposable Windows/Linux rerun; revalidate parity and accepted resource budget.
+- [ ] Commit/push R5.1 evidence and obtain independent selection-readiness review; do not enter M2.
+
+## Review
+
+- Remote R5 receipt/results PASS; remote found structure-key namespace, complete collision coverage, empty-observation representation, and hash-labeling gaps. No runtime/dependency/provider/production change is allowed.
