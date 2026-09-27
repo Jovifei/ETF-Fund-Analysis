@@ -1,1 +1,1094 @@
-# Freshness recovery — 2026-09-21\n\n- [x] Trace live ingestion, computation and scheduler outcomes.\n- [x] Reproduce split rejection and intraday historical retry starvation.\n- [x] Apply existing corporate-action research checks during provider selection; register three official events.\n- [ ] Test, CI, merge, deploy and verify per-instrument dates through the published board.\n\nSource notices: SSE 512200_20240806_RYUS, 512800_20250707_PJ9L, 515220_20240412_5CZN.\nDaily research still uses settled bars; live quotes have their own source timestamps.\n\n# Public unit evidence recomputation — 2026-09-21\n\n## Plan\n\n- [x] Reproduce the production zero-certification result from stored evidence reasons.\n- [x] Add RED tests for Sina observed units, large-value rounding, and stale evidence reuse.\n- [x] Correct the minimal unit contract/tolerance and recompute existing evidence rows.\n- [x] Run full verification, commit, CI, merge `main`, redeploy, and rerun production certification.\n\n## Review\n\nFocused RED/GREEN evidence suites pass after the correction. v1.0.8 production deployment and audited certification are recorded in `docs/PRODUCTION_DEPLOYMENT_RECEIPT_V108_20260921.md`.\n\n# Tencent public-source evidence closure — 2026-09-21\n\n## Plan\n\n- [x] Reproduce current public-source gap and add failing adapter/evidence tests.\n- [x] Add a bounded Tencent daily adapter and preserve raw Sina fields for cross-source evidence.\n- [x] Run focused, full, frontend, static, migration, and provider-coverage checks.\n- [x] Refresh production through audited tasks, certify only evidence-backed rows, and inspect all gates.\n- [x] Commit, push, CI, fast-forward `main`, build/deploy the exact SHA, and verify rollback receipt.\n\n## Review\n\nCompleted in v1.0.8; see the deployment receipt above.\n\n## Local review\n\n- RED: the new Tencent adapter test failed at collection before the adapter existed.\n- GREEN: focused evidence/provider suites passed; backend full pytest reached 100% with exit 0.\n- Static/frontend: compileall, Node syntax/tests, Vitest 36/36, vue-tsc, and Vite build passed.\n- Live read-only: Sina/Tencent samples matched after documented unit conversion; bounded coverage retry recovered the four transient timeouts.\n\n# Data Evidence Closure and Production Release — 2026-09-20\n\n## Scope\n\n- [x] Confirm clean isolated branch `codex/unit-evidence-closure` from `0ac75fa`.\n- [x] RED: add regressions for empty evidence, false independence, unit mismatch, stale hash, and partial-range certification.\n- [x] GREEN: add audited unit-evidence persistence and recomputed certification lookup.\n- [x] Split FTShare daily-history and quote capability qualification.\n- [x] Extend data-health API and Settings UI with per-instrument gaps and affected calculations.\n- [ ] Run provider probes for benchmark and four split instruments, then enabled universe when safe.\n- [x] Run focused and full backend/frontend/migration checks; production browser acceptance remains a deployment gate.\n- [ ] Record review evidence, commit, push, pass CI, and fast-forward `main`.\n- [ ] Back up production, rehearse migration, build full image, remove source bind, deploy, and verify/rollback as required.\n\n## Review\n\n- Backend full pytest passed twice after dependency completion; final run exited 0.\n- Frontend Vitest 36/36, typecheck, and production build passed.\n- SQLite empty upgrade, downgrade to `d40609090002`, and re-upgrade to `e609200001` passed.\n- Compileall, Node syntax, migration parity, secret scan, and diff check passed.\n- Evidence is recomputed from stored raw fields and closes, bound to the exact daily-bar quality hash, and rejects same-upstream, incomplete-range, stale, or tampered inputs.\n\n---\n\n# QA-R Provider/Data Repair Plan — 2026-09-17\n\n## Goal\n\nRestore a qualified ETF decision-data path without weakening the data contract, inferring units, repairing splits by guesswork, or promoting non-realtime quotes. Preserve the current production deployment and work in this isolated worktree.\n\n## Work items\n\n- [x] Reproduce the production failure with deterministic fixture rows and provider fallback metadata.\n- [x] Trace EM failure → Sina fallback → missing/unknown units and discontinuity gate across bars, indicators, forecasts, and decision board.\n- [x] Define the smallest provider-side repair: only accept volume/amount when the documented unit contract is verified; otherwise keep price-only and block dependent outputs.\n- [x] Add regression tests for qualified Sina quantity fields, missing quantity, unit mismatch, unexplained price discontinuity, and fallback audit status.\n- [x] Implement the approved minimal fix and keep all fail-closed gates intact.\n- [x] Run focused tests, full pytest, compileall, JS checks, Vue tests/typecheck/build, and QA-R Playwright suites.\n- [x] Rebuild the production image, verify source/tree/digest, back up PostgreSQL, deploy with rollback point, and verify scheduler/data outcomes.\n- [x] Update the production receipt and data-freshness evidence; do not claim complete realtime qualification unless all gates pass.\n\n## Acceptance gates\n\n- Bars may be stored only with a documented source/unit contract and continuity evidence.\n- Indicators/forecasts remain blocked for unknown units or unexplained price gaps.\n- Decision board must expose partial/stale reasons and never derive an actionable state from degraded inputs.\n- Production rollback remains available from the pre-repair PostgreSQL backup and prior Compose/release.\n\n---\n\n# v0.5.0 Local Validation Execution Plan\n\n## 2026-09-12 全面落地审核（只读业务代码）\n\n- [x] 核对原工程脏区、接收分支、远端 SHA、生产挂载及 CI 实际结果。\n- [x] 复现新浪单位资格校验的同比例缩放盲点，核对收盘调度截止冲突。\n- [x] 并行复核数据/指标/预测、Codex/AI/账户、调度/部署/前端（Luna xhigh）；父任务复核关键结论。\n- [x] 输出 docs/CODE_AUDIT_BLOCKERS_20260912.md；纯函数复现单位盲点、15:02盘后窗口、Codex目录冲突和14:30未来报价/非交易日门禁缺口。远端双CI失败及生产运行状态已只读核验。\n\n## Multi-user security remediation (2026-09-01, active)\n\n### Browser identity / regression / deployment handoff repair (2026-09-02, in progress)\n\n- [ ] RED: prove a valid legacy Bearer can use only compatible safe reads and is never reported as a browser identity by `/api/auth/me`.\n- [ ] RED: make the global review mutation use an enrolled database-admin session, retain an explicit Bearer 401 assertion, and isolate the SSE/backfill rows from suite-wide state.\n- [ ] GREEN: expose a current-admin self-disable action only when a second active admin is listed; preserve the backend last-admin guard and clear the revoked browser session after self-disable.\n- [ ] GREEN: replace obsolete production/browser single-account configuration instructions with database-auth bootstrap requirements; distinguish historical migration evidence from current head `2c3d4e5f6a7b`.\n- [ ] Review: run focused suites, then full pytest sequentially with the project venv, plus compileall, Node syntax, and diff checks; record explicit exit codes. No commit/deploy.\n\n### CLI / report-list consistency remediation (2026-09-02, in progress)\n\n- [x] RED: auth-disabled `holding-set` was rejected for missing `--username`; an owned external `.json` was listed (`2 failed`, exit 1).\n- [x] GREEN: `holding-set`/`holding-delete` now use `user_id=NULL` only with `Settings.auth_enabled=false`; auth-enabled mode rejects missing/disabled accounts and uses the explicit active owner's ID. Direct regression also proves another active user cannot delete that owner's holding.\n- [x] GREEN: `GET /api/reports` now injects `Settings` and applies strict candidate resolution plus `relative_to(settings.reports_dir.resolve())`; it exposes only owned, safe, regular in-root `.html`/`.json` files after filtering.\n- [x] Review: final new regressions `2 passed` (exit 0); auth/ownership modules `42 passed, 1 skipped` (exit 0); sequential full pytest exit 0; `python -m compileall -q backend/app`, `node --check backend/app/static/app.js`, and `git diff --check` each exit 0. Only pre-existing third-party deprecation/CRLF warnings were emitted. No commit/deploy.\n\n### Report artifact stale-file regression (2026-09-02, complete)\n\n- [x] RED: temporary restoration of the prior SQL-limited list returned the newer `unsupported-system.txt` instead of the valid JSON (`test_multi_user_ownership.py -k stale`, exit 1).\n- [x] GREEN: retain owner/session filtering; only expose existing `.html`/`.json` artifacts under their safe basename, and apply `limit` after filtering valid rows.\n- [x] Review: focused stale regression passed (1 passed/9 deselected, exit 0); sequential ownership/API/optimizer/ETF-1430 suites passed (31 passed, exit 0); `compileall`, Node syntax, and `git diff --check` each exited 0. No commit/deploy; diff check emitted only existing CRLF notices.\n\n- [x] RED: prove shared signal persistence is independent of all user holdings.\n- [x] RED: prove members and legacy Bearer cannot perform global mutations while admins can.\n- [x] GREEN: isolate shared signal generation and add explicit active-admin authorization for global controls.\n- [x] GREEN: bind private reports/SSE/optimizer to an authenticated owner; make ownership migration portable and rollback-safe.\n- [x] Review: run focused tests, migration checks, compileall, Node syntax, and diff check; record outcomes.\n\n### Follow-up security/UI review fixes (2026-09-02, complete)\n\n- [x] RED/GREEN: bind each long-lived SSE iteration to its original database session and stop after revocation, expiry, reset, or account disable.\n- [x] RED/GREEN: serialize active-admin disable checks through the existing database guard and prove a two-session race retains one active admin.\n- [x] RED/GREEN: render the current authenticated identity and admin-only account lifecycle controls without exposing credentials or controls to members.\n- [x] Review: focused suites passed separately: auth 21 passed/1 safe PostgreSQL skip, ownership 13 passed, password/static 27 passed, API 11 passed, and migration/optimizer/ETF1430 9 passed. The single combined-order run has one pre-existing report-artifact 404 after the ownership suite; `test_api.py` passes alone. Compileall, Node syntax, and diff checks are recorded below.\n\n### Multi-user remediation review (in progress)\n\n- [ ] Final spec review: prove an admin may self-disable only while another active admin remains, and that the current database session is revoked.\n- [ ] Final spec review: make blank login credentials reach the generic 401 path, then update migration-head references without erasing historical chain context.\n- [ ] Final spec review: run focused auth/ownership/API/static/migration checks plus compileall, Node syntax, and diff validation; record exact exit codes.\n\n- P0 focused red/green: `test_global_mutations_require_an_active_admin_session` first failed because a member received 200 from `POST /api/demo/load`; after explicit `require_admin`, it and `test_shared_signal_refresh_is_independent_of_every_users_holdings` pass (2 passed).\n- P0 implementation: scheduled shared refresh no longer queries `Holding` or persists holding/current-weight evidence or input hashes; user overlays remain a read-path concern. Global mutation gates cover decision-board refresh, Demo load/reset, board fund management, runtime settings/probe, task execution/history, and global analysis review mutations/reads.\n- Current checks: `python -m compileall -q backend/app`, `node --check backend/app/static/app.js`, and `git diff --check` passed. Existing line-ending warnings were emitted only.\n- P1 completion: database-backed lifecycle is admin-only (`/api/admin/users` and hidden-prompt `auth-*` CLI), disable/reset revoke all sessions, and disabled-session reactivation requires a fresh login. Auth-enabled reports/downloads/SSE require a database session; per-user reports, ETF 14:30 artifacts, and portfolio optimization reports carry `user_id`, while deliberate auth-disabled/system artifacts remain `NULL` and are never exposed to authenticated users.\n- P1 verification: `test_multi_user_auth.py`, `test_multi_user_ownership.py`, `test_migration_schema_parity.py`, `test_portfolio_optimization.py`, `test_etf_1430_workbench.py`, and `test_api.py` passed in the focused rerun (one existing skip). The migration test also creates two owners for one instrument and proves downgrade to `0a9b1c2d3e4f` aborts. Ruff on changed P1 files, compileall, Node syntax, and `git diff --check` passed.\n\n> **For agentic workers:** REQUIRED SUB-SKILL: use `subagent-driven-development` task by task. Every task is implemented or executed by a fresh Luna/xhigh agent, followed by a fresh specification reviewer and then a fresh code-quality/evidence reviewer. The main agent controls scope, resolves blockers, integrates results, and performs final verification.\n\n**Goal:** Audit and validate the current v0.5.0 ETF/LOF research system using the actual local working tree, then produce an evidence-backed `deployment_reports/local-v050-validation.md` without exposing secrets or overstating Mock/unavailable results.\n\n**Architecture:** Treat all existing tracked modifications as owner work and preserve them. Validation is read-only except for this task ledger, generated local artifacts, and the final report; any code fix must first reproduce the failure with a test and follow red-green-refactor. External/provider outputs are untrusted and must be classified by provenance, freshness, and availability.\n\n**Tech stack:** Python 3, FastAPI, SQLAlchemy, pytest, Node.js syntax checking, PowerShell, optional Bash, Tushare/AKShare provider adapters, deterministic indicator/backtest/forecast services.\n\n---\n\n## Safety and provenance boundary\n\n- [x] Confirm repository root: `E:\project\ETF-Fund-Analysis`.\n- [x] Confirm HEAD: `ae755dfd89549abeaf772ac8c34152e80391210d` (`feat: add v0.5.0 indicator and strategy engine`).\n- [x] Confirm current branch: `main` tracking `origin/main`.\n- [x] Detect a dirty working tree and preserve all pre-existing tracked/untracked content.\n- [x] Verify the dirty tree includes substantive user changes in 16 files in addition to line-ending noise.\n- [x] Do not reset, clean, stash, checkout, stage, commit, pull, push, or rewrite owner files.\n- [x] Do not read or emit `.env`, tokens, cookies, passwords, account data, public IPs, or signed URLs.\n- [x] Only report whether `TUSHARE_TOKEN` is configured or missing; never print its value.\n- [x] Never label daily-close fallback as realtime, Mock as real, or `not_calibrated` as calibrated.\n- [x] Do not modify strategy thresholds/formulas merely to improve validation output.\n\n## Task 1: Repository and implementation audit\n\n**Inputs:** `AGENTS.md`, `STATUS.md`, `HANDOFF.md`, `VALIDATION.md`, `CODEX_DEPLOYMENT_TASKS.md`, `README.md`, `docs/ARCHITECTURE.md`, `docs/STRATEGY_AND_VALIDATION.md`, `docs/GITHUB_RESEARCH.md`, the eight core service/source files named in the handoff, related tests, `config/watchlist.json`, `config/strategy.json`, and `scripts/provider_smoke.py`.\n\n- [x] Read the required documents and source/tests without opening secret files.\n- [x] Record current provider, strategy, indicator, forecast, and schema/version identifiers.\n- [x] Reconcile stale 0.4.0 documentation claims against the v0.5.0 code and current working tree.\n- [x] Inspect the 16 substantive dirty files and attribute them as pre-existing owner work.\n- [x] Inventory commands, outputs, report paths, and prerequisites for Tasks 2-6.\n- [x] Luna implementer/auditor self-review complete (`DONE_WITH_CONCERNS`: effective runtime is v0.4 and ablation is not wired).\n- [x] Luna specification review confirms full audit scope and no secret exposure.\n- [x] Luna quality/evidence review approves findings with required pre-execution fixes recorded below.\n\n### Task 1 durable evidence\n\n- Current HEAD is the requested v0.5 commit, but the actual dirty working tree reports app `0.4.0`, `signal-v0.4.0`, `indicator-v0.2.0`, and `similarity-v0.2.0`; runtime task/indicator wiring uses the v0.4 services.\n- v0.5 modules and direct strategy-engine tests exist, but the current task service does not register `backtest_ablation`; calling it through the current CLI reaches `UnknownTaskError`.\n- The 16 substantive pre-existing dirty paths are: `.gitignore`, `README.md`, `STATUS.md`, `THIRD_PARTY_NOTICES.md`, `VALIDATION.md`, `backend/app/core/config.py`, `backend/app/services/indicator_service.py`, `backend/app/services/task_service.py`, `backend/tests/test_backtest.py`, `backend/tests/test_indicators.py`, `backend/tests/test_pipeline.py`, `config/strategy.json`, `deploy/.env.production.example`, `docs/GITHUB_RESEARCH.md`, `pyproject.toml`, and `vendor/manifest.json`. This is path attribution only; author and intent are unknown.\n- `tasks/todo.md` is the only current-turn file at this checkpoint.\n- Existing repository reports are historical Mock/v0.4 artifacts and are not current validation evidence.\n- Baseline pytest isolates its SQLite database but not its report directory. Task 2 must set explicit temporary `DATABASE_URL` and `REPORTS_DIR` before imports.\n- Provider/live execution is gated pending regression-tested exception redaction plus explicit realtime and trade-calendar provenance. A smoke exit code of zero is not sufficient proof of execution-grade realtime data.\n- `FILE_MANIFEST.txt`, `SOURCE_INFO.json`, and example artifacts are stale relative to HEAD/current v0.5 files; they remain owner work and will be labeled, not silently regenerated.\n\n## Task 2: Complete local baseline verification\n\n**Commands:**\n\n```powershell\npytest -q\npython -m compileall -q backend/app\nnode --check backend/app/static/app.js\n```\n\nIf Bash exists:\n\n```powershell\nbash -n deploy/aliyun/bootstrap_host.sh\nbash -n deploy/aliyun/deploy.sh\nbash -n deploy/aliyun/update.sh\n```\n\nSecret scanner:\n\n```powershell\npython codex/skills/fund-research/scripts/check_no_secrets.py .\n```\n\n- [x] Capture Python, OS, Node, Bash availability and exact pass/fail results.\n- [x] If a failure occurs, reproduce and diagnose before any fix; do not delete tests or weaken gates.\n- [x] Any required fix follows TDD and touches only the minimal files.\n- [x] Luna implementer self-review complete (`DONE_WITH_CONCERNS`: initial environment blocked; isolated rerun passed with one deprecation warning).\n- [x] Luna specification review passes after correcting DB-isolation and bytecode-attribution overclaims.\n- [x] Luna quality/evidence review passes; baseline uses an external Python 3.12 venv and explicit Git Bash.\n\n### Task 2A: Windows pytest fixture lifecycle fix (TDD)\n\n**Modify:** `backend/tests/conftest.py`\n\n- [x] **RED:** In a clean Python 3.12 venv and disposable working-tree copy, run `<venv-python> -m pytest -q`; all 10 test progress markers complete, then session teardown fails at `backend/tests/conftest.py:32` with `PermissionError: [WinError 32]` while unlinking SQLite.\n- [x] **RED evidence for report isolation:** The disposable copy's repository `reports/` receives two files because the fixture does not set `REPORTS_DIR` before settings import.\n- [x] Import `get_engine` with the existing delayed `app.db.session` import and dispose the engine in a `finally` block before unlinking `TEST_DB`.\n- [x] Create a session-owned `TemporaryDirectory` for reports before settings import, set `REPORTS_DIR` to it, and clean it in the same fixture teardown.\n- [x] Copy only the updated fixture into the existing isolated source copy and rerun `<venv-python> -m pytest -q`; observed: 10 passed, exit 0, no teardown error.\n- [x] Verify the source-copy repository `reports/` receives no new current-run files and the original repository's explicit status path list changes only at `backend/tests/conftest.py` plus `tasks/todo.md`.\n- [x] Re-run compileall, Node syntax, three explicit Git Bash syntax checks, and the scoped secret scanner in the isolated copy.\n- [x] Luna implementer self-review complete.\n- [x] Luna specification review passes.\n- [x] Luna quality/evidence review passes; one non-blocking defensive cleanup-order Minor remains documented.\n\n### Task 2 evidence\n\n- Allowed run root: `E:\Claude_allow\Download\etf-v050-baseline-20260828-010724-5733a2a2a57a4769bb639ada797e2cfb`.\n- RED: Python 3.12 dependencies installed in an external venv; 10 tests executed but session teardown failed with Windows `WinError 32` because the pooled SQLite engine retained the test DB handle. The RED run also wrote two reports inside the disposable source copy.\n- GREEN: fixture now sets a session temporary `REPORTS_DIR` before settings import and disposes the engine before deleting SQLite. Isolated rerun: `pytest -q` exit 0 with 10 passed; compileall, Node syntax, scoped secret scan, and all three explicit Git Bash `bash -n` checks exit 0.\n- Green teardown removed the SQLite DB and fixture report directory; no green `reports/` directory remained. Historical RED artifacts remain under the allowed run root for evidence.\n- Python 3.12.10 matches CI's major/minor. Local Node 24 differs from CI Node 22. Pytest emitted a non-failing Starlette/httpx deprecation warning.\n- Scoped secret scan excludes Git history, env files, vendor, reports, backups, caches, and is not proof those excluded areas are clean.\n\n## Task 3: Provider capability and ETF universe validation\n\n- [x] Inspect `scripts/provider_smoke.py` before execution for output/redaction safety.\n- [x] Check only whether `TUSHARE_TOKEN` is configured/missing.\n- [x] Run a non-persistent safe provider capability path where prerequisites permit; preserve only whitelisted provider, operation, success/failure, record count, latency, fields, and error class. Direct `provider_smoke.py` was not used because it can emit raw exception/degradation text.\n- [x] Build separate Tushare and AKShare capability matrices covering implemented instrument, daily-history, spot, news, and trade-calendar paths.\n- [x] Mark unavailable/configuration/single-run/unverified results literally; do not synthesize realtime capability.\n- [x] Inspect `config/watchlist.json`; report total/enabled counts, ETF/LOF counts, duplicates, required-field coverage, themes, markets, benchmarks, and obvious demo entries.\n- [x] Do not rewrite the universe in this phase.\n- [x] Luna implementer self-review complete (`DONE_WITH_CONCERNS`).\n- [x] Luna specification review passes after persisting the sanitized evidence JSON.\n- [x] Luna quality/evidence review passes with a No-Go for real provider ingestion/history validation.\n\n### Task 3 evidence\n\n- Sanitized artifact: `E:\Claude_allow\Download\etf-v050-baseline-20260828-010724-5733a2a2a57a4769bb639ada797e2cfb\evidence\provider-capability-sanitized.json`; SHA-256 `c556af27ab344eb899540e05e8d56e457ca061d05947e01a8592e34ed1fcf3ee`.\n- Tushare: `TUSHARE_TOKEN missing`; provider was not initialized or called, so permissions/capabilities are untested rather than failed.\n- AKShare single-run observation: instruments 5, daily bars 32, spot quotes 3 with 3 adapter-classified non-degraded records, news 0, calendar unverified. Spot latency was about 25.6 seconds.\n- Composite without Mock: instruments and spot succeeded; daily bars failed with `ProviderError`; news empty; calendar unverified. Independent AKShare daily success does not establish Composite stability.\n- The spot run occurred outside market hours; AKShare adapter assigns local call time and `is_realtime=True` to matched rows. It is not verified exchange-time freshness or stable realtime capability and cannot support actionable signals.\n- Universe: demo 10, enabled 9, disabled 1, ETF 9, LOF 1, SH 9/SZ 1 derived from suffix, no duplicate code/symbol, themes populated, benchmark 4/10, no explicit market field.\n- Real provider-backed ingestion and real history/indicator validation are blocked. Task 4 may continue only with isolated Mock/local deterministic evidence.\n- Known product gaps remain: raw exception strings in provider smoke/audit/log paths, no verified calendar provenance, and no safe persisted runner/command manifest. These require a separately approved design before behavior changes.\n\n## Task 4: Historical data quality and v0.5 indicator validation\n\n- [x] Identify available local database/artifacts without reading credentials or mutating production databases.\n- [x] Report per-instrument Mock history coverage, row counts, date bounds, duplicates, non-monotonic dates, missing/invalid OHLCV, future dates, non-positive prices, volume/amount anomalies, and provenance.\n- [x] State the real-five-ETF blocker and never substitute Mock proof: Tushare unconfigured and Composite daily failed in the single capability run.\n- [x] Run current deterministic indicator tests plus active v0.4 and direct dormant-v0.5 calculations for the named metric families; RPS app comparison remains unavailable/unverified.\n- [x] Cross-check public result-frame outputs against separate local NumPy/Pandas formulas and document tolerance/initialization differences; no external trusted indicator library was installed.\n- [x] Keep `volume_profile_approx` explicitly estimated, never real shareholder-chip data.\n- [x] Luna implementer self-review complete (`PASS_WITH_LIMITATIONS`).\n- [x] Luna specification review passes after adding direct RSRS and observed boolean counts.\n- [x] Luna quality/evidence review passes after converting helper comparisons to public-frame end-to-end checks and eliminating vacuous success paths.\n\n### Task 4 evidence\n\n- Sanitized artifact: `E:\Claude_allow\Download\etf-v050-baseline-20260828-010724-5733a2a2a57a4769bb639ada797e2cfb\evidence\task4-mock-history-indicators-sanitized.json`; SHA-256 `F9916837181E9792A3EA95336E6B3E96E57B1A3AF7367BD525052032E434359D`.\n- Mock bootstrap: 10 instruments, 9 enabled, 2709 bars; each enabled instrument has 301 rows from 2025-07-04 through 2026-08-28. Recorded duplicate/date/future/OHLC/volume/amount anomaly counts are zero; source is Mock only.\n- Active effective-v0.4 indicator chain created 9/9 snapshots. Direct dormant-v0.5 calculation succeeded for five Mock histories.\n- Public result-frame outputs match separate local reference formulas for OBV, MFI14, CMF20, ADX14/+DI/-DI, and RSRS beta/R2/raw/z-score at declared `1e-9`/`1e-8` tolerances; these are local duplicate-formula checks, not an external library validation.\n- Warm-up/default/computed counts are recorded as MFI 13/288, CMF 19/282, ADX-DMI 13/288, RSRS beta/R2/raw 17/284, z-score 46/255. Quality review notes these counts are recorded but not runtime-asserted in the harness (Minor).\n- RPS closed-form reference self-check passes but no current public app comparison exists; RPS remains `UNVERIFIED`. `volume_profile_approx` is estimated and the named profit metric is unavailable.\n- Focused indicator/strategy-engine tests: 3 passed. All Task 4 conclusions remain Mock-only; real provider validation is blocked and forecast status remains `not_calibrated`.\n\n## Task 5: Rotation, ablation, and forecast validation\n\n- [x] Determine safe local task invocation and database/report isolation before execution.\n- [x] Run `backtest_rotation` and `validate_forecasts`; record current `backtest_ablation` as `UnknownTaskError` and directly exercise dormant v0.5 ablation only as module evidence.\n- [x] Capture Mock provenance, input window/universe, output artifact paths/hashes, and failures.\n- [x] For rotation, verify `decision_at=close_t`, `execution_at=open_t_plus_1`, feature dates, lot sizes, and Mock provenance; fees/slippage/hysteresis/caps/market gate are source+config evidence rather than exhaustive per-trade assertions.\n- [x] For ablation, compare all four actually implemented variants under the same observed non-factor controls/execution engine; answer whether `full_v050` beats `momentum_baseline`. Do not claim cryptographically identical inputs because dataset/effective-weight hashes are absent.\n- [x] For forecast validation, report 1/5/20-day `directional_accuracy`, Brier, MAE, 80% interval coverage, calibration bins, samples, and `not_calibrated` state.\n- [x] Distinguish Mock engine execution proof from real performance evidence.\n- [x] Luna implementer self-review complete.\n- [x] Luna specification review passes after exact metric naming, turnover deltas, and dormant-service semantics were corrected.\n- [x] Luna quality/evidence review passes for bounded `MOCK_ONLY_ENGINE_EXECUTION_PROOF`; report wording fixes are recorded below.\n\n### Task 5 evidence\n\n- Sanitized summary: `E:\Claude_allow\Download\etf-v050-baseline-20260828-010724-5733a2a2a57a4769bb639ada797e2cfb\evidence\task5-mock-backtest-forecast-sanitized.json`; SHA-256 `1335de0015bffa07bc21baf3c319a71f1b368b9f7acae94af7c092cf661fcb3b`.\n- Current effective-v0.4 rotation (Mock): 36 decisions, 134 trades, total return -9.6336%, benchmark -22.1640%, excess +12.5304 percentage points, maximum drawdown -10.7584%, Sharpe -2.3948, turnover 11.6597x. All 36 decisions pass close-t feature timing and t+1-open execution; all trades use 100-share lots.\n- Current `backtest_ablation` task is unavailable and returns `UnknownTaskError`.\n- Direct dormant `RotationBacktestV05Service` uses `strategy_config_version=signal-v0.4.0` and is not sealed/runtime-wired v0.5. Four variants run; `full_v050` loses `momentum_baseline` on total return, Sharpe, maximum drawdown, and turnover. Turnover deltas versus baseline are 0.0000, +1.1707, +1.2976, and +0.3871 for baseline/volume-flow/breakout-structure/full respectively. Requested A-H variants are not implemented.\n- Common-input wording is limited to the same observed non-factor controls and execution engine with factor weights varied; no dataset hash or serialized effective-weight map proves cryptographic identity.\n- Forecast Mock diagnostics: horizons 1/5/20 have samples 225/216/189; directional accuracy 48.89%/42.59%/48.68%; 80% interval coverage 78.67%/76.85%/69.31%; Brier 0.2530/0.2652/0.2837. Per-instrument samples are sparse (25/24/21); no simple forecast baseline or significance analysis exists. Model `similarity-v0.2.0` remains `not_calibrated` for all 27 snapshots.\n- Backtest realism remains bounded: no full runtime assertions for caps/fees/slippage/hysteresis and no suspension/no-volume/limit-up-down/exchange-specific lot/LOF premium/cash-yield/independent-engine reconciliation.\n\n## Task 6: Validation report\n\n**Create:** `deployment_reports/local-v050-validation.md`\n\n- [x] Include Git commit/branch/dirty-boundary, Python version, OS, tests, Tushare matrix, AKShare matrix, universe counts, history coverage, anomalies, indicator validation, rotation backtest, ablation, forecast validation, incomplete items, and 3-5 prioritized next steps.\n- [x] Answer the ten first-stage questions from the handoff using only current evidence.\n- [x] Redact secrets and omit public IPs/account identifiers/signed URLs.\n- [x] Label every conclusion as confirmed, partial, unavailable, Mock-only, or unverified where appropriate.\n- [x] Do not claim provider stability from one smoke run or local success as ECS/production proof.\n- [x] Luna report author self-review complete.\n- [x] Luna specification review passes after metric availability, rotation/ablation completeness, forecast count, and absent-vs-null semantics were corrected.\n- [x] Luna quality/evidence review passes after final wording hardening.\n\n## Task 7: Final controller verification and review\n\n- [x] Re-run `pytest -q`.\n- [x] Re-run `python -m compileall -q backend/app`.\n- [x] Re-run `node --check backend/app/static/app.js`.\n- [x] Re-run Bash syntax checks if Bash is available.\n- [x] Re-run secret scan and ensure the final report contains no sensitive values.\n- [x] Verify exact changed-file attribution using an explicit file list, not broad ownership assumptions.\n- [x] Dispatch final Luna/xhigh reviewer across the full task and resolve all Critical/Important findings.\n- [x] Add a Review section below with commands, evidence, limitations, and final status.\n\n## Review\n\n### D3 release/docs/validation review (2026-08-29)\n\n- Changed only the D3-owned semantic paths in this section: `backend/app/core/config.py`, `pyproject.toml`, `deploy/.env.production.example`, `deploy/Caddyfile.example`, `deploy/nginx.conf.example`, `README.md`, `QUICKSTART.md`, `docs/ARCHITECTURE.md`, `docs/IMPLEMENTATION_MATRIX.md`, `STATUS.md`, `HANDOFF.md`, and this ledger. Other dirty snapshot paths remain pre-existing owner work; no stage/commit/reset/clean/push was performed.\n- Release assertions: `Settings(_env_file=None).app_version == 0.6.0`; `pyproject.toml` package version is `0.6.0`; `APP_VERSION=0.6.0` is in the production example. `config/strategy.json` remains `signal-v0.4.0`; no strategy/indicator/forecast formula or version was changed. `OCR_MAX_IMAGE_BYTES` is accepted with legacy `OCR_MAX_BYTES` compatibility.\n- `E:\project\ETF-Fund-Analysis\.venv\Scripts\python.exe -m pytest -rA`: **323 passed, 2 skipped, 14 warnings, exit 0**. Skips are host symlink privilege limitations; warnings are existing Starlette/httpx and Python 3.12 SQLite datetime deprecations.\n- `python -m compileall -q backend/app`: exit 0. `node --check backend/app/static/app.js`: exit 0.\n- `with_server.py --help` was run first from `C:\Users\Admin\.codex\skills\webapp-testing\scripts\with_server.py` (the worktree has no helper). Git Bash/WSL was unavailable: WSL relay reported `/bin/bash` missing and `C:\Program Files\Git\bin\bash.exe` was absent. Shell syntax is therefore a deployment gate.\n- `docker` exists, but `docker compose config` was not run with a generated `.env`: Compose requires the server-local `.env` referenced by services, and no `.env` or secret was created/read. This is an explicit Compose gate; no image build or network/model download occurred.\n- Mock bootstrap used a disposable SQLite/report root and `MARKET_PROVIDER=mock`, `AUTH_ENABLED=false`, lookback 180: succeeded; 10 instruments, 1,170 bars, 9 indicator snapshots, 9 degraded/mock quotes, six configured context cards with zero eligible proxy requests, and a generated report. Forecast failures due intentionally short history were retained as non-calibrated/unavailable.\n- Mock HTTP on isolated `127.0.0.1:38123` through `with_server.py`: `/api/health` returned version `0.6.0`, `/api/bootstrap` returned six context cards and nine instruments; helper stopped the server cleanly.\n- Headless Chromium smoke used the locally existing Playwright-capable Python 3.12 interpreter with a generated nonsecret local token, isolated port/temp DB/reports/OCR environment, and Mock provider. After attempting `networkidle` (the app keeps an authenticated SSE stream open), assertions passed: six context cards, code-first identity, exact distinct `FORECAST · 非实际结果` labels, PORTFOLIO INPUT dialog and image accept types, mobile tabs, console errors 0. No upload or provider call was made; server/browser cleaned up.\n- Secret scan: `check_no_secrets.py .` returned two fixture-only matches at `backend/tests/test_api.py:164` (`market-context-test-token`) and `backend/tests/test_news_analysis.py:137` (`test-key-not-a-real-secret`); both are pre-existing test literals, not credentials. No `.env`, token, cookie, password, account number, or signed URL was read or emitted.\n- Real PostgreSQL, Tushare/AKShare/news/OpenAI endpoint qualification, ECS/HTTPS, real Paddle Python 3.12 wheel/model and `paddle-local-v1` manifest, six proxy qualification, forecast calibration, and production backup/restore remain gates. Final D3 status: **DONE_WITH_CONCERNS** (implementation and local/Mock evidence complete; deployment and real-provider evidence intentionally pending).\n- Controller follow-up (2026-08-29): the two environment gates above were closed from the main checkout — `bash -n` passed on `deploy/aliyun/bootstrap_host.sh`, `deploy/aliyun/deploy.sh`, `deploy/aliyun/update.sh`, `scripts/backup_postgres.sh`, `scripts/restore_postgres.sh`, `scripts/smoke_http.sh`; `docker compose config` passed with a throwaway placeholder `POSTGRES_PASSWORD` (temp `.env` deleted, no secret created). Full pytest re-run independently: 323 passed / 2 skipped, exit 0; Alembic full-chain upgrade → downgrade base → upgrade passed (head `b3c4d5e6f7a8`). QUICKSTART backup/migration order corrected to backup-first per spec review.\n\n### Fresh controller verification\n\n- Verification copy: `E:\Claude_allow\Download\etf-v050-baseline-20260828-010724-5733a2a2a57a4769bb639ada797e2cfb\final-controller-20260828-041026-2f32cf89664e4734baef7b0861dbdb47\source-copy-final`.\n- Python 3.12 isolated editable install: exit 0.\n- `pytest -q`: exit 0, 10 passed; one non-failing Starlette/httpx deprecation warning.\n- `python -m compileall -q backend/app`: exit 0.\n- `node --check backend/app/static/app.js`: exit 0.\n- Explicit Git Bash syntax checks for `bootstrap_host.sh`, `deploy.sh`, and `update.sh`: all exit 0.\n- Scoped working-tree secret scanner: exit 0, `no obvious committed secrets found`; its exclusions remain documented and it is not a Git-history/env-file proof.\n- Final report: 219 lines, 17 required sections, forbidden secret/URL/IP assignment pattern count 0, SHA-256 `DBA42A6AC1FB25AC92B1CACE921174A177F811C191C1AFFB5870B1D589C5AEFC`.\n- Approved evidence hashes rechecked: Provider `C556AF27AB344EB899540E05E8D56E457CA061D05947E01A8592E34ED1FCF3EE`; Task 4 `F9916837181E9792A3EA95336E6B3E96E57B1A3AF7367BD525052032E434359D`; Task 5 `1335DE0015BFFA07BC21BAF3C319A71F1B368B9F7ACAE94AF7C092CF661FCB3B`.\n- Original repository status-path list before/after final verification: delta 0.\n\n### Exact current-turn file attribution\n\n- Modified: `backend/tests/conftest.py` — Windows SQLite engine disposal and test report isolation only.\n- Created: `tasks/todo.md` — this execution ledger.\n- Created (Git-ignored by project rule): `deployment_reports/local-v050-validation.md` — final validation report.\n- The 16 other substantive dirty paths listed in Task 1 pre-existed this turn and remain owner work; no author or intent is inferred.\n\n### Final review and status\n\n- Fresh final Luna/xhigh global review found no Critical or Important issue. One non-blocking defensive teardown Minor remains: if `get_engine().dispose()` itself raises, later cleanup may be skipped.\n- Final result: `PARTIAL / NOT READY FOR REAL STRATEGY SEALING OR PRODUCTION PROVIDER CLAIMS`.\n- Completed scope: repository audit, fresh local baseline, safe single-run Provider capability observation, demo-universe audit, Mock history/indicator validation, Mock rotation/direct dormant ablation/forecast validation, and reviewed report.\n- Blocked/unverified scope: Tushare permissions, stable Composite history, exchange-time realtime freshness, five-real-ETF quality cross-check, real-data indicator validation, RPS app comparison, calibrated forecasts, A-H ablation, complete transaction constraints, and independent second-engine reconciliation.\n\n---\n\n# v0.6.0 Multi-Model, Market Context, and Portfolio OCR Active Plan\n\n**Isolation:** `E:\Claude_allow\Download\ETF-Fund-Analysis-worktrees\multi-model-market-context-ocr` on `codex/multi-model-market-context-ocr`.\n\n**Approved design:** `docs/superpowers/specs/2026-08-28-multi-model-market-context-ocr-design.md`.\n\n**Implementation plans:**\n- `docs/superpowers/plans/2026-08-28-analysis-gateway.md`\n- `docs/superpowers/plans/2026-08-28-market-context.md`\n- `docs/superpowers/plans/2026-08-28-portfolio-ocr.md`\n- `docs/superpowers/plans/2026-08-28-dashboard-integration.md`\n\n## Baseline\n\n- [x] Current owner working snapshot copied without secrets into the isolated worktree.\n- [x] Baseline `pytest -q`: 10 passed; one existing Starlette/httpx deprecation warning.\n- [x] Baseline compileall and Node syntax: exit 0.\n- [x] No implementation task has started before plan completion.\n\n## Subagent-driven task gates\n\n- [x] A1 contracts/config: implementer self-review, spec review, quality review.\n- [x] A2 direct adapters/gateway: implementer self-review, spec review, quality review.\n- [x] A3a persistence/review records: implementer self-review, spec review, quality review. PostgreSQL trigger smoke remains a deployment environment gate.\n- [x] A3b1 news/signal/Dashboard integration: implementer self-review, spec review, quality review.\n- [x] A3b2 review API/task integration: implementer self-review, spec review, quality review.\n- [x] B1 market registry/contracts/schema: implementer self-review, spec review, quality review.\n- [x] B2a market registry sync/provider observations: implementer self-review, spec review, quality review.\n- [x] B2b market task/scheduler/payload: implementer self-review, spec review, quality review.\n- [x] C1 OCR contracts/image validation/schema: implementer self-review, spec review, quality review.\n- [x] C2 OCR service/private API: implementer self-review, spec review, quality review.\n- [x] D1 market/identity/forecast UI: implementer self-review, spec review, quality review.\n- [x] D2 Portfolio OCR review UI: implementer self-review, spec review, quality review.\n- [x] D3 release/docs/end-to-end: implementer self-review, spec review, quality review.\n- [x] Final global review has no open Critical or Important issue. (Controller-dispatched independent reviewer, two rounds; see "Final global review evidence" below. Not the Luna runtime — same gate, different reviewer.)\n- [x] Main controller verification and exact file attribution complete. (Controller independently re-ran full pytest, Alembic full-chain roundtrip, `bash -n` on 6 scripts, `docker compose config` with placeholder env, compileall, `node --check`; D3 file attribution verified against actual diffs by the spec reviewer.)\n\n### Final global review evidence (2026-08-29)\n\n- Round 1 (controller-dispatched independent reviewer over the full uncommitted tree): VERDICT PASS, no Critical. Findings: 1 Important — `ReportService.generate()` never passed `market_context` to `report.html.j2`, so generated reports always rendered the six placeholder cards; Minors — scheduler `refresh_market_context` did not catch `TaskBusyError` (advisory-lock starvation), OCR `_resolve_line` ran `_instrument_maps` per row, `task-snapshots/` not gitignored, `!deploy/.env.production.example` negation dropped, `canonical_json` path-lookalike pattern overly broad, analysis orphan-flag validation absent.\n- Fix round (fix agent): report render wired via `market_context=payload.get("market_context") or []` with new discriminating test `test_report_service_generation_wires_bootstrap_market_context` (verified to fail without the fix); scheduler catches `(TaskExecutionError, TaskBusyError)`; `_instrument_maps` hoisted out of the candidate-row loop (`_resolve_line(by_symbol, by_name, ...)`); `.gitignore` restored negation + added `task-snapshots/`. Gates after fixes: full pytest 324 passed / 2 skipped exit 0, compileall clean, `node --check` clean.\n- Round 2 (same reviewer): all five fixes verified OK, no regressions, VERDICT PASS. Test isolation sound (rollback in `finally`, artifact under ignored path).\n- Deferred non-blocking follow-ups (recorded deliberately, not lost): (1) `backend/app/utils/canonical_json.py` path-lookalike pattern rejects ordinary `A/B` strings in free-text fields — consistent with DB checks, blunt but safe; narrow in a future release if operator notes need slashes. (2) `backend/app/core/config.py` analysis orphan flags (e.g. `ANALYSIS_CODEX_ENABLED=true` without `ANALYSIS_ENABLED`) are silently ignored rather than rejected; add fail-closed validation in a future release.\n\n### D3 release/docs/validation execution checklist\n\n- [x] Set authoritative application/package release to `0.6.0`; retain strategy/indicator/forecast versions.\n- [x] Document one-primary analysis configuration, market-context defaults, OCR operator/deployment gates, and no-actionable-data boundaries.\n- [x] Align production env example, reverse-proxy upload limits, migration/rollback order, and Docker Paddle behavior.\n- [x] Run isolated SQLite migration, Python/JS checks, shell syntax, Compose/secret checks, Mock HTTP, and browser smoke where dependencies permit.\n- [x] Record exact commands/results/limitations and explicit D3 file attribution in the review below.\n\n### B2a review evidence\n\n- [x] Disabled/unverified registry rows remain visible but never expose historical snapshots as current observations.\n- [x] Eligible rows without a successful snapshot are explicitly unavailable; registry verification remains separate provenance.\n- [x] Registry order reconciliation is safe under immediate uniqueness constraints, including historical rows and configured order `10000`.\n- [x] Observations bind to `source_symbol`; A-to-B symbol changes preserve A history without relabeling it as B.\n- [x] Mock observations remain explicitly unverified/degraded/non-actionable; non-Mock unverified observations are rejected.\n- [x] Composite capability-unavailable traces remain `unsupported`; provider failures are sanitized and cannot leak raw exception text.\n- [x] SQLite/PostgreSQL conflict-safe inserts preserve snapshot idempotency and the outer transaction.\n- [x] ORM and Alembic constraints/unique keys are aligned; clean SQLite upgrade/downgrade/upgrade passed.\n- [x] Controller verification: `test_market_context.py` 49 passed; full suite 236 passed; compileall, Node syntax, scoped Ruff, and diff check passed.\n- [x] Fresh Luna/high specification and quality reviews found no open Critical or Important issue.\n\n### B2b review evidence\n\n- [x] `refresh_market_context` task, coherent run/event identity, private endpoint, bootstrap payload, and partial-pipeline behavior are implemented.\n- [x] Scheduler isolates market-context failures, continues independent tasks, and throttles by last terminal attempt without relabeling failure as success.\n- [x] Current-run counts come from an immutable service-owned outcome; no Provider monkeypatching or historical-count leakage remains.\n- [x] Forecast provenance uses authoritative stored fields only; unsupported `data_cutoff` remains null and diagnostics cannot spoof it.\n- [x] Existing v0.5 signal/backtest wiring, `backtest_ablation`, and indicator assertions were restored and regression-tested.\n- [x] Controller verification: focused B2b tests 68 passed; full suite 252 passed; compileall, Node syntax, scoped Ruff, and diff check passed.\n- [x] Fresh Luna/high specification and quality reviews found no open Critical or Important issue.\n\n### C1 review evidence\n\n- [x] PNG/JPEG/WebP validation enforces MIME/magic/decode/bytes/dimensions/pixels/trailing data and does not mutate Pillow globals.\n- [x] Paddle remains optional, local-only, manifest/hash bound, executed in a killable spawned process with bounded output and hard timeout cleanup.\n- [x] Image metadata is revalidated at the adapter boundary; forged `ValidatedImage` instances cannot bypass decoding and hash checks.\n- [x] Import-session/candidate persistence excludes image bytes, raw OCR, user filenames, and sensitive fields; safe text is validated on bind/read and by portable structural constraints.\n- [x] SQLite-specific NUL triggers cover ORM `create_all` and Alembic; PostgreSQL text NUL rejection and dialect-specific backslash DDL are documented/compiled.\n- [x] Opaque tokens, consent/terminal/selection state coherence, indexes, defaults, TypeDecorators, ORM and migration parity are covered.\n- [x] Controller verification: C1 37 passed/2 platform skips; full suite 289 passed/2 skips; SQLite Alembic roundtrip, PostgreSQL DDL compile, compileall, Node, Ruff, and diff check passed.\n- [x] Real PostgreSQL constraints and real Paddle package/model qualification remain deployment gates; no network/model download occurred.\n- [x] Fresh Luna/high specification and quality reviews found no open Critical or Important issue.\n\n### C2 review evidence\n\n- [x] Private multipart upload, review/edit/reject, confirm/cancel, expiry cleanup, and consent-only cloud status endpoints are implemented with no image retrieval route.\n- [x] Durable `processing` precedes file creation; terminal state commits precede deletion; cleanup retries until `storage_key` is cleared.\n- [x] Mutations use service-owned sessions and fail closed on caller transactions or in-memory SQLite; CAS states protect edit/confirm/cancel/expiry races.\n- [x] Unknown exchanges and non-exact names never silently resolve; bbox OCR cells are assembled by row and x-order without numeric pollution.\n- [x] Holding writes occur only after explicit confirmation through `HoldingService.upsert`, in deterministic code order, with idempotent confirmation.\n- [x] Storage uses contained opaque token directories and fail-closed 0700/0600 permission checks; no raw screenshot/OCR/path is exposed.\n- [x] Controller verification: full suite 318 passed/2 platform skips; Alembic roundtrip/current head, compileall, Node, Ruff, diff, and targeted secret scan passed.\n- [x] Fresh Luna/high specification and quality reviews found no open Critical or Important issue.\n\n### D1 review evidence\n\n- [x] Six market-context cards remain visible through deterministic fallback merge; no proxy code or observation is fabricated.\n- [x] Code-first identity and today-change-first observed hierarchy are implemented across Dashboard and report.\n- [x] Forecasts use a distinct `FORECAST · 非实际结果` surface with null-safe provenance and explicit calibration state.\n- [x] Quote `is_mock`, freshness, source and timestamps are displayed per observed item; Mock/degraded cannot appear as verified normal state.\n- [x] Dynamic UI/report text is escaped; report autoescape and minimal-payload rendering are covered.\n- [x] Responsive report/table behavior, explicit Asia/Shanghai time handling, bars cancellation/debounce, modal/keyboard/focus accessibility and contrast are implemented.\n- [x] Controller verification: focused D1 11 passed; full suite 321 passed/2 skips; Node, compileall, Ruff and diff check passed.\n- [x] Fresh Luna/high specification and quality reviews found no open Critical or Important issue.\n\n### D2 review evidence\n\n- [x] Portfolio screenshot upload uses FormData without multipart `Content-Type` corruption and keeps Authorization header-only.\n- [x] Candidate review exposes only allowed fields, code-first alternatives, confidence/status warnings, explicit edit/reject/confirm/cancel and no raw/path/hash data.\n- [x] Import generation, AbortControllers, serialized PATCH queue, pending-save flush and durable cancel prevent stale async responses and lost edits.\n- [x] Client numeric bounds/precision mirror backend validation; 0/decimals are preserved and unresolved/duplicate/error states block confirmation.\n- [x] Lock/auth generation clears sensitive in-memory review state; no import state is persisted to localStorage; cloud review remains disabled with no egress.\n- [x] Mobile tabs remain accessible; modal, live status, focus, reduced-motion and responsive candidate layout are implemented.\n- [x] Controller verification: test_api 10 passed; full suite passed with 2 platform skips; Node, compileall, Ruff and diff check passed.\n- [x] Fresh Luna/high specification and quality reviews found no open Critical or Important issue.\n\n## Authorization and provenance\n\n- [x] No automatic commit, push, PR, provider credential read, production DB write, broker action, or threshold tuning is authorized.\n- [x] Pre-existing snapshot differences remain owner work; each task records only its explicit file list and semantic diff.\n- [x] Models/agents remain text-analysis candidates with no tools or numeric decision authority.\n\n---\n\n# FTShare + Safe Demo Active Plan\n\n- [x] Current staged owner snapshot copied into isolated worktree without `.env`, databases, `.zcode`, or reference screenshots.\n- [x] A. Configure and verify FTShare MCP plus pinned user-level Skill; no business DB access.\n- [x] B. Implement disabled-by-default FTShare Provider, qualification script, provider ordering, audit and contract tests.\n- [x] C. Implement isolated DemoService/API; fix 30-calendar-day root cause and status semantics.\n- [x] D. Implement system-page demo/free/complete UX, provider probe matrix and source badges.\n- [x] E. Update docs/config examples, run full regression, live read-only FTShare qualification, browser smoke and final review; schema parity is now green.\n- [x] Every implementation task has a fresh delegated implementer (Luna/Terra high as requested), specification review and quality review with no open feature Critical/Important issue.\n- [x] No real credential read, production DB write, broker action, or Mock-to-production fallback; commit/push only after Jovi's explicit authorization.\n\n## Task B implementation checklist (FTShare provider)\n\n- [x] RED: add isolated MockTransport contract tests for settings, mappings, validation, errors, and factory order.\n- [x] GREEN: implement disabled-by-default FTShare settings, fixed-endpoint provider, factory ordering, and qualification probe.\n- [x] Verify focused tests, full pytest, compileall, node check, and diff check; record evidence below.\n\n### Task B review\n\n- Focused FTShare contract tests: 63 passed; market-context focused suite and full pytest also passed (2 existing platform skips).\n- Follow-up hardening covers exact row symbol/code matching, exact provenance allowlist, strict Beijing ISO timestamp/order/date parsing, explicit unadjusted bars, streaming response byte bounds, strict pagination parsing, production base URL policy, no Mock in new composite chains, sanitized factory/transport errors, integer share volumes, computed bounded pct units, unknown qualification pagination, and idempotent scheduler/provider lifecycle closure.\n- `python -m compileall -q backend/app scripts/qualify_ftshare.py`: passed; `node --check backend/app/static/app.js`: passed.\n- `git diff --check`: no FTShare/task-B whitespace errors; an existing owner change in `backend/app/static/app.css` reports a blank EOF line.\n- Live FTShare qualification was run read-only after implementation and exits nonzero while daily/spot evidence is unavailable; the checked report remains unqualified and FTShare disabled.\n\n### Task C review\n\n- [x] DemoService uses a process-local SQLite `StaticPool` and a dedicated MockProvider; it never shares the production SQLAlchemy engine.\n- [x] Demo load runs the existing sync/420+ bar/indicator/forecast/signal pipeline with `report=False`; demo reads include explicit `demo`, `is_mock`, `research_only`, and `actionable=false` provenance.\n- [x] Private `/api/demo/load`, `/api/demo/bootstrap`, and `/api/demo/reset` endpoints accept no provider URL, tool, or shell controls; reset/disposal is lock-protected and idempotent.\n- [x] Empty, insufficient, provider-unavailable, and indicator-failure states have mutually exclusive labels; API/UI refresh-bars default is 120 calendar days.\n- [x] Focused demo regression: 8 passed; compileall and Node syntax checks passed. Full suite and independent spec/quality review remain parent-task gates.\n- [x] Review hardening: demo settings forcibly disable analysis, LLM, Tushare, FTShare, RSS/news egress, and OCR cloud/local modes; injected HTTP transport confirms zero external calls.\n- [x] Review hardening: pipeline stages classify provider fetch failures separately from core indicator failures; app lifespan disposes the demo runtime and injected provider exactly once.\n- [x] Review hardening: recursive demo provenance flags cover nested dashboard/grade/board/audit data; readiness counts distinct latest indicator snapshots per instrument.\n\n### Task D review\n\n- [x] System page distinguishes isolated DEMO, free AKShare-primary, and complete Tushare-primary usage; FTShare state is visible without returning endpoint URLs or credentials.\n- [x] Market probe returns bounded per-provider rows (`provider`, `operation`, `ok`, `status`, `records`, `latency`, `failure_class`, `qualification`) and persists only sanitized latest results.\n- [x] Demo load/reset/exit controls switch the dashboard to `/api/demo/*`, disable formal task controls, show a persistent DEMO/Mock banner, and restore formal `/api/bootstrap` on exit.\n- [x] Source badge is derived from observed quote/provider provenance; demo results remain research-only and non-actionable.\n- [x] Focused market settings tests, Node syntax, and compile checks passed; full-suite verification remains the parent task gate.\n- [x] Review hardening: FTShare factory inclusion requires both explicit enablement and `qualified`; unqualified/rejected sources are skipped.\n- [x] Review hardening: DEMO blocks all formal mutation handlers and controls, including holdings, OCR, boards, reports, settings, coefficients, and tasks.\n- [x] Review hardening: source badge reports `不可用` when no current quote or latest successful provenance exists; formal Mock is not relabeled as isolated DEMO.\n- [x] Review hardening: exiting DEMO reloads formal settings before formal bootstrap and never re-enters DEMO on settings-read failure.\n- [x] Quality hardening: mode transitions use generation tokens, abort in-flight reads/SSE/OCR work, and centrally track in-flight formal mutations with no counter leak on failure/abort.\n- [x] Quality hardening: Node VM behavior tests cover pending-write refusal, successful DEMO retention, failed-enter SSE/timer restoration, and single formal SSE reconnect on successful exit.\n\n### Task E finalization evidence\n\n- [x] Documentation/config examples updated for `FTSHARE_ENABLED=false`, `FTSHARE_QUALIFICATION=unverified`, fixed endpoint, timeout, page/row/date/response bounds, qualification workflow, independent data-service terms, safe DEMO workflow, 120-day refresh default, status semantics, pinned Agent Skill commit, and the separate Tushare plaintext-token security debt.\n- [x] `scripts/qualify_ftshare.py` live read-only probe completed on 2026-08-30 for `510300.SH`; ETF list, daily bars, and spot operations all returned sanitized rejection (`CapabilityUnavailable`), so the qualification report remains `unqualified` and FTShare remains disabled. Evidence: `docs/ftshare-qualification-2026-08-30.json`.\n- [x] Parent-controller evidence: `pytest -q` exited 0 (447 collected test nodes; 2 existing platform skips); `python -m compileall -q backend/app scripts/qualify_ftshare.py` passed; `node --check backend/app/static/app.js` passed; diff secret scan found no configured-secret patterns (environment files excluded). This child task does not relabel that controller run as its own full-suite result.\n- [x] Isolated headless browser smoke on port 18988 with a worktree-pinned app and temporary SQLite: DEMO banner/load/status/source badge, formal task and portfolio locks, FTShare disabled status, DEMO exit, and zero external requests passed. Exact smoke processes and temporary SQLite artifacts were cleaned up; ports 18981-18988 verified closed.\n- [x] Audited ORM/migration reconciliation: clean disposable SQLite passes `upgrade head`, `current`, full `downgrade base`/re-upgrade, and `alembic check` at `d5e6f7a8b9c0`. The metadata-only repair preserves historical review/analysis hash-check names, restores the separately named opaque import-session constraint, keeps nullable legacy calibration JSON, and removes only a redundant candidate-id index declaration covered by the existing UNIQUE constraint. Regression: `backend/tests/test_migration_schema_parity.py`; real PostgreSQL qualification remains a deployment gate.\n## Unified decision-board backend plan (approved)\n\n- [x] Inspect current models, private routes, task lifecycle, scheduler, and backend fixtures.\n- [x] RED: add isolated decision-board service/API/scheduler tests for response semantics, storage isolation, slot eligibility/deduplication, and refresh concurrency. (Initial run was environment-blocked before functional execution; dependencies were then isolated under the permitted download directory.)\n- [x] GREEN: add snapshot/provisional persistence migration and read-only snapshot service with explicit provenance/freshness state.\n- [x] GREEN: wire the three private API endpoints, async refresh task, and Asia/Shanghai slot scheduler without changing strategy-grade logic.\n- [x] Verify focused backend tests, compileall, migration chain/schema parity where practical; record exact outcome and blockers below.\n\n### Unified decision-board backend review\n\n- [x] `backend/tests/test_decision_board.py` (13) + signal-grade/workbench regression (7): 20 passed with isolated Python 3.12 dependencies.\n- [x] Contract repair: snapshot rows now contain normalized wide-table `volume`/`ma`/`macd`/`kdj`/`td`/`rsi`/`chan`/`sector` objects; horizon selection rebuilds groups; details are snapshot-captured history, 10 scenario candles, support/resistance, Chan approximation and sort basis.\n- [x] Contract repair: complete provisional OHLCV produces a temporary research-only derived view even with an unverified timestamp; it cannot be actionable and never writes `DailyBar`.\n- [x] Contract repair: only decision slots fetch board quote input then capture provisional then materialize the board; queued API requests are consumed without an extra provider fetch; no decision-board news/AI side effect.\n- [x] Corrected focused suite: `test_decision_board.py` + `test_signal_grade.py` + `test_market_context.py`: 80 passed. `node --test backend/app/static/decision_board.test.js` exited 0.\n- [x] Spec review repair: `/workbench/1430` now 307 redirects to `/`; the legacy API remains compatibility-only.\n- [x] Spec review repair: `previous_day_delta` is `today - previous confirmed DailyBar return` in decimal-ratio units; list/detail accept exact `snapshot_id`, unknown snapshots return 404.\n- [x] Spec review repair: next slot uses `TradingCalendarService`, skips non-trading dates, and snapshots retain all entries for only the latest 20 trading dates.\n- [x] Final sorting repair: all sortable technical columns expose numeric `sort_keys` with documented health priority; forecast key binds selected horizon expected return with confidence as a tie-break only and missing values last.\n- [x] Sorting tie repair: volume ratio/direction, MA up-arrow count, and parsed TD9 setup count are packed into primitive numeric ties; actual persisted snapshot + API horizon tests verify `forecast` keys rematerialize for 1 versus 5 days.\n- [x] Quality critical loop closed: the isolated Python 3.12 full suite completed with exit 0; the earlier shared SQLite lock was not reproduced.\n- [x] Disposable SQLite Alembic `upgrade head`, `current` (`e6f7a8b9c0d1`), and `check`: passed; no new upgrade operations.\n- [x] `py -3.14 -m compileall -q backend/app backend/tests`, scoped Ruff `I,F`, and scoped `git diff --check`: passed (Git only reported existing CRLF conversion notices).\n- [x] Migration parity verified in the isolated Docker PostgreSQL service at head `f7a8b9c0d1e2`; `alembic check` reported no new operations.\n- [x] Final frontend/API integration verified after the unified UI changes; the prior `marketContextSection` mismatch is no longer present in the active contract.\n\n### Unified decision-board final release review (2026-09-01)\n\n- Full pytest: exit 0; 2 existing platform skips and deprecation warnings only.\n- `python -m compileall -q backend/app`, `node --check backend/app/static/app.js`, `node --test backend/app/static/decision_board.test.js` (11/11), and `git diff --check`: pass.\n- Isolated Docker API/DB healthy; Alembic current/head `f7a8b9c0d1e2`; `alembic check`: no pending operations.\n- Browser visual smoke: 37 rendered rows across six groups at 1440/1024/390 widths; grouped/global table, detail, forecast and responsive screenshots captured under `E:\Claude_allow\Download`.\n- Final independent review: APPROVED. Mock data remains explicitly research-only/non-actionable; no credentials, production DB, or broker access was used.\n\n## Free-tier provider fallback correction (2026-09-01)\n\n- [x] RED: regression showed `public_composite` omitted a configured Tushare candidate and persisted UI tokens still bound tasks to direct AKShare.\n- [x] GREEN: free/public execution now orders AKShare → configured Tushare → qualified FTShare; complete execution remains Tushare → AKShare → qualified FTShare.\n- [x] Runtime probe and TaskService tests cover stored-token binding; no Mock fallback was introduced.\n- [x] Focused Provider/settings suite and full pytest passed; Ruff, compileall, Node syntax and diff checks passed.\n- [x] Independent Terra review: APPROVED after the persisted-token binding repair.\n\n## Password-account browser authentication (2026-09-01)\n\n- [x] RED: account login/session/CSRF/legacy/static UI regression tests (initial import failed as expected before implementation).\n- [x] GREEN: Argon2id account auth, signed cookie session, CSRF and throttling.\n- [x] GREEN: remove browser token persistence and document deployment setup.\n- [x] Review: focused Python auth/API/holding tests, full pytest, Node decision-board tests, compileall, JS syntax, Ruff and diff checks pass; 2 existing platform skips only. Final specification and quality reviews approved the account/session/CSRF/legacy boundaries.\n\n## Multi-user account and portfolio isolation (2026-09-01)\n\n- [x] Review-fix plan: add RED regressions for private SSE, legacy ownership/backfill, self-lockout/session invalidation, production DB auth configuration, owner-specific overlays, and legacy NULL-owner uniqueness; implement the smallest service/router/model/Alembic fixes; run focused and full gates; record evidence and remaining production limitations.\n- [x] See `tasks/plans/2026-09-01-multi-user-auth.md`; the single-account prototype is not deployed to shared users.\n- [x] Task 1: add singleton bootstrap guard, `AuthUser`/`AuthSession`,\n  database-backed Argon2id/session primitives, a hidden-prompt first-admin CLI command, and migration\n  `0a9b1c2d3e4f` from `f7a8b9c0d1e2`; no holdings ownership change.\n- [x] Task 1 focused evidence: 45 tests passed, with one explicit skip for an\n  absent PostgreSQL test URL, across new auth models/service, legacy\n  single-account compatibility, and Alembic SQLite round-trip parity.\n- [x] Task 1 P1 regression: two competing SQLite sessions create exactly one\n  admin; the other is rejected after database guard serialization.\n- [x] Task 1 quality regression: malformed/plaintext and pseudo Argon2id PHC\n  hashes, including invalid base64 and empty salt/digest records, are rejected\n  at ORM/service boundaries; optional PostgreSQL Alembic concurrency test is\n  fail-closed skipped without an explicit test database.\n- [x] Task 1 password-cost regression: ORM hash validation is structural only;\n  a real Argon2 verify occurs only in credential verification, avoiding a\n  second computation at account construction or bootstrap.\n- [x] Task 1 PostgreSQL test safety: destructive auth-row cleanup requires all\n  of `TEST_POSTGRES_URL`, `APP_ENV=test`, `ALLOW_DESTRUCTIVE_TEST_DATABASE=1`,\n  and an unmistakable test/scratch/ci database suffix; otherwise no connection\n  or delete is attempted.\n- [x] Task 1 final regression/compile/diff check completed; current-user route\n  conversion and user-owned portfolio tables are covered by the later Task 2 evidence below.\n\n## Multi-user account and portfolio isolation — Task 2 (2026-09-01)\n\n- [x] RED: add focused DB-session API and owner-isolation tests for login/revoke,\n  holdings, OCR imports, legacy Bearer boundaries, and migration/backfill parity.\n- [x] GREEN: replace the stateless browser session dependency with DB-backed\n  current-user resolution and per-session CSRF; retain legacy Bearer for shared reads only.\n- [x] GREEN: add nullable ownership FKs, per-user holding uniqueness, and a\n  deterministic admin-only legacy-holding backfill command.\n- [x] GREEN: propagate a resolved user through holdings, imports, bootstrap,\n  signal center, and user-generated reports without changing strategy logic.\n- [x] Review: run the focused suite, migration round trip/check, compileall,\n  Node syntax check, and inspect the scoped diff before handoff. No commit/push/deploy.\n\n### Multi-user final review evidence (2026-09-02)\n\n- [x] Admin/member lifecycle, DB sessions, CSRF, revocation, SSE revalidation,\n  owner-scoped holdings/OCR/reports/14:30/optimizer, shared-signal purity,\n  nullable ownership migration, dynamic legacy uniqueness, safe downgrade and\n  explicit backfill all passed independent specification and quality reviews.\n- [x] Project venv full `pytest -q` exited 0 with 3 platform skips; focused\n  auth/ownership/API/migration/holding-import/optimizer/ETF1430 suites also\n  exited 0. `compileall`, `node --check`, decision-board Node tests and\n  `git diff --check` exited 0.\n- [x] Production configuration is fail-closed and documentation/templates now\n  describe database authentication and migration head `2c3d4e5f6a7b` consistently.\n- [x] No credentials, `.env`, production database, broker, or deployment target\n  was accessed. Real PostgreSQL migration/backup/restore, ECS deployment, and\n  provider qualification remain explicit gates.\n- [x] The repository helper secret scan was run; its simple pattern checker\n  reported only synthetic test fixture strings in test files (including legacy\n  token/password labels), not configured credentials. `.env` and production\n  environment files were excluded by the checker and were not opened.\n\n### Multi-user HTTP OCR test-isolation repair (2026-09-02)\n\n- [x] Reproduce the shared SQLite residue after the authenticated OCR HTTP ownership regression.\n- [x] Add teardown scoped to only that test's created users, sessions, imports, candidates, holdings, and transient files.\n- [x] Verify `test_holding_import.py` and `test_multi_user_ownership.py`, then `pytest -q`, compileall, Node syntax, and scoped diff.\n\n#### Review evidence\n\n- [x] Specification and code-quality reviews approved the test-only cleanup. A first review required moving client creation inside the protected `try`; the re-review approved the corrected exception-safe teardown.\n- [x] Project venv `E:\project\ETF-Fund-Analysis\.venv\Scripts\python.exe`: `backend/tests/test_holding_import.py` = 68 passed, 2 skipped, exit 0; `backend/tests/test_multi_user_ownership.py` = 17 passed, exit 0; full `pytest -q` = exit 0 with 3 platform skips and existing deprecation warnings only.\n- [x] `python -m compileall -q backend/app`, `node --check backend/app/static/app.js`, and `git diff --check` each exited 0. The only diff-check output was existing CRLF conversion notices. No commit, push, deployment, credential read, or production database access.\n\n### Multi-user production auth config consistency (2026-09-02)\n\n- [x] RED: add a self-contained production-settings regression proving that obsolete `AUTH_EMAIL` is rejected by database-backed authentication, while development settings continue to accept the compatibility field. Initial focused run exited 1 on the new production `AUTH_EMAIL` case as expected.\n- [x] GREEN: include `AUTH_EMAIL` in the production-only obsolete compatibility configuration rejection without changing database-backed identity behavior.\n- [x] Review: `backend/tests/test_password_auth.py` = 31 passed (exit 0); `backend/tests/test_multi_user_auth.py` = 21 passed, 1 skipped (exit 0); `python -m compileall -q backend/app`, `node --check backend/app/static/app.js`, and `git diff --check` each exit 0. The diff check emitted only pre-existing CRLF conversion warnings. Production-template and deployment documentation now list `AUTH_EMAIL` with the retired compatibility variables. No commit, push, deployment, dotenv read, or production database access.\n\n### P1 production authentication fail-closed fix (2026-09-02)\n\n- [x] RED: exact production `AUTH_ENABLED=false` regression failed as intended (`DID NOT RAISE ValueError`; exit 1); paired development/test assertions passed.\n- [x] GREEN: production now requires explicit `AUTH_ENABLED=true`, PostgreSQL, disabled schema auto-create, a secure cookie, and no obsolete credentials; development/test offline/demo behavior remains available.\n- [x] Review: `test_password_auth.py` = 34 passed (exit 0); `test_multi_user_auth.py` = 21 passed, 1 skipped (exit 0); `test_holding_import.py` + `test_ftshare_provider.py` = 133 passed, 2 skipped (exit 0); project-venv sequential `pytest -q` = exit 0 with 3 platform skips and existing deprecation warnings. `python -m compileall -q backend/app`, `node --check backend/app/static/app.js`, and `git diff --check` each exit 0; diff check emitted only existing CRLF conversion notices. No commit, push, deployment, dotenv read, or production database access.\n\n### Multi-user report-route review fixes (2026-09-02)\n\n- [x] RED: prove `POST /api/reports` generates a system-scoped report with `AUTH_ENABLED=false`, while enabled authentication and legacy unsafe Bearer remain rejected.\n- [x] RED: prove report download resolves a single, exact registered artifact only: wildcard-like names, same-owner near matches, sibling directories, and another user cannot leak a path or file.\n- [x] GREEN: use the existing optional current-user resolution for offline report generation; retain the database-session boundary for authenticated mode.\n- [x] GREEN: replace wildcard SQL lookup with exact artifact selection plus regular-file, basename, allowed-extension, and reports-directory containment checks.\n- [x] Review: RED regression exited 1 for the intended offline-session and wildcard-near-match failures; post-fix report pair, auth (21 passed, 1 skipped), password (31 passed), ownership (19 passed), and API (12 passed) each exited 0 in isolated project-venv processes. `compileall`, Node syntax, and `git diff --check` each exited 0; diff emitted only existing CRLF notices. A single combined module process exited 1 because its shared SQLite fixture leaves ownership accounts before auth tests that require an empty account table; separate module runs avoid that pre-existing ordering constraint. No commit, push, deploy, credential read, or production DB access.\n\n### Multi-user report operational-detail isolation follow-up (2026-09-02)\n\n- [x] RED/GREEN: inject global task/provider diagnostic sentinels; member report payload has empty `tasks`/`provider_health` and its HTML has no sentinels, while system and active-admin payloads retain both sentinels. Initial RED exited 1 for the intended member-task leak; GREEN passed.\n- [x] Derive report operational-detail inclusion from the persisted owner: system and active-admin reports allow it; member, unknown, and inactive-owner private reports deny it.\n- [x] Documentation: repair the HANDOFF migration chain with `e6f7a8b9c0d1` then `f7a8b9c0d1e2` before auth; align current strategy references to `signal-v0.7.0-research` in the related current-state architecture/implementation/deployment handoffs without changing labeled historical evidence.\n- [ ] Review: ownership = 22 passed (exit 0); auth + password = 55 passed, 1 PostgreSQL safety skip (exit 0); compileall/Node/scoped Ruff/diff check = 0. One full project-venv pytest was started sequentially and completed, but this execution environment truncated its result and did not retain an exit code, so it is not claimed as passed. Full-tree Ruff exits 1 on 86 pre-existing cross-module violations; scoped Ruff for this change passes. No commit, push, deployment, dotenv read, or production database access.\n# v1.0.1 接收、移植、测试与部署执行记录（2026-09-07）\n\n- [x] 校验 ZIP SHA256、目录安全和 `PACKAGE_MANIFEST_V101.json`。\n- [x] 保留原脏工作树；从精确 `9a0ca1812eda24acc390f1b3097662bfd615dfef` 建立隔离分支并移植包内容。\n- [x] 只读核对远端 main、v1.0.0、已有 v1.0.1 分支、开放 PR 与生产 SSH 入口。\n- [x] 在独立 Python 3.12 / Node 环境执行后端、前端、Alembic、PostgreSQL、Playwright、JS/Shell/Compose 和密钥门禁（Windows Bash 不可用，ShellCheck 改在隔离容器执行）。\n- [x] 真实 Provider 小样本：510300.SH、512480.SH；记录各能力、单位、时间、覆盖、入库和失败状态；缺量导致衍生任务诚实 partial。\n- [x] 检查旧生产数据备份/恢复/迁移/单位污染；备份 hash、隔离 staging 恢复、Alembic、OHLC/重复键/空值检查通过，生产 head 为 `d40609090002`。\n- [x] 审查 staged diff，提交功能分支并推送 `224b59f`；`ci` 与 `workspace-ci` 成功；未自动合并 main、不移动标签。PR 创建链接因 GitHub CLI 未登录保留给用户。\n- [x] 按 SSH 只读盘点结果形成生产 override；固定镜像 digest，停止旧 API/scheduler，启用 v1.0.1 API+单 worker；未启动第二个 scheduler。\n- [x] 通过正式域名/API、认证/CSRF、页面、任务、重启保留和 worker health 验收并更新部署收据；认证账户未创建/重置，真实 Provider 资格仍未晋级。\n\n## 当前门禁\n\n- 生产 SSH 只读盘点已连通：远端当前 Git/Compose 与 ZIP 基线不一致；已通过备份、staging 和 CI 后采用独立 v1.0.1 override，未覆盖生产源码。\n- 生产当前由 v1.0.1 镜像/API/单 worker 提供服务；旧 API/scheduler 保持停止状态，数据库 head 已升级。\n- 不读取或输出任何私有配置、Token、Cookie、密码、持仓和备份内容。\n\n## 本轮复核\n\n- 本机接收分支已完成源码、前端、迁移、PostgreSQL、容器镜像、Provider 小样本和离线浏览器验证；真实公共源仅有可用性/覆盖证据，不构成生产资格。\n- 生产备份、隔离 staging 恢复/迁移/单位核验、维护窗口和最终 HTTP/worker 验收均已完成；后续仅在新授权下启用真实数据重抓、分钟线、模型或定时复盘。\n- 本机登录修复：确认 8082 初始数据库无用户；为 live runner 增加显式、带邀请码的本地注册配置和回归测试，正式站注册仍保持关闭。\n\n## v1.0.3 local acceptance repairs — 2026-09-09\nBaseline: 9439563dafc35d7410f9dde39253478a321c96ef. Separate review branch; original fixed-SHA receive tree remains unchanged.\n- [x] Reproduce overlapping Sina price-only history replacing complete cached EM rows; preserve the existing complete row without mixing source fields.\n- [x] Restrict the index download affordance to the three supported A-share indexes and explain unsupported OHLC capability.\n- [x] Preserve bounded sanitized per-index failures in task summaries.\n- [x] RED/GREEN targeted regression, parent diff review, frontend typecheck/24 tests/build/12 ordinary + 1 authenticated Playwright.\n- [x] Parent full backend regression, final source scan/compile/diff, explicit source/test commits a628004 and 49ab0ce.\n- [x] Recheck private-state protection and restore pre-receive consistent backup before replaying the fixed local acceptance pipeline; retain the entire original trial DB separately.\n- [x] Record actual public-source results and unavailable capabilities; qualification unchanged. See docs/LOCAL_ACCEPTANCE_RECEIPT_V103_20260909.md.\n\nAllowed code scope: MarketService history upsert, worker summary, Overview index action, and corresponding regressions. No formula/unit version change, credentials, production server, main merge, tags or model calls. Rollback keeps both consistent DB snapshots and the exact fixed-SHA checkout.\n\n### Final review evidence\n- [x] Sector duplicate/conflict RED/GREEN and parent source review; final full pytest 842 passed, 5 platform/database skips. Latest actual sector run succeeded (90 industry, 175 concept, 1 breadth); original failing batch's exact key was not retained.\n- [x] Final running SHA49ab0ce on loopback8082; API/worker same code and original persistent DB; ordinary app source unchanged after final tests.\n- [x] Provider values, archive hashes, restart cache proof, synthetic-account real-cache screenshots and optional-model blockers recorded in sanitized receipt.\n- [ ] User's original admin session UI acceptance and one official-login/budgeted model run remain pending; no approval inferred from silence.\n\n## v1.0.3 follow-up fixes and deployment — 2026-09-09\n- [x] Push review branch `codex/v103-local-review-20260909` through `1558ad5`, `90225ac`, and `c60a157`.\n- [x] Deploy current SHA to `etf.joviluma.com`; preserve PostgreSQL backup and old image rollback tag; API/worker health verified.\n- [x] Retry index history after bounded-source fix: Shanghai, CSI300, and CSI-all each 1,196 OHLC rows through `2026-09-08`.\n- [x] Retry two ETF history: each 1,196 rows through `2026-09-08`; Sina volume remains missing and does not become actionable.\n- [x] Retry factor diagnostics: price-only instruments allowed for price factors; volume factor coverage remains 0 and report stays `not_qualified`.\n- [x] Fix local PaddleOCR v5 manifest/model-name/input compatibility; synthetic image recognized ETF code, shares, and cost; timeout cleanup passed.\n- [ ] Vibe upstream Windows qualification remains blocked by upstream symlink/path tests; official Codex login, pairing, and one model-budgeted run require Jovi's own interactive login.\n\n## v1.0.4 接收、新闻时间修复与本地持久部署 — 2026-09-10\n\n- [x] 从远端独立 clone 接收 `910e77fc866f123e0d18103048243513e3edb666`，验证基线 `57470eabcad35a6038574e893e7245f0d1adb387` 为祖先；原始脏工作树保持不变。\n- [x] 读取 `AGENTS.md`、`STATUS.md`、`HANDOFF.md`、v1.0.4 用户/验收/安全/OSS/验证/版本文档。\n- [x] 核对 PR #32 和固定 SHA 的 CI：`workspace-ci` #88 成功；`ci` #565 失败，`test` exit 1；PR `ci` #566 同样失败；公开数据观察 #1 成功。GitHub 公共 API 限流，网页结果作为运行状态来源，失败原因须以本地复跑定位。\n- [x] 按 workflow 复跑后端、前端、旧 JS、迁移、Compose 静态配置、浏览器和密钥门禁，逐项记录退出码/跳过原因；Docker daemon 不可用项明确标记环境跳过。\n- [x] 复现并修复 `news_status.py` 的 SQLite 无时区发布时间误按 UTC 解释问题；补后端和前端回归测试，不改历史数据库日期。\n- [x] 备份原持久库并只在副本执行迁移/数据/重启验收；不初始化、不连接真实用户库、不读取或输出私密配置。\n- [x] 按 v1.0.4 合同完成本地真实目录/板块/两只 ETF/有限历史准备、图表/原模板/研究/账户边界验证；真实数据失败保留来源与原因，不使用 Mock 冒充。\n- [x] AI 未完成仓库外主密钥配置，按未确认费用边界保持关闭；没有复制 auth.json 或调用模型。\n- [x] 形成本地部署收据、截图、持久重启证明和剩余边界；不合并 main、不移动标签、不部署服务器。\n- [x] 2026-09-10 12:58 对两只 ETF 再次重试 `quotes`；仍 `partial/TaskExecutionError`，保留旧日线和失败状态，不伪造今日数据。\n\n### v1.0.4 结果\n- `docs/LOCAL_ACCEPTANCE_RECEIPT_V104_20260910.md` 汇总固定 SHA、CI、修复、真实任务、页面、账户、重启和环境限制。\n- 本地审核修复提交 `b8112d4`；当前分支只在本地审核，不自动推送或合并。\n\n## 项目知识文档与 Obsidian 同步 — 2026-09-09\n- [x] 新增项目制造过程与文档地图，覆盖当前实现、证据边界、部署回滚和未完成资格。\n- [x] 更新 `docs/README.md` 导航并校验相对链接。\n- [x] 用 codex-memory checkpoint DryRun 生成持久知识；五个槽位的目标哈希可复现且不含敏感内容。\n- [x] Jovi 授权创建项目记忆目录后，执行有界 checkpoint Apply，写入 5 份项目知识笔记；`load-memory.ps1` 与 `verify-memory.ps1` 均返回 `PASS`。\n- [x] 文档通过源文件/提交/测试/运行收据核对后，执行文档镜像 DryRun；官方 mirror wrapper 返回 `MEMORY_UPDATED`，复制 78 个 Markdown 文件。\n\n### 文档/记忆复核结果\n- [x] 仓库知识文档提交 `5d8d12a` 已推送到远端 `main`。\n- [x] Obsidian 项目目录 `03-项目记忆/etf-fund-analysis` 已创建，包含概览、工程关系、当前进度、关键决策和工作流 5 份笔记。\n- [x] `invoke-mirror.ps1` 在新鲜 DryRun 后成功 Apply，状态为 `MEMORY_UPDATED`，镜像根目录为 `05-工程文档`，状态文件已写入本机 memory state。\n- [x] 初次 checkpoint wrapper 的 expected-plan 冲突没有产生部分写入；随后按 Jovi 的明确授权执行有界 Apply，并完成独立复核。\n\n## 深化项目知识库 — 2026-09-09\n- [x] 盘点当前主线的产品边界、目录、运行组件、数据流、用户路由和版本演进事实。\n- [x] 盘点已完成能力、验证证据、部署状态、未完成门禁和明确不能宣称的内容。\n- [x] 盘点技术路线与可复用工程经验，区分当前运行事实、研究候选和未来路线。\n- [x] 整理开源仓库/公开项目借鉴清单，记录 revision、许可证、借鉴点、实际落点和隔离边界。\n- [x] 新增详细仓库知识文档，并更新 `docs/README.md` 导航。\n- [x] 扩展 Obsidian 项目记忆为分主题知识库，写入工程关系、技术路线、完成项、验证/部署、开源借鉴和可复用经验。\n- [x] 运行 checkpoint/mirror DryRun 与 Apply，完成 `load-memory.ps1`、`verify-memory.ps1`、Git 状态和远端提交复核。\n\n### 深化结果\n- 新增 `PROJECT_KNOWLEDGE_BASE_V103.md`、`TECHNICAL_ROUTE_V103.md`、`COMPLETION_AND_EVIDENCE_MATRIX_V103.md`、`OPEN_SOURCE_ADOPTION_REGISTER_V103.md` 四份长期知识文档。\n- Obsidian 五个核心槽位已扩展为详细的项目概览、工程关系、当前进度、关键决策和可复用工作流；官方 checkpoint wrapper 返回 `MEMORY_UPDATED`。\n- 文档镜像新鲜 DryRun 发现 6 个变更，官方 mirror wrapper 返回 `MEMORY_UPDATED`；目标目录为项目记忆下的 `05-工程文档`。\n- 本轮只修改文档与任务台账，没有修改业务代码、生产数据库、用户账户或原始脏工作树。\n\n## v1.0.4 公网刷新修复与部署 — 2026-09-10\n\n- [x] 复现生产 AKShare `ProviderTimeout`，确认 20 秒 bounded deadline 不足以覆盖 ETF 分页现货接口。\n- [x] 将 AKShare 默认/示例/Compose timeout 统一为 60 秒，增加默认预算回归测试；接收分支提交 `3e4b9fa` 并推送远端。\n- [x] 以无网络方式构建 `etf-workspace:v1.0.4-runtime-20260910`，诊断端口 API、迁移和 `cryptography` 导入通过。\n- [x] 生产切换前完成 PostgreSQL 备份；新版 API/worker/scheduler 健康，失败路径保留并验证回滚材料。\n- [x] 验证 scheduler `refresh_quotes` 成功写入 35 个启用标的；两只 ETF 当日报价落库且保持非实时资格标识。\n- [x] 通过受审计 TaskService 补两只 ETF 日线，生产各 1,197 根至 2026-09-09；指数缓存三项各 1,197 根至 2026-09-09。\n- [x] 更新 `STATUS.md`、`HANDOFF.md`、本地验收收据和公网部署收据；不合并 `main`，保留旧源/镜像/备份。\n\n### Review\n\n后端全套 pytest 通过；compileall、Node 静态检查、旧 JS 15/15 和 diff check 通过。公网 health、容器状态、scheduler 成功任务、provider audit、两只 ETF 报价/日线和指数缓存均已现场复核。剩余边界为 AKShare 时间戳实时资格、Sina 成交量、因子/预测资格、中证全指实时、OCR/Vibe/真人模型等既有门禁。\n\n## v1.0.5 ZIP 接收与本地复测计划 — 2026-09-10\n\n- [x] 校验 ZIP 旁车 SHA256、解压安全、verify_bundle.py 与包内基线/补丁/清单。\n- [x] 在独立 clone 固定 46c713d4，应用 v105 补丁；按 SOURCE_CHANGESET 核对归一化文件 SHA，不修改原工程。\n- [x] 先复跑后端、前端、迁移、JS、密钥扫描、HTTP/Playwright 和认证隔离；记录 Node/Python/浏览器/PostgreSQL/Docker 的实际版本与跳过原因。\n- [x] 备份原持久库到新的证据目录，在副本中逐字段核对目录、板块、两只 ETF、三指数、新闻、API 和页面。\n- [x] 处理必要 R1–R6 缺陷时，每组单独提交、先复现后修复；R7、main 合并和标签移动保持未执行。\n- [x] 本地持久服务重启后核对 schema、条数、日期、来源、失败审计、原 WorkBuddy 模板和截图，形成 v105 接收收据。\n\n### v105 Review（2026-09-11）\n\n- [x] ZIP SHA、verify_bundle、固定基线、补丁 apply-check、SOURCE_CHANGESET 归一化 SHA 全部通过；原工程未触碰。\n- [x] 包内第一阶段提交 `6e1c0c2`；R1 `e072718`、R2 `9b0822e`/`8ba2df7`、R3 `5a900f7`/`04c4ca4`；任务台账 `652f2c7`。\n- [x] Python3.12 全量 pytest 无失败；v105 专项23；Vue28/typecheck/build；旧JS20；compileall、secret scan、diff check；普通 Playwright17/17、认证2/2。\n- [x] 临时 SQLite Alembic upgrade/check/head 通过；原副本 Backup API、真实 AKShare 目录/板块/ETF/指数/新闻任务、字段/单位/时间/来源和页面证据已保留。\n- [x] v105 API/worker 使用同一副本重启后 health、完整性、条数和日期保留；scheduler 单实例现场尝试出现 SQLite 并发写锁，已停止并记录为剩余项。\n- [x] 生产切换前完成 PostgreSQL 备份、诊断端口 Alembic/health、独立源目录和精确 v1.0.4 rollback Compose；公网 API、worker、scheduler、根页面和认证边界复核通过。\n- [x] v105 接收分支已推送远端；`main` 未合并、标签未移动，原工程脏区未触碰。\n- [ ] 专用 PostgreSQL16 条件测试、Node22、Docker 本机条件、Windows DPAPI、完整实时/量价资格和交易时段后的新报价/收盘日线仍待现场窗口复核；R7 完整缠论/自动同步保持未实现。\n\n### v105 生产 Review\n\n- [x] 生产备份 `fund_decision_20260911_220430.sql.gz` SHA、600 权限、诊断端口和回滚材料已记录在 `docs/PRODUCTION_DEPLOYMENT_RECEIPT_V105_20260911.md`。\n- [x] 公网 `https://etf.joviluma.com/api/health` 返回 production、`public_composite`、认证开启；三容器 API/worker/scheduler 运行，未登录 data-health 返回 401。\n- [x] 只读核对 `auth_users=3`、`holdings=0`、`watchlist=6`；首次切换时未把旧日线或待核实快照冒充今天收盘/实时数据。\n\n## v105 数据异常修复：新浪成交量回退 — 2026-09-11\n\n- [x] RED：证明新浪历史接口返回的 `volume/amount` 在价格单位自洽时被 Provider 丢弃，导致全量 `volume_missing_for_shared_signals`。\n- [x] GREEN：仅在 `amount / volume` 与收盘价通过单位一致性校验时保留成交量，使用新来源标识并保留不合格行的价格-only 回退。\n- [x] REVIEW：Provider/数据契约/指标/决策板回归与全套静态检查通过；生产重抓和分组恢复在部署阶段复核。\n- [x] DEPLOY：新代码通过诊断端口和公网健康检查后滚动切换，保留当前 v105 回滚 Compose；生产重抓与重算已完成。\n\n### v105 数据异常修复 Review\n\n- [x] 生产备份后部署 `208858e`；东财历史接口失败时新浪回退，35 个标的全部通过 v102 成交量单位校验，`price_only=0`、缺量行数为 0。\n- [x] 受审计任务 `refresh_indicators` 35/35、`refresh_forecasts` 140 条、`refresh_signals` 35 条、`refresh_decision_board` 新快照均成功；决策板 `数据异常=0`。\n- [x] scheduler 已恢复，API/worker healthy，公网 health 通过；整体 stale 仅保留公开报价时效/实时资格提示，未伪装成实时。\n\n## v105 看板快照缓存修复 — 2026-09-11\n\n- [x] RED：静态 WorkBuddy `api()` 请求未声明 `cache: no-store`，可复现浏览器继续读取旧决策快照；后端旧看板路由也缺少响应缓存合同。\n- [x] GREEN：前端 API/auth 请求固定 `cache: no-store`，后端 bootstrap、decision-board 列表和详情响应固定 `private, no-store`；新增静态与 HTTP 回归。\n- [x] DEPLOY：把缓存修复随新归档部署并用后端 no-store 合同和最新 snapshot_id 完成线上复核；用户登录态页面下一次加载将绕过旧缓存。\n# Bot acceptance-gate repair — 2026-09-19\n\n## Goal\n\nRepair the independently reproduced scheduler, walk-forward, return-series, and unit-certification integration defects without weakening fail-closed research rules or touching the owner's current `main` worktree.\n\n## Plan\n\n- [x] RED: add a scheduler regression proving dependencies run before decision-board/report consumers.\n- [x] RED: add a walk-forward regression rejecting zero folds even with a human approval artifact.\n- [x] RED: add a corporate-action regression keeping raw unadjusted prices out of the adjusted/total-return research series.\n- [x] RED: add a service-path regression proving only explicit independent unit evidence can reach `qualify_1430`.\n- [x] GREEN: implement the smallest fixes and retain `actionable=false` for every unqualified path.\n- [x] REVIEW: remove new diff-check violations and run focused tests, full pytest, compileall, JS tests, Vue tests/typecheck/build, and `git diff --check`.\n\n## Review\n\n- RED receipts: the four new tests failed against the prior implementation (topology false, empty folds approved, raw research type absent, and Workbench certification path absent).\n- Focused repair suites: 29 passed; scheduler/market/Workbench regression suites: 88 passed; final Workbench/unit rerun: 13 passed.\n- Full backend: 1165 tests collected; full pytest reached 100% with `pytest_exit=0` and only environment/deprecation skips or warnings.\n- Static/frontend: compileall exit 0; legacy Node tests 27 passed; Vue tests 36 passed; typecheck and production build exited 0.\n- Diff hygiene: working-tree and baseline-to-working-tree `git diff --check` exited 0 after removing five pre-existing trailing-space violations from `docs/LOCAL_CODEX_BRIDGE.md`.\n- Pre-deployment scope boundary: no database migration or change to the owner's current `main` worktree. Independent unit evidence remains externally required; absent evidence still fails closed and all 14:30 output remains non-actionable.\n- Follow-up RED/GREEN: `TaskService.full_pipeline` also published the board before sector refresh; a behavioral order test failed (`9 < 8`) before moving sector refresh ahead of board publication, then the related 83-test orchestration suite passed.\n- Real public-provider flow in isolated SQLite: 36 instruments; 35/35 daily histories through 2026-09-18 (9,870 bars, all price-only); 35 quotes (all non-realtime/degraded); 200 news rows; 266 sector/concept/market rows; 35 fail-closed `数据异常` signals; stale/non-actionable 35-row board and HTML report. Indicators/forecasts correctly refused unverified quantity history. Workspace `/analysis`, decision overview, and ETF detail displayed the persisted real-source data with unverified labels.\n# Production data qualification repair — 2026-09-20\n\n## Goal\n\nResolve the four production `unexplained_price_discontinuity` cases without guessing corporate-action ratios, then verify every data-to-UI-to-decision surface before merging and redeploying.\n\n## Plan\n\n- [x] RED: encode the four production discontinuity fixtures and assert the current gate blocks them with the exact reason.\n- [x] Research: reconcile each discontinuity against authoritative corporate-action/adjusted-series evidence; keep unresolved symbols blocked.\n- [x] GREEN: implement the smallest source/contract fix only where independent evidence supports it; preserve raw display history and fail-closed behavior.\n- [x] Data pipeline: run source fetch, bars, quotes, indicators, forecasts, news, signals, sectors, decision board, and report checks in an isolated database.\n- [x] UI: verify every enabled route and representative list/detail/decision surface against persisted snapshots and no mock/realtime mislabeling.\n- [x] Review: full backend/frontend/static/build/diff gates, exact SHA, production backup, diagnostic deploy, public verification, rollback evidence.\n\n## Review\n\n- Completed through `172db21`: official split evidence is isolated from raw bars, research recomputation no longer becomes `数据异常`, public routes returned 200, and the production board remained stale/non-actionable. The production database backup and rollback source were retained.\n\n# FTShare qualification fail-closed repair — 2026-09-20\n\n## Goal\n\nPrevent a reachable FTShare endpoint from being marked qualified when absolute-unit and timestamp evidence is still absent.\n\n## Plan\n\n- [x] RED: prove three non-empty operations with empty evidence currently produce a false qualification.\n- [x] GREEN: require explicit independent unit and operational timestamp gates in the qualification result.\n- [x] LIVE: run bounded read-only probes and record sanitized endpoint outcomes without changing runtime configuration.\n- [x] REVIEW: run focused and related tests, compile/static checks, full regression, diff review, then update STATUS/HANDOFF.\n\n## Review\n\n- RED failed with missing `_qualification`; GREEN related suite passed 96 tests.\n- Full backend pytest exited 0. `compileall`, Node syntax, scoped Ruff, and `git diff --check` exited 0.\n- Five-symbol application probes returned zero records and `CapabilityUnavailable`; Skill endpoints returned 404/405. FTShare remains disabled/unqualified and no runtime or production state changed.\n# R1 + A-U1–A-U3 merge, release, docs, and project memory — 2026-09-23\n\n## Plan\n\n- [x] Read project rules, latest handoff/receipt, lessons, and project memory; preserve the primary checkout until its state was checked.\n- [x] Verify R1 is an ancestor of main, review candidate `9ac2be8587043cfde72798503f33bd89dc5f0ed8`, and confirm the exact-SHA CI records.\n- [x] Inspect the public production target, image/source labels, mounts, migration, health, backup, and capacity; leave the stale unrelated Compose root untouched.\n- [x] Fix shell line endings and bounded CI build resources; export a smoke-tested, source/tree-labeled image artifact with checksums.\n- [x] Back up production and verify checksum/permissions; restore a copy in an isolated no-egress PostgreSQL environment and rehearse migration/diagnostics.\n- [x] Deploy the verified full image and check API, worker, scheduler, routes, static asset, auth response, migration, and source-mount absence.\n- [x] Update `STATUS.md`, `HANDOFF.md`, docs index, account handoff, and the production deployment receipt; push main docs commit `cc658676e10766b44a485599c615a6a71a023c0f`.\n- [x] Synchronize the mapped Obsidian checkpoint after fresh DryRun/target checks and mirror allowlisted docs; verify hashes and preserve the unrelated Tesla pending checkpoint.\n- [x] Fast-forward the original clean checkout from `825767c` to `cc658676e10766b44a485599c615a6a71a023c0f`; verify it is clean.\n- [x] Final review exact main/document SHA versus deployed application SHA/tree/image, backup/restore evidence, public health, memory sync, and open data gates.\n\n## Review\n\n- Current main/document HEAD: `cc658676e10766b44a485599c615a6a71a023c0f`. Runtime application image is intentionally bound to source SHA `0dbd3fee58a3f5e080aacbcd8eae8d5964aec54f`, tree `f8607b3de8decde6065ccc559c5c26b0262b8e6b`; the later main commit contains documentation/status only.\n- Exact-source CI records on `0dbd3fe`: run `35843677296` (CI), `35843677328` (workspace CI), and `35843677240` (platform audit), all success. Local GitHub CLI refresh was unavailable because this host has no `gh` login; the release receipt retains the previously verified run IDs and conclusions.\n- Production image `etf-workspace:production-0dbd3fe`, ID `sha256:251a0623c694b07525bd398b52f41eecc17ec3d1216912c6d593b704fc8ae81a`, has matching OCI revision/tree labels. API, worker, and one scheduler use this image; only reports/backups are mounted from host. The separate stale Compose root was not modified.\n- Backup `backups/fund_decision_20260923_141523_Q1UTbz.sql.gz`, SHA-256 `f1136db243b7b6913bdaf9bb902b88ab4e94e90f334350dcd88d0cc7a56d742f`; gzip and sidecar checks passed. Restore-copy rehearsal: 106 tables, Alembic `e609200001`, upgrade/check and packaged smoke passed; no production rows were written by the rehearsal.\n- Public health was rechecked during closeout: HTTP 200, `status=ok`, production, `public_composite`, auth enabled, API version `1.0.8`. Prior deploy checks also verified root and Profile asset 200, unauthenticated account API 401, API/worker healthy, scheduler running (no healthcheck configured).\n- Four production-host frontend builds ended exit 137; the last coincided with a kernel kill of UID 10001 Python and scheduler restart. API remained healthy and worker did not restart; scheduler recovered, and deployment then used the hosted CI artifact with no further host builds. Exact killed-process/container attribution was not proven; the timing correlation and subsequent `ProviderError` count are retained in the deployment receipt. No rollback was needed.\n- Obsidian checkpoint was applied through a fresh, hash-guarded DryRun plan because the generic pending checkpoint belonged to `tesla-speed`; the unrelated queue was preserved. The project checkpoint load passed, and mirror copied 37 allowlisted documents with zero skipped; three critical mirrored document hashes matched.\n- Real-data qualification remains **UNKNOWN**. No production data audit/recertification, provider fetch, certified/hash/raw OHLCV edit, account write, or model call was performed. R2–R6 and A-U4/A-U5 remain open; no forecast/actionability gate was loosened.\n# R2 可见页面数据及时性与一致性 — 2026-09-23\n\n## Goal\n\n让总览与 ETF 详情在前台按有界周期读取新数据；切后台停止轮询，回前台立即读取；保留最后成功快照并显示数据时间。页面 GET 不抓取 Provider、不写数据库，不改变行情资格和 actionable。\n\n## Plan\n\n- [x] 确认 `main` 干净，建立从 `a687f17` 开始的独立 worktree 与功能分支。\n- [x] 阅读 R2 路线、刷新政策、read model、总览/详情查询及现有回归测试。\n- [x] 核实生产源分层：东财请求被远端断连；Sina HTTPS 返回样本标的及源时间；Tushare ETF 实时接口返回权限不可用；THS ETF 接口仅有净值、不作为行情价。\n- [x] RED：详情页三项刷新回归先失败：缺少 60 秒到期刷新、回到可见页立即刷新；卸载清理现状通过。\n- [x] GREEN：用一个可复用 composable 管理轮询；应用到总览和详情，保持 GET、现有读取合同和研究门禁。\n- [x] 补齐详情各模块展示时间与 snapshot 身份，缺失时保持 UNKNOWN，不用 fetched_at 冒充 source_time。\n- [x] 后端读模型新增/对齐固定 `as_of` 的展示元数据；只做只读计算，不写库、不调用 Provider。\n- [x] RED/GREEN：添加 Sina HTTPS 行情适配器，注册到免费 Composite 回退链，并允许其精确版本源时间通过 operational-grade 校验；量额保持空值、production-qualified/actionable 仍为 false。\n- [x] 生产端点探针揭示 Sina 必须使用 `/list=代码,...` 路径而非 `?list=`；先记录夹具合同失败，再修正 URL 并用真实响应验证 5/5 请求代码。\n- [x] RED/GREEN：Tushare 权限失败用 allowlist 安全码穿过适配器和 Composite 审计，不保留响应正文或凭证。\n- [x] 隔离入库/展示回归：验证 Sina 时间、来源、空量额和 fail-closed 决策输出。\n- [x] 运行完整后端、前端类型/构建、受影响浏览器矩阵、静态检查与 `git diff --check`；保留首次失败及条件跳过。\n- [ ] 交易时段对 Sina 全链做有界只读探测；生产备份/恢复演练、CI 镜像和部署须在确认本批发布授权后执行。\n\n## Review\n\n- 聚焦 provider/quote/task 审计 16 passed；最终全量 pytest `1235 passed / 14 skipped / 0 failed / 0 errors`。首轮全量 5 项失败是旧 Provider 顺序断言和全构造失败模拟漏 Sina；更新测试合同后修复。新增流式上限回归先复现读取了第 3 个超限块，改造后只读取至 1MB 边界。14 项 skip 均为环境条件（未配置 TEST_POSTGRES_URL、平台文件模式/symlink 能力不可用）。\n- 前端 Vitest 53/53；普通/认证/响应式浏览器 19/19、5/5、18/18；typecheck、production build、compileall、legacy Node 39/39、secret scan、Ruff 新增文件检查和 `git diff --check` 均通过。构建仅有既存 Login 动态/静态重复导入警告。\n- 初次系统 `python` 因未加载项目 venv 缺 SQLAlchemy，随后改用 worktree `.venv`；未将其记为产品失败。第一次 Sina 夹具只验证了自己构造的 query 参数，生产探针返回空记录；核对响应后改为 `/list=...` 并确认真实端点在开盘前返回 5/5 上一交易日行情时间。无新增依赖或软件安装。\n- 生产只读探针未读写数据库。2026-09-24 开盘前端点源时间仍为 2026-09-23；今天盘中及时性尚未实证。没有修改 production-qualified/certified/actionable；没有进行生产部署。\n\n# R2–R4A 详情一致性与图表口径 — 2026-09-26\n\n## Plan\n\n- [x] RED：固定 `as_of` 复现详情/图表输入错位、同日临时/正式 K 重复、缺量被转零、复权重复应用以及未来日线/快照泄漏。\n- [x] GREEN：详情和图表共享同一读时；当日未结算正式行被合格临时行替换，15:15 后正式行优先；输入 hash/series ID绑定读入数据。\n- [x] GREEN：增加逐模块可用性原因及研究决策对比；错误保留上次有效详情、局部模块失败不遮整页，页面 GET 保持只读。\n- [x] GREEN：原始与拆分调整研究序列独立；周/月从研究日线聚合；缺量保留 NULL；来源 qfq/hfq 不重复乘拆分因子。\n- [x] Verify：完整 pytest、前端单测/类型检查/构建、Node、普通/认证/响应式浏览器与路由矩阵通过；首次失败和环境跳过留存。\n- [x] Docs：仓库状态/交接、实现收据、路由验收表已更新；Obsidian ETF 进度/决策/工作流通过专用 DryRun checkpoint 更新，4份文档经镜像 DryRun 后同步；Tesla pending 保留未动。\n- [x] Commit：应用提交与后续测试提交已落在隔离分支；未推送、未合并 main、未部署。\n\n## Review\n\n- 基线：隔离分支 `codex/r2-freshness-lifecycle`，基线 `c63f669095e6eb44e1e9c185deecf0f7af02b27c`；起始工作区干净。\n- 初始专项基线：后端 `18 passed`；前端 detail/chart `7 passed`。测试环境：该 worktree `.venv`。\n- RED 证据：新增盘中/正式 K 场景先有3项失败；模块资格场景先有2项失败；复权/量能场景先复现研究序列缺失、来源 `qfq` 被重复调整和 NULL 被置零。\n- 后端最终全量：`full-pytest-release2.xml`，1250 tests，1236 passed、14 条件 skip、0 failures/errors。首轮完整测试曾有1项旧夹具缺少 `research_bars`；兼容旧载荷后专项及最终全量通过。\n- 前端：Vitest 62/62；vue-tsc、Vite build、compileall、`node --check` 和 legacy Node 39/39 通过。Vite 仅保留 Login 静态/动态重复导入提示。\n- 浏览器：普通20/20、认证5/5、响应式18/18；全路由矩阵覆盖当前直接页及旧路由重定向。所有浏览器使用 mock 与临时 SQLite。\n- 首轮普通浏览器2项失败来自测试夹具缺少 `read_as_of` 及把精确路由服务器的未知URL当作SPA页面；补齐夹具并按中间件白名单定义重测后，20项全过。失败截图/trace保存在 E 盘证据目录。\n- SQLite及业务链路测试通过；PostgreSQL条件因 `TEST_POSTGRES_URL` 未配置跳过，Windows symlink/Unix-only检查按平台跳过。没有引入迁移。\n- 应用提交 `8b52d39d22ebb21a41e269ab9ce9863b85dd3b83`（tree `d7ce9c857f48a99e130cf6060700974213c4e9c0`）；后续测试提交 `f4286d590fd6f9565192754e40c553048286823d`。`main` 仍在 `c63f669`，本轮未推送、合并或部署。\n- 真实行情资格仍 UNKNOWN；未连接 Provider、未改认证/原始 OHLCV、未提高 `actionable` 或预测校准。生产部署仍待后续独立发布授权/收据。\n- Obsidian 写入已回读加载成功；实现收据和路由矩阵的源文件/镜像 SHA-256 相等。固定 pending 文件仍属于 `tesla-speed`，保留原内容和时间戳。\n\n# R4B price structures — 2026-09-27\n\n## Plan\n\n- [x] Verify the isolated baseline and add failing tests for duplicate pivot confirmations, fabricated ATR, and missing pivot time evidence.\n- [x] Implement deterministic daily pivots, deduplicated touch evidence, and box qualification as pure functions with frozen research parameters.\n- [x] Implement box lifecycle replay with settled-bar confirmation and intraday-only breakout attempt display.\n- [x] Persist versioned structure payloads through the audited support/resistance refresh; keep GET read-only and canonical decisions unchanged.\n- [x] Add bounded box overlays and evidence text to the existing chart; guard price-basis and interval mismatches.\n- [x] Verify algorithm, snapshot/API, and browser behavior; preserve first failures, reruns, and environment skips.\n- [x] Update receipt, route matrix, STATUS, HANDOFF, and mapped Obsidian project notes; review and commit each independently accepted batch.\n- [ ] Recheck exact SHA and CI; handle push, main merge, and production rollout only under the release gate stated in this plan.\n\n## Review\n\n- Branch: `codex/r4b-price-structure`; base: `4d8fa1a4b7c5fc8dc3d0066c74dc86cd9092df18` (tree `6400437180c62052936f443f423910fd2a841ac6`).\n- Working tree was clean before branching. Primary checkout and other worktrees were left untouched.\n- App commits: `5600d92243290dffe9e7de6d6af53fea9d48bc22`, `0e5759b706fde8ea4e678f28ef53b7b8d77ec3a7`, `8a5b575904c4cbc5a2d63e53a8521076c80904e1`; final app tree `1fc3d4657dba7f9e0f0ec5d06875eaaa45c98d83`.\n- Final full pytest: 1269 total, 1255 passed, 14 environment skips, 0 failures/errors. Frontend 63/63, ordinary/auth/responsive E2E 26/5/18; Node 39/39, typecheck/build/compileall/secret scan passed.\n- First failures and reruns are recorded in `docs/09-RPT-R4B箱体与支撑压力验收.md`; browser screenshots/traces and JUnit are outside the repo under `E:\Claude_allow\Download\ETF_R4B_QA_20260927`.\n- Obsidian progress/decision/workflow slots were applied after two identical hash-guarded DryRuns; the checkpoint wrapper's internal Apply conflicted, so the same verified plan was applied through its guarded `apply-sync.ps1`. The no-argument mirror wrapper copied four selected documents after DryRun. The unrelated Tesla pending checkpoint hash remained unchanged.\n- Remote CI, main integration, production deployment, and real-data qualification remain pending separate gates.\n\n# R4B PostgreSQL snapshot-version width correction — 2026-09-27\n\n## Plan\n\n- [x] Add a regression that requires the support-resistance method version to fit the existing database column; verify it fails against the deployed 37-character identifier and 32-character column.\n- [x] Shorten only the method-version identifier to fit the existing column; retain algorithm, structure payload, research parameters, and `actionable=false` unchanged.\n- [x] Run focused service/structure tests and required static checks, then full pytest and frontend checks affected by the app commit.\n- [ ] Commit and directly push the fix; wait for exact-SHA CI and obtain a fresh production image artifact.\n- [ ] Back up production and verify checksum; restore a copy in an isolated no-egress PostgreSQL environment and smoke the exact image.\n- [ ] Deploy API, worker, and one scheduler with the verified image; verify migrations, health, source/tree, mounts, and public asset hashes.\n- [ ] Run the existing audited `refresh_decision_board` task only after confirming no active run/lock; verify R4B snapshots are persisted and visible while keeping actionability blocked.\n- [ ] Update R4B receipt, STATUS, HANDOFF, roadmap, and Obsidian project records with the correction/deployment evidence; push documentation and verify final main SHA.\n\n## Review\n\n- Root cause confirmed from production read-only checks: `method_version` column max length 32; deployed identifier length 37; zero active refresh tasks or global pipeline lock; existing snapshots remain on earlier method versions.\n- Existing per-instrument savepoints explain why service health can remain green while individual structure snapshots fail to write.\n- RED: the new regression failed as expected with `37 <= 32`; after shortening the identifier to 31 characters, support-resistance and post-deploy snapshot suites passed 27/27.\n- Final local application checks after the correction: pytest 1270 total / 1256 passed / 14 environment skips / 0 failures / 0 errors; compileall, Node syntax, Node 39/39, Vitest 63/63, typecheck/build, and `git diff --check` passed.\n- Browser rerun on the corrected source: ordinary 26/26 on isolated port 18084, authenticated 5/5, responsive 18/18; the pre-existing listener on 18082 was left untouched. Browser evidence and JUnit are under `E:\Claude_allow\Download\ETF_R4B_QA_20260927`.\n- Vite reported only the existing Login.vue static/dynamic duplicate-import warning; pytest emitted existing dependency deprecation warnings. No frontend source or dependency changed.\n\n# C2D R4B documentation reconciliation — 2026-09-28\n\n## Plan\n\n- [x] Bind the accepted local application candidate `43bfbf6` / tree `12d217a` and final migration head `g8b9c0d1e2f3`.\n- [x] Add authoritative R4B acceptance and R2–R4B reconciliation records.\n- [x] Preserve the historical R4B receipt and append the final independent acceptance addendum.\n- [x] Refresh STATUS, HANDOFF, docs README, and the R4C plan without changing production identity.\n- [ ] Commit and push the documentation-only handoff.\n- [ ] Obtain independent remote C2D review before R4C M1.\n\n## Review\n\nApplication code is unchanged in this worktree. Production remains SHA `0dbd3fe` / tree `f8607b3`; real-data qualification remains UNKNOWN; no production or automatic-trading action is permitted.\n\n# R4C M1 engine qualification — 2026-09-28\n\n## Plan\n\n- [x] Inspect the accepted integration surface and existing chanlun declaration without changing runtime code.\n- [x] Capture installed chanlun artifact/API/license/source mapping evidence and read the current CZSC upstream candidate metadata.\n- [x] Run the deterministic Windows synthetic probe and preserve its JSON hash.\n- [x] Freeze `config/chan_research.json` disabled with explicit M1 blocking reasons.\n- [x] Record Linux/CZSC unavailable gates honestly.\n- [ ] Commit/push the M1 qualification artifacts and obtain independent remote review.\n\n## Review\n\n- M1 is `BLOCKED` for source mapping, uninstalled CZSC, unavailable Linux probe, counts-only current integration, and unestablished causal confirmation.\n- No production, Provider, model, canonical action, frontend, API, schema, or runtime dependency change was made.\n
+# Freshness recovery — 2026-09-21
+
+- [x] Trace live ingestion, computation and scheduler outcomes.
+- [x] Reproduce split rejection and intraday historical retry starvation.
+- [x] Apply existing corporate-action research checks during provider selection; register three official events.
+- [ ] Test, CI, merge, deploy and verify per-instrument dates through the published board.
+
+Source notices: SSE 512200_20240806_RYUS, 512800_20250707_PJ9L, 515220_20240412_5CZN.
+Daily research still uses settled bars; live quotes have their own source timestamps.
+
+# Public unit evidence recomputation — 2026-09-21
+
+## Plan
+
+- [x] Reproduce the production zero-certification result from stored evidence reasons.
+- [x] Add RED tests for Sina observed units, large-value rounding, and stale evidence reuse.
+- [x] Correct the minimal unit contract/tolerance and recompute existing evidence rows.
+- [x] Run full verification, commit, CI, merge `main`, redeploy, and rerun production certification.
+
+## Review
+
+Focused RED/GREEN evidence suites pass after the correction. v1.0.8 production deployment and audited certification are recorded in `docs/PRODUCTION_DEPLOYMENT_RECEIPT_V108_20260921.md`.
+
+# Tencent public-source evidence closure — 2026-09-21
+
+## Plan
+
+- [x] Reproduce current public-source gap and add failing adapter/evidence tests.
+- [x] Add a bounded Tencent daily adapter and preserve raw Sina fields for cross-source evidence.
+- [x] Run focused, full, frontend, static, migration, and provider-coverage checks.
+- [x] Refresh production through audited tasks, certify only evidence-backed rows, and inspect all gates.
+- [x] Commit, push, CI, fast-forward `main`, build/deploy the exact SHA, and verify rollback receipt.
+
+## Review
+
+Completed in v1.0.8; see the deployment receipt above.
+
+## Local review
+
+- RED: the new Tencent adapter test failed at collection before the adapter existed.
+- GREEN: focused evidence/provider suites passed; backend full pytest reached 100% with exit 0.
+- Static/frontend: compileall, Node syntax/tests, Vitest 36/36, vue-tsc, and Vite build passed.
+- Live read-only: Sina/Tencent samples matched after documented unit conversion; bounded coverage retry recovered the four transient timeouts.
+
+# Data Evidence Closure and Production Release — 2026-09-20
+
+## Scope
+
+- [x] Confirm clean isolated branch `codex/unit-evidence-closure` from `0ac75fa`.
+- [x] RED: add regressions for empty evidence, false independence, unit mismatch, stale hash, and partial-range certification.
+- [x] GREEN: add audited unit-evidence persistence and recomputed certification lookup.
+- [x] Split FTShare daily-history and quote capability qualification.
+- [x] Extend data-health API and Settings UI with per-instrument gaps and affected calculations.
+- [ ] Run provider probes for benchmark and four split instruments, then enabled universe when safe.
+- [x] Run focused and full backend/frontend/migration checks; production browser acceptance remains a deployment gate.
+- [ ] Record review evidence, commit, push, pass CI, and fast-forward `main`.
+- [ ] Back up production, rehearse migration, build full image, remove source bind, deploy, and verify/rollback as required.
+
+## Review
+
+- Backend full pytest passed twice after dependency completion; final run exited 0.
+- Frontend Vitest 36/36, typecheck, and production build passed.
+- SQLite empty upgrade, downgrade to `d40609090002`, and re-upgrade to `e609200001` passed.
+- Compileall, Node syntax, migration parity, secret scan, and diff check passed.
+- Evidence is recomputed from stored raw fields and closes, bound to the exact daily-bar quality hash, and rejects same-upstream, incomplete-range, stale, or tampered inputs.
+
+---
+
+# QA-R Provider/Data Repair Plan — 2026-09-17
+
+## Goal
+
+Restore a qualified ETF decision-data path without weakening the data contract, inferring units, repairing splits by guesswork, or promoting non-realtime quotes. Preserve the current production deployment and work in this isolated worktree.
+
+## Work items
+
+- [x] Reproduce the production failure with deterministic fixture rows and provider fallback metadata.
+- [x] Trace EM failure → Sina fallback → missing/unknown units and discontinuity gate across bars, indicators, forecasts, and decision board.
+- [x] Define the smallest provider-side repair: only accept volume/amount when the documented unit contract is verified; otherwise keep price-only and block dependent outputs.
+- [x] Add regression tests for qualified Sina quantity fields, missing quantity, unit mismatch, unexplained price discontinuity, and fallback audit status.
+- [x] Implement the approved minimal fix and keep all fail-closed gates intact.
+- [x] Run focused tests, full pytest, compileall, JS checks, Vue tests/typecheck/build, and QA-R Playwright suites.
+- [x] Rebuild the production image, verify source/tree/digest, back up PostgreSQL, deploy with rollback point, and verify scheduler/data outcomes.
+- [x] Update the production receipt and data-freshness evidence; do not claim complete realtime qualification unless all gates pass.
+
+## Acceptance gates
+
+- Bars may be stored only with a documented source/unit contract and continuity evidence.
+- Indicators/forecasts remain blocked for unknown units or unexplained price gaps.
+- Decision board must expose partial/stale reasons and never derive an actionable state from degraded inputs.
+- Production rollback remains available from the pre-repair PostgreSQL backup and prior Compose/release.
+
+---
+
+# v0.5.0 Local Validation Execution Plan
+
+## 2026-09-12 全面落地审核（只读业务代码）
+
+- [x] 核对原工程脏区、接收分支、远端 SHA、生产挂载及 CI 实际结果。
+- [x] 复现新浪单位资格校验的同比例缩放盲点，核对收盘调度截止冲突。
+- [x] 并行复核数据/指标/预测、Codex/AI/账户、调度/部署/前端（Luna xhigh）；父任务复核关键结论。
+- [x] 输出 docs/CODE_AUDIT_BLOCKERS_20260912.md；纯函数复现单位盲点、15:02盘后窗口、Codex目录冲突和14:30未来报价/非交易日门禁缺口。远端双CI失败及生产运行状态已只读核验。
+
+## Multi-user security remediation (2026-09-01, active)
+
+### Browser identity / regression / deployment handoff repair (2026-09-02, in progress)
+
+- [ ] RED: prove a valid legacy Bearer can use only compatible safe reads and is never reported as a browser identity by `/api/auth/me`.
+- [ ] RED: make the global review mutation use an enrolled database-admin session, retain an explicit Bearer 401 assertion, and isolate the SSE/backfill rows from suite-wide state.
+- [ ] GREEN: expose a current-admin self-disable action only when a second active admin is listed; preserve the backend last-admin guard and clear the revoked browser session after self-disable.
+- [ ] GREEN: replace obsolete production/browser single-account configuration instructions with database-auth bootstrap requirements; distinguish historical migration evidence from current head `2c3d4e5f6a7b`.
+- [ ] Review: run focused suites, then full pytest sequentially with the project venv, plus compileall, Node syntax, and diff checks; record explicit exit codes. No commit/deploy.
+
+### CLI / report-list consistency remediation (2026-09-02, in progress)
+
+- [x] RED: auth-disabled `holding-set` was rejected for missing `--username`; an owned external `.json` was listed (`2 failed`, exit 1).
+- [x] GREEN: `holding-set`/`holding-delete` now use `user_id=NULL` only with `Settings.auth_enabled=false`; auth-enabled mode rejects missing/disabled accounts and uses the explicit active owner's ID. Direct regression also proves another active user cannot delete that owner's holding.
+- [x] GREEN: `GET /api/reports` now injects `Settings` and applies strict candidate resolution plus `relative_to(settings.reports_dir.resolve())`; it exposes only owned, safe, regular in-root `.html`/`.json` files after filtering.
+- [x] Review: final new regressions `2 passed` (exit 0); auth/ownership modules `42 passed, 1 skipped` (exit 0); sequential full pytest exit 0; `python -m compileall -q backend/app`, `node --check backend/app/static/app.js`, and `git diff --check` each exit 0. Only pre-existing third-party deprecation/CRLF warnings were emitted. No commit/deploy.
+
+### Report artifact stale-file regression (2026-09-02, complete)
+
+- [x] RED: temporary restoration of the prior SQL-limited list returned the newer `unsupported-system.txt` instead of the valid JSON (`test_multi_user_ownership.py -k stale`, exit 1).
+- [x] GREEN: retain owner/session filtering; only expose existing `.html`/`.json` artifacts under their safe basename, and apply `limit` after filtering valid rows.
+- [x] Review: focused stale regression passed (1 passed/9 deselected, exit 0); sequential ownership/API/optimizer/ETF-1430 suites passed (31 passed, exit 0); `compileall`, Node syntax, and `git diff --check` each exited 0. No commit/deploy; diff check emitted only existing CRLF notices.
+
+- [x] RED: prove shared signal persistence is independent of all user holdings.
+- [x] RED: prove members and legacy Bearer cannot perform global mutations while admins can.
+- [x] GREEN: isolate shared signal generation and add explicit active-admin authorization for global controls.
+- [x] GREEN: bind private reports/SSE/optimizer to an authenticated owner; make ownership migration portable and rollback-safe.
+- [x] Review: run focused tests, migration checks, compileall, Node syntax, and diff check; record outcomes.
+
+### Follow-up security/UI review fixes (2026-09-02, complete)
+
+- [x] RED/GREEN: bind each long-lived SSE iteration to its original database session and stop after revocation, expiry, reset, or account disable.
+- [x] RED/GREEN: serialize active-admin disable checks through the existing database guard and prove a two-session race retains one active admin.
+- [x] RED/GREEN: render the current authenticated identity and admin-only account lifecycle controls without exposing credentials or controls to members.
+- [x] Review: focused suites passed separately: auth 21 passed/1 safe PostgreSQL skip, ownership 13 passed, password/static 27 passed, API 11 passed, and migration/optimizer/ETF1430 9 passed. The single combined-order run has one pre-existing report-artifact 404 after the ownership suite; `test_api.py` passes alone. Compileall, Node syntax, and diff checks are recorded below.
+
+### Multi-user remediation review (in progress)
+
+- [ ] Final spec review: prove an admin may self-disable only while another active admin remains, and that the current database session is revoked.
+- [ ] Final spec review: make blank login credentials reach the generic 401 path, then update migration-head references without erasing historical chain context.
+- [ ] Final spec review: run focused auth/ownership/API/static/migration checks plus compileall, Node syntax, and diff validation; record exact exit codes.
+
+- P0 focused red/green: `test_global_mutations_require_an_active_admin_session` first failed because a member received 200 from `POST /api/demo/load`; after explicit `require_admin`, it and `test_shared_signal_refresh_is_independent_of_every_users_holdings` pass (2 passed).
+- P0 implementation: scheduled shared refresh no longer queries `Holding` or persists holding/current-weight evidence or input hashes; user overlays remain a read-path concern. Global mutation gates cover decision-board refresh, Demo load/reset, board fund management, runtime settings/probe, task execution/history, and global analysis review mutations/reads.
+- Current checks: `python -m compileall -q backend/app`, `node --check backend/app/static/app.js`, and `git diff --check` passed. Existing line-ending warnings were emitted only.
+- P1 completion: database-backed lifecycle is admin-only (`/api/admin/users` and hidden-prompt `auth-*` CLI), disable/reset revoke all sessions, and disabled-session reactivation requires a fresh login. Auth-enabled reports/downloads/SSE require a database session; per-user reports, ETF 14:30 artifacts, and portfolio optimization reports carry `user_id`, while deliberate auth-disabled/system artifacts remain `NULL` and are never exposed to authenticated users.
+- P1 verification: `test_multi_user_auth.py`, `test_multi_user_ownership.py`, `test_migration_schema_parity.py`, `test_portfolio_optimization.py`, `test_etf_1430_workbench.py`, and `test_api.py` passed in the focused rerun (one existing skip). The migration test also creates two owners for one instrument and proves downgrade to `0a9b1c2d3e4f` aborts. Ruff on changed P1 files, compileall, Node syntax, and `git diff --check` passed.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: use `subagent-driven-development` task by task. Every task is implemented or executed by a fresh Luna/xhigh agent, followed by a fresh specification reviewer and then a fresh code-quality/evidence reviewer. The main agent controls scope, resolves blockers, integrates results, and performs final verification.
+
+**Goal:** Audit and validate the current v0.5.0 ETF/LOF research system using the actual local working tree, then produce an evidence-backed `deployment_reports/local-v050-validation.md` without exposing secrets or overstating Mock/unavailable results.
+
+**Architecture:** Treat all existing tracked modifications as owner work and preserve them. Validation is read-only except for this task ledger, generated local artifacts, and the final report; any code fix must first reproduce the failure with a test and follow red-green-refactor. External/provider outputs are untrusted and must be classified by provenance, freshness, and availability.
+
+**Tech stack:** Python 3, FastAPI, SQLAlchemy, pytest, Node.js syntax checking, PowerShell, optional Bash, Tushare/AKShare provider adapters, deterministic indicator/backtest/forecast services.
+
+---
+
+## Safety and provenance boundary
+
+- [x] Confirm repository root: `E:\project\ETF-Fund-Analysis`.
+- [x] Confirm HEAD: `ae755dfd89549abeaf772ac8c34152e80391210d` (`feat: add v0.5.0 indicator and strategy engine`).
+- [x] Confirm current branch: `main` tracking `origin/main`.
+- [x] Detect a dirty working tree and preserve all pre-existing tracked/untracked content.
+- [x] Verify the dirty tree includes substantive user changes in 16 files in addition to line-ending noise.
+- [x] Do not reset, clean, stash, checkout, stage, commit, pull, push, or rewrite owner files.
+- [x] Do not read or emit `.env`, tokens, cookies, passwords, account data, public IPs, or signed URLs.
+- [x] Only report whether `TUSHARE_TOKEN` is configured or missing; never print its value.
+- [x] Never label daily-close fallback as realtime, Mock as real, or `not_calibrated` as calibrated.
+- [x] Do not modify strategy thresholds/formulas merely to improve validation output.
+
+## Task 1: Repository and implementation audit
+
+**Inputs:** `AGENTS.md`, `STATUS.md`, `HANDOFF.md`, `VALIDATION.md`, `CODEX_DEPLOYMENT_TASKS.md`, `README.md`, `docs/ARCHITECTURE.md`, `docs/STRATEGY_AND_VALIDATION.md`, `docs/GITHUB_RESEARCH.md`, the eight core service/source files named in the handoff, related tests, `config/watchlist.json`, `config/strategy.json`, and `scripts/provider_smoke.py`.
+
+- [x] Read the required documents and source/tests without opening secret files.
+- [x] Record current provider, strategy, indicator, forecast, and schema/version identifiers.
+- [x] Reconcile stale 0.4.0 documentation claims against the v0.5.0 code and current working tree.
+- [x] Inspect the 16 substantive dirty files and attribute them as pre-existing owner work.
+- [x] Inventory commands, outputs, report paths, and prerequisites for Tasks 2-6.
+- [x] Luna implementer/auditor self-review complete (`DONE_WITH_CONCERNS`: effective runtime is v0.4 and ablation is not wired).
+- [x] Luna specification review confirms full audit scope and no secret exposure.
+- [x] Luna quality/evidence review approves findings with required pre-execution fixes recorded below.
+
+### Task 1 durable evidence
+
+- Current HEAD is the requested v0.5 commit, but the actual dirty working tree reports app `0.4.0`, `signal-v0.4.0`, `indicator-v0.2.0`, and `similarity-v0.2.0`; runtime task/indicator wiring uses the v0.4 services.
+- v0.5 modules and direct strategy-engine tests exist, but the current task service does not register `backtest_ablation`; calling it through the current CLI reaches `UnknownTaskError`.
+- The 16 substantive pre-existing dirty paths are: `.gitignore`, `README.md`, `STATUS.md`, `THIRD_PARTY_NOTICES.md`, `VALIDATION.md`, `backend/app/core/config.py`, `backend/app/services/indicator_service.py`, `backend/app/services/task_service.py`, `backend/tests/test_backtest.py`, `backend/tests/test_indicators.py`, `backend/tests/test_pipeline.py`, `config/strategy.json`, `deploy/.env.production.example`, `docs/GITHUB_RESEARCH.md`, `pyproject.toml`, and `vendor/manifest.json`. This is path attribution only; author and intent are unknown.
+- `tasks/todo.md` is the only current-turn file at this checkpoint.
+- Existing repository reports are historical Mock/v0.4 artifacts and are not current validation evidence.
+- Baseline pytest isolates its SQLite database but not its report directory. Task 2 must set explicit temporary `DATABASE_URL` and `REPORTS_DIR` before imports.
+- Provider/live execution is gated pending regression-tested exception redaction plus explicit realtime and trade-calendar provenance. A smoke exit code of zero is not sufficient proof of execution-grade realtime data.
+- `FILE_MANIFEST.txt`, `SOURCE_INFO.json`, and example artifacts are stale relative to HEAD/current v0.5 files; they remain owner work and will be labeled, not silently regenerated.
+
+## Task 2: Complete local baseline verification
+
+**Commands:**
+
+```powershell
+pytest -q
+python -m compileall -q backend/app
+node --check backend/app/static/app.js
+```
+
+If Bash exists:
+
+```powershell
+bash -n deploy/aliyun/bootstrap_host.sh
+bash -n deploy/aliyun/deploy.sh
+bash -n deploy/aliyun/update.sh
+```
+
+Secret scanner:
+
+```powershell
+python codex/skills/fund-research/scripts/check_no_secrets.py .
+```
+
+- [x] Capture Python, OS, Node, Bash availability and exact pass/fail results.
+- [x] If a failure occurs, reproduce and diagnose before any fix; do not delete tests or weaken gates.
+- [x] Any required fix follows TDD and touches only the minimal files.
+- [x] Luna implementer self-review complete (`DONE_WITH_CONCERNS`: initial environment blocked; isolated rerun passed with one deprecation warning).
+- [x] Luna specification review passes after correcting DB-isolation and bytecode-attribution overclaims.
+- [x] Luna quality/evidence review passes; baseline uses an external Python 3.12 venv and explicit Git Bash.
+
+### Task 2A: Windows pytest fixture lifecycle fix (TDD)
+
+**Modify:** `backend/tests/conftest.py`
+
+- [x] **RED:** In a clean Python 3.12 venv and disposable working-tree copy, run `<venv-python> -m pytest -q`; all 10 test progress markers complete, then session teardown fails at `backend/tests/conftest.py:32` with `PermissionError: [WinError 32]` while unlinking SQLite.
+- [x] **RED evidence for report isolation:** The disposable copy's repository `reports/` receives two files because the fixture does not set `REPORTS_DIR` before settings import.
+- [x] Import `get_engine` with the existing delayed `app.db.session` import and dispose the engine in a `finally` block before unlinking `TEST_DB`.
+- [x] Create a session-owned `TemporaryDirectory` for reports before settings import, set `REPORTS_DIR` to it, and clean it in the same fixture teardown.
+- [x] Copy only the updated fixture into the existing isolated source copy and rerun `<venv-python> -m pytest -q`; observed: 10 passed, exit 0, no teardown error.
+- [x] Verify the source-copy repository `reports/` receives no new current-run files and the original repository's explicit status path list changes only at `backend/tests/conftest.py` plus `tasks/todo.md`.
+- [x] Re-run compileall, Node syntax, three explicit Git Bash syntax checks, and the scoped secret scanner in the isolated copy.
+- [x] Luna implementer self-review complete.
+- [x] Luna specification review passes.
+- [x] Luna quality/evidence review passes; one non-blocking defensive cleanup-order Minor remains documented.
+
+### Task 2 evidence
+
+- Allowed run root: `E:\Claude_allow\Download\etf-v050-baseline-20260828-010724-5733a2a2a57a4769bb639ada797e2cfb`.
+- RED: Python 3.12 dependencies installed in an external venv; 10 tests executed but session teardown failed with Windows `WinError 32` because the pooled SQLite engine retained the test DB handle. The RED run also wrote two reports inside the disposable source copy.
+- GREEN: fixture now sets a session temporary `REPORTS_DIR` before settings import and disposes the engine before deleting SQLite. Isolated rerun: `pytest -q` exit 0 with 10 passed; compileall, Node syntax, scoped secret scan, and all three explicit Git Bash `bash -n` checks exit 0.
+- Green teardown removed the SQLite DB and fixture report directory; no green `reports/` directory remained. Historical RED artifacts remain under the allowed run root for evidence.
+- Python 3.12.10 matches CI's major/minor. Local Node 24 differs from CI Node 22. Pytest emitted a non-failing Starlette/httpx deprecation warning.
+- Scoped secret scan excludes Git history, env files, vendor, reports, backups, caches, and is not proof those excluded areas are clean.
+
+## Task 3: Provider capability and ETF universe validation
+
+- [x] Inspect `scripts/provider_smoke.py` before execution for output/redaction safety.
+- [x] Check only whether `TUSHARE_TOKEN` is configured/missing.
+- [x] Run a non-persistent safe provider capability path where prerequisites permit; preserve only whitelisted provider, operation, success/failure, record count, latency, fields, and error class. Direct `provider_smoke.py` was not used because it can emit raw exception/degradation text.
+- [x] Build separate Tushare and AKShare capability matrices covering implemented instrument, daily-history, spot, news, and trade-calendar paths.
+- [x] Mark unavailable/configuration/single-run/unverified results literally; do not synthesize realtime capability.
+- [x] Inspect `config/watchlist.json`; report total/enabled counts, ETF/LOF counts, duplicates, required-field coverage, themes, markets, benchmarks, and obvious demo entries.
+- [x] Do not rewrite the universe in this phase.
+- [x] Luna implementer self-review complete (`DONE_WITH_CONCERNS`).
+- [x] Luna specification review passes after persisting the sanitized evidence JSON.
+- [x] Luna quality/evidence review passes with a No-Go for real provider ingestion/history validation.
+
+### Task 3 evidence
+
+- Sanitized artifact: `E:\Claude_allow\Download\etf-v050-baseline-20260828-010724-5733a2a2a57a4769bb639ada797e2cfb\evidence\provider-capability-sanitized.json`; SHA-256 `c556af27ab344eb899540e05e8d56e457ca061d05947e01a8592e34ed1fcf3ee`.
+- Tushare: `TUSHARE_TOKEN missing`; provider was not initialized or called, so permissions/capabilities are untested rather than failed.
+- AKShare single-run observation: instruments 5, daily bars 32, spot quotes 3 with 3 adapter-classified non-degraded records, news 0, calendar unverified. Spot latency was about 25.6 seconds.
+- Composite without Mock: instruments and spot succeeded; daily bars failed with `ProviderError`; news empty; calendar unverified. Independent AKShare daily success does not establish Composite stability.
+- The spot run occurred outside market hours; AKShare adapter assigns local call time and `is_realtime=True` to matched rows. It is not verified exchange-time freshness or stable realtime capability and cannot support actionable signals.
+- Universe: demo 10, enabled 9, disabled 1, ETF 9, LOF 1, SH 9/SZ 1 derived from suffix, no duplicate code/symbol, themes populated, benchmark 4/10, no explicit market field.
+- Real provider-backed ingestion and real history/indicator validation are blocked. Task 4 may continue only with isolated Mock/local deterministic evidence.
+- Known product gaps remain: raw exception strings in provider smoke/audit/log paths, no verified calendar provenance, and no safe persisted runner/command manifest. These require a separately approved design before behavior changes.
+
+## Task 4: Historical data quality and v0.5 indicator validation
+
+- [x] Identify available local database/artifacts without reading credentials or mutating production databases.
+- [x] Report per-instrument Mock history coverage, row counts, date bounds, duplicates, non-monotonic dates, missing/invalid OHLCV, future dates, non-positive prices, volume/amount anomalies, and provenance.
+- [x] State the real-five-ETF blocker and never substitute Mock proof: Tushare unconfigured and Composite daily failed in the single capability run.
+- [x] Run current deterministic indicator tests plus active v0.4 and direct dormant-v0.5 calculations for the named metric families; RPS app comparison remains unavailable/unverified.
+- [x] Cross-check public result-frame outputs against separate local NumPy/Pandas formulas and document tolerance/initialization differences; no external trusted indicator library was installed.
+- [x] Keep `volume_profile_approx` explicitly estimated, never real shareholder-chip data.
+- [x] Luna implementer self-review complete (`PASS_WITH_LIMITATIONS`).
+- [x] Luna specification review passes after adding direct RSRS and observed boolean counts.
+- [x] Luna quality/evidence review passes after converting helper comparisons to public-frame end-to-end checks and eliminating vacuous success paths.
+
+### Task 4 evidence
+
+- Sanitized artifact: `E:\Claude_allow\Download\etf-v050-baseline-20260828-010724-5733a2a2a57a4769bb639ada797e2cfb\evidence\task4-mock-history-indicators-sanitized.json`; SHA-256 `F9916837181E9792A3EA95336E6B3E96E57B1A3AF7367BD525052032E434359D`.
+- Mock bootstrap: 10 instruments, 9 enabled, 2709 bars; each enabled instrument has 301 rows from 2025-07-04 through 2026-08-28. Recorded duplicate/date/future/OHLC/volume/amount anomaly counts are zero; source is Mock only.
+- Active effective-v0.4 indicator chain created 9/9 snapshots. Direct dormant-v0.5 calculation succeeded for five Mock histories.
+- Public result-frame outputs match separate local reference formulas for OBV, MFI14, CMF20, ADX14/+DI/-DI, and RSRS beta/R2/raw/z-score at declared `1e-9`/`1e-8` tolerances; these are local duplicate-formula checks, not an external library validation.
+- Warm-up/default/computed counts are recorded as MFI 13/288, CMF 19/282, ADX-DMI 13/288, RSRS beta/R2/raw 17/284, z-score 46/255. Quality review notes these counts are recorded but not runtime-asserted in the harness (Minor).
+- RPS closed-form reference self-check passes but no current public app comparison exists; RPS remains `UNVERIFIED`. `volume_profile_approx` is estimated and the named profit metric is unavailable.
+- Focused indicator/strategy-engine tests: 3 passed. All Task 4 conclusions remain Mock-only; real provider validation is blocked and forecast status remains `not_calibrated`.
+
+## Task 5: Rotation, ablation, and forecast validation
+
+- [x] Determine safe local task invocation and database/report isolation before execution.
+- [x] Run `backtest_rotation` and `validate_forecasts`; record current `backtest_ablation` as `UnknownTaskError` and directly exercise dormant v0.5 ablation only as module evidence.
+- [x] Capture Mock provenance, input window/universe, output artifact paths/hashes, and failures.
+- [x] For rotation, verify `decision_at=close_t`, `execution_at=open_t_plus_1`, feature dates, lot sizes, and Mock provenance; fees/slippage/hysteresis/caps/market gate are source+config evidence rather than exhaustive per-trade assertions.
+- [x] For ablation, compare all four actually implemented variants under the same observed non-factor controls/execution engine; answer whether `full_v050` beats `momentum_baseline`. Do not claim cryptographically identical inputs because dataset/effective-weight hashes are absent.
+- [x] For forecast validation, report 1/5/20-day `directional_accuracy`, Brier, MAE, 80% interval coverage, calibration bins, samples, and `not_calibrated` state.
+- [x] Distinguish Mock engine execution proof from real performance evidence.
+- [x] Luna implementer self-review complete.
+- [x] Luna specification review passes after exact metric naming, turnover deltas, and dormant-service semantics were corrected.
+- [x] Luna quality/evidence review passes for bounded `MOCK_ONLY_ENGINE_EXECUTION_PROOF`; report wording fixes are recorded below.
+
+### Task 5 evidence
+
+- Sanitized summary: `E:\Claude_allow\Download\etf-v050-baseline-20260828-010724-5733a2a2a57a4769bb639ada797e2cfb\evidence\task5-mock-backtest-forecast-sanitized.json`; SHA-256 `1335de0015bffa07bc21baf3c319a71f1b368b9f7acae94af7c092cf661fcb3b`.
+- Current effective-v0.4 rotation (Mock): 36 decisions, 134 trades, total return -9.6336%, benchmark -22.1640%, excess +12.5304 percentage points, maximum drawdown -10.7584%, Sharpe -2.3948, turnover 11.6597x. All 36 decisions pass close-t feature timing and t+1-open execution; all trades use 100-share lots.
+- Current `backtest_ablation` task is unavailable and returns `UnknownTaskError`.
+- Direct dormant `RotationBacktestV05Service` uses `strategy_config_version=signal-v0.4.0` and is not sealed/runtime-wired v0.5. Four variants run; `full_v050` loses `momentum_baseline` on total return, Sharpe, maximum drawdown, and turnover. Turnover deltas versus baseline are 0.0000, +1.1707, +1.2976, and +0.3871 for baseline/volume-flow/breakout-structure/full respectively. Requested A-H variants are not implemented.
+- Common-input wording is limited to the same observed non-factor controls and execution engine with factor weights varied; no dataset hash or serialized effective-weight map proves cryptographic identity.
+- Forecast Mock diagnostics: horizons 1/5/20 have samples 225/216/189; directional accuracy 48.89%/42.59%/48.68%; 80% interval coverage 78.67%/76.85%/69.31%; Brier 0.2530/0.2652/0.2837. Per-instrument samples are sparse (25/24/21); no simple forecast baseline or significance analysis exists. Model `similarity-v0.2.0` remains `not_calibrated` for all 27 snapshots.
+- Backtest realism remains bounded: no full runtime assertions for caps/fees/slippage/hysteresis and no suspension/no-volume/limit-up-down/exchange-specific lot/LOF premium/cash-yield/independent-engine reconciliation.
+
+## Task 6: Validation report
+
+**Create:** `deployment_reports/local-v050-validation.md`
+
+- [x] Include Git commit/branch/dirty-boundary, Python version, OS, tests, Tushare matrix, AKShare matrix, universe counts, history coverage, anomalies, indicator validation, rotation backtest, ablation, forecast validation, incomplete items, and 3-5 prioritized next steps.
+- [x] Answer the ten first-stage questions from the handoff using only current evidence.
+- [x] Redact secrets and omit public IPs/account identifiers/signed URLs.
+- [x] Label every conclusion as confirmed, partial, unavailable, Mock-only, or unverified where appropriate.
+- [x] Do not claim provider stability from one smoke run or local success as ECS/production proof.
+- [x] Luna report author self-review complete.
+- [x] Luna specification review passes after metric availability, rotation/ablation completeness, forecast count, and absent-vs-null semantics were corrected.
+- [x] Luna quality/evidence review passes after final wording hardening.
+
+## Task 7: Final controller verification and review
+
+- [x] Re-run `pytest -q`.
+- [x] Re-run `python -m compileall -q backend/app`.
+- [x] Re-run `node --check backend/app/static/app.js`.
+- [x] Re-run Bash syntax checks if Bash is available.
+- [x] Re-run secret scan and ensure the final report contains no sensitive values.
+- [x] Verify exact changed-file attribution using an explicit file list, not broad ownership assumptions.
+- [x] Dispatch final Luna/xhigh reviewer across the full task and resolve all Critical/Important findings.
+- [x] Add a Review section below with commands, evidence, limitations, and final status.
+
+## Review
+
+### D3 release/docs/validation review (2026-08-29)
+
+- Changed only the D3-owned semantic paths in this section: `backend/app/core/config.py`, `pyproject.toml`, `deploy/.env.production.example`, `deploy/Caddyfile.example`, `deploy/nginx.conf.example`, `README.md`, `QUICKSTART.md`, `docs/ARCHITECTURE.md`, `docs/IMPLEMENTATION_MATRIX.md`, `STATUS.md`, `HANDOFF.md`, and this ledger. Other dirty snapshot paths remain pre-existing owner work; no stage/commit/reset/clean/push was performed.
+- Release assertions: `Settings(_env_file=None).app_version == 0.6.0`; `pyproject.toml` package version is `0.6.0`; `APP_VERSION=0.6.0` is in the production example. `config/strategy.json` remains `signal-v0.4.0`; no strategy/indicator/forecast formula or version was changed. `OCR_MAX_IMAGE_BYTES` is accepted with legacy `OCR_MAX_BYTES` compatibility.
+- `E:\project\ETF-Fund-Analysis\.venv\Scripts\python.exe -m pytest -rA`: **323 passed, 2 skipped, 14 warnings, exit 0**. Skips are host symlink privilege limitations; warnings are existing Starlette/httpx and Python 3.12 SQLite datetime deprecations.
+- `python -m compileall -q backend/app`: exit 0. `node --check backend/app/static/app.js`: exit 0.
+- `with_server.py --help` was run first from `C:\Users\Admin\.codex\skills\webapp-testing\scripts\with_server.py` (the worktree has no helper). Git Bash/WSL was unavailable: WSL relay reported `/bin/bash` missing and `C:\Program Files\Git\bin\bash.exe` was absent. Shell syntax is therefore a deployment gate.
+- `docker` exists, but `docker compose config` was not run with a generated `.env`: Compose requires the server-local `.env` referenced by services, and no `.env` or secret was created/read. This is an explicit Compose gate; no image build or network/model download occurred.
+- Mock bootstrap used a disposable SQLite/report root and `MARKET_PROVIDER=mock`, `AUTH_ENABLED=false`, lookback 180: succeeded; 10 instruments, 1,170 bars, 9 indicator snapshots, 9 degraded/mock quotes, six configured context cards with zero eligible proxy requests, and a generated report. Forecast failures due intentionally short history were retained as non-calibrated/unavailable.
+- Mock HTTP on isolated `127.0.0.1:38123` through `with_server.py`: `/api/health` returned version `0.6.0`, `/api/bootstrap` returned six context cards and nine instruments; helper stopped the server cleanly.
+- Headless Chromium smoke used the locally existing Playwright-capable Python 3.12 interpreter with a generated nonsecret local token, isolated port/temp DB/reports/OCR environment, and Mock provider. After attempting `networkidle` (the app keeps an authenticated SSE stream open), assertions passed: six context cards, code-first identity, exact distinct `FORECAST · 非实际结果` labels, PORTFOLIO INPUT dialog and image accept types, mobile tabs, console errors 0. No upload or provider call was made; server/browser cleaned up.
+- Secret scan: `check_no_secrets.py .` returned two fixture-only matches at `backend/tests/test_api.py:164` (`market-context-test-token`) and `backend/tests/test_news_analysis.py:137` (`test-key-not-a-real-secret`); both are pre-existing test literals, not credentials. No `.env`, token, cookie, password, account number, or signed URL was read or emitted.
+- Real PostgreSQL, Tushare/AKShare/news/OpenAI endpoint qualification, ECS/HTTPS, real Paddle Python 3.12 wheel/model and `paddle-local-v1` manifest, six proxy qualification, forecast calibration, and production backup/restore remain gates. Final D3 status: **DONE_WITH_CONCERNS** (implementation and local/Mock evidence complete; deployment and real-provider evidence intentionally pending).
+- Controller follow-up (2026-08-29): the two environment gates above were closed from the main checkout — `bash -n` passed on `deploy/aliyun/bootstrap_host.sh`, `deploy/aliyun/deploy.sh`, `deploy/aliyun/update.sh`, `scripts/backup_postgres.sh`, `scripts/restore_postgres.sh`, `scripts/smoke_http.sh`; `docker compose config` passed with a throwaway placeholder `POSTGRES_PASSWORD` (temp `.env` deleted, no secret created). Full pytest re-run independently: 323 passed / 2 skipped, exit 0; Alembic full-chain upgrade → downgrade base → upgrade passed (head `b3c4d5e6f7a8`). QUICKSTART backup/migration order corrected to backup-first per spec review.
+
+### Fresh controller verification
+
+- Verification copy: `E:\Claude_allow\Download\etf-v050-baseline-20260828-010724-5733a2a2a57a4769bb639ada797e2cfb\final-controller-20260828-041026-2f32cf89664e4734baef7b0861dbdb47\source-copy-final`.
+- Python 3.12 isolated editable install: exit 0.
+- `pytest -q`: exit 0, 10 passed; one non-failing Starlette/httpx deprecation warning.
+- `python -m compileall -q backend/app`: exit 0.
+- `node --check backend/app/static/app.js`: exit 0.
+- Explicit Git Bash syntax checks for `bootstrap_host.sh`, `deploy.sh`, and `update.sh`: all exit 0.
+- Scoped working-tree secret scanner: exit 0, `no obvious committed secrets found`; its exclusions remain documented and it is not a Git-history/env-file proof.
+- Final report: 219 lines, 17 required sections, forbidden secret/URL/IP assignment pattern count 0, SHA-256 `DBA42A6AC1FB25AC92B1CACE921174A177F811C191C1AFFB5870B1D589C5AEFC`.
+- Approved evidence hashes rechecked: Provider `C556AF27AB344EB899540E05E8D56E457CA061D05947E01A8592E34ED1FCF3EE`; Task 4 `F9916837181E9792A3EA95336E6B3E96E57B1A3AF7367BD525052032E434359D`; Task 5 `1335DE0015BFFA07BC21BAF3C319A71F1B368B9F7ACAE94AF7C092CF661FCB3B`.
+- Original repository status-path list before/after final verification: delta 0.
+
+### Exact current-turn file attribution
+
+- Modified: `backend/tests/conftest.py` — Windows SQLite engine disposal and test report isolation only.
+- Created: `tasks/todo.md` — this execution ledger.
+- Created (Git-ignored by project rule): `deployment_reports/local-v050-validation.md` — final validation report.
+- The 16 other substantive dirty paths listed in Task 1 pre-existed this turn and remain owner work; no author or intent is inferred.
+
+### Final review and status
+
+- Fresh final Luna/xhigh global review found no Critical or Important issue. One non-blocking defensive teardown Minor remains: if `get_engine().dispose()` itself raises, later cleanup may be skipped.
+- Final result: `PARTIAL / NOT READY FOR REAL STRATEGY SEALING OR PRODUCTION PROVIDER CLAIMS`.
+- Completed scope: repository audit, fresh local baseline, safe single-run Provider capability observation, demo-universe audit, Mock history/indicator validation, Mock rotation/direct dormant ablation/forecast validation, and reviewed report.
+- Blocked/unverified scope: Tushare permissions, stable Composite history, exchange-time realtime freshness, five-real-ETF quality cross-check, real-data indicator validation, RPS app comparison, calibrated forecasts, A-H ablation, complete transaction constraints, and independent second-engine reconciliation.
+
+---
+
+# v0.6.0 Multi-Model, Market Context, and Portfolio OCR Active Plan
+
+**Isolation:** `E:\Claude_allow\Download\ETF-Fund-Analysis-worktrees\multi-model-market-context-ocr` on `codex/multi-model-market-context-ocr`.
+
+**Approved design:** `docs/superpowers/specs/2026-08-28-multi-model-market-context-ocr-design.md`.
+
+**Implementation plans:**
+- `docs/superpowers/plans/2026-08-28-analysis-gateway.md`
+- `docs/superpowers/plans/2026-08-28-market-context.md`
+- `docs/superpowers/plans/2026-08-28-portfolio-ocr.md`
+- `docs/superpowers/plans/2026-08-28-dashboard-integration.md`
+
+## Baseline
+
+- [x] Current owner working snapshot copied without secrets into the isolated worktree.
+- [x] Baseline `pytest -q`: 10 passed; one existing Starlette/httpx deprecation warning.
+- [x] Baseline compileall and Node syntax: exit 0.
+- [x] No implementation task has started before plan completion.
+
+## Subagent-driven task gates
+
+- [x] A1 contracts/config: implementer self-review, spec review, quality review.
+- [x] A2 direct adapters/gateway: implementer self-review, spec review, quality review.
+- [x] A3a persistence/review records: implementer self-review, spec review, quality review. PostgreSQL trigger smoke remains a deployment environment gate.
+- [x] A3b1 news/signal/Dashboard integration: implementer self-review, spec review, quality review.
+- [x] A3b2 review API/task integration: implementer self-review, spec review, quality review.
+- [x] B1 market registry/contracts/schema: implementer self-review, spec review, quality review.
+- [x] B2a market registry sync/provider observations: implementer self-review, spec review, quality review.
+- [x] B2b market task/scheduler/payload: implementer self-review, spec review, quality review.
+- [x] C1 OCR contracts/image validation/schema: implementer self-review, spec review, quality review.
+- [x] C2 OCR service/private API: implementer self-review, spec review, quality review.
+- [x] D1 market/identity/forecast UI: implementer self-review, spec review, quality review.
+- [x] D2 Portfolio OCR review UI: implementer self-review, spec review, quality review.
+- [x] D3 release/docs/end-to-end: implementer self-review, spec review, quality review.
+- [x] Final global review has no open Critical or Important issue. (Controller-dispatched independent reviewer, two rounds; see "Final global review evidence" below. Not the Luna runtime — same gate, different reviewer.)
+- [x] Main controller verification and exact file attribution complete. (Controller independently re-ran full pytest, Alembic full-chain roundtrip, `bash -n` on 6 scripts, `docker compose config` with placeholder env, compileall, `node --check`; D3 file attribution verified against actual diffs by the spec reviewer.)
+
+### Final global review evidence (2026-08-29)
+
+- Round 1 (controller-dispatched independent reviewer over the full uncommitted tree): VERDICT PASS, no Critical. Findings: 1 Important — `ReportService.generate()` never passed `market_context` to `report.html.j2`, so generated reports always rendered the six placeholder cards; Minors — scheduler `refresh_market_context` did not catch `TaskBusyError` (advisory-lock starvation), OCR `_resolve_line` ran `_instrument_maps` per row, `task-snapshots/` not gitignored, `!deploy/.env.production.example` negation dropped, `canonical_json` path-lookalike pattern overly broad, analysis orphan-flag validation absent.
+- Fix round (fix agent): report render wired via `market_context=payload.get("market_context") or []` with new discriminating test `test_report_service_generation_wires_bootstrap_market_context` (verified to fail without the fix); scheduler catches `(TaskExecutionError, TaskBusyError)`; `_instrument_maps` hoisted out of the candidate-row loop (`_resolve_line(by_symbol, by_name, ...)`); `.gitignore` restored negation + added `task-snapshots/`. Gates after fixes: full pytest 324 passed / 2 skipped exit 0, compileall clean, `node --check` clean.
+- Round 2 (same reviewer): all five fixes verified OK, no regressions, VERDICT PASS. Test isolation sound (rollback in `finally`, artifact under ignored path).
+- Deferred non-blocking follow-ups (recorded deliberately, not lost): (1) `backend/app/utils/canonical_json.py` path-lookalike pattern rejects ordinary `A/B` strings in free-text fields — consistent with DB checks, blunt but safe; narrow in a future release if operator notes need slashes. (2) `backend/app/core/config.py` analysis orphan flags (e.g. `ANALYSIS_CODEX_ENABLED=true` without `ANALYSIS_ENABLED`) are silently ignored rather than rejected; add fail-closed validation in a future release.
+
+### D3 release/docs/validation execution checklist
+
+- [x] Set authoritative application/package release to `0.6.0`; retain strategy/indicator/forecast versions.
+- [x] Document one-primary analysis configuration, market-context defaults, OCR operator/deployment gates, and no-actionable-data boundaries.
+- [x] Align production env example, reverse-proxy upload limits, migration/rollback order, and Docker Paddle behavior.
+- [x] Run isolated SQLite migration, Python/JS checks, shell syntax, Compose/secret checks, Mock HTTP, and browser smoke where dependencies permit.
+- [x] Record exact commands/results/limitations and explicit D3 file attribution in the review below.
+
+### B2a review evidence
+
+- [x] Disabled/unverified registry rows remain visible but never expose historical snapshots as current observations.
+- [x] Eligible rows without a successful snapshot are explicitly unavailable; registry verification remains separate provenance.
+- [x] Registry order reconciliation is safe under immediate uniqueness constraints, including historical rows and configured order `10000`.
+- [x] Observations bind to `source_symbol`; A-to-B symbol changes preserve A history without relabeling it as B.
+- [x] Mock observations remain explicitly unverified/degraded/non-actionable; non-Mock unverified observations are rejected.
+- [x] Composite capability-unavailable traces remain `unsupported`; provider failures are sanitized and cannot leak raw exception text.
+- [x] SQLite/PostgreSQL conflict-safe inserts preserve snapshot idempotency and the outer transaction.
+- [x] ORM and Alembic constraints/unique keys are aligned; clean SQLite upgrade/downgrade/upgrade passed.
+- [x] Controller verification: `test_market_context.py` 49 passed; full suite 236 passed; compileall, Node syntax, scoped Ruff, and diff check passed.
+- [x] Fresh Luna/high specification and quality reviews found no open Critical or Important issue.
+
+### B2b review evidence
+
+- [x] `refresh_market_context` task, coherent run/event identity, private endpoint, bootstrap payload, and partial-pipeline behavior are implemented.
+- [x] Scheduler isolates market-context failures, continues independent tasks, and throttles by last terminal attempt without relabeling failure as success.
+- [x] Current-run counts come from an immutable service-owned outcome; no Provider monkeypatching or historical-count leakage remains.
+- [x] Forecast provenance uses authoritative stored fields only; unsupported `data_cutoff` remains null and diagnostics cannot spoof it.
+- [x] Existing v0.5 signal/backtest wiring, `backtest_ablation`, and indicator assertions were restored and regression-tested.
+- [x] Controller verification: focused B2b tests 68 passed; full suite 252 passed; compileall, Node syntax, scoped Ruff, and diff check passed.
+- [x] Fresh Luna/high specification and quality reviews found no open Critical or Important issue.
+
+### C1 review evidence
+
+- [x] PNG/JPEG/WebP validation enforces MIME/magic/decode/bytes/dimensions/pixels/trailing data and does not mutate Pillow globals.
+- [x] Paddle remains optional, local-only, manifest/hash bound, executed in a killable spawned process with bounded output and hard timeout cleanup.
+- [x] Image metadata is revalidated at the adapter boundary; forged `ValidatedImage` instances cannot bypass decoding and hash checks.
+- [x] Import-session/candidate persistence excludes image bytes, raw OCR, user filenames, and sensitive fields; safe text is validated on bind/read and by portable structural constraints.
+- [x] SQLite-specific NUL triggers cover ORM `create_all` and Alembic; PostgreSQL text NUL rejection and dialect-specific backslash DDL are documented/compiled.
+- [x] Opaque tokens, consent/terminal/selection state coherence, indexes, defaults, TypeDecorators, ORM and migration parity are covered.
+- [x] Controller verification: C1 37 passed/2 platform skips; full suite 289 passed/2 skips; SQLite Alembic roundtrip, PostgreSQL DDL compile, compileall, Node, Ruff, and diff check passed.
+- [x] Real PostgreSQL constraints and real Paddle package/model qualification remain deployment gates; no network/model download occurred.
+- [x] Fresh Luna/high specification and quality reviews found no open Critical or Important issue.
+
+### C2 review evidence
+
+- [x] Private multipart upload, review/edit/reject, confirm/cancel, expiry cleanup, and consent-only cloud status endpoints are implemented with no image retrieval route.
+- [x] Durable `processing` precedes file creation; terminal state commits precede deletion; cleanup retries until `storage_key` is cleared.
+- [x] Mutations use service-owned sessions and fail closed on caller transactions or in-memory SQLite; CAS states protect edit/confirm/cancel/expiry races.
+- [x] Unknown exchanges and non-exact names never silently resolve; bbox OCR cells are assembled by row and x-order without numeric pollution.
+- [x] Holding writes occur only after explicit confirmation through `HoldingService.upsert`, in deterministic code order, with idempotent confirmation.
+- [x] Storage uses contained opaque token directories and fail-closed 0700/0600 permission checks; no raw screenshot/OCR/path is exposed.
+- [x] Controller verification: full suite 318 passed/2 platform skips; Alembic roundtrip/current head, compileall, Node, Ruff, diff, and targeted secret scan passed.
+- [x] Fresh Luna/high specification and quality reviews found no open Critical or Important issue.
+
+### D1 review evidence
+
+- [x] Six market-context cards remain visible through deterministic fallback merge; no proxy code or observation is fabricated.
+- [x] Code-first identity and today-change-first observed hierarchy are implemented across Dashboard and report.
+- [x] Forecasts use a distinct `FORECAST · 非实际结果` surface with null-safe provenance and explicit calibration state.
+- [x] Quote `is_mock`, freshness, source and timestamps are displayed per observed item; Mock/degraded cannot appear as verified normal state.
+- [x] Dynamic UI/report text is escaped; report autoescape and minimal-payload rendering are covered.
+- [x] Responsive report/table behavior, explicit Asia/Shanghai time handling, bars cancellation/debounce, modal/keyboard/focus accessibility and contrast are implemented.
+- [x] Controller verification: focused D1 11 passed; full suite 321 passed/2 skips; Node, compileall, Ruff and diff check passed.
+- [x] Fresh Luna/high specification and quality reviews found no open Critical or Important issue.
+
+### D2 review evidence
+
+- [x] Portfolio screenshot upload uses FormData without multipart `Content-Type` corruption and keeps Authorization header-only.
+- [x] Candidate review exposes only allowed fields, code-first alternatives, confidence/status warnings, explicit edit/reject/confirm/cancel and no raw/path/hash data.
+- [x] Import generation, AbortControllers, serialized PATCH queue, pending-save flush and durable cancel prevent stale async responses and lost edits.
+- [x] Client numeric bounds/precision mirror backend validation; 0/decimals are preserved and unresolved/duplicate/error states block confirmation.
+- [x] Lock/auth generation clears sensitive in-memory review state; no import state is persisted to localStorage; cloud review remains disabled with no egress.
+- [x] Mobile tabs remain accessible; modal, live status, focus, reduced-motion and responsive candidate layout are implemented.
+- [x] Controller verification: test_api 10 passed; full suite passed with 2 platform skips; Node, compileall, Ruff and diff check passed.
+- [x] Fresh Luna/high specification and quality reviews found no open Critical or Important issue.
+
+## Authorization and provenance
+
+- [x] No automatic commit, push, PR, provider credential read, production DB write, broker action, or threshold tuning is authorized.
+- [x] Pre-existing snapshot differences remain owner work; each task records only its explicit file list and semantic diff.
+- [x] Models/agents remain text-analysis candidates with no tools or numeric decision authority.
+
+---
+
+# FTShare + Safe Demo Active Plan
+
+- [x] Current staged owner snapshot copied into isolated worktree without `.env`, databases, `.zcode`, or reference screenshots.
+- [x] A. Configure and verify FTShare MCP plus pinned user-level Skill; no business DB access.
+- [x] B. Implement disabled-by-default FTShare Provider, qualification script, provider ordering, audit and contract tests.
+- [x] C. Implement isolated DemoService/API; fix 30-calendar-day root cause and status semantics.
+- [x] D. Implement system-page demo/free/complete UX, provider probe matrix and source badges.
+- [x] E. Update docs/config examples, run full regression, live read-only FTShare qualification, browser smoke and final review; schema parity is now green.
+- [x] Every implementation task has a fresh delegated implementer (Luna/Terra high as requested), specification review and quality review with no open feature Critical/Important issue.
+- [x] No real credential read, production DB write, broker action, or Mock-to-production fallback; commit/push only after Jovi's explicit authorization.
+
+## Task B implementation checklist (FTShare provider)
+
+- [x] RED: add isolated MockTransport contract tests for settings, mappings, validation, errors, and factory order.
+- [x] GREEN: implement disabled-by-default FTShare settings, fixed-endpoint provider, factory ordering, and qualification probe.
+- [x] Verify focused tests, full pytest, compileall, node check, and diff check; record evidence below.
+
+### Task B review
+
+- Focused FTShare contract tests: 63 passed; market-context focused suite and full pytest also passed (2 existing platform skips).
+- Follow-up hardening covers exact row symbol/code matching, exact provenance allowlist, strict Beijing ISO timestamp/order/date parsing, explicit unadjusted bars, streaming response byte bounds, strict pagination parsing, production base URL policy, no Mock in new composite chains, sanitized factory/transport errors, integer share volumes, computed bounded pct units, unknown qualification pagination, and idempotent scheduler/provider lifecycle closure.
+- `python -m compileall -q backend/app scripts/qualify_ftshare.py`: passed; `node --check backend/app/static/app.js`: passed.
+- `git diff --check`: no FTShare/task-B whitespace errors; an existing owner change in `backend/app/static/app.css` reports a blank EOF line.
+- Live FTShare qualification was run read-only after implementation and exits nonzero while daily/spot evidence is unavailable; the checked report remains unqualified and FTShare disabled.
+
+### Task C review
+
+- [x] DemoService uses a process-local SQLite `StaticPool` and a dedicated MockProvider; it never shares the production SQLAlchemy engine.
+- [x] Demo load runs the existing sync/420+ bar/indicator/forecast/signal pipeline with `report=False`; demo reads include explicit `demo`, `is_mock`, `research_only`, and `actionable=false` provenance.
+- [x] Private `/api/demo/load`, `/api/demo/bootstrap`, and `/api/demo/reset` endpoints accept no provider URL, tool, or shell controls; reset/disposal is lock-protected and idempotent.
+- [x] Empty, insufficient, provider-unavailable, and indicator-failure states have mutually exclusive labels; API/UI refresh-bars default is 120 calendar days.
+- [x] Focused demo regression: 8 passed; compileall and Node syntax checks passed. Full suite and independent spec/quality review remain parent-task gates.
+- [x] Review hardening: demo settings forcibly disable analysis, LLM, Tushare, FTShare, RSS/news egress, and OCR cloud/local modes; injected HTTP transport confirms zero external calls.
+- [x] Review hardening: pipeline stages classify provider fetch failures separately from core indicator failures; app lifespan disposes the demo runtime and injected provider exactly once.
+- [x] Review hardening: recursive demo provenance flags cover nested dashboard/grade/board/audit data; readiness counts distinct latest indicator snapshots per instrument.
+
+### Task D review
+
+- [x] System page distinguishes isolated DEMO, free AKShare-primary, and complete Tushare-primary usage; FTShare state is visible without returning endpoint URLs or credentials.
+- [x] Market probe returns bounded per-provider rows (`provider`, `operation`, `ok`, `status`, `records`, `latency`, `failure_class`, `qualification`) and persists only sanitized latest results.
+- [x] Demo load/reset/exit controls switch the dashboard to `/api/demo/*`, disable formal task controls, show a persistent DEMO/Mock banner, and restore formal `/api/bootstrap` on exit.
+- [x] Source badge is derived from observed quote/provider provenance; demo results remain research-only and non-actionable.
+- [x] Focused market settings tests, Node syntax, and compile checks passed; full-suite verification remains the parent task gate.
+- [x] Review hardening: FTShare factory inclusion requires both explicit enablement and `qualified`; unqualified/rejected sources are skipped.
+- [x] Review hardening: DEMO blocks all formal mutation handlers and controls, including holdings, OCR, boards, reports, settings, coefficients, and tasks.
+- [x] Review hardening: source badge reports `不可用` when no current quote or latest successful provenance exists; formal Mock is not relabeled as isolated DEMO.
+- [x] Review hardening: exiting DEMO reloads formal settings before formal bootstrap and never re-enters DEMO on settings-read failure.
+- [x] Quality hardening: mode transitions use generation tokens, abort in-flight reads/SSE/OCR work, and centrally track in-flight formal mutations with no counter leak on failure/abort.
+- [x] Quality hardening: Node VM behavior tests cover pending-write refusal, successful DEMO retention, failed-enter SSE/timer restoration, and single formal SSE reconnect on successful exit.
+
+### Task E finalization evidence
+
+- [x] Documentation/config examples updated for `FTSHARE_ENABLED=false`, `FTSHARE_QUALIFICATION=unverified`, fixed endpoint, timeout, page/row/date/response bounds, qualification workflow, independent data-service terms, safe DEMO workflow, 120-day refresh default, status semantics, pinned Agent Skill commit, and the separate Tushare plaintext-token security debt.
+- [x] `scripts/qualify_ftshare.py` live read-only probe completed on 2026-08-30 for `510300.SH`; ETF list, daily bars, and spot operations all returned sanitized rejection (`CapabilityUnavailable`), so the qualification report remains `unqualified` and FTShare remains disabled. Evidence: `docs/ftshare-qualification-2026-08-30.json`.
+- [x] Parent-controller evidence: `pytest -q` exited 0 (447 collected test nodes; 2 existing platform skips); `python -m compileall -q backend/app scripts/qualify_ftshare.py` passed; `node --check backend/app/static/app.js` passed; diff secret scan found no configured-secret patterns (environment files excluded). This child task does not relabel that controller run as its own full-suite result.
+- [x] Isolated headless browser smoke on port 18988 with a worktree-pinned app and temporary SQLite: DEMO banner/load/status/source badge, formal task and portfolio locks, FTShare disabled status, DEMO exit, and zero external requests passed. Exact smoke processes and temporary SQLite artifacts were cleaned up; ports 18981-18988 verified closed.
+- [x] Audited ORM/migration reconciliation: clean disposable SQLite passes `upgrade head`, `current`, full `downgrade base`/re-upgrade, and `alembic check` at `d5e6f7a8b9c0`. The metadata-only repair preserves historical review/analysis hash-check names, restores the separately named opaque import-session constraint, keeps nullable legacy calibration JSON, and removes only a redundant candidate-id index declaration covered by the existing UNIQUE constraint. Regression: `backend/tests/test_migration_schema_parity.py`; real PostgreSQL qualification remains a deployment gate.
+## Unified decision-board backend plan (approved)
+
+- [x] Inspect current models, private routes, task lifecycle, scheduler, and backend fixtures.
+- [x] RED: add isolated decision-board service/API/scheduler tests for response semantics, storage isolation, slot eligibility/deduplication, and refresh concurrency. (Initial run was environment-blocked before functional execution; dependencies were then isolated under the permitted download directory.)
+- [x] GREEN: add snapshot/provisional persistence migration and read-only snapshot service with explicit provenance/freshness state.
+- [x] GREEN: wire the three private API endpoints, async refresh task, and Asia/Shanghai slot scheduler without changing strategy-grade logic.
+- [x] Verify focused backend tests, compileall, migration chain/schema parity where practical; record exact outcome and blockers below.
+
+### Unified decision-board backend review
+
+- [x] `backend/tests/test_decision_board.py` (13) + signal-grade/workbench regression (7): 20 passed with isolated Python 3.12 dependencies.
+- [x] Contract repair: snapshot rows now contain normalized wide-table `volume`/`ma`/`macd`/`kdj`/`td`/`rsi`/`chan`/`sector` objects; horizon selection rebuilds groups; details are snapshot-captured history, 10 scenario candles, support/resistance, Chan approximation and sort basis.
+- [x] Contract repair: complete provisional OHLCV produces a temporary research-only derived view even with an unverified timestamp; it cannot be actionable and never writes `DailyBar`.
+- [x] Contract repair: only decision slots fetch board quote input then capture provisional then materialize the board; queued API requests are consumed without an extra provider fetch; no decision-board news/AI side effect.
+- [x] Corrected focused suite: `test_decision_board.py` + `test_signal_grade.py` + `test_market_context.py`: 80 passed. `node --test backend/app/static/decision_board.test.js` exited 0.
+- [x] Spec review repair: `/workbench/1430` now 307 redirects to `/`; the legacy API remains compatibility-only.
+- [x] Spec review repair: `previous_day_delta` is `today - previous confirmed DailyBar return` in decimal-ratio units; list/detail accept exact `snapshot_id`, unknown snapshots return 404.
+- [x] Spec review repair: next slot uses `TradingCalendarService`, skips non-trading dates, and snapshots retain all entries for only the latest 20 trading dates.
+- [x] Final sorting repair: all sortable technical columns expose numeric `sort_keys` with documented health priority; forecast key binds selected horizon expected return with confidence as a tie-break only and missing values last.
+- [x] Sorting tie repair: volume ratio/direction, MA up-arrow count, and parsed TD9 setup count are packed into primitive numeric ties; actual persisted snapshot + API horizon tests verify `forecast` keys rematerialize for 1 versus 5 days.
+- [x] Quality critical loop closed: the isolated Python 3.12 full suite completed with exit 0; the earlier shared SQLite lock was not reproduced.
+- [x] Disposable SQLite Alembic `upgrade head`, `current` (`e6f7a8b9c0d1`), and `check`: passed; no new upgrade operations.
+- [x] `py -3.14 -m compileall -q backend/app backend/tests`, scoped Ruff `I,F`, and scoped `git diff --check`: passed (Git only reported existing CRLF conversion notices).
+- [x] Migration parity verified in the isolated Docker PostgreSQL service at head `f7a8b9c0d1e2`; `alembic check` reported no new operations.
+- [x] Final frontend/API integration verified after the unified UI changes; the prior `marketContextSection` mismatch is no longer present in the active contract.
+
+### Unified decision-board final release review (2026-09-01)
+
+- Full pytest: exit 0; 2 existing platform skips and deprecation warnings only.
+- `python -m compileall -q backend/app`, `node --check backend/app/static/app.js`, `node --test backend/app/static/decision_board.test.js` (11/11), and `git diff --check`: pass.
+- Isolated Docker API/DB healthy; Alembic current/head `f7a8b9c0d1e2`; `alembic check`: no pending operations.
+- Browser visual smoke: 37 rendered rows across six groups at 1440/1024/390 widths; grouped/global table, detail, forecast and responsive screenshots captured under `E:\Claude_allow\Download`.
+- Final independent review: APPROVED. Mock data remains explicitly research-only/non-actionable; no credentials, production DB, or broker access was used.
+
+## Free-tier provider fallback correction (2026-09-01)
+
+- [x] RED: regression showed `public_composite` omitted a configured Tushare candidate and persisted UI tokens still bound tasks to direct AKShare.
+- [x] GREEN: free/public execution now orders AKShare → configured Tushare → qualified FTShare; complete execution remains Tushare → AKShare → qualified FTShare.
+- [x] Runtime probe and TaskService tests cover stored-token binding; no Mock fallback was introduced.
+- [x] Focused Provider/settings suite and full pytest passed; Ruff, compileall, Node syntax and diff checks passed.
+- [x] Independent Terra review: APPROVED after the persisted-token binding repair.
+
+## Password-account browser authentication (2026-09-01)
+
+- [x] RED: account login/session/CSRF/legacy/static UI regression tests (initial import failed as expected before implementation).
+- [x] GREEN: Argon2id account auth, signed cookie session, CSRF and throttling.
+- [x] GREEN: remove browser token persistence and document deployment setup.
+- [x] Review: focused Python auth/API/holding tests, full pytest, Node decision-board tests, compileall, JS syntax, Ruff and diff checks pass; 2 existing platform skips only. Final specification and quality reviews approved the account/session/CSRF/legacy boundaries.
+
+## Multi-user account and portfolio isolation (2026-09-01)
+
+- [x] Review-fix plan: add RED regressions for private SSE, legacy ownership/backfill, self-lockout/session invalidation, production DB auth configuration, owner-specific overlays, and legacy NULL-owner uniqueness; implement the smallest service/router/model/Alembic fixes; run focused and full gates; record evidence and remaining production limitations.
+- [x] See `tasks/plans/2026-09-01-multi-user-auth.md`; the single-account prototype is not deployed to shared users.
+- [x] Task 1: add singleton bootstrap guard, `AuthUser`/`AuthSession`,
+  database-backed Argon2id/session primitives, a hidden-prompt first-admin CLI command, and migration
+  `0a9b1c2d3e4f` from `f7a8b9c0d1e2`; no holdings ownership change.
+- [x] Task 1 focused evidence: 45 tests passed, with one explicit skip for an
+  absent PostgreSQL test URL, across new auth models/service, legacy
+  single-account compatibility, and Alembic SQLite round-trip parity.
+- [x] Task 1 P1 regression: two competing SQLite sessions create exactly one
+  admin; the other is rejected after database guard serialization.
+- [x] Task 1 quality regression: malformed/plaintext and pseudo Argon2id PHC
+  hashes, including invalid base64 and empty salt/digest records, are rejected
+  at ORM/service boundaries; optional PostgreSQL Alembic concurrency test is
+  fail-closed skipped without an explicit test database.
+- [x] Task 1 password-cost regression: ORM hash validation is structural only;
+  a real Argon2 verify occurs only in credential verification, avoiding a
+  second computation at account construction or bootstrap.
+- [x] Task 1 PostgreSQL test safety: destructive auth-row cleanup requires all
+  of `TEST_POSTGRES_URL`, `APP_ENV=test`, `ALLOW_DESTRUCTIVE_TEST_DATABASE=1`,
+  and an unmistakable test/scratch/ci database suffix; otherwise no connection
+  or delete is attempted.
+- [x] Task 1 final regression/compile/diff check completed; current-user route
+  conversion and user-owned portfolio tables are covered by the later Task 2 evidence below.
+
+## Multi-user account and portfolio isolation — Task 2 (2026-09-01)
+
+- [x] RED: add focused DB-session API and owner-isolation tests for login/revoke,
+  holdings, OCR imports, legacy Bearer boundaries, and migration/backfill parity.
+- [x] GREEN: replace the stateless browser session dependency with DB-backed
+  current-user resolution and per-session CSRF; retain legacy Bearer for shared reads only.
+- [x] GREEN: add nullable ownership FKs, per-user holding uniqueness, and a
+  deterministic admin-only legacy-holding backfill command.
+- [x] GREEN: propagate a resolved user through holdings, imports, bootstrap,
+  signal center, and user-generated reports without changing strategy logic.
+- [x] Review: run the focused suite, migration round trip/check, compileall,
+  Node syntax check, and inspect the scoped diff before handoff. No commit/push/deploy.
+
+### Multi-user final review evidence (2026-09-02)
+
+- [x] Admin/member lifecycle, DB sessions, CSRF, revocation, SSE revalidation,
+  owner-scoped holdings/OCR/reports/14:30/optimizer, shared-signal purity,
+  nullable ownership migration, dynamic legacy uniqueness, safe downgrade and
+  explicit backfill all passed independent specification and quality reviews.
+- [x] Project venv full `pytest -q` exited 0 with 3 platform skips; focused
+  auth/ownership/API/migration/holding-import/optimizer/ETF1430 suites also
+  exited 0. `compileall`, `node --check`, decision-board Node tests and
+  `git diff --check` exited 0.
+- [x] Production configuration is fail-closed and documentation/templates now
+  describe database authentication and migration head `2c3d4e5f6a7b` consistently.
+- [x] No credentials, `.env`, production database, broker, or deployment target
+  was accessed. Real PostgreSQL migration/backup/restore, ECS deployment, and
+  provider qualification remain explicit gates.
+- [x] The repository helper secret scan was run; its simple pattern checker
+  reported only synthetic test fixture strings in test files (including legacy
+  token/password labels), not configured credentials. `.env` and production
+  environment files were excluded by the checker and were not opened.
+
+### Multi-user HTTP OCR test-isolation repair (2026-09-02)
+
+- [x] Reproduce the shared SQLite residue after the authenticated OCR HTTP ownership regression.
+- [x] Add teardown scoped to only that test's created users, sessions, imports, candidates, holdings, and transient files.
+- [x] Verify `test_holding_import.py` and `test_multi_user_ownership.py`, then `pytest -q`, compileall, Node syntax, and scoped diff.
+
+#### Review evidence
+
+- [x] Specification and code-quality reviews approved the test-only cleanup. A first review required moving client creation inside the protected `try`; the re-review approved the corrected exception-safe teardown.
+- [x] Project venv `E:\project\ETF-Fund-Analysis\.venv\Scripts\python.exe`: `backend/tests/test_holding_import.py` = 68 passed, 2 skipped, exit 0; `backend/tests/test_multi_user_ownership.py` = 17 passed, exit 0; full `pytest -q` = exit 0 with 3 platform skips and existing deprecation warnings only.
+- [x] `python -m compileall -q backend/app`, `node --check backend/app/static/app.js`, and `git diff --check` each exited 0. The only diff-check output was existing CRLF conversion notices. No commit, push, deployment, credential read, or production database access.
+
+### Multi-user production auth config consistency (2026-09-02)
+
+- [x] RED: add a self-contained production-settings regression proving that obsolete `AUTH_EMAIL` is rejected by database-backed authentication, while development settings continue to accept the compatibility field. Initial focused run exited 1 on the new production `AUTH_EMAIL` case as expected.
+- [x] GREEN: include `AUTH_EMAIL` in the production-only obsolete compatibility configuration rejection without changing database-backed identity behavior.
+- [x] Review: `backend/tests/test_password_auth.py` = 31 passed (exit 0); `backend/tests/test_multi_user_auth.py` = 21 passed, 1 skipped (exit 0); `python -m compileall -q backend/app`, `node --check backend/app/static/app.js`, and `git diff --check` each exit 0. The diff check emitted only pre-existing CRLF conversion warnings. Production-template and deployment documentation now list `AUTH_EMAIL` with the retired compatibility variables. No commit, push, deployment, dotenv read, or production database access.
+
+### P1 production authentication fail-closed fix (2026-09-02)
+
+- [x] RED: exact production `AUTH_ENABLED=false` regression failed as intended (`DID NOT RAISE ValueError`; exit 1); paired development/test assertions passed.
+- [x] GREEN: production now requires explicit `AUTH_ENABLED=true`, PostgreSQL, disabled schema auto-create, a secure cookie, and no obsolete credentials; development/test offline/demo behavior remains available.
+- [x] Review: `test_password_auth.py` = 34 passed (exit 0); `test_multi_user_auth.py` = 21 passed, 1 skipped (exit 0); `test_holding_import.py` + `test_ftshare_provider.py` = 133 passed, 2 skipped (exit 0); project-venv sequential `pytest -q` = exit 0 with 3 platform skips and existing deprecation warnings. `python -m compileall -q backend/app`, `node --check backend/app/static/app.js`, and `git diff --check` each exit 0; diff check emitted only existing CRLF conversion notices. No commit, push, deployment, dotenv read, or production database access.
+
+### Multi-user report-route review fixes (2026-09-02)
+
+- [x] RED: prove `POST /api/reports` generates a system-scoped report with `AUTH_ENABLED=false`, while enabled authentication and legacy unsafe Bearer remain rejected.
+- [x] RED: prove report download resolves a single, exact registered artifact only: wildcard-like names, same-owner near matches, sibling directories, and another user cannot leak a path or file.
+- [x] GREEN: use the existing optional current-user resolution for offline report generation; retain the database-session boundary for authenticated mode.
+- [x] GREEN: replace wildcard SQL lookup with exact artifact selection plus regular-file, basename, allowed-extension, and reports-directory containment checks.
+- [x] Review: RED regression exited 1 for the intended offline-session and wildcard-near-match failures; post-fix report pair, auth (21 passed, 1 skipped), password (31 passed), ownership (19 passed), and API (12 passed) each exited 0 in isolated project-venv processes. `compileall`, Node syntax, and `git diff --check` each exited 0; diff emitted only existing CRLF notices. A single combined module process exited 1 because its shared SQLite fixture leaves ownership accounts before auth tests that require an empty account table; separate module runs avoid that pre-existing ordering constraint. No commit, push, deploy, credential read, or production DB access.
+
+### Multi-user report operational-detail isolation follow-up (2026-09-02)
+
+- [x] RED/GREEN: inject global task/provider diagnostic sentinels; member report payload has empty `tasks`/`provider_health` and its HTML has no sentinels, while system and active-admin payloads retain both sentinels. Initial RED exited 1 for the intended member-task leak; GREEN passed.
+- [x] Derive report operational-detail inclusion from the persisted owner: system and active-admin reports allow it; member, unknown, and inactive-owner private reports deny it.
+- [x] Documentation: repair the HANDOFF migration chain with `e6f7a8b9c0d1` then `f7a8b9c0d1e2` before auth; align current strategy references to `signal-v0.7.0-research` in the related current-state architecture/implementation/deployment handoffs without changing labeled historical evidence.
+- [ ] Review: ownership = 22 passed (exit 0); auth + password = 55 passed, 1 PostgreSQL safety skip (exit 0); compileall/Node/scoped Ruff/diff check = 0. One full project-venv pytest was started sequentially and completed, but this execution environment truncated its result and did not retain an exit code, so it is not claimed as passed. Full-tree Ruff exits 1 on 86 pre-existing cross-module violations; scoped Ruff for this change passes. No commit, push, deployment, dotenv read, or production database access.
+# v1.0.1 接收、移植、测试与部署执行记录（2026-09-07）
+
+- [x] 校验 ZIP SHA256、目录安全和 `PACKAGE_MANIFEST_V101.json`。
+- [x] 保留原脏工作树；从精确 `9a0ca1812eda24acc390f1b3097662bfd615dfef` 建立隔离分支并移植包内容。
+- [x] 只读核对远端 main、v1.0.0、已有 v1.0.1 分支、开放 PR 与生产 SSH 入口。
+- [x] 在独立 Python 3.12 / Node 环境执行后端、前端、Alembic、PostgreSQL、Playwright、JS/Shell/Compose 和密钥门禁（Windows Bash 不可用，ShellCheck 改在隔离容器执行）。
+- [x] 真实 Provider 小样本：510300.SH、512480.SH；记录各能力、单位、时间、覆盖、入库和失败状态；缺量导致衍生任务诚实 partial。
+- [x] 检查旧生产数据备份/恢复/迁移/单位污染；备份 hash、隔离 staging 恢复、Alembic、OHLC/重复键/空值检查通过，生产 head 为 `d40609090002`。
+- [x] 审查 staged diff，提交功能分支并推送 `224b59f`；`ci` 与 `workspace-ci` 成功；未自动合并 main、不移动标签。PR 创建链接因 GitHub CLI 未登录保留给用户。
+- [x] 按 SSH 只读盘点结果形成生产 override；固定镜像 digest，停止旧 API/scheduler，启用 v1.0.1 API+单 worker；未启动第二个 scheduler。
+- [x] 通过正式域名/API、认证/CSRF、页面、任务、重启保留和 worker health 验收并更新部署收据；认证账户未创建/重置，真实 Provider 资格仍未晋级。
+
+## 当前门禁
+
+- 生产 SSH 只读盘点已连通：远端当前 Git/Compose 与 ZIP 基线不一致；已通过备份、staging 和 CI 后采用独立 v1.0.1 override，未覆盖生产源码。
+- 生产当前由 v1.0.1 镜像/API/单 worker 提供服务；旧 API/scheduler 保持停止状态，数据库 head 已升级。
+- 不读取或输出任何私有配置、Token、Cookie、密码、持仓和备份内容。
+
+## 本轮复核
+
+- 本机接收分支已完成源码、前端、迁移、PostgreSQL、容器镜像、Provider 小样本和离线浏览器验证；真实公共源仅有可用性/覆盖证据，不构成生产资格。
+- 生产备份、隔离 staging 恢复/迁移/单位核验、维护窗口和最终 HTTP/worker 验收均已完成；后续仅在新授权下启用真实数据重抓、分钟线、模型或定时复盘。
+- 本机登录修复：确认 8082 初始数据库无用户；为 live runner 增加显式、带邀请码的本地注册配置和回归测试，正式站注册仍保持关闭。
+
+## v1.0.3 local acceptance repairs — 2026-09-09
+Baseline: 9439563dafc35d7410f9dde39253478a321c96ef. Separate review branch; original fixed-SHA receive tree remains unchanged.
+- [x] Reproduce overlapping Sina price-only history replacing complete cached EM rows; preserve the existing complete row without mixing source fields.
+- [x] Restrict the index download affordance to the three supported A-share indexes and explain unsupported OHLC capability.
+- [x] Preserve bounded sanitized per-index failures in task summaries.
+- [x] RED/GREEN targeted regression, parent diff review, frontend typecheck/24 tests/build/12 ordinary + 1 authenticated Playwright.
+- [x] Parent full backend regression, final source scan/compile/diff, explicit source/test commits a628004 and 49ab0ce.
+- [x] Recheck private-state protection and restore pre-receive consistent backup before replaying the fixed local acceptance pipeline; retain the entire original trial DB separately.
+- [x] Record actual public-source results and unavailable capabilities; qualification unchanged. See docs/LOCAL_ACCEPTANCE_RECEIPT_V103_20260909.md.
+
+Allowed code scope: MarketService history upsert, worker summary, Overview index action, and corresponding regressions. No formula/unit version change, credentials, production server, main merge, tags or model calls. Rollback keeps both consistent DB snapshots and the exact fixed-SHA checkout.
+
+### Final review evidence
+- [x] Sector duplicate/conflict RED/GREEN and parent source review; final full pytest 842 passed, 5 platform/database skips. Latest actual sector run succeeded (90 industry, 175 concept, 1 breadth); original failing batch's exact key was not retained.
+- [x] Final running SHA49ab0ce on loopback8082; API/worker same code and original persistent DB; ordinary app source unchanged after final tests.
+- [x] Provider values, archive hashes, restart cache proof, synthetic-account real-cache screenshots and optional-model blockers recorded in sanitized receipt.
+- [ ] User's original admin session UI acceptance and one official-login/budgeted model run remain pending; no approval inferred from silence.
+
+## v1.0.3 follow-up fixes and deployment — 2026-09-09
+- [x] Push review branch `codex/v103-local-review-20260909` through `1558ad5`, `90225ac`, and `c60a157`.
+- [x] Deploy current SHA to `etf.joviluma.com`; preserve PostgreSQL backup and old image rollback tag; API/worker health verified.
+- [x] Retry index history after bounded-source fix: Shanghai, CSI300, and CSI-all each 1,196 OHLC rows through `2026-09-08`.
+- [x] Retry two ETF history: each 1,196 rows through `2026-09-08`; Sina volume remains missing and does not become actionable.
+- [x] Retry factor diagnostics: price-only instruments allowed for price factors; volume factor coverage remains 0 and report stays `not_qualified`.
+- [x] Fix local PaddleOCR v5 manifest/model-name/input compatibility; synthetic image recognized ETF code, shares, and cost; timeout cleanup passed.
+- [ ] Vibe upstream Windows qualification remains blocked by upstream symlink/path tests; official Codex login, pairing, and one model-budgeted run require Jovi's own interactive login.
+
+## v1.0.4 接收、新闻时间修复与本地持久部署 — 2026-09-10
+
+- [x] 从远端独立 clone 接收 `910e77fc866f123e0d18103048243513e3edb666`，验证基线 `57470eabcad35a6038574e893e7245f0d1adb387` 为祖先；原始脏工作树保持不变。
+- [x] 读取 `AGENTS.md`、`STATUS.md`、`HANDOFF.md`、v1.0.4 用户/验收/安全/OSS/验证/版本文档。
+- [x] 核对 PR #32 和固定 SHA 的 CI：`workspace-ci` #88 成功；`ci` #565 失败，`test` exit 1；PR `ci` #566 同样失败；公开数据观察 #1 成功。GitHub 公共 API 限流，网页结果作为运行状态来源，失败原因须以本地复跑定位。
+- [x] 按 workflow 复跑后端、前端、旧 JS、迁移、Compose 静态配置、浏览器和密钥门禁，逐项记录退出码/跳过原因；Docker daemon 不可用项明确标记环境跳过。
+- [x] 复现并修复 `news_status.py` 的 SQLite 无时区发布时间误按 UTC 解释问题；补后端和前端回归测试，不改历史数据库日期。
+- [x] 备份原持久库并只在副本执行迁移/数据/重启验收；不初始化、不连接真实用户库、不读取或输出私密配置。
+- [x] 按 v1.0.4 合同完成本地真实目录/板块/两只 ETF/有限历史准备、图表/原模板/研究/账户边界验证；真实数据失败保留来源与原因，不使用 Mock 冒充。
+- [x] AI 未完成仓库外主密钥配置，按未确认费用边界保持关闭；没有复制 auth.json 或调用模型。
+- [x] 形成本地部署收据、截图、持久重启证明和剩余边界；不合并 main、不移动标签、不部署服务器。
+- [x] 2026-09-10 12:58 对两只 ETF 再次重试 `quotes`；仍 `partial/TaskExecutionError`，保留旧日线和失败状态，不伪造今日数据。
+
+### v1.0.4 结果
+- `docs/LOCAL_ACCEPTANCE_RECEIPT_V104_20260910.md` 汇总固定 SHA、CI、修复、真实任务、页面、账户、重启和环境限制。
+- 本地审核修复提交 `b8112d4`；当前分支只在本地审核，不自动推送或合并。
+
+## 项目知识文档与 Obsidian 同步 — 2026-09-09
+- [x] 新增项目制造过程与文档地图，覆盖当前实现、证据边界、部署回滚和未完成资格。
+- [x] 更新 `docs/README.md` 导航并校验相对链接。
+- [x] 用 codex-memory checkpoint DryRun 生成持久知识；五个槽位的目标哈希可复现且不含敏感内容。
+- [x] Jovi 授权创建项目记忆目录后，执行有界 checkpoint Apply，写入 5 份项目知识笔记；`load-memory.ps1` 与 `verify-memory.ps1` 均返回 `PASS`。
+- [x] 文档通过源文件/提交/测试/运行收据核对后，执行文档镜像 DryRun；官方 mirror wrapper 返回 `MEMORY_UPDATED`，复制 78 个 Markdown 文件。
+
+### 文档/记忆复核结果
+- [x] 仓库知识文档提交 `5d8d12a` 已推送到远端 `main`。
+- [x] Obsidian 项目目录 `03-项目记忆/etf-fund-analysis` 已创建，包含概览、工程关系、当前进度、关键决策和工作流 5 份笔记。
+- [x] `invoke-mirror.ps1` 在新鲜 DryRun 后成功 Apply，状态为 `MEMORY_UPDATED`，镜像根目录为 `05-工程文档`，状态文件已写入本机 memory state。
+- [x] 初次 checkpoint wrapper 的 expected-plan 冲突没有产生部分写入；随后按 Jovi 的明确授权执行有界 Apply，并完成独立复核。
+
+## 深化项目知识库 — 2026-09-09
+- [x] 盘点当前主线的产品边界、目录、运行组件、数据流、用户路由和版本演进事实。
+- [x] 盘点已完成能力、验证证据、部署状态、未完成门禁和明确不能宣称的内容。
+- [x] 盘点技术路线与可复用工程经验，区分当前运行事实、研究候选和未来路线。
+- [x] 整理开源仓库/公开项目借鉴清单，记录 revision、许可证、借鉴点、实际落点和隔离边界。
+- [x] 新增详细仓库知识文档，并更新 `docs/README.md` 导航。
+- [x] 扩展 Obsidian 项目记忆为分主题知识库，写入工程关系、技术路线、完成项、验证/部署、开源借鉴和可复用经验。
+- [x] 运行 checkpoint/mirror DryRun 与 Apply，完成 `load-memory.ps1`、`verify-memory.ps1`、Git 状态和远端提交复核。
+
+### 深化结果
+- 新增 `PROJECT_KNOWLEDGE_BASE_V103.md`、`TECHNICAL_ROUTE_V103.md`、`COMPLETION_AND_EVIDENCE_MATRIX_V103.md`、`OPEN_SOURCE_ADOPTION_REGISTER_V103.md` 四份长期知识文档。
+- Obsidian 五个核心槽位已扩展为详细的项目概览、工程关系、当前进度、关键决策和可复用工作流；官方 checkpoint wrapper 返回 `MEMORY_UPDATED`。
+- 文档镜像新鲜 DryRun 发现 6 个变更，官方 mirror wrapper 返回 `MEMORY_UPDATED`；目标目录为项目记忆下的 `05-工程文档`。
+- 本轮只修改文档与任务台账，没有修改业务代码、生产数据库、用户账户或原始脏工作树。
+
+## v1.0.4 公网刷新修复与部署 — 2026-09-10
+
+- [x] 复现生产 AKShare `ProviderTimeout`，确认 20 秒 bounded deadline 不足以覆盖 ETF 分页现货接口。
+- [x] 将 AKShare 默认/示例/Compose timeout 统一为 60 秒，增加默认预算回归测试；接收分支提交 `3e4b9fa` 并推送远端。
+- [x] 以无网络方式构建 `etf-workspace:v1.0.4-runtime-20260910`，诊断端口 API、迁移和 `cryptography` 导入通过。
+- [x] 生产切换前完成 PostgreSQL 备份；新版 API/worker/scheduler 健康，失败路径保留并验证回滚材料。
+- [x] 验证 scheduler `refresh_quotes` 成功写入 35 个启用标的；两只 ETF 当日报价落库且保持非实时资格标识。
+- [x] 通过受审计 TaskService 补两只 ETF 日线，生产各 1,197 根至 2026-09-09；指数缓存三项各 1,197 根至 2026-09-09。
+- [x] 更新 `STATUS.md`、`HANDOFF.md`、本地验收收据和公网部署收据；不合并 `main`，保留旧源/镜像/备份。
+
+### Review
+
+后端全套 pytest 通过；compileall、Node 静态检查、旧 JS 15/15 和 diff check 通过。公网 health、容器状态、scheduler 成功任务、provider audit、两只 ETF 报价/日线和指数缓存均已现场复核。剩余边界为 AKShare 时间戳实时资格、Sina 成交量、因子/预测资格、中证全指实时、OCR/Vibe/真人模型等既有门禁。
+
+## v1.0.5 ZIP 接收与本地复测计划 — 2026-09-10
+
+- [x] 校验 ZIP 旁车 SHA256、解压安全、verify_bundle.py 与包内基线/补丁/清单。
+- [x] 在独立 clone 固定 46c713d4，应用 v105 补丁；按 SOURCE_CHANGESET 核对归一化文件 SHA，不修改原工程。
+- [x] 先复跑后端、前端、迁移、JS、密钥扫描、HTTP/Playwright 和认证隔离；记录 Node/Python/浏览器/PostgreSQL/Docker 的实际版本与跳过原因。
+- [x] 备份原持久库到新的证据目录，在副本中逐字段核对目录、板块、两只 ETF、三指数、新闻、API 和页面。
+- [x] 处理必要 R1–R6 缺陷时，每组单独提交、先复现后修复；R7、main 合并和标签移动保持未执行。
+- [x] 本地持久服务重启后核对 schema、条数、日期、来源、失败审计、原 WorkBuddy 模板和截图，形成 v105 接收收据。
+
+### v105 Review（2026-09-11）
+
+- [x] ZIP SHA、verify_bundle、固定基线、补丁 apply-check、SOURCE_CHANGESET 归一化 SHA 全部通过；原工程未触碰。
+- [x] 包内第一阶段提交 `6e1c0c2`；R1 `e072718`、R2 `9b0822e`/`8ba2df7`、R3 `5a900f7`/`04c4ca4`；任务台账 `652f2c7`。
+- [x] Python3.12 全量 pytest 无失败；v105 专项23；Vue28/typecheck/build；旧JS20；compileall、secret scan、diff check；普通 Playwright17/17、认证2/2。
+- [x] 临时 SQLite Alembic upgrade/check/head 通过；原副本 Backup API、真实 AKShare 目录/板块/ETF/指数/新闻任务、字段/单位/时间/来源和页面证据已保留。
+- [x] v105 API/worker 使用同一副本重启后 health、完整性、条数和日期保留；scheduler 单实例现场尝试出现 SQLite 并发写锁，已停止并记录为剩余项。
+- [x] 生产切换前完成 PostgreSQL 备份、诊断端口 Alembic/health、独立源目录和精确 v1.0.4 rollback Compose；公网 API、worker、scheduler、根页面和认证边界复核通过。
+- [x] v105 接收分支已推送远端；`main` 未合并、标签未移动，原工程脏区未触碰。
+- [ ] 专用 PostgreSQL16 条件测试、Node22、Docker 本机条件、Windows DPAPI、完整实时/量价资格和交易时段后的新报价/收盘日线仍待现场窗口复核；R7 完整缠论/自动同步保持未实现。
+
+### v105 生产 Review
+
+- [x] 生产备份 `fund_decision_20260911_220430.sql.gz` SHA、600 权限、诊断端口和回滚材料已记录在 `docs/PRODUCTION_DEPLOYMENT_RECEIPT_V105_20260911.md`。
+- [x] 公网 `https://etf.joviluma.com/api/health` 返回 production、`public_composite`、认证开启；三容器 API/worker/scheduler 运行，未登录 data-health 返回 401。
+- [x] 只读核对 `auth_users=3`、`holdings=0`、`watchlist=6`；首次切换时未把旧日线或待核实快照冒充今天收盘/实时数据。
+
+## v105 数据异常修复：新浪成交量回退 — 2026-09-11
+
+- [x] RED：证明新浪历史接口返回的 `volume/amount` 在价格单位自洽时被 Provider 丢弃，导致全量 `volume_missing_for_shared_signals`。
+- [x] GREEN：仅在 `amount / volume` 与收盘价通过单位一致性校验时保留成交量，使用新来源标识并保留不合格行的价格-only 回退。
+- [x] REVIEW：Provider/数据契约/指标/决策板回归与全套静态检查通过；生产重抓和分组恢复在部署阶段复核。
+- [x] DEPLOY：新代码通过诊断端口和公网健康检查后滚动切换，保留当前 v105 回滚 Compose；生产重抓与重算已完成。
+
+### v105 数据异常修复 Review
+
+- [x] 生产备份后部署 `208858e`；东财历史接口失败时新浪回退，35 个标的全部通过 v102 成交量单位校验，`price_only=0`、缺量行数为 0。
+- [x] 受审计任务 `refresh_indicators` 35/35、`refresh_forecasts` 140 条、`refresh_signals` 35 条、`refresh_decision_board` 新快照均成功；决策板 `数据异常=0`。
+- [x] scheduler 已恢复，API/worker healthy，公网 health 通过；整体 stale 仅保留公开报价时效/实时资格提示，未伪装成实时。
+
+## v105 看板快照缓存修复 — 2026-09-11
+
+- [x] RED：静态 WorkBuddy `api()` 请求未声明 `cache: no-store`，可复现浏览器继续读取旧决策快照；后端旧看板路由也缺少响应缓存合同。
+- [x] GREEN：前端 API/auth 请求固定 `cache: no-store`，后端 bootstrap、decision-board 列表和详情响应固定 `private, no-store`；新增静态与 HTTP 回归。
+- [x] DEPLOY：把缓存修复随新归档部署并用后端 no-store 合同和最新 snapshot_id 完成线上复核；用户登录态页面下一次加载将绕过旧缓存。
+# Bot acceptance-gate repair — 2026-09-19
+
+## Goal
+
+Repair the independently reproduced scheduler, walk-forward, return-series, and unit-certification integration defects without weakening fail-closed research rules or touching the owner's current `main` worktree.
+
+## Plan
+
+- [x] RED: add a scheduler regression proving dependencies run before decision-board/report consumers.
+- [x] RED: add a walk-forward regression rejecting zero folds even with a human approval artifact.
+- [x] RED: add a corporate-action regression keeping raw unadjusted prices out of the adjusted/total-return research series.
+- [x] RED: add a service-path regression proving only explicit independent unit evidence can reach `qualify_1430`.
+- [x] GREEN: implement the smallest fixes and retain `actionable=false` for every unqualified path.
+- [x] REVIEW: remove new diff-check violations and run focused tests, full pytest, compileall, JS tests, Vue tests/typecheck/build, and `git diff --check`.
+
+## Review
+
+- RED receipts: the four new tests failed against the prior implementation (topology false, empty folds approved, raw research type absent, and Workbench certification path absent).
+- Focused repair suites: 29 passed; scheduler/market/Workbench regression suites: 88 passed; final Workbench/unit rerun: 13 passed.
+- Full backend: 1165 tests collected; full pytest reached 100% with `pytest_exit=0` and only environment/deprecation skips or warnings.
+- Static/frontend: compileall exit 0; legacy Node tests 27 passed; Vue tests 36 passed; typecheck and production build exited 0.
+- Diff hygiene: working-tree and baseline-to-working-tree `git diff --check` exited 0 after removing five pre-existing trailing-space violations from `docs/LOCAL_CODEX_BRIDGE.md`.
+- Pre-deployment scope boundary: no database migration or change to the owner's current `main` worktree. Independent unit evidence remains externally required; absent evidence still fails closed and all 14:30 output remains non-actionable.
+- Follow-up RED/GREEN: `TaskService.full_pipeline` also published the board before sector refresh; a behavioral order test failed (`9 < 8`) before moving sector refresh ahead of board publication, then the related 83-test orchestration suite passed.
+- Real public-provider flow in isolated SQLite: 36 instruments; 35/35 daily histories through 2026-09-18 (9,870 bars, all price-only); 35 quotes (all non-realtime/degraded); 200 news rows; 266 sector/concept/market rows; 35 fail-closed `数据异常` signals; stale/non-actionable 35-row board and HTML report. Indicators/forecasts correctly refused unverified quantity history. Workspace `/analysis`, decision overview, and ETF detail displayed the persisted real-source data with unverified labels.
+# Production data qualification repair — 2026-09-20
+
+## Goal
+
+Resolve the four production `unexplained_price_discontinuity` cases without guessing corporate-action ratios, then verify every data-to-UI-to-decision surface before merging and redeploying.
+
+## Plan
+
+- [x] RED: encode the four production discontinuity fixtures and assert the current gate blocks them with the exact reason.
+- [x] Research: reconcile each discontinuity against authoritative corporate-action/adjusted-series evidence; keep unresolved symbols blocked.
+- [x] GREEN: implement the smallest source/contract fix only where independent evidence supports it; preserve raw display history and fail-closed behavior.
+- [x] Data pipeline: run source fetch, bars, quotes, indicators, forecasts, news, signals, sectors, decision board, and report checks in an isolated database.
+- [x] UI: verify every enabled route and representative list/detail/decision surface against persisted snapshots and no mock/realtime mislabeling.
+- [x] Review: full backend/frontend/static/build/diff gates, exact SHA, production backup, diagnostic deploy, public verification, rollback evidence.
+
+## Review
+
+- Completed through `172db21`: official split evidence is isolated from raw bars, research recomputation no longer becomes `数据异常`, public routes returned 200, and the production board remained stale/non-actionable. The production database backup and rollback source were retained.
+
+# FTShare qualification fail-closed repair — 2026-09-20
+
+## Goal
+
+Prevent a reachable FTShare endpoint from being marked qualified when absolute-unit and timestamp evidence is still absent.
+
+## Plan
+
+- [x] RED: prove three non-empty operations with empty evidence currently produce a false qualification.
+- [x] GREEN: require explicit independent unit and operational timestamp gates in the qualification result.
+- [x] LIVE: run bounded read-only probes and record sanitized endpoint outcomes without changing runtime configuration.
+- [x] REVIEW: run focused and related tests, compile/static checks, full regression, diff review, then update STATUS/HANDOFF.
+
+## Review
+
+- RED failed with missing `_qualification`; GREEN related suite passed 96 tests.
+- Full backend pytest exited 0. `compileall`, Node syntax, scoped Ruff, and `git diff --check` exited 0.
+- Five-symbol application probes returned zero records and `CapabilityUnavailable`; Skill endpoints returned 404/405. FTShare remains disabled/unqualified and no runtime or production state changed.
+# R1 + A-U1–A-U3 merge, release, docs, and project memory — 2026-09-23
+
+## Plan
+
+- [x] Read project rules, latest handoff/receipt, lessons, and project memory; preserve the primary checkout until its state was checked.
+- [x] Verify R1 is an ancestor of main, review candidate `9ac2be8587043cfde72798503f33bd89dc5f0ed8`, and confirm the exact-SHA CI records.
+- [x] Inspect the public production target, image/source labels, mounts, migration, health, backup, and capacity; leave the stale unrelated Compose root untouched.
+- [x] Fix shell line endings and bounded CI build resources; export a smoke-tested, source/tree-labeled image artifact with checksums.
+- [x] Back up production and verify checksum/permissions; restore a copy in an isolated no-egress PostgreSQL environment and rehearse migration/diagnostics.
+- [x] Deploy the verified full image and check API, worker, scheduler, routes, static asset, auth response, migration, and source-mount absence.
+- [x] Update `STATUS.md`, `HANDOFF.md`, docs index, account handoff, and the production deployment receipt; push main docs commit `cc658676e10766b44a485599c615a6a71a023c0f`.
+- [x] Synchronize the mapped Obsidian checkpoint after fresh DryRun/target checks and mirror allowlisted docs; verify hashes and preserve the unrelated Tesla pending checkpoint.
+- [x] Fast-forward the original clean checkout from `825767c` to `cc658676e10766b44a485599c615a6a71a023c0f`; verify it is clean.
+- [x] Final review exact main/document SHA versus deployed application SHA/tree/image, backup/restore evidence, public health, memory sync, and open data gates.
+
+## Review
+
+- Current main/document HEAD: `cc658676e10766b44a485599c615a6a71a023c0f`. Runtime application image is intentionally bound to source SHA `0dbd3fee58a3f5e080aacbcd8eae8d5964aec54f`, tree `f8607b3de8decde6065ccc559c5c26b0262b8e6b`; the later main commit contains documentation/status only.
+- Exact-source CI records on `0dbd3fe`: run `35843677296` (CI), `35843677328` (workspace CI), and `35843677240` (platform audit), all success. Local GitHub CLI refresh was unavailable because this host has no `gh` login; the release receipt retains the previously verified run IDs and conclusions.
+- Production image `etf-workspace:production-0dbd3fe`, ID `sha256:251a0623c694b07525bd398b52f41eecc17ec3d1216912c6d593b704fc8ae81a`, has matching OCI revision/tree labels. API, worker, and one scheduler use this image; only reports/backups are mounted from host. The separate stale Compose root was not modified.
+- Backup `backups/fund_decision_20260923_141523_Q1UTbz.sql.gz`, SHA-256 `f1136db243b7b6913bdaf9bb902b88ab4e94e90f334350dcd88d0cc7a56d742f`; gzip and sidecar checks passed. Restore-copy rehearsal: 106 tables, Alembic `e609200001`, upgrade/check and packaged smoke passed; no production rows were written by the rehearsal.
+- Public health was rechecked during closeout: HTTP 200, `status=ok`, production, `public_composite`, auth enabled, API version `1.0.8`. Prior deploy checks also verified root and Profile asset 200, unauthenticated account API 401, API/worker healthy, scheduler running (no healthcheck configured).
+- Four production-host frontend builds ended exit 137; the last coincided with a kernel kill of UID 10001 Python and scheduler restart. API remained healthy and worker did not restart; scheduler recovered, and deployment then used the hosted CI artifact with no further host builds. Exact killed-process/container attribution was not proven; the timing correlation and subsequent `ProviderError` count are retained in the deployment receipt. No rollback was needed.
+- Obsidian checkpoint was applied through a fresh, hash-guarded DryRun plan because the generic pending checkpoint belonged to `tesla-speed`; the unrelated queue was preserved. The project checkpoint load passed, and mirror copied 37 allowlisted documents with zero skipped; three critical mirrored document hashes matched.
+- Real-data qualification remains **UNKNOWN**. No production data audit/recertification, provider fetch, certified/hash/raw OHLCV edit, account write, or model call was performed. R2–R6 and A-U4/A-U5 remain open; no forecast/actionability gate was loosened.
+# R2 可见页面数据及时性与一致性 — 2026-09-23
+
+## Goal
+
+让总览与 ETF 详情在前台按有界周期读取新数据；切后台停止轮询，回前台立即读取；保留最后成功快照并显示数据时间。页面 GET 不抓取 Provider、不写数据库，不改变行情资格和 actionable。
+
+## Plan
+
+- [x] 确认 `main` 干净，建立从 `a687f17` 开始的独立 worktree 与功能分支。
+- [x] 阅读 R2 路线、刷新政策、read model、总览/详情查询及现有回归测试。
+- [x] 核实生产源分层：东财请求被远端断连；Sina HTTPS 返回样本标的及源时间；Tushare ETF 实时接口返回权限不可用；THS ETF 接口仅有净值、不作为行情价。
+- [x] RED：详情页三项刷新回归先失败：缺少 60 秒到期刷新、回到可见页立即刷新；卸载清理现状通过。
+- [x] GREEN：用一个可复用 composable 管理轮询；应用到总览和详情，保持 GET、现有读取合同和研究门禁。
+- [x] 补齐详情各模块展示时间与 snapshot 身份，缺失时保持 UNKNOWN，不用 fetched_at 冒充 source_time。
+- [x] 后端读模型新增/对齐固定 `as_of` 的展示元数据；只做只读计算，不写库、不调用 Provider。
+- [x] RED/GREEN：添加 Sina HTTPS 行情适配器，注册到免费 Composite 回退链，并允许其精确版本源时间通过 operational-grade 校验；量额保持空值、production-qualified/actionable 仍为 false。
+- [x] 生产端点探针揭示 Sina 必须使用 `/list=代码,...` 路径而非 `?list=`；先记录夹具合同失败，再修正 URL 并用真实响应验证 5/5 请求代码。
+- [x] RED/GREEN：Tushare 权限失败用 allowlist 安全码穿过适配器和 Composite 审计，不保留响应正文或凭证。
+- [x] 隔离入库/展示回归：验证 Sina 时间、来源、空量额和 fail-closed 决策输出。
+- [x] 运行完整后端、前端类型/构建、受影响浏览器矩阵、静态检查与 `git diff --check`；保留首次失败及条件跳过。
+- [ ] 交易时段对 Sina 全链做有界只读探测；生产备份/恢复演练、CI 镜像和部署须在确认本批发布授权后执行。
+
+## Review
+
+- 聚焦 provider/quote/task 审计 16 passed；最终全量 pytest `1235 passed / 14 skipped / 0 failed / 0 errors`。首轮全量 5 项失败是旧 Provider 顺序断言和全构造失败模拟漏 Sina；更新测试合同后修复。新增流式上限回归先复现读取了第 3 个超限块，改造后只读取至 1MB 边界。14 项 skip 均为环境条件（未配置 TEST_POSTGRES_URL、平台文件模式/symlink 能力不可用）。
+- 前端 Vitest 53/53；普通/认证/响应式浏览器 19/19、5/5、18/18；typecheck、production build、compileall、legacy Node 39/39、secret scan、Ruff 新增文件检查和 `git diff --check` 均通过。构建仅有既存 Login 动态/静态重复导入警告。
+- 初次系统 `python` 因未加载项目 venv 缺 SQLAlchemy，随后改用 worktree `.venv`；未将其记为产品失败。第一次 Sina 夹具只验证了自己构造的 query 参数，生产探针返回空记录；核对响应后改为 `/list=...` 并确认真实端点在开盘前返回 5/5 上一交易日行情时间。无新增依赖或软件安装。
+- 生产只读探针未读写数据库。2026-09-24 开盘前端点源时间仍为 2026-09-23；今天盘中及时性尚未实证。没有修改 production-qualified/certified/actionable；没有进行生产部署。
+
+# R2–R4A 详情一致性与图表口径 — 2026-09-26
+
+## Plan
+
+- [x] RED：固定 `as_of` 复现详情/图表输入错位、同日临时/正式 K 重复、缺量被转零、复权重复应用以及未来日线/快照泄漏。
+- [x] GREEN：详情和图表共享同一读时；当日未结算正式行被合格临时行替换，15:15 后正式行优先；输入 hash/series ID绑定读入数据。
+- [x] GREEN：增加逐模块可用性原因及研究决策对比；错误保留上次有效详情、局部模块失败不遮整页，页面 GET 保持只读。
+- [x] GREEN：原始与拆分调整研究序列独立；周/月从研究日线聚合；缺量保留 NULL；来源 qfq/hfq 不重复乘拆分因子。
+- [x] Verify：完整 pytest、前端单测/类型检查/构建、Node、普通/认证/响应式浏览器与路由矩阵通过；首次失败和环境跳过留存。
+- [x] Docs：仓库状态/交接、实现收据、路由验收表已更新；Obsidian ETF 进度/决策/工作流通过专用 DryRun checkpoint 更新，4份文档经镜像 DryRun 后同步；Tesla pending 保留未动。
+- [x] Commit：应用提交与后续测试提交已落在隔离分支；未推送、未合并 main、未部署。
+
+## Review
+
+- 基线：隔离分支 `codex/r2-freshness-lifecycle`，基线 `c63f669095e6eb44e1e9c185deecf0f7af02b27c`；起始工作区干净。
+- 初始专项基线：后端 `18 passed`；前端 detail/chart `7 passed`。测试环境：该 worktree `.venv`。
+- RED 证据：新增盘中/正式 K 场景先有3项失败；模块资格场景先有2项失败；复权/量能场景先复现研究序列缺失、来源 `qfq` 被重复调整和 NULL 被置零。
+- 后端最终全量：`full-pytest-release2.xml`，1250 tests，1236 passed、14 条件 skip、0 failures/errors。首轮完整测试曾有1项旧夹具缺少 `research_bars`；兼容旧载荷后专项及最终全量通过。
+- 前端：Vitest 62/62；vue-tsc、Vite build、compileall、`node --check` 和 legacy Node 39/39 通过。Vite 仅保留 Login 静态/动态重复导入提示。
+- 浏览器：普通20/20、认证5/5、响应式18/18；全路由矩阵覆盖当前直接页及旧路由重定向。所有浏览器使用 mock 与临时 SQLite。
+- 首轮普通浏览器2项失败来自测试夹具缺少 `read_as_of` 及把精确路由服务器的未知URL当作SPA页面；补齐夹具并按中间件白名单定义重测后，20项全过。失败截图/trace保存在 E 盘证据目录。
+- SQLite及业务链路测试通过；PostgreSQL条件因 `TEST_POSTGRES_URL` 未配置跳过，Windows symlink/Unix-only检查按平台跳过。没有引入迁移。
+- 应用提交 `8b52d39d22ebb21a41e269ab9ce9863b85dd3b83`（tree `d7ce9c857f48a99e130cf6060700974213c4e9c0`）；后续测试提交 `f4286d590fd6f9565192754e40c553048286823d`。`main` 仍在 `c63f669`，本轮未推送、合并或部署。
+- 真实行情资格仍 UNKNOWN；未连接 Provider、未改认证/原始 OHLCV、未提高 `actionable` 或预测校准。生产部署仍待后续独立发布授权/收据。
+- Obsidian 写入已回读加载成功；实现收据和路由矩阵的源文件/镜像 SHA-256 相等。固定 pending 文件仍属于 `tesla-speed`，保留原内容和时间戳。
+
+# R4B price structures — 2026-09-27
+
+## Plan
+
+- [x] Verify the isolated baseline and add failing tests for duplicate pivot confirmations, fabricated ATR, and missing pivot time evidence.
+- [x] Implement deterministic daily pivots, deduplicated touch evidence, and box qualification as pure functions with frozen research parameters.
+- [x] Implement box lifecycle replay with settled-bar confirmation and intraday-only breakout attempt display.
+- [x] Persist versioned structure payloads through the audited support/resistance refresh; keep GET read-only and canonical decisions unchanged.
+- [x] Add bounded box overlays and evidence text to the existing chart; guard price-basis and interval mismatches.
+- [x] Verify algorithm, snapshot/API, and browser behavior; preserve first failures, reruns, and environment skips.
+- [x] Update receipt, route matrix, STATUS, HANDOFF, and mapped Obsidian project notes; review and commit each independently accepted batch.
+- [ ] Recheck exact SHA and CI; handle push, main merge, and production rollout only under the release gate stated in this plan.
+
+## Review
+
+- Branch: `codex/r4b-price-structure`; base: `4d8fa1a4b7c5fc8dc3d0066c74dc86cd9092df18` (tree `6400437180c62052936f443f423910fd2a841ac6`).
+- Working tree was clean before branching. Primary checkout and other worktrees were left untouched.
+- App commits: `5600d92243290dffe9e7de6d6af53fea9d48bc22`, `0e5759b706fde8ea4e678f28ef53b7b8d77ec3a7`, `8a5b575904c4cbc5a2d63e53a8521076c80904e1`; final app tree `1fc3d4657dba7f9e0f0ec5d06875eaaa45c98d83`.
+- Final full pytest: 1269 total, 1255 passed, 14 environment skips, 0 failures/errors. Frontend 63/63, ordinary/auth/responsive E2E 26/5/18; Node 39/39, typecheck/build/compileall/secret scan passed.
+- First failures and reruns are recorded in `docs/09-RPT-R4B箱体与支撑压力验收.md`; browser screenshots/traces and JUnit are outside the repo under `E:\Claude_allow\Download\ETF_R4B_QA_20260927`.
+- Obsidian progress/decision/workflow slots were applied after two identical hash-guarded DryRuns; the checkpoint wrapper's internal Apply conflicted, so the same verified plan was applied through its guarded `apply-sync.ps1`. The no-argument mirror wrapper copied four selected documents after DryRun. The unrelated Tesla pending checkpoint hash remained unchanged.
+- Remote CI, main integration, production deployment, and real-data qualification remain pending separate gates.
+
+# R4B PostgreSQL snapshot-version width correction — 2026-09-27
+
+## Plan
+
+- [x] Add a regression that requires the support-resistance method version to fit the existing database column; verify it fails against the deployed 37-character identifier and 32-character column.
+- [x] Shorten only the method-version identifier to fit the existing column; retain algorithm, structure payload, research parameters, and `actionable=false` unchanged.
+- [x] Run focused service/structure tests and required static checks, then full pytest and frontend checks affected by the app commit.
+- [ ] Commit and directly push the fix; wait for exact-SHA CI and obtain a fresh production image artifact.
+- [ ] Back up production and verify checksum; restore a copy in an isolated no-egress PostgreSQL environment and smoke the exact image.
+- [ ] Deploy API, worker, and one scheduler with the verified image; verify migrations, health, source/tree, mounts, and public asset hashes.
+- [ ] Run the existing audited `refresh_decision_board` task only after confirming no active run/lock; verify R4B snapshots are persisted and visible while keeping actionability blocked.
+- [ ] Update R4B receipt, STATUS, HANDOFF, roadmap, and Obsidian project records with the correction/deployment evidence; push documentation and verify final main SHA.
+
+## Review
+
+- Root cause confirmed from production read-only checks: `method_version` column max length 32; deployed identifier length 37; zero active refresh tasks or global pipeline lock; existing snapshots remain on earlier method versions.
+- Existing per-instrument savepoints explain why service health can remain green while individual structure snapshots fail to write.
+- RED: the new regression failed as expected with `37 <= 32`; after shortening the identifier to 31 characters, support-resistance and post-deploy snapshot suites passed 27/27.
+- Final local application checks after the correction: pytest 1270 total / 1256 passed / 14 environment skips / 0 failures / 0 errors; compileall, Node syntax, Node 39/39, Vitest 63/63, typecheck/build, and `git diff --check` passed.
+- Browser rerun on the corrected source: ordinary 26/26 on isolated port 18084, authenticated 5/5, responsive 18/18; the pre-existing listener on 18082 was left untouched. Browser evidence and JUnit are under `E:\Claude_allow\Download\ETF_R4B_QA_20260927`.
+- Vite reported only the existing Login.vue static/dynamic duplicate-import warning; pytest emitted existing dependency deprecation warnings. No frontend source or dependency changed.
+
+# C2D R4B documentation reconciliation — 2026-09-28
+
+## Plan
+
+- [x] Bind the accepted local application candidate `43bfbf6` / tree `12d217a` and final migration head `g8b9c0d1e2f3`.
+- [x] Add authoritative R4B acceptance and R2–R4B reconciliation records.
+- [x] Preserve the historical R4B receipt and append the final independent acceptance addendum.
+- [x] Refresh STATUS, HANDOFF, docs README, and the R4C plan without changing production identity.
+- [ ] Commit and push the documentation-only handoff.
+- [ ] Obtain independent remote C2D review before R4C M1.
+
+## Review
+
+Application code is unchanged in this worktree. Production remains SHA `0dbd3fe` / tree `f8607b3`; real-data qualification remains UNKNOWN; no production or automatic-trading action is permitted.
+
+# R4C M1 engine qualification — 2026-09-28
+
+## Plan
+
+- [x] Inspect the accepted integration surface and existing chanlun declaration without changing runtime code.
+- [x] Capture installed chanlun artifact/API/license/source mapping evidence and read the current CZSC upstream candidate metadata.
+- [x] Run the deterministic Windows synthetic probe and preserve its JSON hash.
+- [x] Freeze `config/chan_research.json` disabled with explicit M1 blocking reasons.
+- [x] Record Linux/CZSC unavailable gates honestly.
+- [ ] Commit/push the M1 qualification artifacts and obtain independent remote review.
+
+## Review
+
+- M1 is `BLOCKED` for source mapping, uninstalled CZSC, unavailable Linux probe, counts-only current integration, and unestablished causal confirmation.
+- No production, Provider, model, canonical action, frontend, API, schema, or runtime dependency change was made.
