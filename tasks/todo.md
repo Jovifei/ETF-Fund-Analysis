@@ -1092,3 +1092,17 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 
 - M1 is `BLOCKED` for source mapping, uninstalled CZSC, unavailable Linux probe, counts-only current integration, and unestablished causal confirmation.
 - No production, Provider, model, canonical action, frontend, API, schema, or runtime dependency change was made.
+
+# R4C M1 evidence closure — 2026-09-28
+
+## Plan
+
+- [x] Reconcile the cached chanlun wheel's pure-Python source against the published upstream tag and PyPI release metadata.
+- [x] Add source-level capability matrix and exact cross-platform probe manifests without installing dependencies.
+- [x] Define geometry/causal probe fields and retain disabled configuration.
+- [ ] Obtain independent remote review of M1-R1 evidence closure.
+
+## Review
+
+- Pure-Python `chan.py` matches upstream tag `v26.6.73` commit `1477cde...`; native cp313 wheel is not a published PyPI file, so source mapping remains blocked.
+- M1 remains `CLOSED_BLOCKED`; M2, runtime integration, Provider, production and real-data qualification remain unauthorized/unchanged.
