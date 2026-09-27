@@ -245,6 +245,67 @@ def test_sr_same_day_revisions_are_append_only_and_previous_payload_remains_read
     db.delete(revisions[1])
     db.flush()
     assert service.latest(db, inst.id) is None
+
+
+def test_sr_identical_compute_reuses_one_immutable_revision(isolated):
+    from app.models import SupportResistanceSnapshotRevision
+
+    db, inst = isolated
+    add_bar(db, inst, day=date(2026, 9, 11), close=2.0, high=2.1, low=1.9)
+    service = SupportResistanceService()
+
+    service.compute(db, inst.id)
+    first = db.query(SupportResistanceSnapshotRevision).one()
+    service.compute(db, inst.id)
+
+    revisions = db.query(SupportResistanceSnapshotRevision).all()
+    assert len(revisions) == 1
+    assert revisions[0].revision_id == first.revision_id
+    assert service.latest(db, inst.id)["revision_id"] == first.revision_id
+
+
+def test_sr_latest_fails_closed_when_current_payload_is_tampered(isolated):
+    from app.models import SupportResistanceSnapshot
+
+    db, inst = isolated
+    add_bar(db, inst, day=date(2026, 9, 11), close=2.0, high=2.1, low=1.9)
+    service = SupportResistanceService()
+    service.compute(db, inst.id)
+    snapshot = db.query(SupportResistanceSnapshot).one()
+    snapshot.payload_json = {**snapshot.payload_json, "tampered": True}
+    db.flush()
+
+    assert service.latest(db, inst.id) is None
+    assert not db.new and not db.dirty
+
+
+def test_sr_revision_publication_failure_keeps_previous_current(monkeypatch, isolated):
+    from app.models import SupportResistanceSnapshotRevision
+    from app.utils.hashing import stable_hash
+
+    db, inst = isolated
+    add_bar(db, inst, day=date(2026, 9, 11), close=2.0, high=2.1, low=1.9)
+    service = SupportResistanceService()
+    service.compute(db, inst.id)
+    db.commit()
+    previous = service.latest(db, inst.id)
+    revised_service = SupportResistanceService()
+    revised_service.config_hash = stable_hash({"revision": "new-config"})
+    original_add = db.add
+
+    def fail_revision(value):
+        if isinstance(value, SupportResistanceSnapshotRevision):
+            raise RuntimeError("revision publication failed")
+        return original_add(value)
+
+    monkeypatch.setattr(db, "add", fail_revision)
+    with pytest.raises(RuntimeError, match="revision publication failed"):
+        revised_service.compute(db, inst.id)
+    db.rollback()
+
+    current = service.latest(db, inst.id)
+    assert current is not None
+    assert current["revision_id"] == previous["revision_id"]
     assert not db.new and not db.dirty
 
 def test_daily_close_wins_over_an_old_quote_and_labels_the_return_date(isolated):
