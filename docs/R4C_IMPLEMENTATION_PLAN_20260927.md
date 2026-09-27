@@ -87,6 +87,7 @@
 
 | 候选 | 当前可借鉴内容 | 采用判断 |
 | --- | --- | --- |
+| 已安装的 [`chanlun`](https://github.com/YuYuKunKun/chanlun.rs) | 本机 venv 的分发元数据报告版本 `2606.73`，Project-URL 指向 `YuYuKunKun/chanlun.rs`；上游 README 描述 Rust/PyO3 Python 绑定与 MIT。 | 这是项目现有实现，先审其真实几何与确认行为，不应仅因另一个项目更新就替换；本机分发元数据未给出许可证字段，仍须核查所用 wheel 的许可证/NOTICE 和精确来源。 |
 | [CZSC](https://github.com/waditu/czsc/blob/master/README.md) | README 描述 1.0 核心转到 Rust/PyO3；[Python 包清单](https://github.com/waditu/czsc/blob/master/pyproject.toml)与 [Rust 清单](https://github.com/waditu/czsc/blob/master/Cargo.toml)分别有许可证声明。 | R4C 窄适配候选；先固定具体发布工件、查清双层许可证和跨平台轮子，再审分型/笔/中枢确认语义。 |
 | [AKQuant](https://github.com/akfamily/akquant/blob/main/docs/en/guide/testing.md) | 提供合成交易规则测试；仓库有 [ETF 轮动示例](https://github.com/akfamily/akquant/blob/main/examples/59_akshare_etf_rotation.py)。 | R6 合格 PIT 数据到位后的隔离第二回测引擎，不替代本阶段结构引擎或数据资格。 |
 | [Qlib](https://github.com/microsoft/qlib/blob/main/qlib/workflow/task/gen.py) | 滚动/扩展窗口任务生成可供样本外研究借鉴。 | 依赖和数据转换较重，只在隔离研究环境评估。 |
