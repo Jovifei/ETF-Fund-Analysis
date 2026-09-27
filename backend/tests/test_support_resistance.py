@@ -92,3 +92,12 @@ def test_oscillator_confirmations_add_features_but_not_independent_touches():
 
     assert level["confirmations"] >= 4
     assert level["touch_count"] == len(level["touch_ids"])
+
+
+def test_support_resistance_method_version_fits_existing_database_column():
+    from app.models import SupportResistanceSnapshot
+    from app.services.support_resistance_service import METHOD_VERSION
+
+    max_length = SupportResistanceSnapshot.__table__.c.method_version.type.length
+
+    assert len(METHOD_VERSION) <= max_length

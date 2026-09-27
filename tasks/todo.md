@@ -1039,3 +1039,25 @@ Prevent a reachable FTShare endpoint from being marked qualified when absolute-u
 - First failures and reruns are recorded in `docs/09-RPT-R4B箱体与支撑压力验收.md`; browser screenshots/traces and JUnit are outside the repo under `E:\Claude_allow\Download\ETF_R4B_QA_20260927`.
 - Obsidian progress/decision/workflow slots were applied after two identical hash-guarded DryRuns; the checkpoint wrapper's internal Apply conflicted, so the same verified plan was applied through its guarded `apply-sync.ps1`. The no-argument mirror wrapper copied four selected documents after DryRun. The unrelated Tesla pending checkpoint hash remained unchanged.
 - Remote CI, main integration, production deployment, and real-data qualification remain pending separate gates.
+
+# R4B PostgreSQL snapshot-version width correction — 2026-09-27
+
+## Plan
+
+- [x] Add a regression that requires the support-resistance method version to fit the existing database column; verify it fails against the deployed 37-character identifier and 32-character column.
+- [x] Shorten only the method-version identifier to fit the existing column; retain algorithm, structure payload, research parameters, and `actionable=false` unchanged.
+- [x] Run focused service/structure tests and required static checks, then full pytest and frontend checks affected by the app commit.
+- [ ] Commit and directly push the fix; wait for exact-SHA CI and obtain a fresh production image artifact.
+- [ ] Back up production and verify checksum; restore a copy in an isolated no-egress PostgreSQL environment and smoke the exact image.
+- [ ] Deploy API, worker, and one scheduler with the verified image; verify migrations, health, source/tree, mounts, and public asset hashes.
+- [ ] Run the existing audited `refresh_decision_board` task only after confirming no active run/lock; verify R4B snapshots are persisted and visible while keeping actionability blocked.
+- [ ] Update R4B receipt, STATUS, HANDOFF, roadmap, and Obsidian project records with the correction/deployment evidence; push documentation and verify final main SHA.
+
+## Review
+
+- Root cause confirmed from production read-only checks: `method_version` column max length 32; deployed identifier length 37; zero active refresh tasks or global pipeline lock; existing snapshots remain on earlier method versions.
+- Existing per-instrument savepoints explain why service health can remain green while individual structure snapshots fail to write.
+- RED: the new regression failed as expected with `37 <= 32`; after shortening the identifier to 31 characters, support-resistance and post-deploy snapshot suites passed 27/27.
+- Final local application checks after the correction: pytest 1270 total / 1256 passed / 14 environment skips / 0 failures / 0 errors; compileall, Node syntax, Node 39/39, Vitest 63/63, typecheck/build, and `git diff --check` passed.
+- Browser rerun on the corrected source: ordinary 26/26 on isolated port 18084, authenticated 5/5, responsive 18/18; the pre-existing listener on 18082 was left untouched. Browser evidence and JUnit are under `E:\Claude_allow\Download\ETF_R4B_QA_20260927`.
+- Vite reported only the existing Login.vue static/dynamic duplicate-import warning; pytest emitted existing dependency deprecation warnings. No frontend source or dependency changed.

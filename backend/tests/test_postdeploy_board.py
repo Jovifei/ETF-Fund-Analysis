@@ -178,7 +178,7 @@ def test_sr_snapshot_contains_versioned_daily_structures_and_get_stays_read_only
     computed = service.compute(db, inst.id)
     persisted = service.latest(db, inst.id)
 
-    assert computed["method_version"] == "support-resistance-v4-price-structure"
+    assert computed["method_version"] == "support-resistance-v4-structure"
     assert computed["structures"]["boxes"][0]["state"] == "confirmed"
     assert computed["structures"]["actionable"] is False
     assert persisted is not None and persisted["structures"]["input_hash"] == computed["structures"]["input_hash"]

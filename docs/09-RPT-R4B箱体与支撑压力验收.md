@@ -16,7 +16,7 @@ R4B 已在隔离分支完成本地实现和验收。实现产生可回放、带�
 | 结构快照提交 | `0e5759b706fde8ea4e678f28ef53b7b8d77ec3a7` |
 | 图表与页面状态提交 | `8a5b575904c4cbc5a2d63e53a8521076c80904e1` |
 | 最终应用 tree | `1fc3d4657dba7f9e0f0ec5d06875eaaa45c98d83` |
-| 算法 / 快照 / 图表合同 | `price-structure-v1` / `support-resistance-v4-price-structure` / `chart-read-v1.2.0` |
+| 算法 / 快照 / 图表合同 | `price-structure-v1` / `support-resistance-v4-structure` / `chart-read-v1.2.0` |
 
 没有数据库迁移。现有支撑压力快照因方法版本变化会失效，须由已有受审计刷新任务重算；GET 不抓数、不写快照，也不补算新结构。
 
@@ -54,3 +54,11 @@ R4B 已在隔离分支完成本地实现和验收。实现产生可回放、带�
 ## 未完成的发布门禁
 
 生产镜像未构建/切换，main 未更新；真实行情覆盖与认证资格未审核。PostgreSQL 条件未运行。公开行情输入、人工样本外研究、完整总收益与缠论属于后续独立阶段。生产部署须另核对远端 SHA/CI、备份恢复和运行收据；不能用本地测试声称线上已更新。
+
+## 生产镜像 PostgreSQL 兼容性纠正（2026-09-27）
+
+R4B 首次发布后追加的只读线上检查发现：既有 PostgreSQL `support_resistance_snapshots.method_version` 列为 `VARCHAR(32)`，应用曾写入的标识为 37 字符。快照保存按标的 SAVEPOINT 隔离，因此健康检查可正常而每个快照写入失败。发布后检查时，活跃 `refresh_decision_board` 数与流水线 advisory lock 均为 0；快照汇总仍是 `support-resistance-v1` 125 条、`support-resistance-v2-input-mask` 280 条，尚无 R4B 方法版本行。
+
+修复只将方法版本改为 `support-resistance-v4-structure`（31 字符），没有新增迁移或改变算法、快照结构、参数、canonical decision、预测校准及 `actionable=false`。新增列宽回归先失败（37 > 32），修复后支撑压力与快照专项 27/27 通过；修复版全量 pytest 为 1270 项，1256 passed、14 环境跳过、0 failures/errors；前端 63/63，普通/认证/响应式浏览器 26/5/18 通过，Node 39/39、typecheck、构建和 compileall 通过。
+
+上述为修复版本地验收。**在修复版固定 SHA 的 CI 镜像、备份副本演练、生产切换和受审计刷新任务完成前，不宣称 R4B 生产快照已恢复。**真实行情资格仍 UNKNOWN。生产部署收据与后续任务执行结果将在门禁完成后补充。

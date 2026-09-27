@@ -1,4 +1,4 @@
-"""支撑/压力唯一计算与读取入口（support-resistance-v4-price-structure）。
+"""支撑/压力唯一计算与读取入口（support-resistance-v4-structure）。
 
 全系统的支撑压力只在这里计算并落库（SupportResistanceSnapshot），
 决策总表 / 14:30 工作台 / ETF 详情一律读取快照，禁止各自从日线重算。
@@ -27,7 +27,7 @@ from app.utils.support_resistance import build_support_resistance
 
 logger = logging.getLogger(__name__)
 
-METHOD_VERSION = "support-resistance-v4-price-structure"
+METHOD_VERSION = "support-resistance-v4-structure"
 DEFAULT_WINDOW = 250
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 DAILY_SETTLEMENT = time(15, 15)
