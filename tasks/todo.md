@@ -1106,3 +1106,21 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 
 - Pure-Python `chan.py` matches upstream tag `v26.6.73` commit `1477cde...`; native cp313 wheel is not a published PyPI file, so source mapping remains blocked.
 - M1 remains `CLOSED_BLOCKED`; M2, runtime integration, Provider, production and real-data qualification remain unauthorized/unchanged.
+
+# R4C M1-R3.2 evidence correction — 2026-09-28
+
+## Plan
+
+- [x] Update the disabled qualification config to remove the two R3-closed blocker codes and record only current blockers.
+- [x] Bind the committed probe commit, path, file SHA-256, code-defined fixture, and historical JSON hashes in the runtime receipt.
+- [x] Record that the probe JSON platform field is hard-coded/non-authoritative; preserve existing probe hashes and do not rerun the environments.
+- [x] Reconcile the OSS evidence addendum and task ledger without changing application/runtime files.
+- [x] Validate JSON, Markdown evidence references, Python syntax, and diff hygiene; commit and push the isolated evidence correction.
+- [ ] Send the exact commit and receipts to remote ChatGPT for independent R3.2 review.
+
+## Review
+
+- Config remains `enabled=false`, `qualification_status=BLOCKED`, and `engine_id=null`; closed reasons `CZSC_NOT_INSTALLED` and `LINUX_PROBE_NOT_RUN_ENV` were removed.
+- Runtime and OSS receipts bind commit `f6501bd233701f7f1becfc681bc0918223898edd`, probe SHA-256 `95B5C5A6FAB20E95312100AE0D2BE54935998B2EFD8881009455234ED924E9E2`, code-defined fixture, and unchanged historical JSON hashes. The hard-coded JSON platform label is explicitly non-authoritative for Linux.
+- Validation: JSON parse, probe syntax compile, evidence-reference checks, and `git diff --check` passed; no application/runtime/dependency/Provider/production change.
+- Pending the exact evidence commit push and independent remote R3.2 review.

@@ -17,6 +17,14 @@ The first Linux dependency download timed out; the same exact wheel was retried 
 
 Probe: `scripts/validate_r4c_m1_r3_czsc.py`; frozen synthetic 300-bar alternating fixture, full repeated run, prefixes 80/160/240/300, and volume zero comparison. No market data or Provider call.
 
+### R3.2 evidence binding
+
+- The exact harness used for the recorded run is committed at `f6501bd233701f7f1becfc681bc0918223898edd`, path `scripts/validate_r4c_m1_r3_czsc.py`.
+- The committed harness SHA-256 is `95B5C5A6FAB20E95312100AE0D2BE54935998B2EFD8881009455234ED924E9E2`.
+- The frozen fixture is generated entirely by that committed script; there is no separate fixture file. The script hash therefore binds the fixture and normalization logic.
+- The existing Windows JSON SHA-256 is `0897890DB7BE08C198ADF1EA73CB2925D99629748D5204DB93152D138F053EE8`; the existing Linux JSON SHA-256 is `5BCB6EAF78F9C7E48FFD58820CFD5BB774C115CEB3E407F0FAD47DA83CBFD643`. These historical hashes are preserved unchanged.
+- The script's JSON `platform` field is hard-coded to `windows-cpython-3.12-cp310-abi3`, so that field is non-authoritative for the Linux artifact. Platform identity comes from the disposable environment and exact wheel records above. No probe is rerun solely to relabel the historical JSON.
+
 - Windows probe JSON SHA-256: `0897890DB7BE08C198ADF1EA73CB2925D99629748D5204DB93152D138F053EE8`.
 - Linux probe JSON SHA-256: `5BCB6EAF78F9C7E48FFD58820CFD5BB774C115CEB3E407F0FAD47DA83CBFD643`.
 - Full normalized digest: equal on Windows/Linux.
@@ -29,3 +37,5 @@ Probe: `scripts/validate_r4c_m1_r3_czsc.py`; frozen synthetic 300-bar alternatin
 ## Interpretation
 
 This closes artifact import and cross-platform normalized-output probes for the pinned CZSC candidate. It does not establish application qualification: confirmation time, repaint/replacement behavior, stable IDs, future-only mutation behavior and source-K causal observation still require an explicit ledger. `config/chan_research.json` remains `enabled=false`, no engine is selected, and M2/runtime integration remains forbidden until independent review.
+
+The current disabled configuration records `SOURCE_MAPPING_BLOCKED` for the legacy `chanlun` candidate, `CURRENT_INTEGRATION_COUNTS_ONLY`, `CAUSAL_CONFIRMATION_NOT_ESTABLISHED`, `REPAINT_CONTRACT_NOT_ESTABLISHED`, `STABLE_ID_CONTRACT_NOT_ESTABLISHED`, and `RESOURCE_EVIDENCE_INCOMPLETE`. The earlier `CZSC_NOT_INSTALLED` and `LINUX_PROBE_NOT_RUN_ENV` reasons were closed by this isolated probe and are no longer current blockers.

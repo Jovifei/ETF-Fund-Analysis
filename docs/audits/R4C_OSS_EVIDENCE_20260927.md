@@ -3,7 +3,7 @@
 **Date:** 2026-09-28
 **Scope:** evidence-only engine/dialect qualification from accepted R4B baseline.
 **Accepted application baseline:** `43bfbf6929a70f520c216b759edbaa433e920e91` / `12d217af3edbe34c67bc36e75b4395ab4917b001`.
-**Overall M1:** `BLOCKED` (`SOURCE_MAPPING_BLOCKED`, `CZSC_NOT_INSTALLED`, `LINUX_PROBE_NOT_RUN_ENV`, `CURRENT_INTEGRATION_COUNTS_ONLY`, `CAUSAL_CONFIRMATION_NOT_ESTABLISHED`).
+**Overall M1:** `CLOSED_BLOCKED` (`SOURCE_MAPPING_BLOCKED` for the legacy `chanlun` candidate, `CURRENT_INTEGRATION_COUNTS_ONLY`, `CAUSAL_CONFIRMATION_NOT_ESTABLISHED`, `REPAINT_CONTRACT_NOT_ESTABLISHED`, `STABLE_ID_CONTRACT_NOT_ESTABLISHED`, `RESOURCE_EVIDENCE_INCOMPLETE`).
 
 ## Scope and safety boundary
 
@@ -70,7 +70,7 @@ Probe script: `scripts/validate_r4c_m1.py`. It uses a frozen synthetic 300-bar a
 
 Stable count output is useful evidence of repeatability for this fixture. It does not qualify geometry, confirmation timestamps, repaint rules, or a dialect for M2.
 
-## M1 decision and hard stop
+## M1-R2 decision and hard stop (historical snapshot)
 
 `config/chan_research.json` is disabled. No engine is selected. M1 stops because:
 
@@ -94,3 +94,9 @@ The existing `chanlun` evidence is now partially reconciled: the cached cp313 wh
 ## M1-R3 runtime probe addendum — 2026-09-28
 
 The exact CZSC v1.0.1 Windows and manylinux wheels were installed only in disposable environments. Normalized full/prefix/zero-volume digests matched across Windows and Linux; the probe exposed FX/BI/ZS geometry fields. Confirmation/repaint/stable-ID causality remains unqualified, so `config/chan_research.json` stays disabled and M2 is not authorized. See [R4C M1 runtime probe](R4C_M1_RUNTIME_PROBE_20260928.md).
+
+## M1-R3.2 evidence binding — 2026-09-28
+
+The exact recorded probe is bound to commit `f6501bd233701f7f1becfc681bc0918223898edd`, path `scripts/validate_r4c_m1_r3_czsc.py`, file SHA-256 `95B5C5A6FAB20E95312100AE0D2BE54935998B2EFD8881009455234ED924E9E2`. The synthetic fixture is code-defined in that file, so the file hash also binds the fixture and normalization logic. Existing Windows/Linux JSON hashes remain `0897890DB7BE08C198ADF1EA73CB2925D99629748D5204DB93152D138F053EE8` and `5BCB6EAF78F9C7E48FFD58820CFD5BB774C115CEB3E407F0FAD47DA83CBFD643`.
+
+The JSON `platform` value is hard-coded to the Windows label by the historical harness and is non-authoritative for the Linux JSON; platform identity is taken from the disposable environment and wheel installation records. No probe was rerun for this documentation correction. The current configuration removes the closed `CZSC_NOT_INSTALLED` and `LINUX_PROBE_NOT_RUN_ENV` codes while retaining only active qualification blockers. M1 remains `CLOSED_BLOCKED`, M2 remains unauthorized, and production/real-data/actionability state is unchanged.
