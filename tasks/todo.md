@@ -1185,3 +1185,17 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - Remote R5 receipt/results PASS; remote found structure-key namespace, complete collision coverage, empty-observation representation, and hash-labeling gaps. No runtime/dependency/provider/production change is allowed.
 - R5.1 Windows/Linux semantic digest matches `9346d77b4d0477a3434238924b4b63c939c098feb9f27321313de79bf28f8b54`; three collision namespaces are zero, namespace sensitivity passes, and proposed resource limits pass. R5.1 method commit `f151e262d97f0f20addc1faf4773dfcb46742d8a` is pushed; independent selection-readiness review remains open.
 - R5.1 evidence tip `aa824ba48a91a11d4d3f7ea053639fa23532bd60` (tree `406a1ae96514134d6bc4a63a6076ae44e50cfef0`) is pushed to `codex/r4c-m1`.
+
+# R4C M1-R5.2 collision-preimage correction — 2026-09-28
+
+## Plan
+
+- [x] Record remote R5.1 design PASS and collision-validation CHANGES_REQUIRED while keeping M1 blocked.
+- [x] Bind R5.2 base `2d98d98f5bdd91634f164d2e1825f200f0a5509d` / tree `fc2007b8190d0a3875e31469032bc8686cc2ed6f`.
+- [x] Replace self-referential hashed collision values with raw canonical preimages in all three namespace maps.
+- [ ] Commit/push correction before disposable Windows/Linux rerun; revalidate parity, sensitivity, collisions, and budget.
+- [ ] Obtain independent selection-readiness review; M2 remains forbidden.
+
+## Review
+
+- Pending R5.2 method correction and remote review. No runtime/dependency/provider/production change is allowed.

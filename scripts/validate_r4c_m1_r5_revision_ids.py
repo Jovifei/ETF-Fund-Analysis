@@ -28,6 +28,10 @@ RESOURCE_BUDGET = {
 }
 
 
+def canonical_json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+
+
 def observation_payload(rows: list[dict[str, Any]], cutoff: int) -> dict[str, Any]:
     input_payload = [
         {
@@ -113,7 +117,7 @@ def build_history(rows: list[dict[str, Any]]) -> dict[str, Any]:
         }
         obs_payload = observation_payload(rows, cutoff)
         obs_id = json_digest(obs_payload)
-        observation_collisions[obs_id].add(json_digest(obs_payload))
+        observation_collisions[obs_id].add(canonical_json(obs_payload))
         observation_ledger.append(
             {
                 "cutoff": cutoff,
@@ -122,10 +126,10 @@ def build_history(rows: list[dict[str, Any]]) -> dict[str, Any]:
             }
         )
         for key, (item, key_payload) in current.items():
-            structure_collisions[key].add(json_digest(key_payload))
+            structure_collisions[key].add(canonical_json(key_payload))
             rev_payload = revision_payload(obs_id, key, item)
             revision = json_digest(rev_payload)
-            revision_collisions[revision].add(json_digest(rev_payload))
+            revision_collisions[revision].add(canonical_json(rev_payload))
             payload_hash = json_digest(rev_payload["payload"])
             if key not in seen:
                 status = "OBSERVED_NEW"

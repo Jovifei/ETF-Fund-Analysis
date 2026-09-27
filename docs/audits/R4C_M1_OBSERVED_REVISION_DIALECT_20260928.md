@@ -64,6 +64,8 @@ The R5.1 validator must use a dialect-native, namespaced `structure_key` that bi
 
 The authoritative checked-out method file SHA is `D2F516F4CF2F185414393F03024ED70441674D42B822CBDB57A3D93FD88191E1`. The earlier bounded chunk release was serialized as text and had a separate transport hash `17F28DA499CD255DDCF0C17ADFB30F3A6D76F31B9C0253DCE55A244214D1D004`; that transport hash is not the committed file SHA.
 
+R5.2 corrects collision validation to retain canonical JSON preimages in each namespace map. An ID is now a collision only when the same ID maps to different raw canonical payloads; a hash of the payload is not used as the collision preimage.
+
 ## R5.1 identity-hardening receipt
 
 The corrected method is committed at `f151e262d97f0f20addc1faf4773dfcb46742d8a`, tree `dfbee537778920ad1745ccbf558e72631a6beca6`, with script SHA-256 `544156B9A865D7768635F6CF0A20513947F00AD49EB676082C04B35E269D3883`. The final evidence tip is `3751476667e087de159a8dd73f3f6dd7e760babc` / tree `f14c75aa36856a6e8b4fa51f57436884dbc7586b` before this R5.1 receipt update.
