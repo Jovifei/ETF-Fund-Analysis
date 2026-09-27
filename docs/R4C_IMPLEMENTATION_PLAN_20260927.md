@@ -83,6 +83,17 @@
 
 现有 `backend/app/services/kline_stabilization_service.py` 已有可选 `chanlun` 摘要路径，但计数不能证明几何或确认时点。优先审查其真实分发包，再对照 [CZSC](https://github.com/waditu/czsc) 的当前结构 API；Skill 只供开发参考，不能绕过 Provider Adapter 抓行情。AKQuant、Qlib 等保留为后续独立回测/滚动评估参考；KLineCharts 先维持项目固定版本。任何引入须固定上游提交、分发工件、许可证/NOTICE 和依赖树，不因框架更新而静默替换现有算法。
 
+2026-09-27 对一手公开源码的只读核对显示：
+
+| 候选 | 当前可借鉴内容 | 采用判断 |
+| --- | --- | --- |
+| [CZSC](https://github.com/waditu/czsc/blob/master/README.md) | README 描述 1.0 核心转到 Rust/PyO3；[Python 包清单](https://github.com/waditu/czsc/blob/master/pyproject.toml)与 [Rust 清单](https://github.com/waditu/czsc/blob/master/Cargo.toml)分别有许可证声明。 | R4C 窄适配候选；先固定具体发布工件、查清双层许可证和跨平台轮子，再审分型/笔/中枢确认语义。 |
+| [AKQuant](https://github.com/akfamily/akquant/blob/main/docs/en/guide/testing.md) | 提供合成交易规则测试；仓库有 [ETF 轮动示例](https://github.com/akfamily/akquant/blob/main/examples/59_akshare_etf_rotation.py)。 | R6 合格 PIT 数据到位后的隔离第二回测引擎，不替代本阶段结构引擎或数据资格。 |
+| [Qlib](https://github.com/microsoft/qlib/blob/main/qlib/workflow/task/gen.py) | 滚动/扩展窗口任务生成可供样本外研究借鉴。 | 依赖和数据转换较重，只在隔离研究环境评估。 |
+| [KLineCharts](https://github.com/klinecharts/KLineChart/blob/main/package.json) | 上游主线版本已高于本地固定的 9.8.12。 | R4C 先沿用固定渲染层；升级须单独迁移测试，不能解决 Provider/时点资格。 |
+
+这些链接说明公开项目的能力与候选价值，不构成本项目已采用、许可证完全核定、收益优势或生产兼容证明。[AKShare 官方 README](https://github.com/akfamily/akshare/blob/main/README.md)对数据接口可能变化有提醒，进一步支持保留 Provider Adapter 与失败阻断。M1 仍须固定精确上游 SHA 和发行工件后才能做选型结论。
+
 ## 后续依赖
 
 - N1：在冻结证据上做消息主体、否定、事件时间、转载去重和 ETF 暴露映射，人工标注集验收；不让模型改价格结构。
