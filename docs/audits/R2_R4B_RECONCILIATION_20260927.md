@@ -10,10 +10,10 @@
 | R2–R4A 应用提交 | `8b52d39d22ebb21a41e269ab9ce9863b85dd3b83`，tree `d7ce9c857f48a99e130cf6060700974213c4e9c0` | 2026-09-26 收据报告本地实现和验收；本轮未复跑 |
 | R2–R4A 测试提交 | `f4286d590fd6f9565192754e40c553048286823d`，tree `736c6393a22c81537b8a1b5a32ea17c2b80e7275` | 后续测试补充 |
 | R2–R4A 文档提交 / 分支头 | `4d8fa1a4b7c5fc8dc3d0066c74dc86cd9092df18`，tree `6400437180c62052936f443f423910fd2a841ac6` | `codex/r2-freshness-lifecycle`；比 `main` 领先 3 个提交、无落后 |
-| R4B 在途分支 | `codex/r4b-price-structure` 当前仍指向 `4d8fa1a`，工作树有未提交应用、测试和文档变更 | 由另一条 Codex 聊天执行；**未验收** |
+| R4B 在途分支 | 已观察到三个应用/测试提交 `5600d92`、`0e5759b`、`8a5b575904c4cbc5a2d63e53a8521076c80904e1`；后者 tree `1fc3d4657dba7f9e0f0ec5d06875eaaa45c98d83` | 完整后端验收仍在运行、工作树尚有 `tasks/todo.md` 变化；**未验收** |
 | 生产运行身份 | 上一次 `docs/PRODUCTION_DEPLOYMENT_RECEIPT_AU_20260923.md` 记录应用 SHA `0dbd3fee58a3f5e080aacbcd8eae8d5964aec54f` | 本轮未重新查询生产，不推断当前运行身份 |
 
-`main` 是 R2–R4A 分支的 merge-base；R4B 分支尚未形成独立提交。当前 `main` 与 R2–R4A 的改动清单包含后端读模型、价格口径、详情/图表、测试、状态页和验收收据；不能用该差异代表尚未提交的 R4B。
+`main` 是 R2–R4A 分支的 merge-base；R2–R4A 文档提交 `4d8fa1a` 是 R4B 当前提交链的 merge-base。`4d8fa1a..8a5b575` 涉及 20 个文件，包含价格结构计算、快照服务、图表和测试；`git diff --check` 通过。上述 R4B SHA 是测试仍在运行时的候选观察值，不是最终应用身份或验收结论。
 
 ## 证据分类
 
