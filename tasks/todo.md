@@ -1138,7 +1138,7 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - [x] Run the committed harness only in disposable Windows/Linux environments with exact pinned artifacts.
 - [x] Verify per-bar prefix ledger, suffix/future mutation, candidate stable IDs, volume semantics, resources, and normalized parity.
 - [x] Update M1 evidence/config only; keep `enabled=false`, no engine, real data UNKNOWN, and production unchanged.
-- [ ] Commit/push the evidence result and obtain independent remote M1-R4 review before any further phase.
+- [x] Commit/push the evidence result and obtain independent remote M1-R4 review before any further phase.
 
 ## Review
 
@@ -1147,3 +1147,4 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - Source review and execution show no permanent confirmation, stable native IDs, or repaint-safe lifecycle; future suffix mutations remove prior structures. Unknown volume fails explicitly, positive/zero digests match, and resource measurements are recorded without adopting a budget.
 - Validation: probe syntax compile, JSON parse, semantic/prefix parity, resource fields, volume boundary, and `git diff --check` passed. No project runtime/dependency/Provider/production change.
 - M1 remains `CLOSED_BLOCKED`; pending final evidence commit and independent remote M1-R4 review.
+- Final evidence receipt commit `d3bd40b50359e4f5e7f047e292dbc8b803b4af7b` (tree `d920ed1cdc5954816c0b50635c23b33c9b785e64`) is pushed to `codex/r4c-m1`; remote review is now the only open gate.
