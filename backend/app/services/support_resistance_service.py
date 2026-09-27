@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import PROJECT_ROOT, Settings, get_settings
-from app.models import DailyBar, Instrument, SupportResistanceSnapshot
+from app.models import DailyBar, Instrument, SupportResistanceSnapshot, SupportResistanceSnapshotRevision
 from app.utils.hashing import stable_hash
 from app.utils.price_structure import ALGORITHM_VERSION, build_price_structures
 from app.utils.support_resistance import build_support_resistance
@@ -137,6 +137,36 @@ class SupportResistanceService:
     ) -> None:
         if as_of_date is None:
             return
+        payload_hash = stable_hash(payload)
+        input_hash = payload.get("input_hash")
+        price_basis_id = payload.get("price_basis_id")
+        revision_id = stable_hash({
+            "instrument_id": instrument_id,
+            "interval": "1d",
+            "as_of_date": as_of_date,
+            "method_version": METHOD_VERSION,
+            "config_hash": self.config_hash,
+            "price_basis_id": price_basis_id,
+            "input_hash": input_hash,
+            "payload_hash": payload_hash,
+        })
+        if db.scalar(select(SupportResistanceSnapshotRevision).where(
+            SupportResistanceSnapshotRevision.revision_id == revision_id
+        )) is None:
+            db.add(SupportResistanceSnapshotRevision(
+                revision_id=revision_id,
+                instrument_id=instrument_id,
+                interval="1d",
+                as_of_date=as_of_date,
+                method_version=METHOD_VERSION,
+                config_hash=self.config_hash,
+                price_basis_id=price_basis_id,
+                input_hash=input_hash,
+                payload_hash=payload_hash,
+                payload_json=payload,
+                source_bars=bars,
+                computed_by=computed_by,
+            ))
         existing = db.scalar(
             select(SupportResistanceSnapshot).where(
                 SupportResistanceSnapshot.instrument_id == instrument_id,

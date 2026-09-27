@@ -822,6 +822,39 @@ class SupportResistanceSnapshot(Base):
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class SupportResistanceSnapshotRevision(Base):
+    """Append-only evidence for each published support/resistance computation."""
+
+    __tablename__ = "support_resistance_snapshot_revisions"
+    __table_args__ = (
+        UniqueConstraint("revision_id", name="uq_sr_revision_id"),
+        Index(
+            "ix_sr_revisions_instrument_date",
+            "instrument_id",
+            "interval",
+            "as_of_date",
+            "generated_at",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    revision_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    instrument_id: Mapped[int] = mapped_column(
+        ForeignKey("instruments.id", ondelete="CASCADE"), nullable=False
+    )
+    interval: Mapped[str] = mapped_column(String(8), default="1d", nullable=False)
+    as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
+    method_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    config_hash: Mapped[str | None] = mapped_column(String(64))
+    price_basis_id: Mapped[str | None] = mapped_column(String(64))
+    input_hash: Mapped[str | None] = mapped_column(String(64))
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    source_bars: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    computed_by: Mapped[str] = mapped_column(String(16), default="scheduled", nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class SignalSnapshot(Base):
     __tablename__ = "signal_snapshots"
     __table_args__ = (

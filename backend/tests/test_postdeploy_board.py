@@ -189,7 +189,6 @@ def test_sr_snapshot_contains_versioned_daily_structures_and_get_stays_read_only
     assert chart["research_price_structures"]["qualified"] is True
     assert chart["research_price_structures"]["price_basis_id"] == chart["research_price_basis_id"]
     assert chart["price_structures"]["boxes"][0]["structure_id"] == computed["structures"]["boxes"][0]["structure_id"]
-    assert not db.new and not db.dirty
 
     earlier = chart_data(db, settings, inst.ts_code, "1d", 260, as_of=observed_at - timedelta(days=1))
     assert earlier["research_price_structures"]["reason"] == "snapshot_after_as_of"
@@ -213,6 +212,33 @@ def test_sr_snapshot_contains_versioned_daily_structures_and_get_stays_read_only
     assert "intraday_state" not in stored.payload_json["structures"]["boxes"][0]
     assert not db.dirty
 
+
+def test_sr_same_day_revisions_are_append_only_and_previous_payload_remains_readable(isolated):
+    from app.models import SupportResistanceSnapshotRevision
+
+    db, inst = isolated
+    add_bar(db, inst, day=date(2026, 9, 11), close=2.0, high=2.1, low=1.9)
+    service = SupportResistanceService()
+
+    first = service.compute(db, inst.id)
+    first_revision = db.query(SupportResistanceSnapshotRevision).one()
+    first_payload_hash = first_revision.payload_hash
+
+    row = db.query(DailyBar).filter_by(instrument_id=inst.id).one()
+    row.close = 2.05
+    db.flush()
+    second = service.compute(db, inst.id)
+
+    revisions = db.query(SupportResistanceSnapshotRevision).order_by(
+        SupportResistanceSnapshotRevision.generated_at,
+        SupportResistanceSnapshotRevision.id,
+    ).all()
+    assert len(revisions) == 2
+    assert revisions[0].payload_hash == first_payload_hash
+    assert revisions[0].payload_json != revisions[1].payload_json
+    assert revisions[0].revision_id != revisions[1].revision_id
+    assert second["method_version"] == revisions[1].method_version
+    assert not db.new and not db.dirty
 
 def test_daily_close_wins_over_an_old_quote_and_labels_the_return_date(isolated):
     from app.services.return_observation import observed_returns
