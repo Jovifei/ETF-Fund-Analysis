@@ -1173,13 +1173,14 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 
 - [x] Record remote R5 receipt PASS while keeping R5 method `CHANGES_REQUIRED`, M1 blocked, and M2 false.
 - [x] Bind the R5.1 base `3751476667e087de159a8dd73f3f6dd7e760babc` / tree `f14c75aa36856a6e8b4fa51f57436884dbc7586b`.
-- [ ] Namespace `structure_key` with instrument/interval/engine/version/dialect/config/basis and causal endpoints.
-- [ ] Add explicit observation records for all cutoffs, including zero-structure observations.
-- [ ] Validate observation, structure, and revision collision namespaces against canonical preimages.
-- [ ] Add namespace-sensitivity checks and correct raw-script versus chunk-release hash labels.
-- [ ] Commit the corrected method before disposable Windows/Linux rerun; revalidate parity and accepted resource budget.
-- [ ] Commit/push R5.1 evidence and obtain independent selection-readiness review; do not enter M2.
+- [x] Namespace `structure_key` with instrument/interval/engine/version/dialect/config/basis and causal endpoints.
+- [x] Add explicit observation records for all cutoffs, including zero-structure observations.
+- [x] Validate observation, structure, and revision collision namespaces against canonical preimages.
+- [x] Add namespace-sensitivity checks and correct raw-script versus chunk-release hash labels.
+- [x] Commit the corrected method before disposable Windows/Linux rerun; revalidate parity and accepted resource budget.
+- [x] Commit/push R5.1 evidence and obtain independent selection-readiness review; do not enter M2.
 
 ## Review
 
 - Remote R5 receipt/results PASS; remote found structure-key namespace, complete collision coverage, empty-observation representation, and hash-labeling gaps. No runtime/dependency/provider/production change is allowed.
+- R5.1 Windows/Linux semantic digest matches `9346d77b4d0477a3434238924b4b63c939c098feb9f27321313de79bf28f8b54`; three collision namespaces are zero, namespace sensitivity passes, and proposed resource limits pass. R5.1 method commit `f151e262d97f0f20addc1faf4773dfcb46742d8a` is pushed; independent selection-readiness review remains open.
