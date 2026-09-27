@@ -1,0 +1,19 @@
+{
+  "enabled": false,
+  "qualification_status": "BLOCKED",
+  "engine_id": null,
+  "engine_version": null,
+  "upstream_sha": null,
+  "artifact_sha256": null,
+  "dialect_version": null,
+  "supported_capabilities": [],
+  "reason_codes": [
+    "SOURCE_MAPPING_BLOCKED",
+    "CZSC_NOT_INSTALLED",
+    "LINUX_PROBE_NOT_RUN_ENV",
+    "CURRENT_INTEGRATION_COUNTS_ONLY",
+    "CAUSAL_CONFIRMATION_NOT_ESTABLISHED"
+  ],
+  "accepted_application_sha": "43bfbf6929a70f520c216b759edbaa433e920e91",
+  "accepted_application_tree": "12d217af3edbe34c67bc36e75b4395ab4917b001"
+}
