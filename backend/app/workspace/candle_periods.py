@@ -118,7 +118,7 @@ def transform_chart(result: dict, period: str, config: dict, limit: int=500, *, 
     series_id=stable_hash({"base_input_hash":result.get("input_hash"),"interval":period,
                            "research_price_basis_id":result.get("research_price_basis_id"),
                            "indicator_version":result.get("indicator_version"),
-                           "chart_contract_version":"chart-read-v1.1.0"})
+                           "chart_contract_version":"chart-read-v1.2.0"})
     studies={**studies,"input_hash":result.get("input_hash"),"series_id":series_id,
              "price_basis_id":result.get("research_price_basis_id"),"interval":period}
     payload = {**result, 'interval': period, 'bars': bars[-limit:],
@@ -133,6 +133,10 @@ def transform_chart(result: dict, period: str, config: dict, limit: int=500, *, 
         'raw_overlay_reason': result.get('raw_overlay_reason') or (None if raw_overlay_allowed else 'price_basis_mismatch'),
         'basis_transition': bool(result.get('raw_overlay_reason') == 'price_basis_mismatch'),
         'research_cost_overlay_allowed': bool(result.get('research_cost_overlay_allowed')),
+        'price_structures': (result.get('price_structures') if period == '1d' else {
+            'qualified': False, 'reason': 'interval_unsupported', 'boxes': [], 'actionable': False, 'interval': period}),
+        'research_price_structures': (result.get('research_price_structures') if period == '1d' else {
+            'qualified': False, 'reason': 'interval_unsupported', 'boxes': [], 'actionable': False, 'interval': period}),
         'actionable': False,
         'indicator_note': '日/周/月K按实际历史OHLC聚合；指标按同一拆分调整研究序列重算。价位为当前研究参考，不是历史当时已知的交易信号。'}
     if payload['basis_transition'] and result.get('indicator_note'):

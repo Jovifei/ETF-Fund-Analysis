@@ -59,7 +59,21 @@
     "volume_profile_window": 120,
     "volume_profile_bins": 32,
     "chan_segments": 3,
-    "chan_segment_bars": 18
+    "chan_segment_bars": 18,
+    "price_structure": {
+      "candidate_window": 120,
+      "pivot_window": 2,
+      "atr_period": 14,
+      "atr_tolerance_multiple": 0.3,
+      "minimum_touch_gap": 3,
+      "minimum_duration": 20,
+      "minimum_inside_ratio": 0.8,
+      "minimum_width_atr": 2.0,
+      "maximum_width_atr": 12.0,
+      "maximum_trend_drift_width": 0.5,
+      "expiry_bars": 60,
+      "breakout_reversal_bars": 5
+    }
   },
   "point_in_time": {
     "accepted_intervals_minutes": [5, 15],

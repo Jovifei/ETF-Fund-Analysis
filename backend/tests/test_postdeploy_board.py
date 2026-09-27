@@ -118,6 +118,18 @@ def test_sr_preserves_unknown_and_true_zero_amount(isolated):
     assert frame.iloc[1]['amount']==0.
 
 
+def test_sr_frame_excludes_unsettled_same_day_daily_bar_until_1515(isolated):
+    db, inst = isolated
+    add_bar(db, inst, day=date(2026, 9, 11))
+    add_bar(db, inst, day=date(2026, 9, 14))
+    service = SupportResistanceService()
+    before = datetime(2026, 9, 14, 14, 30, tzinfo=get_settings().timezone)
+    settled = datetime(2026, 9, 14, 15, 15, tzinfo=get_settings().timezone)
+
+    assert service._sr_frame(db, inst.id, as_of=before).iloc[-1]['trade_date'] == date(2026, 9, 11)
+    assert service._sr_frame(db, inst.id, as_of=settled).iloc[-1]['trade_date'] == date(2026, 9, 14)
+
+
 def test_snapshot_contract_rejects_old_versions_without_rewriting_them():
     from app.services.snapshot_contract import snapshot_issues
     s=get_settings();cfg=s.load_strategy()
@@ -137,6 +149,69 @@ def test_sr_does_not_reuse_a_snapshot_after_a_same_day_price_revision(isolated):
     assert service.latest(db,inst.id) is not None
     bar.close=2.05;db.flush()
     assert service.latest(db,inst.id) is None
+
+
+def test_sr_snapshot_contains_versioned_daily_structures_and_get_stays_read_only(isolated):
+    from app.models import SupportResistanceSnapshot
+    from app.workspace.candle_periods import transform_chart
+    from app.workspace.read_model import chart_data
+
+    db, inst = isolated
+    dates = pd.bdate_range("2026-01-05", periods=120)
+    highs = [104.0] * 120
+    lows = [102.0] * 120
+    for index in (10, 45, 80, 110):
+        highs[index] = 106.0
+    for index in (25, 60, 95):
+        lows[index] = 100.0
+    rows = [DailyBar(instrument_id=inst.id, trade_date=day.date(), open=103.0, high=highs[i], low=lows[i],
+        close=103.0, pre_close=103.0, volume=None, amount=None, source="mock:structure", adjust="none",
+        quality_hash=f"structure-{i}") for i, day in enumerate(dates)]
+    db.add_all(rows)
+    db.flush()
+    service = SupportResistanceService()
+
+    assert service.latest(db, inst.id) is None
+    assert not db.new and not db.dirty
+    assert db.query(SupportResistanceSnapshot).filter_by(instrument_id=inst.id).count() == 0
+
+    computed = service.compute(db, inst.id)
+    persisted = service.latest(db, inst.id)
+
+    assert computed["method_version"] == "support-resistance-v4-price-structure"
+    assert computed["structures"]["boxes"][0]["state"] == "confirmed"
+    assert computed["structures"]["actionable"] is False
+    assert persisted is not None and persisted["structures"]["input_hash"] == computed["structures"]["input_hash"]
+
+    settings = get_settings()
+    observed_at = datetime.combine(dates[-1].date(), datetime.min.time(), tzinfo=settings.timezone) + timedelta(hours=16)
+    chart = chart_data(db, settings, inst.ts_code, "1d", 260, as_of=observed_at)
+    assert chart["research_price_structures"]["qualified"] is True
+    assert chart["research_price_structures"]["price_basis_id"] == chart["research_price_basis_id"]
+    assert chart["price_structures"]["boxes"][0]["structure_id"] == computed["structures"]["boxes"][0]["structure_id"]
+    assert not db.new and not db.dirty
+
+    earlier = chart_data(db, settings, inst.ts_code, "1d", 260, as_of=observed_at - timedelta(days=1))
+    assert earlier["research_price_structures"]["reason"] == "snapshot_after_as_of"
+    weekly = transform_chart(chart, "1w", settings.load_strategy()["indicator"], 260, now=observed_at)
+    assert weekly["research_price_structures"]["reason"] == "interval_unsupported"
+
+    from app.services.decision_board_service import DecisionBoardService
+    provisional_day = (dates[-1] + pd.offsets.BDay(1)).date()
+    provisional_at = datetime.combine(provisional_day, datetime.min.time(), tzinfo=settings.timezone) + timedelta(hours=10, minutes=29)
+    DecisionBoardService(settings).record_provisional_input(db, ts_code=inst.ts_code,
+        observed_at=provisional_at, source="mock:intraday", timestamp_verified=True,
+        open_price=108.0, high_price=108.2, low_price=107.8, last_price=108.0,
+        volume=100.0, amount=10800.0, pct_change_percent_points=0.1)
+    intraday = chart_data(db, settings, inst.ts_code, "1d", 260, as_of=provisional_at + timedelta(minutes=1))
+    shown_box = intraday["research_price_structures"]["boxes"][0]
+    stored = db.query(SupportResistanceSnapshot).filter_by(instrument_id=inst.id).one()
+
+    assert shown_box["state"] == "confirmed"
+    assert shown_box["intraday_state"]["state"] == "breakout_attempt"
+    assert shown_box["intraday_state"]["side"] == "upper"
+    assert "intraday_state" not in stored.payload_json["structures"]["boxes"][0]
+    assert not db.dirty
 
 
 def test_daily_close_wins_over_an_old_quote_and_labels_the_return_date(isolated):

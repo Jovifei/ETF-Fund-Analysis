@@ -445,7 +445,7 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
     series_id = stable_hash({"base_input_hash": input_hash, "interval": interval,
                              "research_price_basis_id": research_price_basis_id,
                              "indicator_version": strategy["indicator_version"],
-                             "chart_contract_version": "chart-read-v1.1.0"})
+                             "chart_contract_version": "chart-read-v1.2.0"})
     snapshot = db.scalar(select(IndicatorSnapshot).where(IndicatorSnapshot.instrument_id == inst.id).order_by(IndicatorSnapshot.as_of_date.desc(), IndicatorSnapshot.generated_at.desc(), IndicatorSnapshot.id.desc()).limit(1))
     matches = None
     if snapshot and research_series and iso(snapshot.as_of_date) == research_series[-1]["date"]:
@@ -453,7 +453,31 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
         comparable = [key for key in CORE_FIELDS if number(values.get(key)) is not None and research_series[-1]["indicators"].get(key) is not None]
         matches = all(abs(float(values[key]) - research_series[-1]["indicators"][key]) <= (0.011 if key.startswith(("kdj", "rsi")) else 0.00011) for key in comparable) if comparable else None
     mock = settings.market_provider == "mock" or any("mock" in str(row["source"]).lower() for row in rows)
-    sr = SupportResistanceService(settings).latest(db, inst.id)
+    sr_snapshot = SupportResistanceService(settings).latest(db, inst.id)
+    sr = sr_snapshot
+    structure_status = {"qualified": False, "reason": "snapshot_missing_requires_task", "boxes": [], "actionable": False, "interval": "1d"}
+    if sr_snapshot is not None:
+        structure_status = dict(sr_snapshot.get("structures") or structure_status)
+        structure_status["boxes"] = [dict(box) for box in structure_status.get("boxes", [])]
+        snapshot_day = sr_snapshot.get("source_as_of_date")
+        if continuity_issue:
+            structure_status.update(qualified=False, reason="history_qualification_blocked", boxes=[])
+        elif snapshot_day and snapshot_day > as_of.date().isoformat():
+            structure_status.update(qualified=False, reason="snapshot_after_as_of", boxes=[])
+        elif structure_status.get("price_basis_id") != research_price_basis_id:
+            structure_status.update(qualified=False, reason="price_basis_mismatch", boxes=[])
+        if structure_status.get("qualified") and provisional_status.get("used_for_derived_values") and provisional_bar:
+            for box in structure_status["boxes"]:
+                tolerance = number(box.get("confirmation_tolerance"))
+                high, low = number(provisional_bar.get("high")), number(provisional_bar.get("low"))
+                if tolerance is None or high is None or low is None:
+                    continue
+                above, below = high > box["upper"] + tolerance, low < box["lower"] - tolerance
+                if above or below:
+                    box["intraday_state"] = {"state": "breakout_attempt", "side": "both" if above and below else "upper" if above else "lower",
+                        "observed_at": provisional_bar.get("date"), "source_id": stable_hash({"provisional_id": provisional.id, "structure_id": box["structure_id"]})}
+    structure_status["read_as_of"] = iso(as_of)
+    structure_status["interval"] = "1d"
     price_only = legacy_units or any(row["volume"] is None for row in rows)
     if price_only or continuity_issue or not raw_overlay_allowed:
         sr = None
@@ -467,7 +491,7 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
         "adjust": adjust, "currency": "CNY", "source_bars": len(rows), "history_truncated": truncated,
         "indicator_version": strategy["indicator_version"], "indicator_basis": "shared_python_core_formulas_on_research_price_series",
         "input_hash": input_hash, "series_id": series_id,
-        "chart_contract_version": "chart-read-v1.1.0", "display_price_basis": f"source_adjustment:{adjust}",
+        "chart_contract_version": "chart-read-v1.2.0", "display_price_basis": f"source_adjustment:{adjust}",
         "research_price_basis": research_price_basis, "research_price_basis_id": research_price_basis_id,
         "research_basis_evidence_ids": basis_events, "raw_overlay_allowed": raw_overlay_allowed,
         "raw_overlay_reason": "history_qualification_blocked" if continuity_issue else "price_basis_mismatch" if price_basis_changed else None,
@@ -478,6 +502,8 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
         "cost_overlay_allowed": adjust == "none", "research_cost_overlay_allowed": research_cost_overlay_allowed,
         "sr_overlay_allowed": raw_overlay_allowed and len(adjustments) == 1 and bool(sr),
         "support_resistance": sr if raw_overlay_allowed and len(adjustments) == 1 else None,
+        "price_structures": structure_status if raw_overlay_allowed else {**structure_status, "qualified": False, "reason": "price_basis_mismatch", "boxes": []},
+        "research_price_structures": structure_status,
         "indicator_note": "拆分调整研究序列与原始行情的价格口径不同；原始图已隐藏未映射的指标和支撑压力，切换到研究序列可查看。" if price_basis_changed else "盘中指标基于临时行情计算，收盘后由正式日线替换；不生成操作级信号。" if provisional_status.get("used_for_derived_values") else "历史价格指标可展示；量能缺失或旧单位未验证，禁止生成操作级信号。" if price_only else "图表由服务端统一公式生成；支撑压力为当前快照，不是历史当时已知的点位。",
     }
 

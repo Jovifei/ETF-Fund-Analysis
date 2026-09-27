@@ -1,4 +1,4 @@
-"""支撑/压力唯一计算与读取入口（support-resistance-v3-research-price-basis）。
+"""支撑/压力唯一计算与读取入口（support-resistance-v4-price-structure）。
 
 全系统的支撑压力只在这里计算并落库（SupportResistanceSnapshot），
 决策总表 / 14:30 工作台 / ETF 详情一律读取快照，禁止各自从日线重算。
@@ -11,8 +11,9 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, time, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from sqlalchemy import select
@@ -21,12 +22,15 @@ from sqlalchemy.orm import Session
 from app.core.config import PROJECT_ROOT, Settings, get_settings
 from app.models import DailyBar, Instrument, SupportResistanceSnapshot
 from app.utils.hashing import stable_hash
+from app.utils.price_structure import ALGORITHM_VERSION, build_price_structures
 from app.utils.support_resistance import build_support_resistance
 
 logger = logging.getLogger(__name__)
 
-METHOD_VERSION = "support-resistance-v3-research-price-basis"
+METHOD_VERSION = "support-resistance-v4-price-structure"
 DEFAULT_WINDOW = 250
+SHANGHAI = ZoneInfo("Asia/Shanghai")
+DAILY_SETTLEMENT = time(15, 15)
 
 _EMPTY_PAYLOAD: dict[str, Any] = {
     "qualified": False,
@@ -36,6 +40,7 @@ _EMPTY_PAYLOAD: dict[str, Any] = {
     "nearest_resistance": None,
     "trend_lines": [],
     "chan_zone_approx": None,
+    "structures": {"qualified": False, "reason": "snapshot_missing_requires_task", "boxes": [], "actionable": False},
 }
 
 
@@ -60,13 +65,19 @@ class SupportResistanceService:
 
     # -------------------------------------------------------------- 数据准备
 
-    def _sr_frame(self, db: Session, instrument_id: int, *, window: int = DEFAULT_WINDOW) -> pd.DataFrame:
+    def _sr_frame(self, db: Session, instrument_id: int, *, window: int = DEFAULT_WINDOW,
+                  as_of: datetime | None = None) -> pd.DataFrame:
         """Bounded research history; unknown units may not feed weighted methods."""
         from app.providers.corporate_action_contract import official_corporate_actions, research_history_rows
         from app.providers.data_contract import finite, price_history_issue, row_units_verified
         from app.utils.input_lineage import history_digest
+        assessed_at = as_of or datetime.now(SHANGHAI)
+        if assessed_at.tzinfo is None:
+            assessed_at = assessed_at.replace(tzinfo=SHANGHAI)
+        assessed_at = assessed_at.astimezone(SHANGHAI)
+        last_settled_date = assessed_at.date() if assessed_at.time() >= DAILY_SETTLEMENT else assessed_at.date() - timedelta(days=1)
         rows = list(reversed(db.scalars(select(DailyBar)
-            .where(DailyBar.instrument_id == instrument_id)
+            .where(DailyBar.instrument_id == instrument_id, DailyBar.trade_date <= last_settled_date)
             .order_by(DailyBar.trade_date.desc(), DailyBar.id.desc()).limit(window)).all()))
         instrument = db.get(Instrument, instrument_id)
         research_rows = rows if self.settings.market_provider == "mock" or instrument is None else research_history_rows(rows, instrument.ts_code)
@@ -76,9 +87,17 @@ class SupportResistanceService:
             if instrument is not None and adjustments == {"none"} and self.settings.market_provider != "mock"
             else []
         )
-        basis_id = stable_hash({"instrument": instrument.ts_code if instrument else instrument_id,
-                                "adjustments": sorted(adjustments), "split_evidence": split_evidence,
-                                "method_version": METHOD_VERSION})
+        adjust = next(iter(adjustments)) if len(adjustments) == 1 else None
+        price_changed = any(
+            finite(getattr(source_row, key, None)) and finite(getattr(row, key, None))
+            and abs(float(getattr(source_row, key)) - float(getattr(row, key))) > 1e-12
+            for source_row, row in zip(rows, research_rows, strict=True)
+            for key in ("open", "high", "low", "close")
+        )
+        basis = "official_split_adjusted_price_research_not_total_return" if price_changed else f"source_adjustment:{adjust or 'ambiguous'}"
+        basis_id = stable_hash({"code": instrument.ts_code if instrument else str(instrument_id),
+                                "adjust": adjust, "basis": basis,
+                                "events": split_evidence if adjust == "none" else []})
         records = []
         for source_row, row in zip(rows, research_rows, strict=True):
             units_ok = row_units_verified(source_row) or (self.settings.market_provider == "mock" and "mock" in source_row.source)
@@ -89,7 +108,19 @@ class SupportResistanceService:
         frame = pd.DataFrame(records)
         frame.attrs["history_issue"] = price_history_issue(research_rows)
         frame.attrs["input_hash"] = stable_hash({"raw_history_hash": history_digest(rows), "price_basis_id": basis_id})
+        prefix_hashes: dict[str, str] = {}
+        previous_hash = "0" * 64
+        for source_row, research_row in zip(rows, research_rows, strict=True):
+            source_input = {key: getattr(source_row, key, None) for key in (
+                "trade_date", "open", "high", "low", "close", "pre_close", "volume", "amount", "pct_change", "adjust", "source")}
+            research_input = {key: getattr(research_row, key, None) for key in ("trade_date", "open", "high", "low", "close", "volume", "amount")}
+            previous_hash = stable_hash({"prior": previous_hash, "source": source_input,
+                "research": research_input, "price_basis_id": basis_id})
+            prefix_hashes[research_row.trade_date.isoformat()] = previous_hash
+        frame.attrs["prefix_input_hashes"] = prefix_hashes
         frame.attrs["price_basis_id"] = basis_id
+        frame.attrs["price_basis"] = basis
+        frame.attrs["instrument"] = instrument.ts_code if instrument else str(instrument_id)
         frame.attrs["contains_mock"] = any("mock" in str(row.source).lower() for row in rows)
         return frame
 
@@ -140,13 +171,41 @@ class SupportResistanceService:
             )
         db.flush()
 
-    def compute(self, db: Session, instrument_id: int, *, computed_by: str = "scheduled") -> dict[str, Any]:
+    def compute(self, db: Session, instrument_id: int, *, computed_by: str = "scheduled",
+                as_of: datetime | None = None) -> dict[str, Any]:
         """显式任务计算并落库；页面读取不触发本方法。"""
-        frame = self._sr_frame(db, instrument_id)
+        frame = self._sr_frame(db, instrument_id, as_of=as_of)
         bars = len(frame)
         issue = frame.attrs.get("history_issue")
         payload = ({**_EMPTY_PAYLOAD, "reason": issue} if issue
                    else build_support_resistance(frame, self.config))
+        structures = {"qualified": False, "reason": issue, "boxes": [], "actionable": False,
+                      "algorithm_version": ALGORITHM_VERSION, "price_basis_id": frame.attrs.get("price_basis_id"),
+                      "input_hash": frame.attrs.get("input_hash"), "interval": "1d"}
+        if not issue and bars:
+            expected_dates = None
+            calendar_issue = None
+            if not frame.attrs.get("contains_mock"):
+                try:
+                    import exchange_calendars as xcals
+
+                    calendar = xcals.get_calendar("XSHG")
+                    sessions = calendar.sessions_in_range(frame.iloc[0]["trade_date"].isoformat(), frame.iloc[-1]["trade_date"].isoformat())
+                    expected_dates = [pd.Timestamp(day).date().isoformat() for day in sessions]
+                except Exception as exc:  # noqa: BLE001 - no verified calendar means no box certification
+                    calendar_issue = f"calendar_unavailable:{type(exc).__name__}"
+            if calendar_issue:
+                structures["reason"] = "calendar_unavailable"
+                structures["calendar_detail"] = calendar_issue
+            else:
+                structures = build_price_structures(frame, instrument=str(frame.attrs.get("instrument") or instrument_id),
+                    price_basis_id=str(frame.attrs.get("price_basis_id") or "unknown"),
+                    config=self.config.get("price_structure", {}), expected_dates=expected_dates,
+                    input_hash=str(frame.attrs.get("input_hash") or ""),
+                    input_hashes_by_date=frame.attrs.get("prefix_input_hashes"))
+        structures["source_as_of_date"] = frame.iloc[-1]["trade_date"].isoformat() if bars else None
+        payload["structures"] = structures
+        payload["price_basis_id"] = frame.attrs.get("price_basis_id")
         volume_ready = bool(bars and frame["volume"].notna().all())
         amount_ready = bool(bars and frame["amount"].notna().all())
         payload.update(method_version=METHOD_VERSION, config_hash=self.config_hash,

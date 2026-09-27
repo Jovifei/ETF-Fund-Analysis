@@ -49,6 +49,13 @@ def _board_rows(db):
 def test_actions_and_support_resistance_consistent_across_surfaces(
     bootstrapped, db_session, _cleanup_board_snapshots
 ):
+    # Earlier chart tests may leave provisional rows in the shared test SQLite.
+    # This case verifies the persisted settled snapshot contract across surfaces.
+    from app.models import DecisionBoardProvisionalInput
+    from sqlalchemy import delete
+
+    db_session.execute(delete(DecisionBoardProvisionalInput))
+    db_session.flush()
     board = _board_rows(db_session)
     assert board, "decision board payload expected after refresh"
 
@@ -74,7 +81,7 @@ def test_actions_and_support_resistance_consistent_across_surfaces(
         b_support = ((b_sr.get("nearest_support") or {}).get("price")) if isinstance(b_sr, dict) else None
         w_support = ((w_sr.get("nearest_support") or {}).get("price")) if isinstance(w_sr, dict) else None
         if b_support is not None and w_support is not None:
-            assert abs(float(b_support) - float(w_support)) < 1e-9, f"{code} support drift"
+            assert abs(float(b_support) - float(w_support)) < 1e-9, f"{code} support drift: board={b_support} workbench={w_support}; board_snapshot={b_sr.get('snapshot_as_of_date')} source={b_sr.get('snapshot_source')}; workbench_snapshot={w_sr.get('snapshot_as_of_date')} source={w_sr.get('snapshot_source')}; provisional={b.get('provisional', {}).get('used_for_derived_values')}"
         b_resistance = ((b_sr.get("nearest_resistance") or {}).get("price")) if isinstance(b_sr, dict) else None
         w_resistance = ((w_sr.get("nearest_resistance") or {}).get("price")) if isinstance(w_sr, dict) else None
         if b_resistance is not None and w_resistance is not None:
