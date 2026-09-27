@@ -1184,3 +1184,4 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 
 - Remote R5 receipt/results PASS; remote found structure-key namespace, complete collision coverage, empty-observation representation, and hash-labeling gaps. No runtime/dependency/provider/production change is allowed.
 - R5.1 Windows/Linux semantic digest matches `9346d77b4d0477a3434238924b4b63c939c098feb9f27321313de79bf28f8b54`; three collision namespaces are zero, namespace sensitivity passes, and proposed resource limits pass. R5.1 method commit `f151e262d97f0f20addc1faf4773dfcb46742d8a` is pushed; independent selection-readiness review remains open.
+- R5.1 evidence tip `aa824ba48a91a11d4d3f7ea053639fa23532bd60` (tree `406a1ae96514134d6bc4a63a6076ae44e50cfef0`) is pushed to `codex/r4c-m1`.
