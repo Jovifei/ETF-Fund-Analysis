@@ -33,6 +33,7 @@ dependencies = [
 
 [project.optional-dependencies]
 archive = ["duckdb>=1.4,<2"]
+r4c = ["czsc==1.0.1"]
 research = [
   "alphalens-reloaded>=0.4,<1",
   "mapie>=1,<2",

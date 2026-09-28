@@ -1223,3 +1223,27 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 
 - Selection candidate: CZSC `1.0.1` + `r4c-observed-revision-v1`; runtime remains disabled and engine confirmation remains unknown.
 - Selection evidence tip `ec26d2791ccb62f658aeba3517ef3e320c320926` (tree `3b33e26a91afe8e1a3d155c60bd0797ef50d1eef`) is pushed; remote selection review is now the only open gate.
+
+# R4C M2 selected-engine adapter core — 2026-09-28
+
+## Plan
+
+- [x] Bind the accepted selection base `339a2d6bbc7c216699b4d605e6ba7c99dbb5a192` / tree `0d7604d0ec24dc26e281c3f7347cfe060c9c2b6f` and create isolated branch `codex/r4c-m2-observed-revision`.
+- [x] Add failing contract tests before implementation for exact version gating, validated research-bar inputs, deterministic identities, replay transitions, unknown volume, and disabled/no-side-effect boundaries.
+- [x] Add exact optional `r4c` extra `czsc==1.0.1`; preserve existing market extra and legacy integration.
+- [x] Implement narrow lazy CZSC adapter, normalized contract/IDs, and pure in-memory append-only observed-revision replay.
+- [x] Keep config `enabled=false`; do not add DB, migration, task/worker, API/GET, frontend, Provider, real-data, canonical-action, actionable, or production integration.
+- [x] Run focused tests and affected backend checks in disposable Windows/Linux environments using pinned CZSC artifacts; run compileall, scoped Ruff, secret scan, and `git diff --check`.
+- [x] Add an M2 acceptance receipt and update task/status handoff evidence without claiming runtime qualification or deployment.
+- [ ] Commit/push the exact M2 implementation and evidence, then obtain independent remote review before any M3 plan.
+
+## Review
+
+- Remote M2 plan was returned after Jovi reaffirmed the continuing remote-plan/local-execution workflow. The implementation boundary is the disabled, side-effect-free adapter/replay core. The older roadmap's permanent `confirmed_at` wording is superseded for CZSC by the independently selected contract: `engine_confirmation=unknown`, observed revisions append-only.
+- Jovi's standing authorization covers this bounded M2 plan; no production or auto-trading action is included.
+- Independent local review found and fixed three gaps before push: source endpoint IDs now bind `structure_key`; replay rejects backward `cutoff_at` while allowing same-time revisions; failed appends leave the replay unchanged and reusable. Regression tests cover all three.
+- The adapter no longer exposes injectable version/binding loaders. Prepared input caches an immutable endpoint index, and resource timing separates validated-input preparation from adapter execution.
+- Identity-bearing input, structure, and observation records now require validating factories; prepared endpoint maps are immutable, and the adapter has no public version/binding injection seam.
+- Windows and Linux each pass 20 focused tests. The 300-bar semantic digest is identical (`f5863681304268fedc5ce37a7c239550f20a6fb09f978bc50ae6dd7b06be4f98`); both adapter sweeps and full prepare+adapter sweeps meet the M1 budget. Full receipt: `docs/audits/R4C_M2_ADAPTER_ACCEPTANCE_20260928.md`.
+- `ruff`, `compileall`, and `git diff --check` pass. Project-wide `conftest.py` was excluded only on Linux to avoid unrelated DB fixture dependencies; M2-focused tests and the parity/resource probe ran there.
+- Awaiting push and remote review. This is a stage handoff, not project closeout or a request for human acceptance; continue with the next remotely planned stage after M2 passes.

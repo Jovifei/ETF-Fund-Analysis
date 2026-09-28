@@ -1,4 +1,18 @@
-# 当前状态：R4B 本地接受完成，C2D 文档对账进行中（2026-09-28）
+# 当前状态：R4C M2 本地实现与验证完成，远端审核待进行（2026-09-28）
+
+## 当前阶段
+
+- R4B 本地接受与 M0 技术门禁已通过；R4C M1 的引擎/方言选择已由远端接受，CZSC `1.0.1` + `r4c-observed-revision-v1` 仍保持禁用。
+- M2 在隔离分支 `codex/r4c-m2-observed-revision` 实现了精确可选依赖、纯输入适配器、规范化身份和仅内存的追加式观测修订历史。
+- Windows/Linux 各 20 项 M2 专项测试通过，300-bar 语义摘要跨平台一致，资源门禁通过。详细证据见 [R4C M2 acceptance](docs/audits/R4C_M2_ADAPTER_ACCEPTANCE_20260928.md)。
+- 当前 M2 状态为 `IMPLEMENTED_TESTED_PENDING_REMOTE_REVIEW`。下一步推送精确分支并让远端对照上轮计划、代码/证据和技术路线审核；只有远端通过后，才由远端制定下一阶段计划。
+- 这是阶段间交接，不是项目收尾或等待人工验收。产品最终验收仍在后续阶段；远端计划、本地执行、测试、GitHub、远端复核的循环继续。
+
+生产没有部署或修改；真实数据资格仍为 **UNKNOWN**，`actionable=false`，canonical action 未改变。M2 未添加数据库、任务/worker、API、前端、Provider 或自动交易路径。
+
+---
+
+# 历史状态快照：R4B 本地接受完成，C2D 文档对账（2026-09-28）
 
 ## 生产身份（保持不变）
 

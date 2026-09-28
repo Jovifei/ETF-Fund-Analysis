@@ -1,5 +1,6 @@
 # Lessons
 
+- 2026-09-28: Jovi's C2C workflow is a continuing stage loop: remote plan/review, local implementation and tests, GitHub push, then remote audit and the next plan. Human acceptance is a later product gate, not a stop condition between stages; raise technical-route disagreements to the remote reviewer with evidence.
 - 2026-09-23: Windows checkout settings can leave tracked `.sh` files as CRLF in the Git blob; Linux then fails before the script body with `/usr/bin/env: bash\r`. Pin `*.sh text eol=lf` in `.gitattributes` and assert shell entrypoints contain no CR byte; `shellcheck` alone does not catch the shebang failure.
 - 2026-09-23: A green CI image build can exceed a small production host's cgroup during Vue typechecking or native wheel compilation. Set build-stage-only Node/Cargo limits, keep Docker build CPU/memory bounded, and verify production before replacing containers; do not raise limits until the host can safely provide them.
 - 2026-09-23: Docker build cgroup limits on a low-RAM host did not prevent the host OOM killer from terminating a live scheduler process. Build and smoke the immutable image on CI, upload it with source/tree labels and SHA-256, then transfer/load by verified digest; never compile concurrently with production schedulers.

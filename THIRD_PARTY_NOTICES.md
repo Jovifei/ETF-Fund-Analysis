@@ -15,6 +15,7 @@
 | Jinja2 | HTML 报告 | BSD-3-Clause |
 | Typer | CLI | MIT |
 | psycopg | PostgreSQL | LGPL-3.0 with exceptions |
+| CZSC 1.0.1 (`r4c` optional extra) | Isolated R4C observed-revision research adapter | Python package Apache-2.0; Rust workspace MIT |
 | Tushare SDK | 中国市场数据接口 | 以其软件和服务条款为准 |
 | AKShare | 备用财经数据适配 | MIT |
 | feedparser | RSS/Atom 解析 | BSD-2-Clause |
