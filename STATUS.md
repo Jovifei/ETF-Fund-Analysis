@@ -1,14 +1,14 @@
-# 当前状态：R4C M2 本地实现与验证完成，远端审核待进行（2026-09-28）
+# 当前状态：R4C M2-R1 本地修复与验证完成，远端复审待进行（2026-09-28）
 
 ## 当前阶段
 
 - R4B 本地接受与 M0 技术门禁已通过；R4C M1 的引擎/方言选择已由远端接受，CZSC `1.0.1` + `r4c-observed-revision-v1` 仍保持禁用。
-- M2 在隔离分支 `codex/r4c-m2-observed-revision` 实现了精确可选依赖、纯输入适配器、规范化身份和仅内存的追加式观测修订历史。
-- Windows/Linux 各 20 项 M2 专项测试通过，300-bar 语义摘要跨平台一致，资源门禁通过。详细证据见 [R4C M2 acceptance](docs/audits/R4C_M2_ADAPTER_ACCEPTANCE_20260928.md)。
-- 当前 M2 状态为 `IMPLEMENTED_TESTED_PENDING_REMOTE_REVIEW`。下一步推送精确分支并让远端对照上轮计划、代码/证据和技术路线审核；只有远端通过后，才由远端制定下一阶段计划。
+- 首个 M2 提交 `ac8e3ea3fc251d74c7d88e82550ae88cfb3d14ff` 已推送；远端迭代 56 保留 CZSC + observed-revision 路线，但判定 `CHANGES_REQUIRED`。M2-R1 已修复同 ID 冲突证据丢弃、回放流缺少配置/引擎命名空间，以及禁用配置中的过期 blocker 文案。
+- M2-R1 Windows/Linux 各 25 项专项测试通过；300-bar 摘要跨平台一致，M2 与 R5.2.1 身份/碰撞/资源回归均通过。详细证据见 [R4C M2 acceptance](docs/audits/R4C_M2_ADAPTER_ACCEPTANCE_20260928.md)。
+- 当前状态为 `M2_R1_IMPLEMENTED_TESTED_PENDING_REMOTE_RE_REVIEW`。下一步推送修复并交远端复审；M3 仍关闭，只有远端确认 M2 PASS 并给出下一阶段计划后才继续。
 - 这是阶段间交接，不是项目收尾或等待人工验收。产品最终验收仍在后续阶段；远端计划、本地执行、测试、GitHub、远端复核的循环继续。
 
-生产没有部署或修改；真实数据资格仍为 **UNKNOWN**，`actionable=false`，canonical action 未改变。M2 未添加数据库、任务/worker、API、前端、Provider 或自动交易路径。
+生产没有部署或修改；真实数据资格仍为 **UNKNOWN**，`actionable=false`，canonical action 未改变。M2-R1 未添加数据库、任务/worker、API、前端、Provider 或自动交易路径。
 
 ---
 

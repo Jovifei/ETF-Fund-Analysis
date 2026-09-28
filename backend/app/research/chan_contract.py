@@ -415,16 +415,23 @@ def make_observation(
     prepared: PreparedResearchInput,
     structures: Sequence[StructureEvidence],
 ) -> ResearchObservation:
+    if not isinstance(prepared, PreparedResearchInput):
+        raise ChanContractError("unprepared_input", "observation factory requires validated research input")
     observation = build_observation_id(prepared)
-    if any(not isinstance(structure, StructureEvidence) for structure in structures):
+    candidate_structures = tuple(structures)
+    if any(not isinstance(structure, StructureEvidence) for structure in candidate_structures):
         raise ChanContractError("invalid_structure_evidence", "observations require validated structure evidence records")
+    structure_keys = [structure.structure_key for structure in candidate_structures]
+    if len(structure_keys) != len(set(structure_keys)):
+        raise ChanContractError("duplicate_structure_key", "an observation cannot contain duplicate structure keys")
     if any(structure.revision_id != build_revision_id(
         observation,
         structure.structure_key,
         structure.geometry_payload(),
         structure.engine_state,
-    ) for structure in structures):
+    ) for structure in candidate_structures):
         raise ChanContractError("observation_revision_mismatch", "structure revisions must bind this observation")
+    canonical_structures = tuple(sorted(candidate_structures, key=lambda item: item.structure_key))
     return _create_validated_record(
         ResearchObservation,
         {
@@ -446,6 +453,6 @@ def make_observation(
             "dialect_id": DIALECT_ID,
             "engine_confirmation": "unknown",
             "application_observation_status": "observed",
-            "structures": tuple(structures),
+            "structures": canonical_structures,
         },
     )

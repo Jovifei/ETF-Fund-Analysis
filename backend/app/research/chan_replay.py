@@ -25,7 +25,7 @@ class ObservedRevisionReplay:
         self._history: tuple[ObservedTransition, ...] = ()
         self._current: dict[str, StructureEvidence] = {}
         self._seen_keys: frozenset[str] = frozenset()
-        self._stream_identity: tuple[str, str, str, str] | None = None
+        self._stream_identity: tuple[str, str, str, str, str, str, str, str, str] | None = None
 
     @property
     def observations(self) -> tuple[ResearchObservation, ...]:
@@ -43,9 +43,17 @@ class ObservedRevisionReplay:
             observation.interval,
             observation.series_id,
             observation.price_basis_id,
+            observation.adjustment_version,
+            observation.config_id,
+            observation.engine_id,
+            observation.engine_version,
+            observation.dialect_id,
         )
         if self._stream_identity is not None and identity != self._stream_identity:
-            raise ChanContractError("replay_stream_mismatch", "instrument, interval, series, and basis must not change")
+            raise ChanContractError(
+                "replay_stream_mismatch",
+                "instrument, interval, series, basis, adjustment, config, engine, and dialect must not change",
+            )
         if self._observations:
             previous_observation = self._observations[-1]
             if observation.cutoff < previous_observation.cutoff:
@@ -56,6 +64,11 @@ class ObservedRevisionReplay:
                     "observation cutoff timestamps must not move backward",
                 )
             if observation.observation_id == previous_observation.observation_id:
+                if observation != previous_observation:
+                    raise ChanContractError(
+                        "observation_id_conflict",
+                        "one observation ID cannot bind different normalized evidence",
+                    )
                 return ()
 
         current: dict[str, StructureEvidence] = {}

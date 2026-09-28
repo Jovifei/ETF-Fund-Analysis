@@ -251,9 +251,15 @@ def test_config_keeps_selected_engine_disabled_after_m2_core_addition():
     root = Path(__file__).resolve().parents[2]
     config = json.loads((root / "config" / "chan_research.json").read_text(encoding="utf-8"))
     assert config["enabled"] is False
+    assert config["qualification_status"] == "BLOCKED"
     assert config["selection_status"] == "SELECTED_DISABLED"
     assert config["engine_id"] == "czsc"
     assert config["selection_contract"]["engine_confirmation"] == "unknown"
+    assert config["reason_codes"] == [
+        "RUNTIME_INTEGRATION_DISABLED",
+        "REVISION_PERSISTENCE_NOT_IMPLEMENTED",
+        "USER_FACING_READ_MODEL_NOT_INTEGRATED",
+    ]
 
 
 def test_append_only_replay_records_changed_absent_and_reappearing_observations():
@@ -315,19 +321,15 @@ def test_replay_rejects_same_count_observation_with_earlier_cutoff_time():
     assert exc.value.code == "observation_time_reversed"
 
 
-def test_failed_replay_append_does_not_pin_stream_or_partially_commit():
+def test_duplicate_factory_failure_does_not_affect_other_replay_stream():
     contract = _module("app.research.chan_contract")
     replay_module = _module("app.research.chan_replay")
     replay = replay_module.ObservedRevisionReplay()
 
     invalid_input = _prepared(contract)
     duplicate_structure = _structure(contract, invalid_input)
-    invalid_observation = contract.make_observation(
-        invalid_input,
-        [duplicate_structure, duplicate_structure],
-    )
     with pytest.raises(contract.ChanContractError) as exc:
-        replay.append(invalid_observation)
+        contract.make_observation(invalid_input, [duplicate_structure, duplicate_structure])
     assert exc.value.code == "duplicate_structure_key"
     assert replay.observations == ()
     assert replay.history == ()
@@ -349,6 +351,135 @@ def test_empty_observation_is_stored_without_structure_transitions():
     assert observation.application_observation_status == "observed"
     assert replay.append(observation) == ()
     assert replay.observations == (observation,)
+
+
+def test_make_observation_rejects_duplicate_structure_keys():
+    contract = _module("app.research.chan_contract")
+    prepared = _prepared(contract)
+    structure = _structure(contract, prepared)
+
+    with pytest.raises(contract.ChanContractError) as exc:
+        contract.make_observation(prepared, [structure, structure])
+    assert exc.value.code == "duplicate_structure_key"
+
+
+def test_make_observation_canonicalizes_structure_order_for_idempotent_replay():
+    contract = _module("app.research.chan_contract")
+    replay_module = _module("app.research.chan_replay")
+    prepared = _prepared(contract)
+    fx = _structure(contract, prepared)
+    bi = contract.build_structure_evidence(
+        prepared,
+        observation_id=contract.build_observation_id(prepared),
+        kind="bi",
+        direction="up",
+        mark=None,
+        source_start=prepared.bars[10].timestamp.isoformat(sep=" "),
+        source_end=prepared.bars[11].timestamp.isoformat(sep=" "),
+        source_start_bar_id=prepared.bars[10].source_bar_id,
+        source_end_bar_id=prepared.bars[11].source_bar_id,
+        geometry={"high": 104.0, "low": 98.0},
+        engine_state=None,
+    )
+
+    first = contract.make_observation(prepared, [fx, bi])
+    reordered = contract.make_observation(prepared, [bi, fx])
+    assert first == reordered
+    assert [item.structure_key for item in first.structures] == sorted(
+        item.structure_key for item in first.structures
+    )
+
+    replay = replay_module.ObservedRevisionReplay()
+    replay.append(first)
+    prior_history = replay.history
+    assert replay.append(reordered) == ()
+    assert replay.observations == (first,)
+    assert replay.history == prior_history
+
+
+def test_replay_rejects_conflicting_evidence_for_same_observation_id_atomically():
+    contract = _module("app.research.chan_contract")
+    replay_module = _module("app.research.chan_replay")
+    prepared = _prepared(contract)
+    empty = contract.make_observation(prepared, [])
+    populated = contract.make_observation(prepared, [_structure(contract, prepared)])
+    assert empty.observation_id == populated.observation_id
+    assert empty != populated
+
+    replay = replay_module.ObservedRevisionReplay()
+    replay.append(empty)
+    before = (
+        replay.observations,
+        replay.history,
+        dict(replay._current),
+        replay._seen_keys,
+        replay._stream_identity,
+    )
+    with pytest.raises(contract.ChanContractError) as exc:
+        replay.append(populated)
+    assert exc.value.code == "observation_id_conflict"
+    assert (
+        replay.observations,
+        replay.history,
+        dict(replay._current),
+        replay._seen_keys,
+        replay._stream_identity,
+    ) == before
+
+
+def test_replay_stream_rejects_config_changes_but_allows_input_revision_and_settlement():
+    contract = _module("app.research.chan_contract")
+    replay_module = _module("app.research.chan_replay")
+    prepared = _prepared(contract)
+    replay = replay_module.ObservedRevisionReplay()
+    replay.append(contract.make_observation(prepared, []))
+
+    temporary = _prepared(
+        contract,
+        settlement_status="temporary",
+        input_revision_id="temporary-revision",
+    )
+    assert replay.append(contract.make_observation(temporary, [])) == ()
+
+    adjusted = _prepared(
+        contract,
+        adjustment_version="corporate-action-v2",
+        input_revision_id="adjustment-revision",
+    )
+    before_adjustment = (replay.observations, replay.history, replay._stream_identity)
+    with pytest.raises(contract.ChanContractError) as adjustment_exc:
+        replay.append(contract.make_observation(adjusted, []))
+    assert adjustment_exc.value.code == "replay_stream_mismatch"
+    assert (replay.observations, replay.history, replay._stream_identity) == before_adjustment
+
+    configured = _prepared(
+        contract,
+        config_id="another-config-v1",
+        input_revision_id="config-revision",
+    )
+    before = (replay.observations, replay.history, replay._stream_identity)
+    with pytest.raises(contract.ChanContractError) as exc:
+        replay.append(contract.make_observation(configured, []))
+    assert exc.value.code == "replay_stream_mismatch"
+    assert (replay.observations, replay.history, replay._stream_identity) == before
+
+
+def test_replay_stream_rejects_engine_or_dialect_namespace_changes(monkeypatch):
+    contract = _module("app.research.chan_contract")
+    replay_module = _module("app.research.chan_replay")
+    prepared = _prepared(contract)
+    replay = replay_module.ObservedRevisionReplay()
+    replay.append(contract.make_observation(prepared, []))
+    before = (replay.observations, replay.history, replay._stream_identity)
+
+    monkeypatch.setattr(contract, "ENGINE_ID", "alternate-czsc")
+    monkeypatch.setattr(contract, "ENGINE_VERSION", "9.9.9")
+    monkeypatch.setattr(contract, "DIALECT_ID", "alternate-dialect-v1")
+    alternate = contract.make_observation(prepared, [])
+    with pytest.raises(contract.ChanContractError) as exc:
+        replay.append(alternate)
+    assert exc.value.code == "replay_stream_mismatch"
+    assert (replay.observations, replay.history, replay._stream_identity) == before
 
 
 def test_adapter_fails_closed_for_missing_or_wrong_distribution_version(monkeypatch):
@@ -435,10 +566,12 @@ def test_frozen_300_bar_resource_budget_remains_within_selected_m1_limits():
     rows = _rows(300)
     adapter = adapter_module.ChanAdapter()
     full = _prepared(contract, rows)
+    preparation_start = time.perf_counter()
     prefixes = [
         _prepared(contract, rows[:prefix_length])
         for prefix_length in range(20, 301)
     ]
+    prefix_preparation_ms = (time.perf_counter() - preparation_start) * 1000
     warm_start = time.perf_counter()
     adapter.observe(full)
     warm_ms = (time.perf_counter() - warm_start) * 1000
@@ -448,10 +581,12 @@ def test_frozen_300_bar_resource_budget_remains_within_selected_m1_limits():
         observation = adapter.observe(prefix)
         assert observation.cutoff == prefix_length
     prefix_ms = (time.perf_counter() - sweep_start) * 1000
+    combined_prefix_ms = prefix_preparation_ms + prefix_ms
 
     peak_rss_bytes = _peak_rss_bytes()
     assert warm_ms <= 250
     assert prefix_ms <= 2000
+    assert combined_prefix_ms <= 2000
     assert peak_rss_bytes <= 384 * 1024 * 1024
 
 

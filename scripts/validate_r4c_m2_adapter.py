@@ -91,6 +91,7 @@ def main() -> None:
         if observation.cutoff != prefix_length:
             raise SystemExit(f"unexpected prefix cutoff {observation.cutoff}, expected {prefix_length}")
     prefix_sweep_ms = (time.perf_counter() - sweep_start) * 1000
+    combined_prefix_ms = prefix_preparation_ms + prefix_sweep_ms
     peak_rss_bytes = fixture._peak_rss_bytes()
     budget = {
         "warm_300_ms": warm_300_ms,
@@ -100,6 +101,9 @@ def main() -> None:
         "prefix_sweep_ms_max": 2000.0,
         "prefix_sweep_pass": prefix_sweep_ms <= 2000.0,
         "prefix_input_preparation_ms": prefix_preparation_ms,
+        "combined_prefix_ms": combined_prefix_ms,
+        "combined_prefix_ms_max": 2000.0,
+        "combined_prefix_pass": combined_prefix_ms <= 2000.0,
         "peak_rss_bytes": peak_rss_bytes,
         "peak_rss_bytes_max": 384 * 1024 * 1024,
         "peak_rss_pass": peak_rss_bytes is not None and peak_rss_bytes <= 384 * 1024 * 1024,
@@ -129,7 +133,14 @@ def main() -> None:
     }
     if not same_input_same_output:
         raise SystemExit("same-input adapter runs produced different normalized observations")
-    if not all((budget["warm_300_pass"], budget["prefix_sweep_pass"], budget["peak_rss_pass"])):
+    if not all(
+        (
+            budget["warm_300_pass"],
+            budget["prefix_sweep_pass"],
+            budget["combined_prefix_pass"],
+            budget["peak_rss_pass"],
+        )
+    ):
         raise SystemExit("M1 resource budget was exceeded or peak RSS could not be measured")
     if first.engine_confirmation != "unknown" or first.application_observation_status != "observed":
         raise SystemExit("adapter crossed its selected disabled-observation contract")

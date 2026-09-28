@@ -1246,4 +1246,25 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - Identity-bearing input, structure, and observation records now require validating factories; prepared endpoint maps are immutable, and the adapter has no public version/binding injection seam.
 - Windows and Linux each pass 20 focused tests. The 300-bar semantic digest is identical (`f5863681304268fedc5ce37a7c239550f20a6fb09f978bc50ae6dd7b06be4f98`); both adapter sweeps and full prepare+adapter sweeps meet the M1 budget. Full receipt: `docs/audits/R4C_M2_ADAPTER_ACCEPTANCE_20260928.md`.
 - `ruff`, `compileall`, and `git diff --check` pass. Project-wide `conftest.py` was excluded only on Linux to avoid unrelated DB fixture dependencies; M2-focused tests and the parity/resource probe ran there.
-- Awaiting push and remote review. This is a stage handoff, not project closeout or a request for human acceptance; continue with the next remotely planned stage after M2 passes.
+- Initial M2 commit `ac8e3ea3fc251d74c7d88e82550ae88cfb3d14ff` was pushed and independently reviewed; remote iteration 56 returned `M2=CHANGES_REQUIRED`. R1 repairs are tracked below. M3 remains closed.
+
+# R4C M2-R1 replay integrity hardening — 2026-09-28
+
+## Plan
+
+- [x] Bind the exact review base `ac8e3ea3fc251d74c7d88e82550ae88cfb3d14ff` / tree `cbca4cf3dab2293481e7e3b607ffb84201612de5`; keep the already-pushed commit immutable.
+- [x] Add RED tests for duplicate structure rejection/canonical order, same-ID identical retries, same-ID conflicting evidence atomic rejection, config/engine/dialect stream isolation, and unchanged same-time/source-ID contracts.
+- [x] Make `make_observation()` reject duplicate structure keys and sort structures canonically without changing R5 identity formulas.
+- [x] Make replay treat same observation ID as idempotent only for identical canonical evidence; reject conflicts atomically.
+- [x] Extend stream identity with adjustment/config/engine/version/dialect namespaces; allow input revision and settlement variation in one analysis stream.
+- [x] Refresh only demonstrably stale config reason codes; keep qualification BLOCKED and runtime SELECTED_DISABLED.
+- [x] Run Windows/Linux focused suites, semantic/resource probe, R5.2.1 identity/collision regression, Ruff, compileall, scoped secret scan, and diff check.
+- [x] Update M2-R1 receipt and status/handoff without changing the accepted R5 ID formulas.
+- [ ] Commit/push to the existing branch and request remote review. M3 remains forbidden until remote M2 PASS and a new plan.
+
+## Review
+
+- Remote iteration 56 marked M2 `CHANGES_REQUIRED`, retained route A (CZSC + observed revisions), and supplied this exact R1 repair plan. Blockers: same-ID conflicting evidence is silently dropped; replay stream identity omits config/engine/dialect namespaces. Stale config codes are non-blocking but must be corrected before later persistence/read-model work.
+- RED: Windows focused suite had 6 failures reproducing the two replay defects and stale reason-code list. GREEN: Windows/Linux now pass 25 focused tests; same-ID conflict, canonical order, namespace isolation, and combined resource gates pass.
+- Independent local R1 review found no remaining actionable issue; it confirmed the R5 identity formulas are unchanged and the replacement config reason codes describe real blocked work.
+- No M3, production, auto-trading, Provider, real-data qualification, database, API, worker, frontend, or canonical-action work is authorized in this repair.
