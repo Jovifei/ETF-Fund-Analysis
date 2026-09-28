@@ -6,7 +6,7 @@
 
 **Base:** M1 engine/dialect selection `339a2d6bbc7c216699b4d605e6ba7c99dbb5a192` / tree `0d7604d0ec24dc26e281c3f7347cfe060c9c2b6f`
 
-**Exact review identity:** the R1 branch head SHA sent in the matching C2C `EXECUTED` message; reviewers should verify it with `git rev-parse HEAD`. Initial M2 commit `ac8e3ea3fc251d74c7d88e82550ae88cfb3d14ff` remains unchanged; iteration 56 returned `M2=CHANGES_REQUIRED` and retained route A.
+**R1 code commit:** `73a23cb50004bea7c2994a8a0838beced812b64d` (parent `ac8e3ea3fc251d74c7d88e82550ae88cfb3d14ff`). The original M2 commit remains unchanged; iteration 56 returned `M2=CHANGES_REQUIRED` and retained route A. Review the final branch head supplied in the iteration-57 C2C `EXECUTED` message.
 
 ## Scope and route
 

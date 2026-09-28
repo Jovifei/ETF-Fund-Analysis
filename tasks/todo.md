@@ -1260,7 +1260,8 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - [x] Refresh only demonstrably stale config reason codes; keep qualification BLOCKED and runtime SELECTED_DISABLED.
 - [x] Run Windows/Linux focused suites, semantic/resource probe, R5.2.1 identity/collision regression, Ruff, compileall, scoped secret scan, and diff check.
 - [x] Update M2-R1 receipt and status/handoff without changing the accepted R5 ID formulas.
-- [ ] Commit/push to the existing branch and request remote review. M3 remains forbidden until remote M2 PASS and a new plan.
+- [x] Commit/push R1 to the existing branch without rewriting the reviewed M2 base.
+- [ ] Send the iteration-57 EXECUTED receipt and obtain remote review. M3 remains forbidden until remote M2 PASS and a new plan.
 
 ## Review
 

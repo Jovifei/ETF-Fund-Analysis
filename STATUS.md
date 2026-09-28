@@ -4,8 +4,8 @@
 
 - R4B 本地接受与 M0 技术门禁已通过；R4C M1 的引擎/方言选择已由远端接受，CZSC `1.0.1` + `r4c-observed-revision-v1` 仍保持禁用。
 - 首个 M2 提交 `ac8e3ea3fc251d74c7d88e82550ae88cfb3d14ff` 已推送；远端迭代 56 保留 CZSC + observed-revision 路线，但判定 `CHANGES_REQUIRED`。M2-R1 已修复同 ID 冲突证据丢弃、回放流缺少配置/引擎命名空间，以及禁用配置中的过期 blocker 文案。
-- M2-R1 Windows/Linux 各 25 项专项测试通过；300-bar 摘要跨平台一致，M2 与 R5.2.1 身份/碰撞/资源回归均通过。详细证据见 [R4C M2 acceptance](docs/audits/R4C_M2_ADAPTER_ACCEPTANCE_20260928.md)。
-- 当前状态为 `M2_R1_IMPLEMENTED_TESTED_PENDING_REMOTE_RE_REVIEW`。下一步推送修复并交远端复审；M3 仍关闭，只有远端确认 M2 PASS 并给出下一阶段计划后才继续。
+- M2-R1 修复提交 `73a23cb50004bea7c2994a8a0838beced812b64d` 已推送到原隔离分支，基于首个 M2 提交 `ac8e3ea3fc251d74c7d88e82550ae88cfb3d14ff`。Windows/Linux 各 25 项专项测试通过；300-bar 摘要跨平台一致，M2 与 R5.2.1 身份/碰撞/资源回归均通过。详细证据见 [R4C M2 acceptance](docs/audits/R4C_M2_ADAPTER_ACCEPTANCE_20260928.md)。
+- 当前状态为 `M2_R1_IMPLEMENTED_TESTED_PENDING_REMOTE_RE_REVIEW`。下一步发送迭代 57 的执行收据并等待远端复审；M3 仍关闭，只有远端确认 M2 PASS 并给出下一阶段计划后才继续。
 - 这是阶段间交接，不是项目收尾或等待人工验收。产品最终验收仍在后续阶段；远端计划、本地执行、测试、GitHub、远端复核的循环继续。
 
 生产没有部署或修改；真实数据资格仍为 **UNKNOWN**，`actionable=false`，canonical action 未改变。M2-R1 未添加数据库、任务/worker、API、前端、Provider 或自动交易路径。

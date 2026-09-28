@@ -5,13 +5,14 @@
 - 当前隔离分支：`codex/r4c-m2-observed-revision`，基于已接受的 M1 选择提交 `339a2d6bbc7c216699b4d605e6ba7c99dbb5a192` / tree `0d7604d0ec24dc26e281c3f7347cfe060c9c2b6f`。
 - 实现范围：可选 CZSC `1.0.1`、经验证的因果研究输入、FX/BI/ZS 规范化、观察/结构/修订身份、追加式内存观测回放。
 - 远端迭代 56 复核首个 M2 提交后要求修复两项回放完整性问题；R1 已完成：同 ID 冲突证据失败关闭、structure 集合规范排序、config/engine/dialect/adjustment 隔离，并刷新过期 reason codes。
+- R1 code commit `73a23cb50004bea7c2994a8a0838beced812b64d` 已推送到原分支；它保留首个 M2 commit `ac8e3ea3fc251d74c7d88e82550ae88cfb3d14ff`，未重写历史。
 - Windows/Linux 各 25 项 M2-R1 专项测试通过；M2 语义摘要跨平台一致，R5.2.1 碰撞/身份回归通过。执行证据在 [R4C M2 acceptance](docs/audits/R4C_M2_ADAPTER_ACCEPTANCE_20260928.md)。
 - 引擎保持 `enabled=false`，`engine_confirmation=unknown`；真实数据资格 `UNKNOWN`，无数据库/API/worker/Provider/前端/生产集成，无部署和自动交易。
 
 ## 下一步
 
-1. 将 M2-R1 修复和执行收据提交并推送到同一 GitHub 分支。
-2. 在本项目远端 ChatGPT 对照迭代 57 计划和精确提交复审；只有 M2 PASS 后，远端才制定 M3 阶段计划。
+1. 发送迭代 57 执行收据，请远端复核精确分支 head `codex/r4c-m2-observed-revision`。
+2. 只有 M2 PASS 后，远端才制定 M3 阶段计划；M2 仍有 findings 就按远端计划修复并再推送复审。
 3. 如果有技术路线分歧，远端需说明证据和方案；继续按远端计划、本地执行/测试/推送、远端复核循环。
 
 人工验收是产品最终阶段的门，不是当前停止条件。该协作循环持续到项目目标完成；生产部署或真实数据资格仍需各自独立门禁。
