@@ -1282,7 +1282,8 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - [x] Preserve same-ID identical retry as a no-op and fail closed on same-ID conflicting evidence; preserve prior head and all immutable rows on any failed publication.
 - [x] Keep API/read model, GET computation, worker/scheduler, frontend, Provider, real data, canonical action, actionable, production, and auto-trading out of scope. Run only synthetic rows in disposable test databases.
 - [x] Run focused Windows tests, SQLite migration/service tests, ephemeral PostgreSQL 16 upgrade/roundtrip/rollback/concurrency tests, M2 Windows/Linux parity, R5.2.1 identity/collision regression, Ruff, compileall, scoped secret scan, and diff check.
-- [ ] Commit/push the M3 evidence and handoff on the isolated branch; request remote review before any M4 plan.
+- [x] Commit/push the M3 implementation and acceptance receipt to `origin/codex/r4c-m3-persistence` without rewriting the accepted M2 base.
+- [ ] Send the exact pushed branch tip and receipt for remote M3 review; wait for the decision and next-stage plan before any M4 work.
 
 ## Review
 
@@ -1294,3 +1295,4 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - R4B audit showed its revision table used service convention without database immutability triggers and used cascading instrument deletion. M3 therefore adds SQLite/PostgreSQL update/delete guards, non-cascading evidence references, and a monotonic per-stream sequence bound with the head pointer. The sequence distinguishes valid same-cutoff revisions and does not change M2 observation/structure/revision identity formulas. Ask the remote reviewer to assess these implementation choices against the M3 plan.
 - Ruff, compileall, Node check, scoped secret scan, and `git diff --check` pass. Full project pytest was interrupted after about 23 minutes at 27% without final report; the candidate decision-board queue test passes alone in 1.21s, while a separate run of the whole module was also interrupted after a long tail. Record full suite as `INTERRUPTED`, not PASS; no traceback/failing assertion was captured.
 - `config/chan_research.json` remains disabled and blocked with existing runtime/persistence/read-model reason codes pending remote M3 acceptance. Real-data qualification remains `UNKNOWN`; no production database, provider, API, worker, deployment, or trading path was used.
+- GitHub branch `codex/r4c-m3-persistence` contains implementation commit `ce0aa9b899b6d04ea682581b90343fa2973394ce` and the M3 acceptance receipt. Remote review request is the next action; no M4 implementation has started.

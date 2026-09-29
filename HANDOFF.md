@@ -1,15 +1,15 @@
-# 当前接手入口：R4C M3 本地实现与专项验证完成，待推送远端复核（2026-09-29）
+# 当前接手入口：R4C M3 已推送，等待远端复核（2026-09-29）
 
 ## 本轮交接
 
-- 当前隔离分支：`codex/r4c-m3-persistence`，基线为远端确认 M2 PASS 的 `641759eb467ef743f35c142edd50a8208bb2cfa7` / tree `9b4c934c4d8d562ace876f5c5f49c5b0042b4bc1`。Owner 工作区保持独立且未改动。
+- 当前隔离分支：`codex/r4c-m3-persistence`，已推送到 GitHub。M3 实现提交 `ce0aa9b899b6d04ea682581b90343fa2973394ce`，基线为远端确认 M2 PASS 的 `641759eb467ef743f35c142edd50a8208bb2cfa7` / tree `9b4c934c4d8d562ace876f5c5f49c5b0042b4bc1`。Owner 工作区保持独立且未改动。
 - 远端迭代 60 判定 M2 `PASS`，保留 CZSC `1.0.1` + observed-revision 路线，并给出 M3 持久化发布核心计划。本地先 RED 后完成 migration/models/publisher 与专项验收。收据见 [R4C M3 persistence acceptance](docs/audits/R4C_M3_PERSISTENCE_ACCEPTANCE_20260929.md)。
 - M3 限于不可变观测证据、结构修订、状态转移、当前 stream head 和单事务发布；只用合成数据与隔离 SQLite/PostgreSQL 测试库。远端原计划标记 `M3_GO=false` 等待独立授权；Jovi 已授权持续 C2C 执行循环，本轮按该授权推进。
 - 本阶段完成后继续“测试 → GitHub 推送 → 远端审核 → 下一阶段计划”。项目最终人工验收不是当前停止条件；只有明确需要 Jovi 决策的门禁在对应步骤等待。
 
 ## 下一步
 
-提交并推送已验证的 M3 变更；把精确 SHA、收据和本地审查中新增的数据库不可变性/流内序号设计交远端复核，请其对照原计划评估。远端复核后按审核结论和下一阶段计划继续。全量 pytest 停在 27% 长时间无进展后中断，详细状态在收据中；定向 decision-board 队列测试单项通过。
+将当前推送分支的精确 tip 与 [验收收据](docs/audits/R4C_M3_PERSISTENCE_ACCEPTANCE_20260929.md) 交远端复核，请其对照原计划评估新增的数据库不可变性和流内序号设计。远端复核后按审核结论和下一阶段计划继续。全量 pytest 停在 27% 长时间无进展后中断，详细状态在收据中；定向 decision-board 队列测试单项通过。
 
 人工验收是产品最终阶段的门，不是当前停止条件。该协作循环持续到项目目标完成；生产部署或真实数据资格仍需各自独立门禁。
 
