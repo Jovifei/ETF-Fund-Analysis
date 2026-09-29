@@ -475,18 +475,42 @@ def test_next_refresh_skips_weekend_to_next_trading_day() -> None:
     assert next_refresh == datetime(2026, 9, 7, 9, 30, tzinfo=SHANGHAI)
 
 
-def test_snapshot_retention_keeps_last_twenty_trading_dates(db_session, bootstrapped) -> None:
+def test_snapshot_retention_keeps_last_twenty_trading_dates(db_session, monkeypatch) -> None:
     service = DecisionBoardService()
-    day = datetime(2026, 7, 1, 14, 30, tzinfo=SHANGHAI)
-    created = 0
-    while created < 21:
-        if day.weekday() < 5:
-            service.refresh(db_session, generated_at=day)
-            created += 1
-        day += timedelta(days=1)
-    db_session.flush()
-    dates = db_session.scalars(select(DecisionBoardSnapshot.generated_at).order_by(DecisionBoardSnapshot.generated_at)).all()
-    assert len({item.date() for item in dates}) == 20
+    # Retention is the contract under test; avoid recalculating every indicator,
+    # forecast, and support/resistance row 21 times for the date-boundary case.
+    monkeypatch.setattr(
+        service.support_resistance,
+        "capture_for_instruments",
+        lambda *_args, **_kwargs: 0,
+    )
+    monkeypatch.setattr(
+        service,
+        "_build_payload",
+        lambda _db, generated_at: {
+            "snapshot_id": f"retention-{generated_at:%Y%m%d}",
+            "freshness": "fresh",
+            "rows": [],
+        },
+    )
+    savepoint = db_session.begin_nested()
+    try:
+        db_session.execute(delete(DecisionBoardSnapshot))
+        db_session.flush()
+        day = datetime(2026, 7, 1, 14, 30, tzinfo=SHANGHAI)
+        created = 0
+        while created < 21:
+            if day.weekday() < 5:
+                service.refresh(db_session, generated_at=day)
+                created += 1
+            day += timedelta(days=1)
+        db_session.flush()
+        dates = db_session.scalars(
+            select(DecisionBoardSnapshot.generated_at).order_by(DecisionBoardSnapshot.generated_at)
+        ).all()
+        assert len({item.date() for item in dates}) == 20
+    finally:
+        savepoint.rollback()
 
 
 def test_semantic_health_sort_keys_use_approved_primitive_priority_order() -> None:
