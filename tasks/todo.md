@@ -1307,7 +1307,8 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - [x] Add failure injection after one observation is committed: revision insert failure and transition insert failure on a later observation must preserve previous head/history and leave no partial new observation/revisions/transitions.
 - [x] Run the M3 targeted Windows/migration suite, PostgreSQL 16 concurrency/immutability gate, M2 Windows/Linux 25/25, M2 semantic/resource probes, R5.2.1 validator, Alembic heads/current, Ruff, compileall, secret scan, Node and diff checks.
 - [x] Update the receipt with iteration-61 findings, R1 verification, and explicit Alembic heads/current evidence.
-- [ ] Commit/push the same branch and release bounded diff/test output for iteration-62 remote review.
+- [x] Commit the M3-R1 code repair on the same isolated branch without changing migration ID `h9c0d1e2f3a4`.
+- [ ] Push the R1 code and updated receipt; release bounded diff/test output for iteration-62 remote review.
 - [ ] Do not enter M4 unless remote marks M3 PASS and provides the next plan. Keep runtime disabled, persistence blocker present until PASS, real-data UNKNOWN, and production unchanged.
 
 ## Review
