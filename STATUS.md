@@ -1,14 +1,14 @@
-# 当前状态：R4C M3-R1 本地验证完成，待推送远端复审（2026-09-29）
+# 当前状态：R4C M3-R1 已推送，等待远端复审（2026-09-29）
 
 ## 当前阶段
 
 - R4B 本地接受与 M0 技术门禁已通过；R4C M1 的引擎/方言选择已由远端接受，CZSC `1.0.1` + `r4c-observed-revision-v1` 仍保持禁用。
 - 首个 M2 提交 `ac8e3ea3fc251d74c7d88e82550ae88cfb3d14ff` 已推送；远端迭代 56 保留 CZSC + observed-revision 路线，但判定 `CHANGES_REQUIRED`。M2-R1 已修复同 ID 冲突证据丢弃、回放流缺少配置/引擎命名空间，以及禁用配置中的过期 blocker 文案。
 - M2-R1 修复提交 `73a23cb50004bea7c2994a8a0838beced812b64d` 已推送到原隔离分支，基于首个 M2 提交 `ac8e3ea3fc251d74c7d88e82550ae88cfb3d14ff`。Windows/Linux 各 25 项专项测试通过；300-bar 摘要跨平台一致，M2 与 R5.2.1 身份/碰撞/资源回归均通过。详细证据见 [R4C M2 acceptance](docs/audits/R4C_M2_ADAPTER_ACCEPTANCE_20260928.md)。
-- 远端迭代 60 已确认 `M2=PASS` 并给出 M3 持久化发布核心计划。M3 首轮实现提交 `ce0aa9b899b6d04ea682581b90343fa2973394ce` 已推送；迭代 61 复核结论 `M3=CHANGES_REQUIRED`，Route A 保留，M4 仍关闭。M3-R1 代码提交 `7fe11e2e02e3f980ae7ac1771f96403e8dcffe20` 已在同一隔离分支本地提交，补 stream-head identity triggers 和已有 head 下 revision/transition 失败回滚覆盖；保留 migration ID `h9c0d1e2f3a4`，本地验证通过，待推送复审。
+- 远端迭代 60 已确认 `M2=PASS` 并给出 M3 持久化发布核心计划。M3 首轮实现提交 `ce0aa9b899b6d04ea682581b90343fa2973394ce` 已推送；迭代 61 复核结论 `M3=CHANGES_REQUIRED`，Route A 保留，M4 仍关闭。M3-R1 代码提交 `7fe11e2e02e3f980ae7ac1771f96403e8dcffe20` 已在同一隔离分支推送，补 stream-head identity triggers 和已有 head 下 revision/transition 失败回滚覆盖；保留 migration ID `h9c0d1e2f3a4`，本地验证通过，等待远端复审。
 - M3 限于不可变 observation/structure revision/transition 证据、最小可变 stream head、原子发布服务及隔离数据库测试。远端原计划将 `M3_GO=false` 作为独立阶段授权门；Jovi 已授权持续执行远端阶段计划，本轮按此授权推进，严格限于测试数据库。
 - 阶段循环不会等到项目最终人工验收才继续：当前按远端 M3 修复清单本地执行、测试、推送并复审。仅计划中明确需要 Jovi 本人决策的产品、真人验证、真实数据或生产门禁在相应节点等待。
-- M3/R1 收据：[R4C M3 persistence acceptance](docs/audits/R4C_M3_PERSISTENCE_ACCEPTANCE_20260929.md)。R1 的 SQLite/PostgreSQL head identity 保护、后续发布失败回滚、Alembic heads/current、M2 Windows/Linux、R5.2.1 与静态门禁通过。全量 pytest 仍为 `INTERRUPTED`；远端确认该状态不阻止当前 M3 R1 复审，但扩大到主线/产品集成前必须完整跑通或诊断长尾。当前待提交推送并交远端复审。真实数据仍 `UNKNOWN`，生产未变。
+- M3/R1 收据：[R4C M3 persistence acceptance](docs/audits/R4C_M3_PERSISTENCE_ACCEPTANCE_20260929.md)。R1 的 SQLite/PostgreSQL head identity 保护、后续发布失败回滚、Alembic heads/current、M2 Windows/Linux、R5.2.1 与静态门禁通过。全量 pytest 仍为 `INTERRUPTED`；远端确认该状态不阻止当前 M3 R1 复审，但扩大到主线/产品集成前必须完整跑通或诊断长尾。当前等待迭代62远端复审。真实数据仍 `UNKNOWN`，生产未变。
 
 生产没有部署或修改；真实数据资格仍为 **UNKNOWN**，`actionable=false`，canonical action 未改变。当前 M3 仅使用合成证据与 disposable 测试数据库，不接入生产数据库、Provider、任务/worker、API、前端、真实行情或自动交易。
 

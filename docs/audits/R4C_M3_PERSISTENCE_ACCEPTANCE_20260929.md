@@ -1,6 +1,6 @@
 # R4C M3 observed-revision persistence acceptance — 2026-09-29
 
-**State:** `M3_R1_IMPLEMENTED_TESTED_PENDING_PUSH_AND_REMOTE_REVIEW`
+**State:** `M3_R1_PUSHED_PENDING_REMOTE_REVIEW`
 
 **Branch:** `codex/r4c-m3-persistence`
 
