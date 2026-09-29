@@ -20,6 +20,19 @@
 - Exact R1 application/test HEAD and GitHub branch tip are recorded in the subsequent delivery section after commit/push. Remote acceptance remains pending until the Project audits that exact head and these evidence records.
 - R1 code, tests, plan and receipts are bound to commit `f6de8a6ec2f5dd2b4ea7c411afb50dc5a6dcbd10` / tree `5c1f2921602780bef6def9b4efaed0f538463b31`. `origin/codex/r4c-pre-m4-regression-diagnostic` was read back at the same commit after push. The code-tested commit is exact; a following docs-only handoff commit, if any, is identified separately and does not alter application files.
 
+## Iteration 66 M3B-A2 W/M identities — local verification
+
+Remote authorized M3B-A2 from base `f854d6c9db0b774687f226cfb587cc03ddc814c5`: deterministic W/M aggregates from accepted causal D input using existing `aggregate_bars()`. No new calendar algorithm or chart/read-model oracle was added. The exact D identity ledger captured before implementation remains byte-identical.
+
+- W/M are produced only after D freeze succeeds. Period identities bind contract versions, instrument, W/M interval, effective R4A price basis, adjustment version, period bounds, last observed constituent time, ordered D source IDs, period config and aggregate OHLCVA. Revision identity binds W/M logical series and ordered aggregate source IDs; M2 `prepare_research_input()` remains the sole input-hash implementation.
+- `FrozenChanInput.constituent_source_bar_ids` is empty for D and contains ordered constituent IDs for every W/M aggregate. Incomplete calendar periods use `temporary`; closed periods use `settled`. No provisional/unsettled D rows enter.
+- Final A2 focused suite: 96 collected, 92 passed, 4 environment skips, 0 failures/errors. It covers D ledger preservation, W/M aggregate parity, namespace and lineage, append/correction propagation, partial/closed periods, corporate-action transitions, unknown/zero quantities, and Provider/DB-side-effect boundaries. JUnit: `E:\Claude_allow\Download\ETF_R4C_M3_20260929\m3b-a2-final-focused-20260930.xml`.
+- M2 Windows/Linux 25/25. Adapter semantic digest `091254d34ddfeeadc85cd0b17e035295bfc32f8a0cebc6776440f10be82aaeac`; R5 history digest `d637b4f80c749db48d06dfafe3762216d684ff2827149b4024a3de3f814fc1e9`; validator semantic digest `0f4ae0322b5d390c41e618da4c342abea66baac30bce4ccfe4a5f0d713cff76f`. Both platforms report 0/0/0 identity collisions and detect the injected weak-ID collision.
+- Ruff, compileall, Node syntax, scoped secret scan and diff-check pass. No `candle_periods.py`, shared R4A runtime, persistence or schema change; the A2 focused gate is used instead of another full repository suite.
+- A2 has no runtime consumer; `DEPLOYMENT_DISPOSITION=NOT_DEPLOYABLE_SUBSTAGE`, `PRODUCTION_GO=false`, `REAL_DATA_QUALIFICATION=UNKNOWN`, `ACTIONABLE=false`. A2 SHA/tree and remote review result will be appended after commit/push. M3B-B remains NO-GO until A2 remote PASS.
+
+The A2 code/test change is currently uncommitted. Its TDD RED attempts remain under the evidence directory; the final 96-test passing record is named above. After push, append exact A2 code/test and final heads before remote review.
+
 ## Remote gate and boundary
 
 Iteration 63 was independently accepted as `PRE_M4_DIAGNOSTIC=PASS`; remote review also reconfirmed `M0_TECHNICAL_GATE=PASS`, `M0_BASELINE_GATE=PASS`, and `ROUTE_A=RETAIN`. Iteration 64 authorized only `R4C_M3B_APPLICATION_INPUT_CONTRACT` / M3B-A:
@@ -27,6 +40,8 @@ Iteration 63 was independently accepted as `PRE_M4_DIAGNOSTIC=PASS`; remote revi
 - `M3B_A_INPUT_CONTRACT_GO=true`.
 - `M3B_A2_GO=false`, `M3B_B_WORKER_GO=false`, `M3B_C_READ_MODEL_GO=false`, `M4_PAGE_IMPLEMENTATION_GO=false`, `MAIN_INTEGRATION_GO=false`.
 - Real-data qualification remains `UNKNOWN`; actionable remains `false`; production is unchanged.
+
+This was the iteration-64 gate snapshot. It was superseded after iteration-65 R1 `PASS`; iteration 66 explicitly authorized M3B-A2.
 
 Jovi added a standing requirement to deploy completed, tested, GitHub-pushed feature stages and verify them live. Remote reconciled this with iteration 64: `M3B_A_PRODUCTION_GO=false` and `PRODUCTION_DEPLOYMENT=NOT_APPLICABLE` because this substage adds an unused input contract without user-visible or runtime behavior. This is an explicit non-deployable substage, not a silently skipped release. Do not add worker, read-model, API, UI, Provider, runtime, production, or main-merge scope to make it deployable.
 

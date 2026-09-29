@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -60,8 +60,8 @@ def _add_daily_bars(
             instrument_id=instrument.id,
             trade_date=trade_day,
             open=close,
-            high=close + 0.02,
-            low=close - 0.02,
+            high=close * 1.01,
+            low=close * 0.99,
             close=close + 0.01,
             volume=volume,
             amount=amount,
@@ -73,6 +73,54 @@ def _add_daily_bars(
         bars.append(bar)
     db.flush()
     return bars
+
+
+def _add_period_daily_bars(db, instrument, days, closes=None):
+    rows = []
+    for offset, day in enumerate(days):
+        close = closes[offset] if closes is not None else 2.0 + offset * 0.01
+        row = DailyBar(
+            instrument_id=instrument.id,
+            trade_date=day,
+            open=close,
+            high=close * 1.01,
+            low=close * 0.99,
+            close=close,
+            volume=1000.0,
+            amount=close * 1000.0,
+            source="akshare:em:v101",
+            adjust="none",
+            quality_hash=f"quality-{day.isoformat()}",
+        )
+        db.add(row)
+        rows.append(row)
+    db.flush()
+    return rows
+
+
+def _weekdays(start: date, end: date) -> list[date]:
+    days = []
+    while start <= end:
+        if start.weekday() < 5:
+            days.append(start)
+        start += timedelta(days=1)
+    return days
+
+
+def _calendar_rows(prepared):
+    return [
+        {
+            "date": bar.timestamp.replace(tzinfo=UTC).astimezone(SHANGHAI).isoformat(),
+            "open": bar.open,
+            "high": bar.high,
+            "low": bar.low,
+            "close": bar.close,
+            "volume": bar.volume,
+            "amount": bar.amount,
+            "source": "M3B-A accepted daily research input",
+        }
+        for bar in prepared.bars
+    ]
 
 
 def test_freeze_chan_input_maps_r4a_daily_research_bars_to_m2_contract(db_session):
@@ -492,6 +540,289 @@ def test_historical_chan_input_uses_only_effective_515880_actions(isolated_chan_
     assert between_events.price_basis_id != after_second_event.price_basis_id
 
 
+def test_m3b_a2_preserves_the_frozen_daily_identity_ledger(isolated_chan_input_db):
+    from app.research.chan_input import freeze_chan_input
+
+    db = isolated_chan_input_db
+    instrument = _instrument(db, ts_code="515880.SH")
+    _add_period_daily_bars(
+        db,
+        instrument,
+        [date(2026, 2, 2), date(2026, 2, 3), date(2026, 5, 29), date(2026, 7, 3), date(2026, 7, 6)],
+        closes=[3.0, 1.0, 1.1, 1.1, 0.55],
+    )
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    daily = freeze_chan_input(
+        db, settings, instrument.ts_code, interval="D",
+        as_of=datetime(2026, 6, 1, 16, 0, tzinfo=SHANGHAI),
+    )
+
+    assert daily.status == "prepared", (daily.reason_code, daily.detail_code, daily.message)
+    assert {
+        "logical_series_id": daily.logical_series_id,
+        "price_basis_id": daily.price_basis_id,
+        "source_bar_ids": daily.source_bar_ids,
+        "input_revision_id": daily.input_revision_id,
+        "input_hash": daily.prepared.input_hash,
+        "config_id": daily.prepared.config_id,
+        "settlement_status": daily.prepared.settlement_status,
+    } == {
+        "logical_series_id": "af9feaa0fe9554bf9767a90a5656844676564852d03fb75358f08315e1435cab",
+        "price_basis_id": "7bfddf99661c4948f4ca2dd7de9ebd37927e4a3e74acd1e3debb7fccb224ed82",
+        "source_bar_ids": (
+            "5bf1c34f7815fe27271b9289cc5e34f923c68b016b5adbdae51a60250811f2ce",
+            "8d3854cb322b4283bef434249f5772d5def286f6f6a1ca5c26b679cf43aa71fe",
+            "b4d058a09127ca94ddaafcc22cb8bce252d461159e11eff8905efe5d49c200ed",
+        ),
+        "input_revision_id": "7851521c6bcbb8a5e72bbcb988989659f5a8e2a19ff405651db77e28778ec339",
+        "input_hash": "c73dd49ea9fa361b98cea4c7645733e06fb4752c4d748db0ee97016d61375dc6",
+        "config_id": "044ae6adf34067e1c8bdec7f18eab21a7de9c7fb691519f27bf8caabfd293abf",
+        "settlement_status": "settled",
+    }
+    assert daily.constituent_source_bar_ids == ()
+
+
+def test_m3b_a2_week_and_month_inputs_match_existing_calendar_aggregation(isolated_chan_input_db):
+    from app.research.chan_contract import prepare_research_input
+    from app.research.chan_input import freeze_chan_input
+    from app.utils.hashing import stable_hash
+    from app.workspace.candle_periods import aggregate_bars
+
+    db = isolated_chan_input_db
+    instrument = _instrument(db)
+    _add_period_daily_bars(db, instrument, _weekdays(date(2026, 1, 5), date(2026, 1, 23)))
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    as_of = datetime(2026, 1, 14, 15, 15, tzinfo=SHANGHAI)
+    daily = freeze_chan_input(db, settings, instrument.ts_code, interval="D", as_of=as_of)
+    assert daily.status == "prepared"
+
+    period_inputs = {}
+    for interval, calendar_period in (("W", "1w"), ("M", "1mo")):
+        frozen = freeze_chan_input(db, settings, instrument.ts_code, interval=interval, as_of=as_of)
+        period_inputs[interval] = frozen
+        expected = aggregate_bars(_calendar_rows(daily.prepared), calendar_period, now=as_of)
+
+        assert frozen.status == "prepared", (frozen.reason_code, frozen.detail_code, frozen.message)
+        assert frozen.prepared.interval == interval
+        assert frozen.logical_series_id != daily.logical_series_id
+        assert frozen.price_basis_id == daily.price_basis_id
+        assert frozen.prepared.adjustment_version == daily.prepared.adjustment_version
+        assert frozen.prepared.config_id == stable_hash(
+            {
+                "base_config_id": daily.prepared.config_id,
+                "period_input_contract_version": "r4c-calendar-period-v1",
+            }
+        )
+        assert len(frozen.prepared.bars) == len(expected)
+        assert frozen.prepared.settlement_status == "temporary"
+        assert tuple(bar.source_bar_id for bar in frozen.prepared.bars) == frozen.source_bar_ids
+
+        expected_lineage = []
+        cursor = 0
+        for row in expected:
+            count = row["source_bar_count"]
+            expected_lineage.append(
+                tuple(bar.source_bar_id for bar in daily.prepared.bars[cursor : cursor + count])
+            )
+            cursor += count
+        assert cursor == len(daily.prepared.bars)
+        assert frozen.constituent_source_bar_ids == tuple(expected_lineage)
+        canonical = prepare_research_input(
+            instrument=frozen.prepared.instrument,
+            interval=interval,
+            series_id=frozen.prepared.series_id,
+            price_basis_id=frozen.prepared.price_basis_id,
+            adjustment_version=frozen.prepared.adjustment_version,
+            input_revision_id=frozen.prepared.input_revision_id,
+            settlement_status=frozen.prepared.settlement_status,
+            config_id=frozen.prepared.config_id,
+            bars=[bar.input_payload() for bar in frozen.prepared.bars],
+        )
+        assert canonical.input_hash == frozen.prepared.input_hash
+
+        for actual, row in zip(frozen.prepared.bars, expected, strict=True):
+            expected_time = datetime.fromisoformat(row["date"]).astimezone(UTC).replace(tzinfo=None)
+            assert actual.timestamp == expected_time
+            for field in ("open", "high", "low", "close", "volume", "amount"):
+                assert getattr(actual, field) == pytest.approx(row[field])
+    assert period_inputs["W"].logical_series_id != period_inputs["M"].logical_series_id
+
+
+def test_m3b_a2_period_append_and_daily_correction_follow_aggregate_lineage(isolated_chan_input_db):
+    from app.research.chan_input import freeze_chan_input
+
+    db = isolated_chan_input_db
+    instrument = _instrument(db)
+    daily_rows = _add_period_daily_bars(db, instrument, _weekdays(date(2026, 1, 5), date(2026, 1, 19)))
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    open_week = freeze_chan_input(
+        db, settings, instrument.ts_code, interval="W",
+        as_of=datetime(2026, 1, 14, 15, 15, tzinfo=SHANGHAI),
+    )
+    appended_in_week = freeze_chan_input(
+        db, settings, instrument.ts_code, interval="W",
+        as_of=datetime(2026, 1, 15, 15, 15, tzinfo=SHANGHAI),
+    )
+    closed = freeze_chan_input(
+        db, settings, instrument.ts_code, interval="W",
+        as_of=datetime(2026, 1, 16, 15, 15, tzinfo=SHANGHAI),
+    )
+    next_week = freeze_chan_input(
+        db, settings, instrument.ts_code, interval="W",
+        as_of=datetime(2026, 1, 19, 15, 15, tzinfo=SHANGHAI),
+    )
+
+    assert open_week.status == appended_in_week.status == closed.status == next_week.status == "prepared"
+    assert open_week.prepared.settlement_status == appended_in_week.prepared.settlement_status == "temporary"
+    assert open_week.source_bar_ids[0] == appended_in_week.source_bar_ids[0]
+    assert open_week.source_bar_ids[1] != appended_in_week.source_bar_ids[1]
+    assert open_week.input_revision_id != appended_in_week.input_revision_id
+    assert open_week.prepared.input_hash != appended_in_week.prepared.input_hash
+    assert closed.prepared.settlement_status == "settled"
+    assert next_week.prepared.settlement_status == "temporary"
+    assert len(next_week.source_bar_ids) == len(closed.source_bar_ids) + 1
+    assert next_week.source_bar_ids[: len(closed.source_bar_ids)] == closed.source_bar_ids
+    assert next_week.logical_series_id == closed.logical_series_id
+    assert next_week.input_revision_id != closed.input_revision_id
+    assert next_week.prepared.input_hash != closed.prepared.input_hash
+
+    daily_rows[7].close += 0.01
+    daily_rows[7].quality_hash = "corrected-2026-01-14"
+    db.flush()
+    corrected = freeze_chan_input(
+        db, settings, instrument.ts_code, interval="W",
+        as_of=datetime(2026, 1, 19, 15, 15, tzinfo=SHANGHAI),
+    )
+
+    assert corrected.status == "prepared"
+    assert corrected.source_bar_ids[0] == next_week.source_bar_ids[0]
+    assert corrected.source_bar_ids[1] != next_week.source_bar_ids[1]
+    assert corrected.source_bar_ids[2] == next_week.source_bar_ids[2]
+    assert corrected.constituent_source_bar_ids[1] != next_week.constituent_source_bar_ids[1]
+    assert corrected.input_revision_id != next_week.input_revision_id
+    assert corrected.prepared.input_hash != next_week.prepared.input_hash
+
+
+def test_m3b_a2_month_period_transitions_from_temporary_to_settled(isolated_chan_input_db):
+    from app.research.chan_input import freeze_chan_input
+
+    db = isolated_chan_input_db
+    instrument = _instrument(db)
+    _add_period_daily_bars(db, instrument, _weekdays(date(2026, 1, 5), date(2026, 2, 2)))
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    mid_month = freeze_chan_input(
+        db, settings, instrument.ts_code, interval="M",
+        as_of=datetime(2026, 1, 14, 15, 15, tzinfo=SHANGHAI),
+    )
+    month_end = freeze_chan_input(
+        db, settings, instrument.ts_code, interval="M",
+        as_of=datetime(2026, 1, 30, 15, 15, tzinfo=SHANGHAI),
+    )
+    next_month = freeze_chan_input(
+        db, settings, instrument.ts_code, interval="M",
+        as_of=datetime(2026, 2, 2, 15, 15, tzinfo=SHANGHAI),
+    )
+
+    assert mid_month.status == month_end.status == next_month.status == "prepared"
+    assert mid_month.prepared.settlement_status == "temporary"
+    assert month_end.prepared.settlement_status == "settled"
+    assert next_month.prepared.settlement_status == "temporary"
+    assert mid_month.logical_series_id == month_end.logical_series_id == next_month.logical_series_id
+    assert mid_month.source_bar_ids[0] != month_end.source_bar_ids[0]
+    assert mid_month.input_revision_id != month_end.input_revision_id
+    assert mid_month.prepared.input_hash != month_end.prepared.input_hash
+    assert next_month.source_bar_ids[0] == month_end.source_bar_ids[0]
+    assert month_end.source_bar_ids[1:] == ()
+    assert len(next_month.source_bar_ids) == len(month_end.source_bar_ids) + 1
+    assert next_month.input_revision_id != month_end.input_revision_id
+    assert next_month.prepared.input_hash != month_end.prepared.input_hash
+
+
+@pytest.mark.parametrize("interval", ["W", "M"])
+def test_m3b_a2_price_basis_transition_uses_causal_daily_namespace(isolated_chan_input_db, interval):
+    from app.research.chan_input import freeze_chan_input
+
+    db = isolated_chan_input_db
+    instrument = _instrument(db, ts_code="515880.SH")
+    _add_period_daily_bars(
+        db,
+        instrument,
+        [date(2026, 2, 2), date(2026, 2, 3), date(2026, 5, 29), date(2026, 7, 3), date(2026, 7, 6)],
+        closes=[3.0, 1.0, 1.1, 1.1, 0.55],
+    )
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    before = freeze_chan_input(
+        db, settings, instrument.ts_code, interval=interval,
+        as_of=datetime(2026, 6, 1, 16, 0, tzinfo=SHANGHAI),
+    )
+    after = freeze_chan_input(
+        db, settings, instrument.ts_code, interval=interval,
+        as_of=datetime(2026, 7, 6, 16, 0, tzinfo=SHANGHAI),
+    )
+
+    assert before.status == after.status == "prepared"
+    assert before.price_basis_id != after.price_basis_id
+    assert before.logical_series_id != after.logical_series_id
+    assert before.source_bar_ids != after.source_bar_ids
+
+
+@pytest.mark.parametrize("interval", ["W", "M"])
+@pytest.mark.parametrize("unknown_field", ["volume", "amount"])
+def test_m3b_a2_blocks_daily_unknowns_and_preserves_aggregate_zero(isolated_chan_input_db, interval, unknown_field):
+    from app.research.chan_input import freeze_chan_input
+
+    db = isolated_chan_input_db
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    unknown = _instrument(db)
+    unknown_row = _add_period_daily_bars(db, unknown, [date(2026, 1, 5)])[0]
+    setattr(unknown_row, unknown_field, None)
+    db.flush()
+    blocked = freeze_chan_input(
+        db, settings, unknown.ts_code, interval=interval,
+        as_of=datetime(2026, 1, 5, 15, 15, tzinfo=SHANGHAI),
+    )
+    assert blocked.status == "blocked"
+    assert blocked.reason_code == f"unknown_{unknown_field}"
+
+    zero = _instrument(db, prefix="58")
+    zero_row = _add_period_daily_bars(db, zero, [date(2026, 1, 5)])[0]
+    zero_row.volume = 0.0
+    zero_row.amount = 0.0
+    db.flush()
+    prepared = freeze_chan_input(
+        db, settings, zero.ts_code, interval=interval,
+        as_of=datetime(2026, 1, 5, 15, 15, tzinfo=SHANGHAI),
+    )
+    assert prepared.status == "prepared"
+    assert prepared.prepared.bars[0].volume == pytest.approx(0.0)
+    assert prepared.prepared.bars[0].amount == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("interval", ["W", "M"])
+def test_m3b_a2_freeze_is_provider_and_database_write_free(isolated_chan_input_db, monkeypatch, interval):
+    from app.research.chan_input import freeze_chan_input
+
+    db = isolated_chan_input_db
+    instrument = _instrument(db)
+    _add_period_daily_bars(db, instrument, _weekdays(date(2026, 1, 5), date(2026, 1, 9)))
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    monkeypatch.setattr("app.providers.factory.create_provider", lambda *_: pytest.fail("Provider called"))
+
+    def reject_dml(_conn, _cursor, statement, _parameters, _context, _many):
+        if statement.lstrip().lower().startswith(("insert", "update", "delete", "replace")):
+            pytest.fail(f"A2 input freeze executed DML: {statement}")
+
+    event.listen(db.bind, "before_cursor_execute", reject_dml)
+    try:
+        frozen = freeze_chan_input(
+            db, settings, instrument.ts_code, interval=interval,
+            as_of=datetime(2026, 1, 9, 15, 15, tzinfo=SHANGHAI),
+        )
+        assert frozen.status == "prepared"
+    finally:
+        event.remove(db.bind, "before_cursor_execute", reject_dml)
+
+
 def test_indicator_version_does_not_enter_chan_logical_series_identity(db_session):
     from types import SimpleNamespace
 
@@ -567,13 +898,13 @@ def test_non_daily_interval_is_blocked_and_freeze_performs_no_database_writes(db
         daily = freeze_chan_input(
             db_session, settings, instrument.ts_code, interval="D", as_of=as_of
         )
-        weekly = freeze_chan_input(
-            db_session, settings, instrument.ts_code, interval="W", as_of=as_of
+        unsupported = freeze_chan_input(
+            db_session, settings, instrument.ts_code, interval="Q", as_of=as_of
         )
     finally:
         event.remove(connection, "before_cursor_execute", collect_dml)
 
     assert daily.status == "prepared"
-    assert weekly.status == "blocked"
-    assert weekly.reason_code == "unsupported_interval"
+    assert unsupported.status == "blocked"
+    assert unsupported.reason_code == "unsupported_interval"
     assert dml_statements == []

@@ -6,7 +6,7 @@ engine, publish database state, or use the chart read model's content-bound ID.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
 
 from sqlalchemy import select
@@ -31,6 +31,8 @@ SERIES_CONTRACT_VERSION = "r4c-price-series-v1"
 SOURCE_BAR_ID_VERSION = "r4c-source-bar-v1"
 INPUT_REVISION_ID_VERSION = "r4c-input-revision-v1"
 DAILY_SETTLEMENT_TIME = time(15, 15)
+PERIOD_INPUT_CONTRACT_VERSION = "r4c-calendar-period-v1"
+PERIOD_SOURCE_BAR_ID_VERSION = "r4c-period-source-bar-v1"
 BLOCKED_REASON_CODES = frozenset(
     {
         "instrument_missing",
@@ -88,6 +90,7 @@ class FrozenChanInput:
     price_basis_id: str | None = None
     input_revision_id: str | None = None
     source_bar_ids: tuple[str, ...] = ()
+    constituent_source_bar_ids: tuple[tuple[str, ...], ...] = ()
     source_as_of: date | None = None
     reason_code: str | None = None
     detail_code: str | None = None
@@ -98,6 +101,14 @@ class FrozenChanInput:
             raise ValueError("status must be prepared or blocked")
         if (self.status == "prepared") != (self.prepared is not None):
             raise ValueError("only a prepared result may contain PreparedResearchInput")
+        if self.prepared is not None:
+            if self.prepared.interval == "D" and self.constituent_source_bar_ids:
+                raise ValueError("daily inputs use period-only lineage")
+            if self.prepared.interval in {"W", "M"} and (
+                len(self.constituent_source_bar_ids) != len(self.prepared.bars)
+                or any(not source_ids for source_ids in self.constituent_source_bar_ids)
+            ):
+                raise ValueError("period inputs require ordered daily constituent lineage")
 
 
 def _market_as_of(value: datetime, settings: Settings) -> datetime:
@@ -165,6 +176,36 @@ def _source_bar_id(
     )
 
 
+def _period_source_bar_id(
+    instrument: str,
+    interval: str,
+    price_basis_id: str,
+    adjustment_version: str,
+    period_config_id: str,
+    aggregate: dict[str, object],
+    constituent_source_bar_ids: tuple[str, ...],
+) -> str:
+    return stable_hash(
+        {
+            "period_source_bar_id_version": PERIOD_SOURCE_BAR_ID_VERSION,
+            "period_input_contract_version": PERIOD_INPUT_CONTRACT_VERSION,
+            "instrument": instrument,
+            "interval": interval,
+            "price_basis_id": price_basis_id,
+            "adjustment_version": adjustment_version,
+            "period_config_id": period_config_id,
+            "period_start": aggregate["period_start"],
+            "period_end": aggregate["period_end"],
+            "last_observed_constituent_timestamp": aggregate["date"],
+            "ordered_constituent_source_bar_ids": list(constituent_source_bar_ids),
+            "aggregate_ohlcva": {
+                field: aggregate[field]
+                for field in ("open", "high", "low", "close", "volume", "amount")
+            },
+        }
+    )
+
+
 def _blocked(
     reason_code: str,
     message: str,
@@ -189,6 +230,165 @@ def _blocked(
     )
 
 
+def _freeze_period_chan_input(
+    db: Session,
+    settings: Settings,
+    instrument_code: str,
+    *,
+    interval: str,
+    as_of: datetime,
+) -> FrozenChanInput:
+    daily = freeze_chan_input(db, settings, instrument_code, interval="D", as_of=as_of)
+    if daily.status != "prepared" or daily.prepared is None:
+        return _blocked(
+            daily.reason_code or "history_qualification_blocked",
+            "accepted daily Chan research input is unavailable for period aggregation",
+            detail_code=daily.detail_code,
+            logical_series_id=daily.logical_series_id,
+            price_basis_id=daily.price_basis_id,
+            input_revision_id=daily.input_revision_id,
+            source_bar_ids=daily.source_bar_ids,
+            source_as_of=daily.source_as_of,
+        )
+
+    from app.workspace.candle_periods import aggregate_bars
+
+    market_as_of = _market_as_of(as_of, settings)
+    daily_rows = []
+    for bar in daily.prepared.bars:
+        market_timestamp = bar.timestamp.replace(tzinfo=UTC).astimezone(settings.timezone)
+        daily_rows.append(
+            {
+                "date": market_timestamp.isoformat(),
+                "open": bar.open,
+                "high": bar.high,
+                "low": bar.low,
+                "close": bar.close,
+                "volume": bar.volume,
+                "amount": bar.amount,
+                "source": "accepted_m3b_a_daily_research",
+            }
+        )
+
+    calendar_period = "1w" if interval == "W" else "1mo"
+    aggregates = aggregate_bars(daily_rows, calendar_period, now=market_as_of)
+    if not aggregates:
+        return _blocked(
+            "history_missing",
+            "no calendar-period aggregate is available from the accepted daily input",
+            logical_series_id=daily.logical_series_id,
+            price_basis_id=daily.price_basis_id,
+            source_bar_ids=daily.source_bar_ids,
+            source_as_of=daily.source_as_of,
+        )
+
+    period_config_id = stable_hash(
+        {
+            "base_config_id": daily.prepared.config_id,
+            "period_input_contract_version": PERIOD_INPUT_CONTRACT_VERSION,
+        }
+    )
+    logical_series_id = _logical_series_id(
+        daily.prepared.instrument,
+        interval,
+        daily.prepared.price_basis_id,
+        daily.prepared.adjustment_version,
+    )
+
+    prepared_bars: list[dict[str, object]] = []
+    period_source_bar_ids: list[str] = []
+    constituent_source_bar_ids: list[tuple[str, ...]] = []
+    cursor = 0
+    for aggregate in aggregates:
+        count = aggregate.get("source_bar_count")
+        if not isinstance(count, int) or count <= 0 or cursor + count > daily.prepared.cutoff:
+            return _blocked(
+                "history_qualification_blocked",
+                "calendar aggregate does not map to the accepted daily source bars",
+                logical_series_id=logical_series_id,
+                price_basis_id=daily.prepared.price_basis_id,
+            )
+        constituents = tuple(
+            daily.prepared.bars[index].source_bar_id
+            for index in range(cursor, cursor + count)
+        )
+        cursor += count
+        source_bar_id = _period_source_bar_id(
+            daily.prepared.instrument,
+            interval,
+            daily.prepared.price_basis_id,
+            daily.prepared.adjustment_version,
+            period_config_id,
+            aggregate,
+            constituents,
+        )
+        period_source_bar_ids.append(source_bar_id)
+        constituent_source_bar_ids.append(constituents)
+        prepared_bars.append(
+            {
+                "source_bar_id": source_bar_id,
+                "timestamp": aggregate["date"],
+                "open": aggregate["open"],
+                "high": aggregate["high"],
+                "low": aggregate["low"],
+                "close": aggregate["close"],
+                "volume": aggregate["volume"],
+                "amount": aggregate["amount"],
+            }
+        )
+    if cursor != daily.prepared.cutoff:
+        return _blocked(
+            "history_qualification_blocked",
+            "calendar aggregation omitted accepted daily source bars",
+            logical_series_id=logical_series_id,
+            price_basis_id=daily.prepared.price_basis_id,
+        )
+
+    frozen_ids = tuple(period_source_bar_ids)
+    input_revision_id = stable_hash(
+        {
+            "input_revision_id_version": INPUT_REVISION_ID_VERSION,
+            "logical_series_id": logical_series_id,
+            "ordered_source_bar_ids": list(frozen_ids),
+        }
+    )
+    settlement_status = "temporary" if bool(aggregates[-1].get("is_partial")) else "settled"
+    try:
+        prepared = prepare_research_input(
+            instrument=daily.prepared.instrument,
+            interval=interval,
+            series_id=logical_series_id,
+            price_basis_id=daily.prepared.price_basis_id,
+            adjustment_version=daily.prepared.adjustment_version,
+            input_revision_id=input_revision_id,
+            settlement_status=settlement_status,
+            config_id=period_config_id,
+            bars=prepared_bars,
+        )
+    except ChanContractError as exc:
+        return _blocked(
+            "history_qualification_blocked",
+            "M2 input validation rejected the frozen calendar-period research history",
+            detail_code=exc.code if exc.code in PRICE_HISTORY_DETAIL_CODES else None,
+            logical_series_id=logical_series_id,
+            price_basis_id=daily.prepared.price_basis_id,
+            input_revision_id=input_revision_id,
+            source_bar_ids=frozen_ids,
+            source_as_of=date.fromisoformat(str(aggregates[-1]["date"])[:10]),
+        )
+
+    return FrozenChanInput(
+        status="prepared",
+        prepared=prepared,
+        logical_series_id=logical_series_id,
+        price_basis_id=daily.prepared.price_basis_id,
+        input_revision_id=input_revision_id,
+        source_bar_ids=frozen_ids,
+        constituent_source_bar_ids=tuple(constituent_source_bar_ids),
+        source_as_of=date.fromisoformat(str(aggregates[-1]["date"])[:10]),
+    )
+
+
 def freeze_chan_input(
     db: Session,
     settings: Settings,
@@ -205,10 +405,18 @@ def freeze_chan_input(
     """
 
     normalized_interval = str(interval or "").strip().upper()
-    if normalized_interval != "D":
-        return _blocked("unsupported_interval", "M3B-A freezes daily (D) input only")
+    if normalized_interval not in {"D", "W", "M"}:
+        return _blocked("unsupported_interval", "Chan inputs support daily (D), weekly (W), and monthly (M) periods")
     if not isinstance(as_of, datetime):
         return _blocked("invalid_as_of", "as_of must be a datetime")
+    if normalized_interval in {"W", "M"}:
+        return _freeze_period_chan_input(
+            db,
+            settings,
+            instrument_code,
+            interval=normalized_interval,
+            as_of=as_of,
+        )
 
     code = str(instrument_code or "").strip().upper()
     if not code:

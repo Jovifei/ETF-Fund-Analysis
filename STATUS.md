@@ -1,8 +1,12 @@
-# 当前状态：R4C M3B-A R1 修复验收中（2026-09-30）
+# 当前状态：R4C M3B-A2 周/月输入身份实施中（2026-09-30）
+
+R1 已于远端 iteration 65 审核通过。iteration 66 A2 本地实现/定向验证现已完成：D 身份基线保持不变，W/M 聚合身份和 lineage 测试通过；96 项组合 92 passed / 4 环境跳过 / 0 失败。M2/R5 跨平台冻结摘要和静态门禁通过。收据和详细计划均已更新；A2 代码尚待提交、推送及远端审核。
+
+远端已审核 iteration 65：`M3B_A_DECISION=PASS`、`ROUTE_A=RETAIN`、无技术缺陷，并授权 iteration 66 M3B-A2 周/月输入身份。A2 新计划见 [M3B-A2 weekly/monthly identity](tasks/plans/2026-09-30-r4c-m3b-a2-weekly-monthly-identity.md)。代码当前已处于该分支 GitHub head `f854d6c9db0b774687f226cfb587cc03ddc814c5`，接下来本地执行 A2。
 
 R1 最终本地验证已完成并推送：应用/测试/收据代码提交 `f6de8a6ec2f5dd2b4ea7c411afb50dc5a6dcbd10`，tree `5c1f2921602780bef6def9b4efaed0f538463b31`；GitHub 分支读回同一 SHA。原七模块 78/78；R1 因果/Chan/M2/M3 组 80 passed / 4 条件跳过；DecisionBoard 指定回归 7/7；最终 Windows 全量 pytest 1316 passed / 19 skipped / 0 failures / 0 errors（1335 collected, 35 warnings, 1497.50 秒）。M2 Python 3.12.14/CZSC 1.0.1 Windows/Linux 各 25/25，摘要一致；R5.2.1 两平台身份摘要一致、三类碰撞均为 0，注入弱 ID 测试均检出。Ruff、compileall、Node、密钥扫描和 diff-check 通过。当前等远端独立审核；未部署，真实数据 UNKNOWN。
 
-远端 iteration 65 `PLAN_UPDATE` 已明确授权 DecisionBoard 两处公司行动截止日期修复。两个调用点按 generated_at/observed_at 的上海日期截断事件。代码测试候选和 GitHub 分支均固定于 `f6de8a6ec2f5dd2b4ea7c411afb50dc5a6dcbd10`；本地工作区在提交后无未提交变更。接下来按 [恢复与阶段交付计划](tasks/plans/2026-09-30-r4c-recovery-and-delivery.md) 发布执行证据并完成远端复核。
+远端 iteration 65 R1 审核已 PASS，Route A 保留，并授权 iteration 66 M3B-A2。A2 仅从已接受 D 研究输入调用 `aggregate_bars()` 构造 W/M。完整实施方案见 [M3B-A2 周/月身份计划](tasks/plans/2026-09-30-r4c-m3b-a2-weekly-monthly-identity.md)。
 
 2026-09-30 已修正定时接力，不再把旧 R4B 聊天的 interrupted 状态作为本聊天工程前置条件。该状态不能证明后台备份仍在执行。现网版本本轮未复查，下方历史部署身份不得当作当前在线事实。当前阶段仍 `NOT_DEPLOYABLE_SUBSTAGE`，真实数据 UNKNOWN。
 

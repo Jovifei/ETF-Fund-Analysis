@@ -1406,3 +1406,22 @@ Recovery implementation/next-stage plan: `tasks/plans/2026-09-30-r4c-recovery-an
 - Source-bar identity binds the actual daily revision consumed by Chan; same source revision is stable, corrected OHLC/quality revision changes the ID, unaffected IDs stay stable, and an appended future bar does not rewrite old IDs.
 - Iterate daily data only. Weekly/monthly constituent identities are deferred to M3B-A2.
 - No changes to `chan_contract.py`, adapter/replay/publisher/M3 migration, workspace jobs/API, frontend, Provider, production, actionable state, or trading behavior.
+
+# R4C M3B-A2 W/M input identities — iteration 66
+
+## Remote gate
+
+- [x] Iteration 65 exact-head review: `M3B_A_DECISION=PASS`, `ROUTE_A=RETAIN`, no technical defect; A2 GO true.
+- [x] Save remote plan to `tasks/plans/2026-09-30-r4c-m3b-a2-weekly-monthly-identity.md`.
+
+## Implementation and verification
+
+- [x] Record frozen D identity ledger before touching code.
+- [x] Add RED W/M aggregation, namespace, lineage, append/correction, corporate-action, partial settlement, zero/unknown, and no-side-effect tests.
+- [x] Implement only `chan_input.py`; reuse `aggregate_bars()`, no new calendar logic, API, worker or production code.
+- [x] Verify D identities unchanged, run A2/R4A/M2/M3 focused gates, cross-platform M2/R5 validators and static checks.
+- [x] Update audit receipt, STATUS/HANDOFF and this plan with the A2 decision/evidence.
+- [ ] Commit and push same branch, release bounded execution evidence, and ask remote to review exact head.
+- [ ] Keep A2 non-deployable; wait for remote PASS before any M3B-B work.
+
+M3B-A2 local verification result: focused group 96 collected / 92 passed / 4 environment skips / 0 failures; D ledger baseline matches, cross-platform M2/R5 digests/collisions remain frozen, static gates pass. Evidence is in `E:/Claude_allow/Download/ETF_R4C_M3_20260929/m3b-a2-final-focused-20260930.xml`, `m3b-a2-cross-platform-linux-20260930.txt`, Windows validator outputs and static log. Candidate still uncommitted/unpushed; current checkpoint is executing A2.

@@ -1,10 +1,8 @@
-# 当前接手入口：R4C M3B-A R1（iteration 65，2026-09-30）
+# 当前接手入口：R4C M3B-A2 周/月输入身份（iteration 66，2026-09-30）
 
-先读 [实施计划](tasks/plans/2026-09-30-r4c-recovery-and-delivery.md) 与 STATUS。远端 iteration 65 已授权且 R1 修复已完成：DecisionBoard 的 `_row` 与 `_derive_provisional` 按 Shanghai market date 过滤公司行动。原图表 parity 断言不变，最终 Windows 全量 1316 passed/19 skipped/0 failures，M2 和 R5.2.1 Windows/Linux 摘要一致，静态/密钥扫描通过。实现与测试提交 `f6de8a6ec2f5dd2b4ea7c411afb50dc5a6dcbd10` / tree `5c1f2921602780bef6def9b4efaed0f538463b31` 已推送并读回一致；现请远端独立审核本轮证据。M3B-A 阶段仍 `NOT_DEPLOYABLE_SUBSTAGE`；M3B-A2 等待远端 R1 PASS。
+远端已判 R1 `PASS`，Route A 保留，M3B-A2 `GO=true`。基线为 GitHub branch `codex/r4c-pre-m4-regression-diagnostic` head `f854d6c9db0b774687f226cfb587cc03ddc814c5` / tree `ccab1b644ef9304e5b78ef57c8fd1ff161b480b7`。完整 plan 在 `tasks/plans/2026-09-30-r4c-m3b-a2-weekly-monthly-identity.md`。只用已接受 M3B-A D 输入复用 `aggregate_bars()` 构造 W/M；本轮不建后台 worker/API/UI，不部署，不改 main。真实资格 UNKNOWN，runtime disabled，actionable=false。
 
-新增 `_row` 测试先复现未来拆分（预期 3.0，实际 1.5）；组合首次失败还包含固定标的在共享测试库重复插入，现改为独立内存库。原 MA20 图表一致断言保留，并扩展拆分当日参数。保留这些失败记录，不宣称完整历史快照 PIT 已认证。
-
-原生产聊天的发布结果仍需未来发布前只读核对；本轮没有生产部署。先关闭 R1，再由远端细化 A2→B→C 后端切片上线→M4 页面上线→M5。下方 iteration 64 内容保留为历史。
+R1 已完成远端 PASS；其双调用点修复、full test 与推送记录保存在审计收据。当前只接着执行 iteration 66 A2。每个阶段继续等本轮远端 PASS 后再进入下一段；A2 本身明确不部署。
 
 ## 本轮交接
 
