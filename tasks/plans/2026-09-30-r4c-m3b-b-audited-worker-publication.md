@@ -112,7 +112,7 @@ Deployment remains `NOT_DEPLOYABLE_SUBSTAGE` / `PRE_RELEASE_RUNTIME_COMPONENT`, 
 
 ## Local execution record — 2026-09-30
 
-Implementation and local commits are complete. Code/test commit is `e38d524c639a938e5bf709302c95923b9f20df1f` / tree `a00ae89bfa7045d151b8c90b3ea09695cc49307e`, parent `6166587d718992237908099b6b89ea83f3779d3d`; push, exact GitHub readback, and remote iteration-68 review remain.
+Implementation and local commits are complete. Code/test commit is `e38d524c639a938e5bf709302c95923b9f20df1f` / tree `a00ae89bfa7045d151b8c90b3ea09695cc49307e`, parent `6166587d718992237908099b6b89ea83f3779d3d`. The branch was pushed and GitHub readback matched; the remote iteration-68 exact-head review remains.
 
 - Added internal `ChanStructuresRequest` / persisted `ChanStructuresJobRequest`; the public `DataRequest.task` contract still rejects `chan_structures`.
 - Added `enqueue_chan_structures()` with global offline scope, the existing queue lock/capacity/idempotency behavior, and the unchanged claim/lease path. No API, scheduler, UI, or regular producer calls it.

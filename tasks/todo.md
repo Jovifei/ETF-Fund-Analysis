@@ -1457,7 +1457,8 @@ Remote iteration 67 exact-head review returned `M3B_A2_DECISION=PASS`, technical
 - [x] Run M3B-A/A2, M2/M3, workspace jobs, R4A corporate-action, M2/R5 cross-platform, full Windows repository pytest, and static gates.
 - [x] Update execution receipt, STATUS/HANDOFF/todo, and plan; deployment remains explicitly `NOT_DEPLOYABLE_SUBSTAGE`.
 - [x] Commit code/tests as `e38d524c639a938e5bf709302c95923b9f20df1f` / tree `a00ae89bfa7045d151b8c90b3ea09695cc49307e`; receipt/status/plan documentation is committed locally.
-- [ ] Push the isolated branch, verify exact GitHub head/tree, release bounded evidence, and request iteration-68 remote exact-head review.
+- [x] Push the isolated branch and verify exact GitHub SHA/tree readback.
+- [ ] Release bounded C2C execution evidence and request iteration-68 remote exact-head review.
 - [x] Keep B `NOT_DEPLOYABLE_SUBSTAGE`; no public producer, API, UI, scheduler, main merge, production, or M3B-C scope.
 
 M3B-B local gates are complete. Full Windows pytest: 1,369 collected, 1,348 passed, 21 skipped, 0 failures/errors, 35 warnings, 1,516.123 seconds, exit 0. The `test_chan_m3b_worker.py` unit group is 17 passed / 2 environment-gated skips. Exact CZSC worker semantic digest matches on Windows/Linux (`66b8092b...096bd`); M2 and R5 frozen digests and collision checks are unchanged. PostgreSQL 16.15 exact retry and chronology-retention gate passes. See [M3B-B worker publication receipt](../docs/audits/R4C_M3B_B_WORKER_PUBLICATION_20260930.md). Await remote review after push; M3B-C remains GO=false.

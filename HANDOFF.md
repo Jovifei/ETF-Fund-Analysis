@@ -4,7 +4,7 @@
 
 ### Iteration 68 execution handoff
 
-M3B-B implementation and all local acceptance gates are complete. Code/test commit: `e38d524c639a938e5bf709302c95923b9f20df1f`, tree `a00ae89bfa7045d151b8c90b3ea09695cc49307e`, parent `6166587d718992237908099b6b89ea83f3779d3d`. The receipt/status/plan documentation is committed locally as well; the isolated branch is not yet pushed. Next: push `codex/r4c-pre-m4-regression-diagnostic`, verify the exact GitHub SHA/tree, release bounded C2C evidence, and request remote exact-head review. Do not start M3B-C until remote review of this head and a separate remote plan.
+M3B-B implementation and all local acceptance gates are complete. Code/test commit: `e38d524c639a938e5bf709302c95923b9f20df1f`, tree `a00ae89bfa7045d151b8c90b3ea09695cc49307e`, parent `6166587d718992237908099b6b89ea83f3779d3d`. The receipt/status/plan documentation is committed and pushed; GitHub readback matched the local SHA/tree. Push any final handoff update before sending bounded C2C evidence and requesting remote exact-head review. Do not start M3B-C until remote review of the pushed head and a separate remote plan.
 
 - Full Windows pytest: 1,369 collected; 1,348 passed; 21 skipped; no failures/errors; 35 warnings; 1,516.123 seconds; exit 0.
 - Exact CZSC 1.0.1 D/W/M worker test passes on Windows Python 3.12.10 and Linux Python 3.12.14 with matching digest `66b8092b122ffb1819d18e45963b3f708fca0581550fb062395efc96023096bd`; W temporary→settled, exact retry, and chronological head retention are covered; D emits two synthetic FX structures.

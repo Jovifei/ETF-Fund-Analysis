@@ -6,7 +6,7 @@ C2C task: `c2c_a1d7`, iteration 68
 
 Remote plan base: `6166587d718992237908099b6b89ea83f3779d3d` / tree `f7a096be408ce908cb5e5c282b19025153ec0653`
 
-Local implementation: complete and verified; GitHub push and remote exact-head review are pending.
+Local implementation and GitHub push/readback are complete; remote exact-head review is pending.
 
 Code/test commit: `e38d524c639a938e5bf709302c95923b9f20df1f` / tree `a00ae89bfa7045d151b8c90b3ea09695cc49307e`, parent `6166587d718992237908099b6b89ea83f3779d3d`.
 
@@ -66,4 +66,4 @@ No production endpoint, Provider, model, real market-data source, or production 
 
 ## Remaining gate
 
-Commit the verified code/tests and documentation, push the isolated branch, read back the exact GitHub head/tree, attach bounded execution evidence to C2C, and ask remote ChatGPT to review this submission against iteration 68. Keep M3B-C, M4, main integration, and production disabled until that review and a new remote plan.
+Attach bounded execution evidence to C2C and ask remote ChatGPT to review the pushed exact head against iteration 68. Keep M3B-C, M4, main integration, and production disabled until that review and a new remote plan.
