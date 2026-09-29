@@ -1,5 +1,7 @@
 # Lessons
 
+- 2026-09-30: 定时接力必须优先读取本聊天当前 checkpoint 和精确候选证据；旧聊天 interrupted 不代表备份仍在执行，也不能覆盖已通过的 M0/R4C 阶段。远端 AX 内容截断时用完整 DOM 读取最新 PLAN_UPDATE 后再判断是否仍等授权。
+
 - 2026-09-29: 持续 C2C 项目中，不能把“最终人工验收”表述为阶段循环的停止条件；远端计划/本地实现与测试/GitHub/远端复核/下一阶段计划持续进行，只在计划明确要求 Jovi 本人决策的具体门禁暂停。
 - 2026-09-28: Jovi's C2C workflow is a continuing stage loop: remote plan/review, local implementation and tests, GitHub push, then remote audit and the next plan. Human acceptance is a later product gate, not a stop condition between stages; raise technical-route disagreements to the remote reviewer with evidence.
 - 2026-09-23: Windows checkout settings can leave tracked `.sh` files as CRLF in the Git blob; Linux then fails before the script body with `/usr/bin/env: bash\r`. Pin `*.sh text eol=lf` in `.gitattributes` and assert shell entrypoints contain no CR byte; `shellcheck` alone does not catch the shebang failure.

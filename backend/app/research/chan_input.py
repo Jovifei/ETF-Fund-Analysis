@@ -31,6 +31,35 @@ SERIES_CONTRACT_VERSION = "r4c-price-series-v1"
 SOURCE_BAR_ID_VERSION = "r4c-source-bar-v1"
 INPUT_REVISION_ID_VERSION = "r4c-input-revision-v1"
 DAILY_SETTLEMENT_TIME = time(15, 15)
+BLOCKED_REASON_CODES = frozenset(
+    {
+        "instrument_missing",
+        "unsupported_interval",
+        "history_missing",
+        "ambiguous_price_basis",
+        "history_qualification_blocked",
+        "source_identity_missing",
+        "unknown_volume",
+        "unknown_amount",
+        "invalid_ohlc",
+        "mock_history",
+        "volume_units_unverified",
+        "invalid_volume",
+        "invalid_amount",
+        "invalid_as_of",
+    }
+)
+PRICE_HISTORY_DETAIL_CODES = frozenset(
+    {
+        "history_missing",
+        "unknown_price_basis",
+        "ambiguous_price_basis",
+        "invalid_ohlc",
+        "invalid_history_date",
+        "duplicate_or_unordered_history",
+        "unexplained_price_discontinuity",
+    }
+)
 
 _CONFIG_ID = stable_hash(
     {
@@ -61,6 +90,7 @@ class FrozenChanInput:
     source_bar_ids: tuple[str, ...] = ()
     source_as_of: date | None = None
     reason_code: str | None = None
+    detail_code: str | None = None
     message: str | None = None
 
     def __post_init__(self) -> None:
@@ -139,6 +169,7 @@ def _blocked(
     reason_code: str,
     message: str,
     *,
+    detail_code: str | None = None,
     logical_series_id: str | None = None,
     price_basis_id: str | None = None,
     input_revision_id: str | None = None,
@@ -147,12 +178,13 @@ def _blocked(
 ) -> FrozenChanInput:
     return FrozenChanInput(
         status="blocked",
+        reason_code=reason_code if reason_code in BLOCKED_REASON_CODES else "history_qualification_blocked",
+        detail_code=detail_code if detail_code in PRICE_HISTORY_DETAIL_CODES else None,
         logical_series_id=logical_series_id,
         price_basis_id=price_basis_id,
         input_revision_id=input_revision_id,
         source_bar_ids=source_bar_ids,
         source_as_of=source_as_of,
-        reason_code=reason_code,
         message=message,
     )
 
@@ -187,7 +219,7 @@ def freeze_chan_input(
     market_as_of = _market_as_of(as_of, settings)
     instrument = db.scalar(select(Instrument).where(Instrument.ts_code == code))
     if instrument is None:
-        return _blocked("instrument_not_found", "instrument_code is not present in persisted history")
+        return _blocked("instrument_missing", "instrument_code is not present in persisted history")
 
     # Match R4A's adjustment selection. Its basis descriptor uses the read date,
     # while the actual D rows are limited by the 15:15 settlement cutoff below.
@@ -206,7 +238,7 @@ def freeze_chan_input(
     adjustment = "none" if "none" in adjustments else adjustments[0] if len(adjustments) == 1 else None
     if adjustment is None:
         return _blocked(
-            "missing_or_ambiguous_price_basis",
+            "ambiguous_price_basis",
             "persisted daily bars contain multiple adjustment bases",
         )
 
@@ -230,7 +262,11 @@ def freeze_chan_input(
     research_rows = (
         stored_rows
         if adjustment != "none"
-        else research_history_rows(stored_rows, code)
+        else research_history_rows(
+            stored_rows,
+            code,
+            effective_through=market_as_of.date(),
+        )
     )
     basis = research_price_basis(
         code,
@@ -244,9 +280,18 @@ def freeze_chan_input(
 
     history_issue = price_history_issue(research_rows)
     if history_issue:
+        reason_code = "history_qualification_blocked"
+        detail_code = history_issue
+        if history_issue == "history_missing":
+            reason_code = "history_missing"
+        elif history_issue in {"unknown_price_basis", "ambiguous_price_basis"}:
+            reason_code = "ambiguous_price_basis"
+        elif history_issue == "invalid_ohlc":
+            reason_code = "invalid_ohlc"
         return _blocked(
-            history_issue,
+            reason_code,
             "R4A research history is not valid for a Chan input",
+            detail_code=detail_code,
             logical_series_id=logical_series_id,
             price_basis_id=price_basis_id,
         )
@@ -271,7 +316,7 @@ def freeze_chan_input(
             )
         if not str(stored.quality_hash or "").strip():
             return _blocked(
-                "source_revision_missing",
+                "source_identity_missing",
                 "daily bar is missing its source quality revision hash",
                 logical_series_id=logical_series_id,
                 price_basis_id=price_basis_id,
@@ -351,9 +396,16 @@ def freeze_chan_input(
             bars=bars,
         )
     except ChanContractError as exc:
+        if exc.code in {"unknown_volume", "unknown_amount", "invalid_ohlc"}:
+            reason_code = exc.code
+        elif exc.code in {"identity_missing", "duplicate_source_bar_id"}:
+            reason_code = "source_identity_missing"
+        else:
+            reason_code = "history_qualification_blocked"
         return _blocked(
-            exc.code,
-            str(exc),
+            reason_code,
+            "M2 input validation rejected the frozen daily research history",
+            detail_code=exc.code if exc.code in PRICE_HISTORY_DETAIL_CODES else None,
             logical_series_id=logical_series_id,
             price_basis_id=price_basis_id,
             input_revision_id=input_revision_id,

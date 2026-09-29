@@ -11,6 +11,21 @@ from sqlalchemy import event
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
+@pytest.fixture
+def isolated_chan_input_db(tmp_path):
+    from app.db.base import Base
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'chan-corporate-action.sqlite3'}")
+    Base.metadata.create_all(engine)
+    try:
+        with Session(engine) as session:
+            yield session
+    finally:
+        engine.dispose()
+
+
 def _instrument(db, *, prefix: str = "59", ts_code: str | None = None) -> Instrument:
     suffix = str(int(uuid4().hex[:5], 16) % 10000).zfill(4)
     code = ts_code or f"{prefix}{suffix}.SH"
@@ -269,9 +284,111 @@ def test_unknown_or_unverified_volume_blocks_but_true_zero_survives(db_session):
     assert [bar.amount for bar in zero_result.prepared.bars] == [0.0] * 5
 
 
-def test_split_research_basis_matches_r4a_and_qfq_changes_chan_namespace(db_session):
+def test_one_valid_settled_bar_is_a_prepared_input(isolated_chan_input_db):
     from app.research.chan_input import freeze_chan_input
 
+    db_session = isolated_chan_input_db
+    instrument = _instrument(db_session)
+    _add_daily_bars(db_session, instrument, date(2025, 1, 2), count=1)
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    result = freeze_chan_input(
+        db_session,
+        settings,
+        instrument.ts_code,
+        interval="D",
+        as_of=datetime(2025, 1, 3, 16, 0, tzinfo=SHANGHAI),
+    )
+
+    assert result.status == "prepared"
+    assert result.prepared.cutoff == 1
+
+
+def test_missing_instrument_uses_bounded_reason_code(db_session):
+    from app.research.chan_input import freeze_chan_input
+
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    result = freeze_chan_input(
+        db_session,
+        settings,
+        "599999.SH",
+        interval="D",
+        as_of=datetime(2025, 1, 3, 16, 0, tzinfo=SHANGHAI),
+    )
+
+    assert result.status == "blocked"
+    assert result.reason_code == "instrument_missing"
+
+
+def test_ambiguous_adjustment_uses_bounded_reason_code(isolated_chan_input_db):
+    from app.research.chan_input import freeze_chan_input
+
+    db_session = isolated_chan_input_db
+    instrument = _instrument(db_session)
+    _add_daily_bars(db_session, instrument, date(2025, 1, 2), adjust="qfq")
+    _add_daily_bars(db_session, instrument, date(2025, 1, 2), adjust="hfq")
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    result = freeze_chan_input(
+        db_session,
+        settings,
+        instrument.ts_code,
+        interval="D",
+        as_of=datetime(2025, 1, 7, 16, 0, tzinfo=SHANGHAI),
+    )
+
+    assert result.status == "blocked"
+    assert result.reason_code == "ambiguous_price_basis"
+
+
+def test_missing_source_revision_uses_bounded_reason_code(isolated_chan_input_db):
+    from app.research.chan_input import freeze_chan_input
+
+    db_session = isolated_chan_input_db
+    instrument = _instrument(db_session)
+    rows = _add_daily_bars(db_session, instrument, date(2025, 1, 2))
+    rows[2].quality_hash = ""
+    db_session.flush()
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    result = freeze_chan_input(
+        db_session,
+        settings,
+        instrument.ts_code,
+        interval="D",
+        as_of=datetime(2025, 1, 7, 16, 0, tzinfo=SHANGHAI),
+    )
+
+    assert result.status == "blocked"
+    assert result.reason_code == "source_identity_missing"
+
+
+def test_history_qualification_reason_has_bounded_detail_code(isolated_chan_input_db):
+    from app.research.chan_input import freeze_chan_input
+
+    db_session = isolated_chan_input_db
+    instrument = _instrument(db_session)
+    rows = _add_daily_bars(db_session, instrument, date(2025, 1, 2))
+    rows[-1].open = 3.0
+    rows[-1].high = 3.1
+    rows[-1].low = 2.9
+    rows[-1].close = 3.0
+    db_session.flush()
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    result = freeze_chan_input(
+        db_session,
+        settings,
+        instrument.ts_code,
+        interval="D",
+        as_of=datetime(2025, 1, 7, 16, 0, tzinfo=SHANGHAI),
+    )
+
+    assert result.status == "blocked"
+    assert result.reason_code == "history_qualification_blocked"
+    assert result.detail_code == "unexplained_price_discontinuity"
+
+
+def test_split_research_basis_matches_r4a_and_qfq_changes_chan_namespace(isolated_chan_input_db):
+    from app.research.chan_input import freeze_chan_input
+
+    db_session = isolated_chan_input_db
     instrument = _instrument(db_session, ts_code="512480.SH")
     split_day = date(2026, 7, 3)
     rows = _add_daily_bars(
@@ -317,6 +434,62 @@ def test_split_research_basis_matches_r4a_and_qfq_changes_chan_namespace(db_sess
     assert source_adjusted.price_basis_id != official_research.price_basis_id
     assert source_adjusted.logical_series_id != official_research.logical_series_id
     assert source_adjusted.source_bar_ids != official_research.source_bar_ids
+
+
+def test_historical_chan_input_uses_only_effective_515880_actions(isolated_chan_input_db):
+    from app.research.chan_input import freeze_chan_input
+
+    db_session = isolated_chan_input_db
+    instrument = _instrument(db_session, ts_code="515880.SH")
+    raw_bars = (
+        (date(2026, 2, 2), 3.0),
+        (date(2026, 2, 3), 1.0),
+        (date(2026, 5, 29), 1.1),
+        (date(2026, 7, 3), 1.1),
+        (date(2026, 7, 6), 0.55),
+    )
+    for day, close in raw_bars:
+        db_session.add(
+            DailyBar(
+                instrument_id=instrument.id,
+                trade_date=day,
+                open=close,
+                high=close * 1.01,
+                low=close * 0.99,
+                close=close,
+                volume=1000.0,
+                amount=close * 1000.0,
+                source="akshare:em:v101",
+                adjust="none",
+                quality_hash=f"quality-{day.isoformat()}",
+            )
+        )
+    db_session.flush()
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+
+    between_events = freeze_chan_input(
+        db_session,
+        settings,
+        instrument.ts_code,
+        interval="D",
+        as_of=datetime(2026, 6, 1, 16, 0, tzinfo=SHANGHAI),
+    )
+    after_second_event = freeze_chan_input(
+        db_session,
+        settings,
+        instrument.ts_code,
+        interval="D",
+        as_of=datetime(2026, 7, 6, 16, 0, tzinfo=SHANGHAI),
+    )
+
+    assert between_events.status == after_second_event.status == "prepared"
+    assert [bar.close for bar in between_events.prepared.bars] == pytest.approx(
+        [1.0, 1.0, 1.1]
+    )
+    assert [bar.close for bar in after_second_event.prepared.bars] == pytest.approx(
+        [0.5, 0.5, 0.55, 0.55, 0.55]
+    )
+    assert between_events.price_basis_id != after_second_event.price_basis_id
 
 
 def test_indicator_version_does_not_enter_chan_logical_series_identity(db_session):

@@ -12,7 +12,8 @@ from sqlalchemy import select
 def instrument(db, missing_volume=False, legacy=False):
     code = '59' + str(int(uuid4().hex[:5], 16) % 10000).zfill(4) + '.SH'
     inst = Instrument(ts_code=code, symbol=code[:6], name='history test', kind='ETF', enabled=True)
-    db.add(inst); db.flush()
+    db.add(inst)
+    db.flush()
     for i in range(80):
         price = 2 + i * .01
         db.add(DailyBar(instrument_id=inst.id, trade_date=date(2025,1,1)+timedelta(days=i),
@@ -286,7 +287,8 @@ def test_empty_history_has_a_specific_chart_unavailability_reason(db_session):
     db_session.rollback()
 
 
-def test_split_price_basis_stays_separate_for_daily_weekly_and_monthly_charts(tmp_path):
+@pytest.mark.parametrize("provisional_day,provisional_price", [(2, 2.0), (3, 1.0)])
+def test_split_price_basis_stays_separate_for_daily_weekly_and_monthly_charts(tmp_path, provisional_day, provisional_price):
     from zoneinfo import ZoneInfo
 
     from app.db.base import Base
@@ -344,12 +346,12 @@ def test_split_price_basis_stays_separate_for_daily_weekly_and_monthly_charts(tm
             assert week['research_price_basis'] == month['research_price_basis'] == daily['research_price_basis']
 
             from app.services.decision_board_service import DecisionBoardService
-            provisional_at = datetime(2026, 7, 2, 10, 0, tzinfo=ZoneInfo('Asia/Shanghai'))
+            provisional_at = datetime(2026, 7, provisional_day, 10, 0, tzinfo=ZoneInfo('Asia/Shanghai'))
             service = DecisionBoardService(settings)
             provisional = service.record_provisional_input(
                 db, ts_code=inst.ts_code, observed_at=provisional_at, source='akshare:em:v101',
-                timestamp_verified=True, open_price=2.0, high_price=2.04, low_price=1.96,
-                last_price=2.0, volume=1000, amount=2000, pct_change_percent_points=0,
+                timestamp_verified=True, open_price=provisional_price, high_price=provisional_price * 1.02, low_price=provisional_price * .98,
+                last_price=provisional_price, volume=2000 / provisional_price, amount=2000, pct_change_percent_points=0,
             )
             provisional_chart = chart_data(db, settings, inst.ts_code, '1d', 500,
                                            as_of=provisional_at + timedelta(minutes=1))
@@ -402,6 +404,72 @@ def test_same_day_daily_bar_is_partial_through_1515_settlement_cutoff(db_session
     assert settled['bars'][-1]['is_partial'] is False
 
 
+def test_chart_historical_as_of_excludes_later_515880_split_event(tmp_path):
+    from zoneinfo import ZoneInfo
+
+    from app.db.base import Base
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    engine = create_engine(f"sqlite:///{tmp_path / '515880-asof.sqlite3'}")
+    Base.metadata.create_all(engine)
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    rows = (
+        (date(2026, 2, 2), 3.0),
+        (date(2026, 2, 3), 1.0),
+        (date(2026, 5, 29), 1.1),
+        (date(2026, 7, 3), 1.1),
+        (date(2026, 7, 6), 0.55),
+    )
+    try:
+        with Session(engine) as db:
+            inst = Instrument(
+                ts_code="515880.SH", symbol="515880", name="two split as-of fixture",
+                kind="ETF", enabled=True,
+            )
+            db.add(inst)
+            db.flush()
+            for day, close in rows:
+                db.add(DailyBar(
+                    instrument_id=inst.id,
+                    trade_date=day,
+                    open=close,
+                    high=close * 1.01,
+                    low=close * 0.99,
+                    close=close,
+                    volume=1000.0,
+                    amount=close * 1000.0,
+                    source="akshare:em:v101",
+                    adjust="none",
+                    quality_hash=f"quality-{day.isoformat()}",
+                ))
+            db.flush()
+
+            between_events = chart_data(
+                db, settings, inst.ts_code, "1d", 20,
+                as_of=datetime(2026, 6, 1, 16, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+            )
+            after_second_event = chart_data(
+                db, settings, inst.ts_code, "1d", 20,
+                as_of=datetime(2026, 7, 6, 16, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+            )
+
+            assert [bar["close"] for bar in between_events["research_bars"]] == pytest.approx(
+                [1.0, 1.0, 1.1]
+            )
+            assert between_events["research_basis_evidence_ids"] == [
+                "sse_515880_20260203"
+            ]
+            assert [bar["close"] for bar in after_second_event["research_bars"]] == pytest.approx(
+                [0.5, 0.5, 0.55, 0.55, 0.55]
+            )
+            assert after_second_event["research_basis_evidence_ids"] == [
+                "sse_515880_20260203", "sse_515880_20260706"
+            ]
+    finally:
+        engine.dispose()
+
+
 def test_legacy_units_only_hide_volume_not_price_indicators(db_session):
     inst = instrument(db_session,legacy=True)
     settings=get_settings().model_copy(update={'market_provider':'akshare'})
@@ -425,7 +493,8 @@ def test_shared_indicator_refresh_skips_bad_asset_not_whole_universe(db_session)
 
 def test_eligibility_scope_does_not_mutate_instruments(db_session):
     from app.providers.data_contract import history_issues
-    good=instrument(db_session); bad=instrument(db_session,missing_volume=True)
+    good = instrument(db_session)
+    bad = instrument(db_session, missing_volume=True)
     settings=get_settings().model_copy(update={'market_provider':'akshare'})
     issues=history_issues(db_session,settings)
     assert good.id not in issues and bad.id in issues

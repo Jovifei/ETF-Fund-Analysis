@@ -1371,6 +1371,33 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - Remote iteration 64 labels M3B-A2 as the same non-deployable identity stage and M3B-B as a pre-release worker component with no standalone production activation. The first coherent read-only application read-model/GET slice (M3B-C) is `DEPLOY_REQUIRED`; later user-visible presentation stages must carry the same explicit release gate.
 - Before any deployable stage, the remote plan must include candidate image build/digest off the production host, a fresh verified production backup, restore/upgrade rehearsal against a disposable PostgreSQL 16 restore of that backup (not an empty database), image-only rollback rehearsal or a tested image-plus-DB restore path, auth/health/read-only smoke tests, and sanitized post-deploy evidence. No production mutation in M3B-A.
 
+# R4C M3B-A-R1 causal corporate-action repair — iteration 65
+
+Latest recovery verification: R1 causal/Chan/M2/M3 target group 80 passed / 4 skipped / 0 failures/errors; DecisionBoard selected regressions 7/7 passed. Final Windows suite 1,316 passed / 19 skipped / 0 failures / 0 errors / 35 warnings in 1,497.50s, 1,335 collected. M2 Windows/Linux 25/25; accepted M2 and R5 history digests match cross-platform, collision counts 0/0/0 and weak-ID injection was detected. Ruff/compileall/Node/secret scan/diff-check pass. Initial fixture collisions are retained as RED evidence; final Chan write fixtures use isolated temp SQLite. Audit/STATUS/HANDOFF updated; same-branch commit/push and remote review remain.
+
+2026-09-30 recovery: remote `PLAN_UPDATE` is received and explicitly authorizes the two DecisionBoard corporate-action cutoffs plus bounded tests. The old R4B chat's interrupted deployment is not this branch's engineering gate. Complete the existing repair before M3B-A2; full regression and remote acceptance remain required.
+
+Recovery implementation/next-stage plan: `tasks/plans/2026-09-30-r4c-recovery-and-delivery.md`. Both service cutoffs are now patched. Original seven-module regression group passes 78/78 (added split-day parameter); static gates pass. Additional M2/M3/DecisionBoard focused group is running with JUnit target `E:/Claude_allow/Download/ETF_R4C_M3_20260929/r1-recovery-focused-final-20260930.xml`. Full Windows/cross-platform/review/push remain pending. Verify process/result before starting a duplicate test invocation.
+
+## Remote review result and GO
+
+- Iteration 64 remote review: `M3B_A_STATUS=CHANGES_REQUIRED`; exact defect is future corporate-action leakage in historical `as_of` input. `research_history_rows()` applies every registered event, while `research_price_basis()` already filters evidence by `effective_through`.
+- Iteration 65 plan base: `9fe14a6b69779e602b4fd9027ea9e8e8a021adc2`. `M3B_A_R1_GO=true`; M3B-A2, M3B-B worker, M3B-C read model/API, M4 UI, main merge, production, and real-data activation remain false.
+- Deployment remains `NOT_DEPLOYABLE_SUBSTAGE`; the repair is inside the same non-visible input-contract stage.
+
+## Plan
+
+- [x] Write failing tests for `research_history_rows(..., effective_through=...)`: `None` preserves all-known-event callers; a supplied date applies only events with `ex_date <= effective_through`.
+- [x] Add a two-event `515880.SH` causal fixture. Between 2026-02-03 and 2026-07-06, apply February but not July evidence/transformation; at/after July 6, apply both.
+- [x] Change `chan_input.py` to pass the same `market_as_of.date()` to both `research_history_rows()` and `research_price_basis()`; do not reimplement split arithmetic.
+- [x] Change only the historical R4A transformation call sites in `workspace/read_model.py` to pass that same `as_of.date()` for persisted and provisional research rows; preserve ordinary chart identity formulas and decision logic.
+- [x] Normalize `FrozenChanInput.reason_code` to the bounded application taxonomy and keep any `detail_code` bounded.
+- [x] Preserve settled-only D v1 and the one-bar policy; do not implement temporary/intraday Chan or a minimum-history threshold.
+- [x] Keep identity formulas, schema, worker, API/UI, Provider, production, and main scope frozen.
+- [x] Run causal/DecisionBoard targeted regressions, full Windows pytest, cross-platform M2/R5 gates, Ruff, compileall, Node, secret scan, and diff checks. No DB/persistence edits, so PG16 was not rerun.
+- [x] Update the M3B-A receipt, `STATUS.md`, `HANDOFF.md`, and lessons with findings, preserved initial failures, final evidence, and `M3B_A_PRODUCTION_GO=false`.
+- [ ] Commit and push the R1 repair on this branch, release execution evidence, and request remote review before any M3B-A2 plan.
+
 ## Frozen scope
 
 - Reuse the persisted `DailyBar` history and R4A `research_history_rows()` / `research_price_basis()` semantics; do not reimplement split adjustment.

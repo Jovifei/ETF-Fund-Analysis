@@ -33,6 +33,62 @@ from sqlalchemy import delete, func, select
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
+@pytest.fixture
+def corporate_action_cutoff_db():
+    from app.db.base import Base
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    try:
+        with Session(engine) as session:
+            yield session
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize("generated_at,expected_close", [
+    (datetime(2026, 7, 5, 23, 59), 3.0),
+    (datetime(2026, 7, 5, 16, 0, tzinfo=ZoneInfo("UTC")), 1.5),
+])
+def test_row_corporate_action_cutoff_uses_snapshot_market_date(corporate_action_cutoff_db, monkeypatch, generated_at, expected_close):
+    from app.providers import corporate_action_contract, data_contract
+
+    db_session = corporate_action_cutoff_db
+    inst = Instrument(ts_code="515880.SH", symbol="515880", name="cutoff fixture", kind="ETF", enabled=True)
+    db_session.add(inst)
+    db_session.flush()
+    db_session.add(DailyBar(
+        instrument_id=inst.id, trade_date=date(2026, 1, 30), open=9, high=9,
+        low=9, close=9, volume=1000, amount=9000, source="akshare:em:v101",
+        adjust="none", quality_hash="row-cutoff-fixture",
+    ))
+    db_session.flush()
+    original = corporate_action_contract.research_history_rows
+    observed = []
+
+    class TransformationCaptured(Exception):
+        pass
+
+    def capture(rows, code, **kwargs):
+        observed.extend(original(rows, code, **kwargs))
+        raise TransformationCaptured
+
+    monkeypatch.setattr(data_contract, "history_issues", lambda *args: {})
+    monkeypatch.setattr(corporate_action_contract, "research_history_rows", capture)
+    try:
+        with pytest.raises(TransformationCaptured):
+            DecisionBoardService(get_settings())._row(
+                db_session, generated_at, inst, None, None, None, None, {}, None,
+            )
+        assert observed[0].close == expected_close
+    finally:
+        db_session.execute(delete(DailyBar).where(DailyBar.instrument_id == inst.id))
+        db_session.execute(delete(Instrument).where(Instrument.id == inst.id))
+        db_session.flush()
+
+
 def test_percent_points_are_converted_to_decimal_ratios_including_small_and_zero_values() -> None:
     assert percent_points_to_ratio(0.01) == 0.0001
     assert percent_points_to_ratio(0.0) == 0.0

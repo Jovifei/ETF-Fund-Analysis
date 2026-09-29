@@ -1,4 +1,10 @@
-# 当前接手入口：R4C M3B-A 日线输入身份契约（iteration 64，2026-09-29）
+# 当前接手入口：R4C M3B-A R1（iteration 65，2026-09-30）
+
+先读 [实施计划](tasks/plans/2026-09-30-r4c-recovery-and-delivery.md) 与 STATUS。远端 iteration 65 已授权且 R1 修复已完成：DecisionBoard 的 `_row` 与 `_derive_provisional` 按 Shanghai market date 过滤公司行动。原图表 parity 断言不变，最终 Windows 全量 1316 passed/19 skipped/0 failures，M2 和 R5.2.1 Windows/Linux 摘要一致，静态/密钥扫描通过。当前变更和收据尚未提交或推送；下一步核对精确 diff/SHA，提交同一分支并推送，发布可读执行记录，再请远端独立审核。M3B-A 阶段仍 `NOT_DEPLOYABLE_SUBSTAGE`；M3B-A2 等待远端 R1 PASS。
+
+新增 `_row` 测试先复现未来拆分（预期 3.0，实际 1.5）；组合首次失败还包含固定标的在共享测试库重复插入，现改为独立内存库。原 MA20 图表一致断言保留，并扩展拆分当日参数。保留这些失败记录，不宣称完整历史快照 PIT 已认证。
+
+原生产聊天的发布结果仍需未来发布前只读核对；本轮没有生产部署。先关闭 R1，再由远端细化 A2→B→C 后端切片上线→M4 页面上线→M5。下方 iteration 64 内容保留为历史。
 
 ## 本轮交接
 

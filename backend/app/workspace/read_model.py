@@ -137,8 +137,10 @@ def search_instruments(db: Session, settings: Settings, q: str, limit: int, user
         query = query.where(or_(scale >= min_scale, scale.is_(None)) if include_unknown else scale >= min_scale)
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     priority = [case((Instrument.ts_code == q.upper(), 0), (Instrument.symbol == q, 1), else_=2)]
-    if sort == "scale": priority += [scale.desc().nulls_last()]
-    elif sort == "turnover": priority += [turnover.desc().nulls_last()]
+    if sort == "scale":
+        priority += [scale.desc().nulls_last()]
+    elif sort == "turnover":
+        priority += [turnover.desc().nulls_last()]
     query = query.order_by(*priority, Instrument.ts_code).offset(offset).limit(limit)
     instruments = list(db.scalars(query))
     ids = [row.id for row in instruments]
@@ -347,11 +349,12 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
     ).order_by(DailyBar.trade_date.desc()).limit(maximum + 1)).all()
     truncated = len(stored) > maximum
     stored = list(reversed(stored[:maximum]))
-    from app.providers.corporate_action_contract import research_history_rows, research_price_basis as build_research_price_basis
+    from app.providers.corporate_action_contract import research_history_rows
+    from app.providers.corporate_action_contract import research_price_basis as build_research_price_basis
     research_stored = (
         stored
         if settings.market_provider == "mock" or adjust != "none"
-        else research_history_rows(stored, code)
+        else research_history_rows(stored, code, effective_through=as_of.date())
     )
     research_objects = list(research_stored)
     rows = [{"date": iso(row.trade_date), "open": row.open, "high": row.high, "low": row.low, "close": row.close, "volume": row.volume, "amount": row.amount, "source": row.source} for row in stored]
@@ -383,7 +386,13 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
             source=provisional.source, adjust=adjust, fetched_at=provisional.created_at,
             quality_hash=None,
         )
-        research_provisional = provisional_object if settings.market_provider == "mock" or adjust != "none" else research_history_rows([provisional_object], code)[0]
+        research_provisional = (
+            provisional_object
+            if settings.market_provider == "mock" or adjust != "none"
+            else research_history_rows(
+                [provisional_object], code, effective_through=as_of.date()
+            )[0]
+        )
         research_provisional_bar = {
             **provisional_bar, "open": research_provisional.open, "high": research_provisional.high,
             "low": research_provisional.low, "close": research_provisional.close,

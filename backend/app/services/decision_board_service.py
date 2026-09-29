@@ -452,7 +452,10 @@ class DecisionBoardService:
         history_rows = db.scalars(
             select(DailyBar).where(DailyBar.instrument_id == instrument.id).order_by(DailyBar.trade_date)
         ).all()
-        research_history = research_history_rows(history_rows, instrument.ts_code)
+        generated_market = generated_at.astimezone(SHANGHAI) if generated_at.tzinfo else generated_at.replace(tzinfo=SHANGHAI)
+        research_history = research_history_rows(
+            history_rows, instrument.ts_code, effective_through=generated_market.date(),
+        )
         stale_history = trailing_unverified_history(research_history) if blocked else None
         from app.services.settlement import settled_session
         from app.services.snapshot_contract import snapshot_issues
@@ -833,7 +836,10 @@ class DecisionBoardService:
         )
         source_rows = [*history, provisional_history_row]
         from app.providers.corporate_action_contract import research_history_rows
-        research_rows = source_rows if self.settings.market_provider == "mock" else research_history_rows(source_rows, instrument.ts_code)
+        observed_market = row.observed_at.astimezone(SHANGHAI) if row.observed_at.tzinfo else row.observed_at.replace(tzinfo=SHANGHAI)
+        research_rows = source_rows if self.settings.market_provider == "mock" else research_history_rows(
+            source_rows, instrument.ts_code, effective_through=observed_market.date(),
+        )
         raw = pd.DataFrame(
             [
                 {

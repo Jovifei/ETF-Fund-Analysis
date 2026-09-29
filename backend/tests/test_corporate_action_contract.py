@@ -1,7 +1,9 @@
 """Display prices stay raw; unexplained gaps block research without rewriting history."""
 from datetime import date, datetime, timedelta
+from inspect import signature
 from types import SimpleNamespace
 
+import pytest
 from app.core.config import get_settings
 from app.providers import corporate_action_contract
 from app.providers.corporate_action_contract import (
@@ -157,3 +159,28 @@ def test_price_basis_contract_is_independent_of_read_window_and_tracks_effective
     assert wide["effective_evidence_ids"] == ["sse_512480_20260629"]
     assert before_event["effective_evidence_ids"] == []
     assert before_event["price_basis_id"] != wide["price_basis_id"]
+
+
+def test_research_history_rows_supports_effective_through_without_changing_default():
+    from app.providers.corporate_action_contract import research_price_basis
+
+    effective_through = date(2026, 6, 1)
+    rows = [
+        _bar(date(2026, 2, 2), 3.0),
+        _bar(date(2026, 2, 3), 1.0),
+        _bar(date(2026, 5, 29), 1.1),
+    ]
+    function_parameters = signature(corporate_action_contract.research_history_rows).parameters
+    assert "effective_through" in function_parameters
+
+    all_known_events = corporate_action_contract.research_history_rows(rows, "515880.SH")
+    historical = corporate_action_contract.research_history_rows(
+        rows, "515880.SH", effective_through=effective_through
+    )
+    historical_basis = research_price_basis(
+        "515880.SH", "none", effective_through=effective_through
+    )
+
+    assert [row.close for row in all_known_events] == pytest.approx([0.5, 0.5, 0.55])
+    assert [row.close for row in historical] == pytest.approx([1.0, 1.0, 1.1])
+    assert historical_basis["effective_evidence_ids"] == ["sse_515880_20260203"]

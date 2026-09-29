@@ -99,10 +99,22 @@ def research_price_basis(
     return {**descriptor, "price_basis_id": stable_hash(descriptor)}
 
 
-def research_history_rows(rows, ts_code: str):
-    """Build an evidence-bound split-adjusted research view without mutating raw bars."""
+def research_history_rows(
+    rows,
+    ts_code: str,
+    *,
+    effective_through: date | None = None,
+):
+    """Build an evidence-bound split-adjusted research view without mutating raw bars.
+
+    With ``effective_through``, only corporate actions effective on or before
+    that market date are applied. ``None`` preserves the historical all-known
+    events behavior for callers that do not request an as-of series.
+    """
 
     events = official_corporate_actions(ts_code)
+    if effective_through is not None:
+        events = tuple(event for event in events if event.ex_date <= effective_through)
     ordered = sorted(rows or (), key=lambda row: row.trade_date)
     if not events:
         return list(ordered)
