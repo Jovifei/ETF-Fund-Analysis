@@ -1373,7 +1373,7 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 
 # R4C M3B-A-R1 causal corporate-action repair — iteration 65
 
-Latest recovery verification: R1 causal/Chan/M2/M3 target group 80 passed / 4 skipped / 0 failures/errors; DecisionBoard selected regressions 7/7 passed. Final Windows suite 1,316 passed / 19 skipped / 0 failures / 0 errors / 35 warnings in 1,497.50s, 1,335 collected. M2 Windows/Linux 25/25; accepted M2 and R5 history digests match cross-platform, collision counts 0/0/0 and weak-ID injection was detected. Ruff/compileall/Node/secret scan/diff-check pass. Initial fixture collisions are retained as RED evidence; final Chan write fixtures use isolated temp SQLite. Audit/STATUS/HANDOFF updated; same-branch commit/push and remote review remain.
+Latest recovery verification: R1 causal/Chan/M2/M3 target group 80 passed / 4 skipped / 0 failures/errors; DecisionBoard selected regressions 7/7 passed. Final Windows suite 1,316 passed / 19 skipped / 0 failures / 0 errors / 35 warnings in 1,497.50s, 1,335 collected. M2 Windows/Linux 25/25; accepted M2 and R5 history digests match cross-platform, collision counts 0/0/0 and weak-ID injection was detected. Ruff/compileall/Node/secret scan/diff-check pass. Initial fixture collisions are retained as RED evidence; final Chan write fixtures use isolated temp SQLite. Implementation/test/receipt committed and pushed to same branch at `f6de8a6ec2f5dd2b4ea7c411afb50dc5a6dcbd10`; waiting on remote review.
 
 2026-09-30 recovery: remote `PLAN_UPDATE` is received and explicitly authorizes the two DecisionBoard corporate-action cutoffs plus bounded tests. The old R4B chat's interrupted deployment is not this branch's engineering gate. Complete the existing repair before M3B-A2; full regression and remote acceptance remain required.
 
@@ -1396,7 +1396,8 @@ Recovery implementation/next-stage plan: `tasks/plans/2026-09-30-r4c-recovery-an
 - [x] Keep identity formulas, schema, worker, API/UI, Provider, production, and main scope frozen.
 - [x] Run causal/DecisionBoard targeted regressions, full Windows pytest, cross-platform M2/R5 gates, Ruff, compileall, Node, secret scan, and diff checks. No DB/persistence edits, so PG16 was not rerun.
 - [x] Update the M3B-A receipt, `STATUS.md`, `HANDOFF.md`, and lessons with findings, preserved initial failures, final evidence, and `M3B_A_PRODUCTION_GO=false`.
-- [ ] Commit and push the R1 repair on this branch, release execution evidence, and request remote review before any M3B-A2 plan.
+- [x] Commit and push the R1 repair on this branch; remote ref readback matches `f6de8a6ec2f5dd2b4ea7c411afb50dc5a6dcbd10`.
+- [ ] Release execution evidence and request remote review before any M3B-A2 plan.
 
 ## Frozen scope
 

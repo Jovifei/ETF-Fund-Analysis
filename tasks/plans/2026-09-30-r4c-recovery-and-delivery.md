@@ -64,7 +64,7 @@ git diff --check
 - [x] Ruff、compileall、Node、密钥扫描、diff-check 通过；未改 DB/持久化，不复跑 PG16。
 - [x] 更新 R1 审计收据、STATUS、HANDOFF、lessons 与任务台账，并明确该子阶段不部署。
 - [ ] 定向 stage、commit、普通 git push，核对远端同分支 HEAD；代码变化后重新运行受影响门禁。
-- [ ] 同一分支提交/推送准确候选，核对 GitHub head 与 SHA/tree。
+- [x] 同一分支提交/推送准确候选，核对 GitHub head 与 SHA/tree。代码/test commit `f6de8a6ec2f5dd2b4ea7c411afb50dc5a6dcbd10`, tree `5c1f2921602780bef6def9b4efaed0f538463b31`; remote branch readback matches.
 - [ ] 发布本轮可读执行证据到同一 ChatGPT 项目聊天；远端复核原计划、补充方案、交接和技术路线并裁决 PASS 或 CHANGES_REQUIRED。
 
 出口：只有本轮全套证据及远端独立 PASS 才为 `M3B_A=PASS`。当前修复为 `NOT_DEPLOYABLE_SUBSTAGE`，没有独立运行消费方，不部署整个累积未发布分支。

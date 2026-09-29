@@ -18,6 +18,7 @@
 - Final static gates: Ruff, `compileall`, Node syntax, scoped `check_no_secrets.py`, and `git diff --check` pass. No new lint findings remain after tidying pre-existing one-line formatting in the already authorized read-model/test files.
 - Route A remains accepted; no identity formula, corporate-action arithmetic, engine/dialect or migration changed. `DEPLOYMENT_DISPOSITION=NOT_DEPLOYABLE_SUBSTAGE`, `M3B_A_PRODUCTION_GO=false`, `PRODUCTION_CHANGED=false`, `REAL_DATA_QUALIFICATION=UNKNOWN`, `ACTIONABLE=false`. No Provider call, worker/API/UI integration, production write, deployment, main merge or trading change.
 - Exact R1 application/test HEAD and GitHub branch tip are recorded in the subsequent delivery section after commit/push. Remote acceptance remains pending until the Project audits that exact head and these evidence records.
+- R1 code, tests, plan and receipts are bound to commit `f6de8a6ec2f5dd2b4ea7c411afb50dc5a6dcbd10` / tree `5c1f2921602780bef6def9b4efaed0f538463b31`. `origin/codex/r4c-pre-m4-regression-diagnostic` was read back at the same commit after push. The code-tested commit is exact; a following docs-only handoff commit, if any, is identified separately and does not alter application files.
 
 ## Remote gate and boundary
 

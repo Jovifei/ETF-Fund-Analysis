@@ -1,8 +1,8 @@
 # 当前状态：R4C M3B-A R1 修复验收中（2026-09-30）
 
-R1 最终本地验证现已全部完成：原七模块 78/78；R1 因果/Chan/M2/M3 组 80 passed / 4 条件跳过；DecisionBoard 指定回归 7/7；最终 Windows 全量 pytest 1316 passed / 19 skipped / 0 failures / 0 errors（1335 collected, 35 warnings, 1497.50 秒）。M2 Python 3.12.14/CZSC 1.0.1 Windows/Linux 各 25/25，摘要一致；R5.2.1 两平台身份摘要一致、三类碰撞均为 0，注入弱 ID 测试均检出。Ruff、compileall、Node、密钥扫描和 diff-check 通过。收据已加入 R1 addendum，GitHub 推送及远端审查仍待完成。
+R1 最终本地验证已完成并推送：应用/测试/收据代码提交 `f6de8a6ec2f5dd2b4ea7c411afb50dc5a6dcbd10`，tree `5c1f2921602780bef6def9b4efaed0f538463b31`；GitHub 分支读回同一 SHA。原七模块 78/78；R1 因果/Chan/M2/M3 组 80 passed / 4 条件跳过；DecisionBoard 指定回归 7/7；最终 Windows 全量 pytest 1316 passed / 19 skipped / 0 failures / 0 errors（1335 collected, 35 warnings, 1497.50 秒）。M2 Python 3.12.14/CZSC 1.0.1 Windows/Linux 各 25/25，摘要一致；R5.2.1 两平台身份摘要一致、三类碰撞均为 0，注入弱 ID 测试均检出。Ruff、compileall、Node、密钥扫描和 diff-check 通过。当前等远端独立审核；未部署，真实数据 UNKNOWN。
 
-远端 iteration 65 `PLAN_UPDATE` 已明确授权 DecisionBoard 两处公司行动截止日期修复。两个调用点按 generated_at/observed_at 的上海日期截断事件。Git HEAD 仍为 `9fe14a6b69779e602b4fd9027ea9e8e8a021adc2`，工作区包含已通过全量与跨平台测试的未提交 R1 代码和收据更新。接下来按 [恢复与阶段交付计划](tasks/plans/2026-09-30-r4c-recovery-and-delivery.md) 完成交付、推送和远端复核。
+远端 iteration 65 `PLAN_UPDATE` 已明确授权 DecisionBoard 两处公司行动截止日期修复。两个调用点按 generated_at/observed_at 的上海日期截断事件。代码测试候选和 GitHub 分支均固定于 `f6de8a6ec2f5dd2b4ea7c411afb50dc5a6dcbd10`；本地工作区在提交后无未提交变更。接下来按 [恢复与阶段交付计划](tasks/plans/2026-09-30-r4c-recovery-and-delivery.md) 发布执行证据并完成远端复核。
 
 2026-09-30 已修正定时接力，不再把旧 R4B 聊天的 interrupted 状态作为本聊天工程前置条件。该状态不能证明后台备份仍在执行。现网版本本轮未复查，下方历史部署身份不得当作当前在线事实。当前阶段仍 `NOT_DEPLOYABLE_SUBSTAGE`，真实数据 UNKNOWN。
 
