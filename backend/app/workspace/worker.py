@@ -14,10 +14,10 @@ import subprocess
 import sys
 import time
 from datetime import UTC, datetime
-from zoneinfo import ZoneInfo
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 
 from app.core.config import get_settings
@@ -166,8 +166,43 @@ def execute(job_id: str) -> int:
         if row is None or row.status != "running":
             return 2
         request, owner_id = dict(row.request_json), row.user_id
-        from app.services.runtime_service import RuntimeService
-        settings = RuntimeService(settings).resolve_settings(db).model_copy(update={"analysis_enabled": False, "llm_enabled": False})
+        kind = request.get("task")
+        if kind != "chan_structures":
+            from app.services.runtime_service import RuntimeService
+            settings = RuntimeService(settings).resolve_settings(db).model_copy(update={"analysis_enabled": False, "llm_enabled": False})
+
+    if kind == "chan_structures":
+        bounded_failure = {
+            "items": [],
+            "provider_called": False,
+            "models_called": False,
+            "qualification_changed": False,
+            "actionable": False,
+        }
+        try:
+            from app.services.chan_structure_service import ChanStructureService
+            from app.workspace.protocol import ChanStructuresJobRequest
+
+            internal_request = ChanStructuresJobRequest.model_validate(request)
+            status, result = ChanStructureService(settings).run(internal_request)
+            with session_scope() as db:
+                row = db.get(WorkspaceDataJob, job_id)
+                if row is None or row.status != "running":
+                    return 2
+                row.status = status
+                row.finished_at = datetime.now(UTC)
+                row.result_json = result
+            return 0
+        except Exception as exc:
+            with session_scope() as db:
+                row = db.get(WorkspaceDataJob, job_id)
+                if row is not None and row.status == "running":
+                    row.status = "failed"
+                    row.failure_reason = type(exc).__name__ if _FAILURE_REASON.fullmatch(type(exc).__name__) else "ChanJobExecutionError"
+                    row.finished_at = datetime.now(UTC)
+                    row.result_json = bounded_failure
+            return 1
+
     if request.get("task") == "api_research":
         from app.workspace.ai_profiles import execute_ticket
         return execute_ticket(job_id)
@@ -188,7 +223,8 @@ def execute(job_id: str) -> int:
                 report=refresh(db,settings,request.get('codes',[]))
                 row=db.get(WorkspaceDataJob,job_id)
                 row.result_json={'steps':[{'task':'research_outlook','status':report['status'],'summary':report}], 'models_called':False}
-                row.status=report['status'];row.finished_at=datetime.now(UTC)
+                row.status = report["status"]
+                row.finished_at = datetime.now(UTC)
             return 0
         if kind == "factors":
             with session_scope() as db:

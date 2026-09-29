@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.workspace.jobs import WorkspaceError, lock_owner, owner_scope
 from app.workspace.models import WorkspaceDataJob
-from app.workspace.protocol import DataRequest, content_hash
+from app.workspace.protocol import ChanStructuresJobRequest, ChanStructuresRequest, DataRequest, content_hash
 
 
 def view(row: WorkspaceDataJob) -> dict:
@@ -35,6 +35,47 @@ def enqueue(db: Session, payload: DataRequest, user_id: int | None) -> tuple[Wor
     if payload.task in {"onboard", "minutes", "prepare_history"} and not payload.codes:
         raise WorkspaceError(422, "onboarding_requires_explicit_codes")
     row = WorkspaceDataJob(job_id=uuid4().hex, user_id=user_id, owner_scope=scope, idempotency_key=key, request_json=request)
+    db.add(row)
+    db.flush()
+    return row, True
+
+
+def enqueue_chan_structures(
+    db: Session,
+    payload: ChanStructuresRequest,
+) -> tuple[WorkspaceDataJob, bool]:
+    """Queue an internal, bounded Chan request without exposing a public task."""
+
+    request = ChanStructuresRequest.model_validate(payload)
+    scope = owner_scope(None)
+    lock_owner(db, "workspace-data-queue")
+    key = content_hash({"scope": scope, "key": request.request_key})
+    persisted = ChanStructuresJobRequest.model_validate(
+        request.model_dump(mode="json", exclude={"request_key"})
+    ).model_dump(mode="json")
+
+    existing = db.scalar(select(WorkspaceDataJob).where(WorkspaceDataJob.idempotency_key == key))
+    if existing is not None:
+        if existing.request_json != persisted:
+            raise WorkspaceError(409, "data_idempotency_conflict")
+        return existing, False
+
+    count = db.scalar(
+        select(func.count())
+        .select_from(WorkspaceDataJob)
+        .where(WorkspaceDataJob.status.in_(("queued", "running")))
+    ) or 0
+    if count >= 10:
+        raise WorkspaceError(429, "data_queue_full")
+
+    row = WorkspaceDataJob(
+        job_id=uuid4().hex,
+        user_id=None,
+        owner_scope=scope,
+        idempotency_key=key,
+        status="queued",
+        request_json=persisted,
+    )
     db.add(row)
     db.flush()
     return row, True

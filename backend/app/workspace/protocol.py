@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 import re
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
@@ -117,6 +117,36 @@ class DataRequest(StrictModel):
         if len(set(self.factor_names)) != len(self.factor_names):
             raise ValueError("duplicate factors rejected")
         return self
+
+
+class ChanStructuresJobRequest(StrictModel):
+    """Persisted, bounded internal request for worker-only Chan publication."""
+
+    schema_version: Literal["r4c-chan-job-v1"]
+    task: Literal["chan_structures"]
+    codes: list[Code] = Field(min_length=1, max_length=30)
+    interval: Literal["D", "W", "M"]
+    as_of: datetime
+
+    @field_validator("codes")
+    @classmethod
+    def canonical_codes(cls, values: list[str]) -> list[str]:
+        if len(set(values)) != len(values):
+            raise ValueError("duplicate Chan codes rejected")
+        return sorted(values)
+
+    @field_validator("as_of")
+    @classmethod
+    def normalize_as_of(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("Chan as_of must include a timezone")
+        return value.astimezone(UTC)
+
+
+class ChanStructuresRequest(ChanStructuresJobRequest):
+    """Internal enqueue request; its idempotency key is not stored in request_json."""
+
+    request_key: str = Field(pattern=r"^[a-zA-Z0-9_-]{16,64}$")
 
 
 class Preferences(StrictModel):
