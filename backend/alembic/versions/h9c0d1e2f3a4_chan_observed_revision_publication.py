@@ -60,9 +60,40 @@ def _create_guards() -> None:
         op.execute(
             sa.text(
                 """
+                CREATE TRIGGER trg_chan_research_stream_heads_identity_immutable
+                BEFORE UPDATE OF stream_id, instrument, interval, series_id, price_basis_id,
+                    adjustment_version, config_id, engine_id, engine_version, dialect_id
+                ON chan_research_stream_heads
+                WHEN NEW.stream_id IS NOT OLD.stream_id
+                  OR NEW.instrument IS NOT OLD.instrument
+                  OR NEW.interval IS NOT OLD.interval
+                  OR NEW.series_id IS NOT OLD.series_id
+                  OR NEW.price_basis_id IS NOT OLD.price_basis_id
+                  OR NEW.adjustment_version IS NOT OLD.adjustment_version
+                  OR NEW.config_id IS NOT OLD.config_id
+                  OR NEW.engine_id IS NOT OLD.engine_id
+                  OR NEW.engine_version IS NOT OLD.engine_version
+                  OR NEW.dialect_id IS NOT OLD.dialect_id
+                BEGIN
+                    SELECT RAISE(ABORT, 'chan research stream identity is immutable');
+                END
+                """
+            )
+        )
+        op.execute(
+            sa.text(
+                """
                 CREATE TRIGGER trg_chan_research_stream_heads_monotonic
                 BEFORE UPDATE OF latest_sequence_number, latest_observation_id ON chan_research_stream_heads
                 WHEN NEW.latest_sequence_number < OLD.latest_sequence_number
+                  OR (
+                    NEW.latest_sequence_number = OLD.latest_sequence_number
+                    AND NEW.latest_observation_id IS NOT OLD.latest_observation_id
+                  )
+                  OR (
+                    NEW.latest_sequence_number > OLD.latest_sequence_number
+                    AND NEW.latest_observation_id IS OLD.latest_observation_id
+                  )
                 BEGIN
                     SELECT RAISE(ABORT, 'chan research stream head cannot move backward');
                 END
@@ -129,13 +160,46 @@ def _create_guards() -> None:
         op.execute(
             sa.text(
                 """
-                CREATE OR REPLACE FUNCTION reject_chan_stream_head_rewind()
+                CREATE OR REPLACE FUNCTION guard_chan_stream_head_update()
                 RETURNS TRIGGER
                 LANGUAGE plpgsql
                 AS $$
                 BEGIN
-                    IF NEW.latest_sequence_number < OLD.latest_sequence_number THEN
-                        RAISE EXCEPTION 'chan research stream head cannot move backward';
+                    IF ROW(
+                        NEW.stream_id,
+                        NEW.instrument,
+                        NEW.interval,
+                        NEW.series_id,
+                        NEW.price_basis_id,
+                        NEW.adjustment_version,
+                        NEW.config_id,
+                        NEW.engine_id,
+                        NEW.engine_version,
+                        NEW.dialect_id
+                    ) IS DISTINCT FROM ROW(
+                        OLD.stream_id,
+                        OLD.instrument,
+                        OLD.interval,
+                        OLD.series_id,
+                        OLD.price_basis_id,
+                        OLD.adjustment_version,
+                        OLD.config_id,
+                        OLD.engine_id,
+                        OLD.engine_version,
+                        OLD.dialect_id
+                    ) THEN
+                        RAISE EXCEPTION 'chan research stream identity is immutable';
+                    END IF;
+                    IF NEW.latest_sequence_number < OLD.latest_sequence_number
+                        OR (
+                            NEW.latest_sequence_number = OLD.latest_sequence_number
+                            AND NEW.latest_observation_id IS DISTINCT FROM OLD.latest_observation_id
+                        )
+                        OR (
+                            NEW.latest_sequence_number > OLD.latest_sequence_number
+                            AND NEW.latest_observation_id IS NOT DISTINCT FROM OLD.latest_observation_id
+                        ) THEN
+                        RAISE EXCEPTION 'chan research stream pointer must stay unchanged or advance';
                     END IF;
                     RETURN NEW;
                 END;
@@ -146,9 +210,9 @@ def _create_guards() -> None:
         op.execute(
             sa.text(
                 """
-                CREATE TRIGGER trg_chan_research_stream_heads_monotonic
-                BEFORE UPDATE OF latest_sequence_number, latest_observation_id ON chan_research_stream_heads
-                FOR EACH ROW EXECUTE FUNCTION reject_chan_stream_head_rewind()
+                CREATE TRIGGER trg_chan_research_stream_heads_guard_update
+                BEFORE UPDATE ON chan_research_stream_heads
+                FOR EACH ROW EXECUTE FUNCTION guard_chan_stream_head_update()
                 """
             )
         )
@@ -287,4 +351,4 @@ def downgrade() -> None:
     if op.get_bind().dialect.name == "postgresql":
         op.execute(sa.text("DROP FUNCTION IF EXISTS reject_chan_immutable_write()"))
         op.execute(sa.text("DROP FUNCTION IF EXISTS reject_chan_stream_head_delete()"))
-        op.execute(sa.text("DROP FUNCTION IF EXISTS reject_chan_stream_head_rewind()"))
+        op.execute(sa.text("DROP FUNCTION IF EXISTS guard_chan_stream_head_update()"))

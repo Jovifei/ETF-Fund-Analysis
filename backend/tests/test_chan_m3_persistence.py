@@ -112,6 +112,10 @@ def migrated_engine(tmp_path_factory):
     database_url = f"sqlite:///{database_path.as_posix()}"
     upgrade = _alembic(database_url, "upgrade", "head")
     assert upgrade.returncode == 0, upgrade.stderr
+    heads = _alembic(database_url, "heads")
+    assert heads.returncode == 0 and "h9c0d1e2f3a4" in (heads.stdout + heads.stderr)
+    current = _alembic(database_url, "current")
+    assert current.returncode == 0 and "h9c0d1e2f3a4" in (current.stdout + current.stderr)
     engine = create_engine(database_url, connect_args={"check_same_thread": False})
     with engine.begin() as connection:
         connection.exec_driver_sql("PRAGMA foreign_keys=ON")
@@ -240,6 +244,26 @@ def test_migrated_evidence_tables_reject_raw_sql_update_and_delete(db_session):
         with db_session.begin_nested():
             db_session.execute(text("DELETE FROM chan_research_stream_heads"))
 
+    head_stream_id = db_session.scalar(text("SELECT stream_id FROM chan_research_stream_heads LIMIT 1"))
+    assert head_stream_id is not None
+    with db_session.begin_nested():
+        db_session.execute(
+            text(
+                "UPDATE chan_research_stream_heads "
+                "SET latest_sequence_number = latest_sequence_number, "
+                "latest_observation_id = latest_observation_id WHERE stream_id = :stream_id"
+            ),
+            {"stream_id": head_stream_id},
+        )
+    for statement in (
+        "UPDATE chan_research_stream_heads SET stream_id = 'tampered' WHERE stream_id = :stream_id",
+        "UPDATE chan_research_stream_heads SET config_id = 'tampered' WHERE stream_id = :stream_id",
+        "UPDATE chan_research_stream_heads SET instrument = 'tampered' WHERE stream_id = :stream_id",
+    ):
+        with pytest.raises(IntegrityError):
+            with db_session.begin_nested():
+                db_session.execute(text(statement), {"stream_id": head_stream_id})
+
 
 def test_price_basis_and_config_namespaces_are_separate_persistent_streams(db_session):
     entities = _module("app.models.entities")
@@ -355,6 +379,10 @@ def migrated_postgres_engine():
     assert reupgrade.returncode == 0, reupgrade.stderr
     recheck = _alembic(database_url, "check")
     assert recheck.returncode == 0, recheck.stderr
+    heads = _alembic(database_url, "heads")
+    assert heads.returncode == 0 and "h9c0d1e2f3a4" in (heads.stdout + heads.stderr)
+    current = _alembic(database_url, "current")
+    assert current.returncode == 0 and "h9c0d1e2f3a4" in (current.stdout + current.stderr)
     try:
         yield engine
     finally:
@@ -402,6 +430,16 @@ def test_postgres_16_concurrent_publication_is_serialized_and_history_is_immutab
         )
         assert first_row is not None and head.latest_sequence_number == 3
 
+    with migrated_postgres_engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE chan_research_stream_heads "
+                "SET latest_sequence_number = latest_sequence_number, "
+                "latest_observation_id = latest_observation_id WHERE stream_id = :stream_id"
+            ),
+            {"stream_id": head.stream_id},
+        )
+
     with migrated_postgres_engine.connect() as connection:
         transaction = connection.begin()
         with pytest.raises(DBAPIError):
@@ -426,6 +464,9 @@ def test_postgres_16_concurrent_publication_is_serialized_and_history_is_immutab
         "DELETE FROM chan_structure_revisions",
         "UPDATE chan_observed_transitions SET stream_id = stream_id",
         "DELETE FROM chan_observed_transitions",
+        "UPDATE chan_research_stream_heads SET stream_id = 'tampered'",
+        "UPDATE chan_research_stream_heads SET config_id = 'tampered'",
+        "UPDATE chan_research_stream_heads SET instrument = 'tampered'",
         "DELETE FROM chan_research_stream_heads",
     ):
         with migrated_postgres_engine.connect() as connection:
@@ -433,3 +474,83 @@ def test_postgres_16_concurrent_publication_is_serialized_and_history_is_immutab
             with pytest.raises(DBAPIError):
                 connection.execute(text(statement))
             transaction.rollback()
+
+
+@pytest.mark.parametrize("failed_model_name", ["ChanStructureRevision", "ChanObservedTransition"])
+def test_failed_later_publication_preserves_committed_head_and_evidence(migrated_engine, failed_model_name):
+    entities = _module("app.models.entities")
+    publisher_module = _module("app.services.chan_observation_service")
+    stream_config = f"failure-case-{failed_model_name}"
+    first = _observation(input_revision="input-r1", high=103.0, config_id=stream_config)
+    second = _observation(input_revision="input-r2", high=104.0, config_id=stream_config)
+    with Session(migrated_engine, expire_on_commit=False) as initial_session:
+        with initial_session.begin():
+            first_result = publisher_module.ChanObservationPublisher(initial_session).publish(first)
+
+    def snapshot(session):
+        head = session.scalar(
+            select(entities.ChanResearchStreamHead).where(
+                entities.ChanResearchStreamHead.stream_id == first_result.stream_id
+            )
+        )
+        observations = list(
+            session.scalars(
+                select(entities.ChanResearchObservation)
+                .where(entities.ChanResearchObservation.stream_id == first_result.stream_id)
+                .order_by(entities.ChanResearchObservation.sequence_number)
+            )
+        )
+        revisions = list(
+            session.scalars(
+                select(entities.ChanStructureRevision)
+                .where(entities.ChanStructureRevision.stream_id == first_result.stream_id)
+                .order_by(entities.ChanStructureRevision.revision_id)
+            )
+        )
+        transitions = list(
+            session.scalars(
+                select(entities.ChanObservedTransition)
+                .where(entities.ChanObservedTransition.stream_id == first_result.stream_id)
+                .order_by(entities.ChanObservedTransition.observation_id, entities.ChanObservedTransition.structure_key)
+            )
+        )
+        assert head is not None
+        return (
+            (head.stream_id, head.latest_sequence_number, head.latest_observation_id, head.config_id),
+            tuple((row.observation_id, row.sequence_number, row.payload_hash) for row in observations),
+            tuple((row.revision_id, row.structure_key, row.payload_hash) for row in revisions),
+            tuple(
+                (
+                    row.observation_id,
+                    row.structure_key,
+                    row.status,
+                    row.revision_id,
+                    row.prior_revision_id,
+                    row.reappearance,
+                )
+                for row in transitions
+            ),
+        )
+
+    with Session(migrated_engine) as before_session:
+        old_snapshot = snapshot(before_session)
+    model = getattr(entities, failed_model_name)
+
+    def reject_later_insert(mapper, connection, target):
+        del mapper, connection, target
+        raise RuntimeError(f"injected {failed_model_name} insert failure")
+
+    from sqlalchemy import event
+
+    event.listen(model, "before_insert", reject_later_insert)
+    try:
+        with Session(migrated_engine) as failure_session:
+            with pytest.raises(RuntimeError, match="injected .* insert failure"):
+                with failure_session.begin():
+                    publisher_module.ChanObservationPublisher(failure_session).publish(second)
+    finally:
+        event.remove(model, "before_insert", reject_later_insert)
+
+    with Session(migrated_engine) as after_session:
+        assert snapshot(after_session) == old_snapshot
+        assert after_session.get(entities.ChanResearchObservation, second.observation_id) is None
