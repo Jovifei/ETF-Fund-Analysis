@@ -30,7 +30,7 @@ Remote authorized M3B-A2 from base `f854d6c9db0b774687f226cfb587cc03ddc814c5`: d
 - M2 Windows/Linux 25/25. Adapter semantic digest `091254d34ddfeeadc85cd0b17e035295bfc32f8a0cebc6776440f10be82aaeac`; R5 history digest `d637b4f80c749db48d06dfafe3762216d684ff2827149b4024a3de3f814fc1e9`; validator semantic digest `0f4ae0322b5d390c41e618da4c342abea66baac30bce4ccfe4a5f0d713cff76f`. Both platforms report 0/0/0 identity collisions and detect the injected weak-ID collision.
 - Ruff, compileall, Node syntax, scoped secret scan and diff-check pass. No `candle_periods.py`, shared R4A runtime, persistence or schema change; the A2 focused gate is used instead of another full repository suite.
 - A2 has no runtime consumer; `DEPLOYMENT_DISPOSITION=NOT_DEPLOYABLE_SUBSTAGE`, `PRODUCTION_GO=false`, `REAL_DATA_QUALIFICATION=UNKNOWN`, `ACTIONABLE=false`. M3B-B remains NO-GO until A2 remote PASS.
-- A2 code/test commit `9992ba8ceb13cd45ba7132fd4d05d755e2ec74cd` / tree `536355297a6af1d65bc297e3e7fa448b76c27136` is pushed on the same branch; GitHub branch readback matched. Final handoff-only delta and remote review remain pending.
+- A2 code/test commit `9992ba8ceb13cd45ba7132fd4d05d755e2ec74cd` / tree `536355297a6af1d65bc297e3e7fa448b76c27136` is pushed on the same branch; GitHub branch readback matched at push time. The following commit is documentation-only. A2 remote review remains pending; M3B-B stays NO-GO until A2 PASS.
 
 ## Remote gate and boundary
 
