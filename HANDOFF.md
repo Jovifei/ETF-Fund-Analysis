@@ -1,19 +1,20 @@
-# 当前接手入口：R4C M3 PASS，pre-M4 全量诊断通过，待远端复核（2026-09-29）
+# 当前接手入口：R4C M3B-A 日线输入身份契约（iteration 64，2026-09-29）
 
 ## 本轮交接
 
-- 当前诊断分支：`codex/r4c-pre-m4-regression-diagnostic`，基线为 M3 PASS head `47ff5c57ae6ccd40864523aa962b3a1fb80f313c`。M3 远端 iteration62 `PASS`，Route A 保留；本分支只做 M3 元数据收尾和全量 pytest 长尾诊断。`M4_IMPLEMENTATION_GO=false`、`MAIN_INTEGRATION_GO=false`；Owner 工作区保持独立且未改动。
-- 远端迭代 60 判定 M2 `PASS`，保留 CZSC `1.0.1` + observed-revision 路线，并给出 M3 持久化发布核心计划。本地先 RED 后完成 migration/models/publisher 与专项验收。收据见 [R4C M3 persistence acceptance](docs/audits/R4C_M3_PERSISTENCE_ACCEPTANCE_20260929.md)。
-- M3 限于不可变观测证据、结构修订、状态转移、当前 stream head 和单事务发布；只用合成数据与隔离 SQLite/PostgreSQL 测试库。远端原计划标记 `M3_GO=false` 等待独立授权；Jovi 已授权持续 C2C 执行循环，本轮按该授权推进。
-- 本阶段完成后继续“测试 → GitHub 推送 → 远端审核 → 下一阶段计划”。项目最终人工验收不是当前停止条件；只有明确需要 Jovi 决策的门禁在对应步骤等待。
+- 当前隔离分支从远端接受的 iteration 63 head `003c19dcdbca5dc8ff6d08607aa23a477f3aac30` 继续。远端 iteration 63 已判定 `PRE_M4_DIAGNOSTIC=PASS`、`M0=PASS`、`ROUTE_A=RETAIN`；本轮只执行 iteration 64 的 `M3B-A`。
+- M3B-A 新增窄范围 `backend/app/research/chan_input.py`，把持久化、已结算 D 日线依 R4A 的研究价格基准/拆分证据规则映射到已接受 M2 `PreparedResearchInput`。Chan `logical_series_id` 与内容绑定图表 `series_id` 分离；bar 修订由逐 bar `source_bar_id` 绑定；M2 `prepare_research_input()` 仍是唯一 `input_hash` 定义。
+- 测试/代码提交 `1fdcf5110d77a2a8eff3074d526273b0d181b2ee`（tree `6f03a3853c91ea21a93ee937540482299b14d130`）只含上述输入模块和 M3B-A 回归测试；状态/收据文档提交待补。Windows M3B-A 8/8 与 R4A/M2 48 passed / 3 skipped 绑定该代码提交。
+- 本阶段不调用 Provider/CZSC，不写数据库，不接 worker、GET/read model、API、前端或生产。真实数据保持 UNKNOWN，`actionable=false`，引擎仍禁用。
+- Jovi 要求完成、测试并推送可发布功能阶段后部署。远端明确裁定 M3B-A 为 `NOT_DEPLOYABLE_SUBSTAGE`，`M3B_A_PRODUCTION_GO=false`，因为本阶段没有用户或运行时可见行为；交接会明确写出“不部署”及原因。远端还要求未来的可观察产品切片 `DEPLOY_REQUIRED`，并写明备份、迁移演练、回滚、镜像身份与线上验证门禁。
+
+## 当前验证
+
+目前 M3B-A 8/8 通过；R4A `test_v103_history.py` + M2 3.13 环境回归 48 passed / 3 skipped；M2 Windows/Linux 3.12.14 各 25/25，300-bar 摘要相同；R5.2.1 Windows/Linux 历史摘要相同、三个 ID 命名空间碰撞数均为 0，注入弱 ID 碰撞自检检出。Ruff、compileall、scoped secret scan、`git diff --check` 均通过。Linux 隔离测试首轮因 conftest 依赖缺失、第二轮副本缺少测试所读仓库文件失败；两次均保留，补齐只读精确副本后最终 Linux 门禁全绿。
 
 ## 下一步
 
-测试修复提交 `d11d3f57571ef9c76306fda000fa1678843a4aeb`（tree `7ffe9aebb7075f8f1630b5b4f61aeb9a917aa980`）绑定 retention 用例优化和 stale release-inventory migration-head 期望。Windows 全量 suite 为 **1297 passed、19 skipped、0 failed、35 warnings，25m54s**；全量输出文件 SHA-256 为 `8614912aa9e3d976e8fd0530f0e2ef735a3193743c2d53f925c8fd81f65f49ae`。全量之后用项目解释器重跑两个直接受影响的回归，`2 passed`，`git diff --check` 通过。详细诊断和首轮/中间轮结果见 [R4C M3 persistence acceptance](docs/audits/R4C_M3_PERSISTENCE_ACCEPTANCE_20260929.md)。
-
-接下来将该诊断分支推送到 GitHub，交远端依据 iteration 63 计划独立审核，并要求明确复核技术路线、指出分歧依据，再给出下一阶段的执行计划。`M4_IMPLEMENTATION_GO=false`；收到远端下一阶段计划及其门禁后再执行，不做主线集成或生产变更。
-
-人工验收是产品最终阶段的门，不是当前停止条件。该协作循环持续到项目目标完成；生产部署或真实数据资格仍需各自独立门禁。
+整理 M3B-A 验收/部署适用性收据，更新状态，核对完整隔离 diff 后提交并推送当前分支，释放 iteration 64 的测试输出，交远端对照计划复核。在远端 review 通过之前不开始 M3B-A2。M3B-A 部署结果明确为 `NOT_APPLICABLE`；下一次远端计划必须为第一个可观察产品阶段明列 `DEPLOY_REQUIRED` 及其备份、回滚、线上验证门禁。项目循环持续到目标完成，不等最终人工验收。
 
 ---
 

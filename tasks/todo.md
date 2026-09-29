@@ -1341,3 +1341,39 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - Collection baseline: 1,316 items in 132 modules; the 27% boundary is inside `test_decision_board.py` at `test_due_slots_skip_lunch_and_weekends[value0-20260831-0930]`. This is a search locator, not an assumed root cause. R4B's 1,279 count predates the added M2/M3 tests; a count delta alone is not a failure.
 - Root cause: `test_snapshot_retention_keeps_last_twenty_trading_dates` performed 21 complete refreshes, including all support/resistance and payload work, while asserting only pruning. The minimal synthetic payload/capture stub retains real `refresh → prune` persistence coverage; it passes in 1.30s. The release-inventory assertion was stale by one migration and now expects the actual M3 head.
 - Final Windows repository suite: 1297 passed, 19 skipped, 0 failures/errors, 35 warnings, 25m54s. M2 Windows/Linux 25/25, R5.2.1, M3 SQLite/PG16, and static checks remain green. Diagnostic code changes are tests/config metadata only; no M4 runtime integration.
+
+# R4C M3B-A application input identity contract — iteration 64
+
+## Remote gate
+
+- Plan received from ChatGPT Project iteration 63 after independent PASS review of the exact pushed diagnostic head `003c19dcdbca5dc8ff6d08607aa23a477f3aac30`.
+- `M0_TECHNICAL_GATE=PASS`, `M0_BASELINE_GATE=PASS`, `PRE_M4_DIAGNOSTIC=PASS`, `ROUTE_A=RETAIN`.
+- `M3B_A_INPUT_CONTRACT_GO=true`; M3B-A2, worker, read model, M4 UI, main integration, production, and real-data qualification are not authorized.
+
+## Plan
+
+- [x] Re-read the accepted R4A chart/history contracts, 15:15 settlement rule, corporate-action research basis, unknown volume/amount behavior, and M2 `PreparedResearchInput` contract at the exact branch base.
+- [x] Write failing tests for stable Chan logical-series identity, source-bar revision identity, input revision/hash, as-of settlement/future-bar exclusion, R4A price-basis parity, true-zero preservation, and fail-closed unknown volume/amount. RED was observed before `chan_input.py` existed.
+- [x] Add only `backend/app/research/chan_input.py` for persisted daily (`D`) history freezing, independent Chan logical-series ID, source-bar IDs, input revision ID, validated M2 input construction, and explicit blocked result.
+- [x] Preserve the canonical M2 `prepare_research_input()` hash; do not create a competing `input_hash` algorithm. Do not use chart `series_id` as Chan stream identity.
+- [x] Verify no Provider creation/call, no CZSC import/execution, no DB writes, and no provisional or unsettled bar leakage into an earlier `as_of` input.
+- [x] Run M3B-A and R4A/M2 regression tests; M2 Windows/Linux 25/25 with unchanged semantic digest; R5.2.1 collision/digest gates; Ruff, compileall, scoped secret scan, and `git diff --check`. A 26-minute full suite is not required unless shared application code changes.
+- [x] Record exact plan base and tested code commit/tree, source identity formulas, tests, fail-closed results, and deployment disposition in `docs/audits/R4C_M3B_INPUT_CONTRACT_20260929.md`; update `STATUS.md`, `HANDOFF.md`, and this checklist.
+- [ ] Commit, push the exact isolated branch, release bounded execution outputs, and request remote review against the iteration-64 plan before any M3B-A2 work.
+- [ ] Keep M3B-A2 blocked until iteration-64 remote review; no production deploy is applicable to this input-only substage. Apply `DEPLOY_REQUIRED` at the first coherent product slice under its approved release gates.
+
+## Release steering and current substage decision
+
+- Jovi's standing requirement is to deploy completed, tested, GitHub-pushed feature stages and verify them online.
+- Remote iteration 64 explicitly reconciled this with the current substage: `M3B_A_PRODUCTION_GO=false`; `PRODUCTION_DEPLOYMENT=NOT_APPLICABLE` because M3B-A adds only an unused input contract with no user-visible or runtime behavior. The handoff must state that reason; deployment is not silently skipped.
+- Worker, read-model, API, UI, provider, runtime, production, and main-merge changes remain forbidden in M3B-A. Do not bundle them to force deployability.
+- Remote iteration 64 labels M3B-A2 as the same non-deployable identity stage and M3B-B as a pre-release worker component with no standalone production activation. The first coherent read-only application read-model/GET slice (M3B-C) is `DEPLOY_REQUIRED`; later user-visible presentation stages must carry the same explicit release gate.
+- Before any deployable stage, the remote plan must include candidate image build/digest off the production host, a fresh verified production backup, restore/upgrade rehearsal against a disposable PostgreSQL 16 restore of that backup (not an empty database), image-only rollback rehearsal or a tested image-plus-DB restore path, auth/health/read-only smoke tests, and sanitized post-deploy evidence. No production mutation in M3B-A.
+
+## Frozen scope
+
+- Reuse the persisted `DailyBar` history and R4A `research_history_rows()` / `research_price_basis()` semantics; do not reimplement split adjustment.
+- Chan logical series identity binds instrument, interval, `research_price_basis_id`, adjustment-contract version, and the explicit Chan input-series contract version. It must not bind current input hash/cutoff, indicator version, or chart UI contract.
+- Source-bar identity binds the actual daily revision consumed by Chan; same source revision is stable, corrected OHLC/quality revision changes the ID, unaffected IDs stay stable, and an appended future bar does not rewrite old IDs.
+- Iterate daily data only. Weekly/monthly constituent identities are deferred to M3B-A2.
+- No changes to `chan_contract.py`, adapter/replay/publisher/M3 migration, workspace jobs/API, frontend, Provider, production, actionable state, or trading behavior.

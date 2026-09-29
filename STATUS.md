@@ -1,16 +1,20 @@
-# 当前状态：R4C M3 已接受，pre-M4 全量诊断通过，等待远端复核（2026-09-29）
+# 当前状态：R4C M3B-A 日线输入身份契约执行中（2026-09-29）
 
 ## 当前阶段
 
+- 远端 iteration 63 独立复核 `PASS`，确认 `M0_TECHNICAL_GATE=PASS`、`M0_BASELINE_GATE=PASS`、`ROUTE_A=RETAIN`，无需重开 M0。当前 iteration 64 仅授权 `M3B-A` 日线输入身份契约；M3B-A2、worker、read model、API、前端、M4 页面、主线和生产都仍是 `GO=false`。
+- 远端确认图表 `series_id` 是内容绑定身份，不能用作 Chan stream 身份。M3B-A 单独定义稳定 Chan `logical_series_id`、逐日 `source_bar_id` 和 `input_revision_id`；日线仅在上海时间 15:15 结算后进入输入，未知量额 fail-closed，M2 继续计算唯一 canonical `input_hash`。
+- Jovi 要求阶段功能测试并推送 GitHub 后部署上线。远端 iteration 64 已协调：M3B-A 是无用户可见或运行时行为的纯输入契约子阶段，`M3B_A_PRODUCTION_GO=false`、`PRODUCTION_DEPLOYMENT=NOT_APPLICABLE`，交接必须明确记录此原因；第一个完整、可观察的产品阶段按远端计划 `DEPLOY_REQUIRED`，并包含备份、迁移演练、回滚和线上 smoke 门禁。
+- 当前分支从已推送 iteration 63 远端接受头 `003c19dcdbca5dc8ff6d08607aa23a477f3aac30` 继续。M3B-A 测试/代码本地提交为 `1fdcf5110d77a2a8eff3074d526273b0d181b2ee` / tree `6f03a3853c91ea21a93ee937540482299b14d130`；收据文档提交及 GitHub 推送待完成。验证为 Windows M3B-A 8/8、R4A/M2 综合回归 48 passed / 3 skipped，M2 Windows/Linux 各 25/25，M2/R5.2.1 摘要与已接受值一致。详细结果见 [M3B-A acceptance](docs/audits/R4C_M3B_INPUT_CONTRACT_20260929.md)。
 - R4B 本地接受与 M0 技术门禁已通过；R4C M1 的引擎/方言选择已由远端接受，CZSC `1.0.1` + `r4c-observed-revision-v1` 仍保持禁用。
 - 首个 M2 提交 `ac8e3ea3fc251d74c7d88e82550ae88cfb3d14ff` 已推送；远端迭代 56 保留 CZSC + observed-revision 路线，但判定 `CHANGES_REQUIRED`。M2-R1 已修复同 ID 冲突证据丢弃、回放流缺少配置/引擎命名空间，以及禁用配置中的过期 blocker 文案。
 - M2-R1 修复提交 `73a23cb50004bea7c2994a8a0838beced812b64d` 已推送到原隔离分支，基于首个 M2 提交 `ac8e3ea3fc251d74c7d88e82550ae88cfb3d14ff`。Windows/Linux 各 25 项专项测试通过；300-bar 摘要跨平台一致，M2 与 R5.2.1 身份/碰撞/资源回归均通过。详细证据见 [R4C M2 acceptance](docs/audits/R4C_M2_ADAPTER_ACCEPTANCE_20260928.md)。
 - 远端迭代 60 确认 `M2=PASS`；迭代 61 对 M3-R1 要求两项修复；迭代 62 已确认 `M3=PASS`、Route A 保留。M3-R1 实现 `7fe11e2e02e3f980ae7ac1771f96403e8dcffe20` 已推送。`M4_IMPLEMENTATION_GO=false`，主线/产品集成也未放行。
 - M3 持久化只使用合成证据和 disposable SQLite/PostgreSQL 测试库；没有 API/read model/worker/Provider/生产集成。M3 PASS 后仅从 disabled config 移除 persistence 未实现 blocker，保留 runtime/read-model blockers、`enabled=false`、`qualification_status=BLOCKED` 和 `selection_status=SELECTED_DISABLED`。
-- 当前分支 `codex/r4c-pre-m4-regression-diagnostic` 从 M3 PASS head `47ff5c57ae6ccd40864523aa962b3a1fb80f313c` 开始。测试修复提交 `d11d3f57571ef9c76306fda000fa1678843a4aeb` / tree `7ffe9aebb7075f8f1630b5b4f61aeb9a917aa980` 只改两个测试文件。retention 测试的重复完整 refresh 已限制为测试夹具计算；修正 stale release-inventory migration-head 断言后，全量 pytest **1297 passed / 19 skipped / 0 failures / 35 warnings，25m54s**。诊断收据见 [R4C M3 persistence acceptance](docs/audits/R4C_M3_PERSISTENCE_ACCEPTANCE_20260929.md)。等待远端复核；`M4_IMPLEMENTATION_GO=false`、`MAIN_INTEGRATION_GO=false`。
+- Iteration 63 pre-M4 诊断分支 `codex/r4c-pre-m4-regression-diagnostic` 已由远端独立核验并接受，最终 head `003c19dcdbca5dc8ff6d08607aa23a477f3aac30` / tree `911d38d26ac635fa8aa87156b4c647cb1b1470f8`，全量 pytest 1297 passed / 19 skipped / 0 failures / 35 warnings。诊断收据见 [R4C M3 persistence acceptance](docs/audits/R4C_M3_PERSISTENCE_ACCEPTANCE_20260929.md)。
 - 阶段循环持续到项目目标完成，不等最终人工验收；仅真人决策、真实数据或生产门禁在对应节点等待。
 
-生产没有部署或修改；真实数据资格仍为 **UNKNOWN**，`actionable=false`，canonical action 未改变。当前 M3 仅使用合成证据与 disposable 测试数据库，不接入生产数据库、Provider、任务/worker、API、前端、真实行情或自动交易。
+本阶段没有部署或修改生产；真实数据资格仍为 **UNKNOWN**，`actionable=false`，canonical action 未改变。M3B-A 只读持久化日线并用于合成/测试库输入合同验证，不接入 Provider、worker、API、前端、真实行情或自动交易。
 
 ---
 
