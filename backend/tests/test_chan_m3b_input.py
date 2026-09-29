@@ -703,6 +703,53 @@ def test_m3b_a2_period_append_and_daily_correction_follow_aggregate_lineage(isol
     assert corrected.prepared.input_hash != next_week.prepared.input_hash
 
 
+def test_m3b_a2_monthly_correction_changes_only_containing_aggregate_lineage(isolated_chan_input_db):
+    from app.research.chan_input import freeze_chan_input
+
+    db = isolated_chan_input_db
+    instrument = _instrument(db)
+    daily_rows = _add_period_daily_bars(
+        db,
+        instrument,
+        _weekdays(date(2026, 1, 5), date(2026, 2, 27)),
+    )
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    before = freeze_chan_input(
+        db,
+        settings,
+        instrument.ts_code,
+        interval="M",
+        as_of=datetime(2026, 2, 27, 15, 15, tzinfo=SHANGHAI),
+    )
+
+    assert before.status == "prepared"
+    assert before.prepared.settlement_status == "settled"
+    assert len(before.source_bar_ids) == len(before.constituent_source_bar_ids) == 2
+    corrected_daily = next(row for row in daily_rows if row.trade_date == date(2026, 1, 14))
+    corrected_daily.close += 0.01
+    corrected_daily.quality_hash = "corrected-2026-01-14-monthly"
+    db.flush()
+
+    after = freeze_chan_input(
+        db,
+        settings,
+        instrument.ts_code,
+        interval="M",
+        as_of=datetime(2026, 2, 27, 15, 15, tzinfo=SHANGHAI),
+    )
+
+    assert after.status == "prepared"
+    assert after.prepared.settlement_status == "settled"
+    assert after.price_basis_id == before.price_basis_id
+    assert after.logical_series_id == before.logical_series_id
+    assert after.source_bar_ids[0] != before.source_bar_ids[0]
+    assert after.constituent_source_bar_ids[0] != before.constituent_source_bar_ids[0]
+    assert after.source_bar_ids[1] == before.source_bar_ids[1]
+    assert after.constituent_source_bar_ids[1] == before.constituent_source_bar_ids[1]
+    assert after.input_revision_id != before.input_revision_id
+    assert after.prepared.input_hash != before.prepared.input_hash
+
+
 def test_m3b_a2_month_period_transitions_from_temporary_to_settled(isolated_chan_input_db):
     from app.research.chan_input import freeze_chan_input
 
@@ -796,6 +843,52 @@ def test_m3b_a2_blocks_daily_unknowns_and_preserves_aggregate_zero(isolated_chan
     assert prepared.status == "prepared"
     assert prepared.prepared.bars[0].volume == pytest.approx(0.0)
     assert prepared.prepared.bars[0].amount == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("interval", ["W", "M"])
+def test_m3b_a2_blocked_period_does_not_expose_daily_identity(db_session, monkeypatch, interval):
+    import app.research.chan_input as chan_input
+
+    settings = get_settings().model_copy(update={"market_provider": "akshare"})
+    daily_blocked = chan_input.FrozenChanInput(
+        status="blocked",
+        reason_code="source_identity_missing",
+        logical_series_id="daily-logical-series",
+        price_basis_id="known-price-basis",
+        input_revision_id="daily-input-revision",
+        source_bar_ids=("daily-source-bar",),
+        source_as_of=date(2026, 1, 5),
+    )
+    original_freeze = chan_input.freeze_chan_input
+
+    def freeze_with_blocked_daily(db, current_settings, instrument_code, *, interval, as_of):
+        if interval == "D":
+            return daily_blocked
+        return original_freeze(
+            db,
+            current_settings,
+            instrument_code,
+            interval=interval,
+            as_of=as_of,
+        )
+
+    monkeypatch.setattr(chan_input, "freeze_chan_input", freeze_with_blocked_daily)
+    result = chan_input.freeze_chan_input(
+        db_session,
+        settings,
+        "515880.SH",
+        interval=interval,
+        as_of=datetime(2026, 1, 5, 15, 15, tzinfo=SHANGHAI),
+    )
+
+    assert result.status == "blocked"
+    assert result.reason_code == "source_identity_missing"
+    assert result.price_basis_id == "known-price-basis"
+    assert result.source_as_of == date(2026, 1, 5)
+    assert result.logical_series_id is None
+    assert result.input_revision_id is None
+    assert result.source_bar_ids == ()
+    assert result.constituent_source_bar_ids == ()
 
 
 @pytest.mark.parametrize("interval", ["W", "M"])

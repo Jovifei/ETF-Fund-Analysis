@@ -244,10 +244,7 @@ def _freeze_period_chan_input(
             daily.reason_code or "history_qualification_blocked",
             "accepted daily Chan research input is unavailable for period aggregation",
             detail_code=daily.detail_code,
-            logical_series_id=daily.logical_series_id,
             price_basis_id=daily.price_basis_id,
-            input_revision_id=daily.input_revision_id,
-            source_bar_ids=daily.source_bar_ids,
             source_as_of=daily.source_as_of,
         )
 
