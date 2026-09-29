@@ -247,7 +247,7 @@ def test_r5_namespace_fields_change_only_the_intended_identity():
     assert source_variant.structure_key != structure_key
 
 
-def test_config_keeps_selected_engine_disabled_after_m2_core_addition():
+def test_config_keeps_selected_engine_disabled_after_m3_persistence():
     root = Path(__file__).resolve().parents[2]
     config = json.loads((root / "config" / "chan_research.json").read_text(encoding="utf-8"))
     assert config["enabled"] is False
@@ -257,7 +257,6 @@ def test_config_keeps_selected_engine_disabled_after_m2_core_addition():
     assert config["selection_contract"]["engine_confirmation"] == "unknown"
     assert config["reason_codes"] == [
         "RUNTIME_INTEGRATION_DISABLED",
-        "REVISION_PERSISTENCE_NOT_IMPLEMENTED",
         "USER_FACING_READ_MODEL_NOT_INTEGRATED",
     ]
 

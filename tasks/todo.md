@@ -1309,11 +1309,31 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - [x] Update the receipt with iteration-61 findings, R1 verification, and explicit Alembic heads/current evidence.
 - [x] Commit the M3-R1 code repair on the same isolated branch without changing migration ID `h9c0d1e2f3a4`.
 - [x] Push the R1 code commit and updated receipt to `origin/codex/r4c-m3-persistence` without rewriting history.
-- [ ] Release bounded diff/test output for the exact pushed head and request iteration-62 remote review.
-- [ ] Do not enter M4 unless remote marks M3 PASS and provides the next plan. Keep runtime disabled, persistence blocker present until PASS, real-data UNKNOWN, and production unchanged.
+- [x] Release bounded diff/test output for the exact pushed head and obtain iteration-62 remote `M3=PASS`.
+- [x] Keep M4 implementation off until the remote pre-M4 diagnostic plan is complete; runtime remains disabled, real-data UNKNOWN, production unchanged.
 
 ## Review
 
 - Remote iteration 61: M3 `CHANGES_REQUIRED`; Route A retained; M4 remains unauthorized. Accepted: no-cascade immutable evidence, evidence-table triggers, stream sequence/composite head FK, PG advisory concurrency lock, shared M2 transition helper, Windows/Linux M2 and R5 parity. Findings: head identity columns can still be changed by raw SQL; no later-publication revision/transition failure test proves prior committed head survives.
 - Remote explicitly accepts the current full-suite record as `INTERRUPTED / NOT_VERIFIED` for this bounded M3 gate; before widening toward main/product integration, complete or diagnose the long-tail full-suite interruption.
 - R1 RED: raw SQL head `config_id`/`instrument` UPDATE was not rejected; initial rollback tests also exposed that the test fixture reused an external transaction, so its rollback removed the supposedly committed baseline. GREEN: migration triggers now reject identity mutation on both dialects; failure tests use independent committed Sessions and compare complete head/observation/revision/transition snapshots after injected later-publication failures. Normal target suite: 40 PASS / 1 PG-only SKIP; fresh PG16 concurrency/identity mutation gate: PASS; Alembic heads/current: single `h9c0d1e2f3a4`.
+
+# R4C pre-M4 full-suite diagnostic — 2026-09-29
+
+## Plan
+
+- [x] Bind exact M3 PASS base `47ff5c57ae6ccd40864523aa962b3a1fb80f313c` and create `codex/r4c-pre-m4-regression-diagnostic`.
+- [x] Close Scope A by removing only `REVISION_PERSISTENCE_NOT_IMPLEMENTED`; retain runtime/read-model blockers and all disabled/blocked/unknown safety values.
+- [x] Record `pytest --collect-only`, total test count, and module ordering.
+- [ ] Reproduce the normal Windows full suite with `-vv --durations=20 -o faulthandler_timeout=120`, capturing live progress, last completed test, and stack dumps without terminating merely because one test is slow.
+- [ ] If the run stalls, bisect bounded module groups in collection order; investigate `backend/tests/test_decision_board.py` first as a lead, not an assumed cause.
+- [ ] For an isolated long tail inspect executor/thread shutdown, subprocess reaping, DB/SQLite locks, scheduler loops, sleeps/polls, and fixture finalizers. Do not call real Providers or external services.
+- [ ] Repair only a proven minimal test-harness/resource-lifecycle defect; rerun the complete Windows suite and the M3/M2/PG gates required by any shared test/runtime changes.
+- [ ] Record final SHA/tree, collection and suite totals/duration, stall location/root cause, repairs, and static checks; push branch and request remote review.
+- [ ] Do not implement M4 or merge into main until the diagnostic exit criteria pass and the remote issues the next authorization/plan. Real data remains UNKNOWN and production unchanged.
+
+## Review
+
+- Remote iteration 62: `M3=PASS`, `PERSISTENCE_CONTRACT=ACCEPTED`, `ROUTE_A=RETAIN`; `M4_IMPLEMENTATION_GO=FALSE`, `MAIN_INTEGRATION_GO=FALSE`.
+- Remote accepts the previous full-suite state as `INTERRUPTED / NOT_VERIFIED` for bounded M3 acceptance but requires a complete suite or diagnosis before widening toward main/product integration. No technical-route disagreement remains.
+- Collection baseline: 1,316 items in 132 modules; the 27% boundary is inside `test_decision_board.py` at `test_due_slots_skip_lunch_and_weekends[value0-20260831-0930]`. This is a search locator, not an assumed root cause. R4B's 1,279 count predates the added M2/M3 tests; a count delta alone is not a failure.

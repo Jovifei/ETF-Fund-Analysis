@@ -333,7 +333,7 @@ def test_backward_cutoff_is_rejected_and_head_cannot_be_rewound(db_session):
             )
 
 
-def test_config_keeps_runtime_and_read_model_disabled_until_remote_m3_acceptance():
+def test_config_removes_only_m3_persistence_blocker_after_remote_pass():
     root = Path(__file__).resolve().parents[2]
     config = __import__("json").loads((root / "config" / "chan_research.json").read_text(encoding="utf-8"))
     assert config["enabled"] is False
@@ -342,7 +342,6 @@ def test_config_keeps_runtime_and_read_model_disabled_until_remote_m3_acceptance
     assert config["selection_contract"]["engine_confirmation"] == "unknown"
     assert config["reason_codes"] == [
         "RUNTIME_INTEGRATION_DISABLED",
-        "REVISION_PERSISTENCE_NOT_IMPLEMENTED",
         "USER_FACING_READ_MODEL_NOT_INTEGRATED",
     ]
 

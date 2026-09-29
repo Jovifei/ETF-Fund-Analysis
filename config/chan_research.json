@@ -31,7 +31,6 @@
   },
   "reason_codes": [
     "RUNTIME_INTEGRATION_DISABLED",
-    "REVISION_PERSISTENCE_NOT_IMPLEMENTED",
     "USER_FACING_READ_MODEL_NOT_INTEGRATED"
   ],
   "accepted_application_sha": "43bfbf6929a70f520c216b759edbaa433e920e91",

@@ -1,6 +1,6 @@
 # R4C M3 observed-revision persistence acceptance — 2026-09-29
 
-**State:** `M3_R1_PUSHED_PENDING_REMOTE_REVIEW`
+**State:** `M3_PASS_PRE_M4_DIAGNOSTIC_IN_PROGRESS`
 
 **Branch:** `codex/r4c-m3-persistence`
 
@@ -116,3 +116,32 @@ R1 M2/R5 regressions were rerun. All 25 M2 focused tests pass on Windows and Lin
 | R5.2.1 prefix sweep | 1,539.917 ms | 1,319.982 ms |
 
 R1 Ruff, compileall, Node check, scoped secret scan, and diff check pass. The remote accepts the full-suite interruption as `INTERRUPTED / NOT_VERIFIED` for this bounded M3 gate; before widening toward main or product integration, complete the full suite or diagnose its long-tail section. The persistence blocker remains in config, runtime remains disabled, and M4 has not started.
+
+## Iteration 62 M3 PASS and Scope A metadata closure — 2026-09-29
+
+Remote review of final M3-R1 head `47ff5c57ae6ccd40864523aa962b3a1fb80f313c` returned `M3=PASS`, `PERSISTENCE_CONTRACT=ACCEPTED`, and `ROUTE_A=RETAIN`. It confirmed the stream-head identity triggers, pointer-forward contract, later-publication rollback tests, PostgreSQL concurrency, migration single head, and M2/R5 invariants. It also records `FULL_PYTEST=INTERRUPTED/NOT_VERIFIED`, `MAIN_INTEGRATION_READINESS=BLOCKED_BY_TEST_DIAGNOSTIC`, `M4_IMPLEMENTATION_GO=FALSE`, and `MAIN_INTEGRATION_GO=FALSE`.
+
+Scope A removes only `REVISION_PERSISTENCE_NOT_IMPLEMENTED` from `config/chan_research.json`. The exact remaining blockers are `RUNTIME_INTEGRATION_DISABLED` and `USER_FACING_READ_MODEL_NOT_INTEGRATED`. `enabled=false`, `qualification_status=BLOCKED`, `selection_status=SELECTED_DISABLED`, `engine_confirmation=unknown`, and `application_observation_status=observed` remain unchanged. The two config regression tests both pass.
+
+Scope B is underway on isolated branch `codex/r4c-pre-m4-regression-diagnostic` at base `47ff5c57ae6ccd40864523aa962b3a1fb80f313c`. No M4 or main integration is authorized until the full suite completes or the remote-required blocked diagnostic is returned with a minimal reproducer and stack/resource evidence.
+
+## Iteration 62 M3 decision and Scope A metadata close — 2026-09-29
+
+Remote review of final head `47ff5c57ae6ccd40864523aa962b3a1fb80f313c` returned `M3=PASS`, `PERSISTENCE_CONTRACT=ACCEPTED`, and `ROUTE_A=RETAIN`. It confirmed both iteration-61 findings are closed against the exact pushed diff. `M4_IMPLEMENTATION_GO=FALSE` and `MAIN_INTEGRATION_GO=FALSE` remain.
+
+Scope A in iteration 63 removes only `REVISION_PERSISTENCE_NOT_IMPLEMENTED` from `config/chan_research.json`. It retains exactly `RUNTIME_INTEGRATION_DISABLED` and `USER_FACING_READ_MODEL_NOT_INTEGRATED`; `enabled=false`, `qualification_status=BLOCKED`, `selection_status=SELECTED_DISABLED`, `engine_confirmation=unknown`, and `application_observation_status=observed` remain unchanged. No engine/version/dialect/identity, resource, real-data, actionable, or production metadata is changed.
+
+## Iteration 63 pre-M4 full-suite diagnostic plan — in progress
+
+The diagnostic branch is `codex/r4c-pre-m4-regression-diagnostic`, created at exact M3 PASS base `47ff5c57ae6ccd40864523aa962b3a1fb80f313c`. This is a test-diagnostic stage only; it does not implement the M4 read model.
+
+Collection baseline: `pytest --collect-only -vv` found 1,316 items in 132 modules. The prior 27% boundary lies within `test_decision_board.py` at `test_due_slots_skip_lunch_and_weekends[value0-20260831-0930]`. This is a search locator, not an assumed root cause. The R4B receipt's 1,279-test count predates M2/M3 additions; count differences alone are not failures.
+
+- Record `pytest --collect-only`, total item count, and module ordering.
+- Reproduce the Windows full suite with `-vv --durations=20 -o faulthandler_timeout=120`. Capture each live last-test/progress point and any faulthandler stack; do not stop only because an individual test is slow.
+- If it stalls, bisect bounded module groups in collection order. Start with `backend/tests/test_decision_board.py` because the prior run reached that region, without assuming it is the cause. Record elapsed time per group.
+- For the isolated long tail inspect unjoined threads, executor shutdown waits, unreaped subprocesses, DB transactions/locks, SQLite file locks, scheduler loops, sleeps/polls, and fixture finalizers. Use existing tooling and do not call real Providers or external services.
+- A minimal repair is allowed only for a proven test-harness/resource-lifecycle defect. Do not change product/business behavior or redesign unrelated modules.
+- Required exit: the full Windows repository suite completes with a final report; M3 focused tests stay green; rerun PG16 if shared DB/test infrastructure changes; rerun M2/R5 gates when shared runtime code changes; run applicable static checks. If the full suite still cannot complete, report `PRE_M4_DIAGNOSTIC=BLOCKED` with the smallest reproducer and stack/resource evidence. Do not start M4.
+
+The previous full suite remains `INTERRUPTED / NOT_VERIFIED`: it reached roughly 27% after about 23 minutes without a failing assertion or traceback. A standalone `test_two_refresh_requests_leave_only_one_active_job` passed in 1.21 seconds; the whole decision-board module attempt was interrupted after a long tail. This diagnostic must identify the cause or complete the suite before any main/product integration.
