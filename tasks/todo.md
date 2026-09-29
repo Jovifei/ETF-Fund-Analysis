@@ -1421,7 +1421,8 @@ Recovery implementation/next-stage plan: `tasks/plans/2026-09-30-r4c-recovery-an
 - [x] Implement only `chan_input.py`; reuse `aggregate_bars()`, no new calendar logic, API, worker or production code.
 - [x] Verify D identities unchanged, run A2/R4A/M2/M3 focused gates, cross-platform M2/R5 validators and static checks.
 - [x] Update audit receipt, STATUS/HANDOFF and this plan with the A2 decision/evidence.
-- [ ] Commit and push same branch, release bounded execution evidence, and ask remote to review exact head.
+- [x] Commit and push same branch; GitHub tip readback matches `9992ba8ceb13cd45ba7132fd4d05d755e2ec74cd` / tree `536355297a6af1d65bc297e3e7fa448b76c27136`.
+- [ ] Release bounded execution evidence and request exact-head remote review.
 - [ ] Keep A2 non-deployable; wait for remote PASS before any M3B-B work.
 
-M3B-A2 local verification result: focused group 96 collected / 92 passed / 4 environment skips / 0 failures; D ledger baseline matches, cross-platform M2/R5 digests/collisions remain frozen, static gates pass. Evidence is in `E:/Claude_allow/Download/ETF_R4C_M3_20260929/m3b-a2-final-focused-20260930.xml`, `m3b-a2-cross-platform-linux-20260930.txt`, Windows validator outputs and static log. Candidate still uncommitted/unpushed; current checkpoint is executing A2.
+M3B-A2 local verification result: focused group 96 collected / 92 passed / 4 environment skips / 0 failures; D ledger baseline matches, cross-platform M2/R5 digests/collisions remain frozen, static gates pass. Evidence is in `E:/Claude_allow/Download/ETF_R4C_M3_20260929/m3b-a2-final-focused-20260930.xml`, `m3b-a2-cross-platform-linux-20260930.txt`, Windows validator outputs and static log. Code/test commit `9992ba8ceb13cd45ba7132fd4d05d755e2ec74cd` is pushed; awaiting remote review.

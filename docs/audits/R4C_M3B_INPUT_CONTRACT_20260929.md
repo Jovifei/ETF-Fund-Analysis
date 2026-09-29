@@ -29,9 +29,8 @@ Remote authorized M3B-A2 from base `f854d6c9db0b774687f226cfb587cc03ddc814c5`: d
 - Final A2 focused suite: 96 collected, 92 passed, 4 environment skips, 0 failures/errors. It covers D ledger preservation, W/M aggregate parity, namespace and lineage, append/correction propagation, partial/closed periods, corporate-action transitions, unknown/zero quantities, and Provider/DB-side-effect boundaries. JUnit: `E:\Claude_allow\Download\ETF_R4C_M3_20260929\m3b-a2-final-focused-20260930.xml`.
 - M2 Windows/Linux 25/25. Adapter semantic digest `091254d34ddfeeadc85cd0b17e035295bfc32f8a0cebc6776440f10be82aaeac`; R5 history digest `d637b4f80c749db48d06dfafe3762216d684ff2827149b4024a3de3f814fc1e9`; validator semantic digest `0f4ae0322b5d390c41e618da4c342abea66baac30bce4ccfe4a5f0d713cff76f`. Both platforms report 0/0/0 identity collisions and detect the injected weak-ID collision.
 - Ruff, compileall, Node syntax, scoped secret scan and diff-check pass. No `candle_periods.py`, shared R4A runtime, persistence or schema change; the A2 focused gate is used instead of another full repository suite.
-- A2 has no runtime consumer; `DEPLOYMENT_DISPOSITION=NOT_DEPLOYABLE_SUBSTAGE`, `PRODUCTION_GO=false`, `REAL_DATA_QUALIFICATION=UNKNOWN`, `ACTIONABLE=false`. A2 SHA/tree and remote review result will be appended after commit/push. M3B-B remains NO-GO until A2 remote PASS.
-
-The A2 code/test change is currently uncommitted. Its TDD RED attempts remain under the evidence directory; the final 96-test passing record is named above. After push, append exact A2 code/test and final heads before remote review.
+- A2 has no runtime consumer; `DEPLOYMENT_DISPOSITION=NOT_DEPLOYABLE_SUBSTAGE`, `PRODUCTION_GO=false`, `REAL_DATA_QUALIFICATION=UNKNOWN`, `ACTIONABLE=false`. M3B-B remains NO-GO until A2 remote PASS.
+- A2 code/test commit `9992ba8ceb13cd45ba7132fd4d05d755e2ec74cd` / tree `536355297a6af1d65bc297e3e7fa448b76c27136` is pushed on the same branch; GitHub branch readback matched. Final handoff-only delta and remote review remain pending.
 
 ## Remote gate and boundary
 

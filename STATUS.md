@@ -1,8 +1,8 @@
 # 当前状态：R4C M3B-A2 周/月输入身份实施中（2026-09-30）
 
-R1 已于远端 iteration 65 审核通过。iteration 66 A2 本地实现/定向验证现已完成：D 身份基线保持不变，W/M 聚合身份和 lineage 测试通过；96 项组合 92 passed / 4 环境跳过 / 0 失败。M2/R5 跨平台冻结摘要和静态门禁通过。收据和详细计划均已更新；A2 代码尚待提交、推送及远端审核。
+R1 已于远端 iteration 65 审核通过。iteration 66 A2 实现与验证已完成并推送：代码/测试提交 `9992ba8ceb13cd45ba7132fd4d05d755e2ec74cd`，tree `536355297a6af1d65bc297e3e7fa448b76c27136`；远端 branch tip 已读回一致。A2 定向 96 项中 92 passed / 4 环境跳过 / 0 失败；D 身份基线保持不变，W/M 聚合身份与 lineage 通过。M2/R5 跨平台摘要、碰撞和静态门禁通过。当前等待 iteration66 远端复核；尚未部署。
 
-远端已审核 iteration 65：`M3B_A_DECISION=PASS`、`ROUTE_A=RETAIN`、无技术缺陷，并授权 iteration 66 M3B-A2 周/月输入身份。A2 新计划见 [M3B-A2 weekly/monthly identity](tasks/plans/2026-09-30-r4c-m3b-a2-weekly-monthly-identity.md)。代码当前已处于该分支 GitHub head `f854d6c9db0b774687f226cfb587cc03ddc814c5`，接下来本地执行 A2。
+远端已审核 iteration 65：`M3B_A_DECISION=PASS`、`ROUTE_A=RETAIN`、无技术缺陷，并授权 iteration 66 M3B-A2 周/月输入身份。A2 新计划见 [M3B-A2 weekly/monthly identity](tasks/plans/2026-09-30-r4c-m3b-a2-weekly-monthly-identity.md)。
 
 R1 最终本地验证已完成并推送：应用/测试/收据代码提交 `f6de8a6ec2f5dd2b4ea7c411afb50dc5a6dcbd10`，tree `5c1f2921602780bef6def9b4efaed0f538463b31`；GitHub 分支读回同一 SHA。原七模块 78/78；R1 因果/Chan/M2/M3 组 80 passed / 4 条件跳过；DecisionBoard 指定回归 7/7；最终 Windows 全量 pytest 1316 passed / 19 skipped / 0 failures / 0 errors（1335 collected, 35 warnings, 1497.50 秒）。M2 Python 3.12.14/CZSC 1.0.1 Windows/Linux 各 25/25，摘要一致；R5.2.1 两平台身份摘要一致、三类碰撞均为 0，注入弱 ID 测试均检出。Ruff、compileall、Node、密钥扫描和 diff-check 通过。当前等远端独立审核；未部署，真实数据 UNKNOWN。
 

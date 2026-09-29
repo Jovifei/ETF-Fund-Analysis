@@ -1,8 +1,8 @@
 # 当前接手入口：R4C M3B-A2 周/月输入身份（iteration 66，2026-09-30）
 
-远端已判 R1 `PASS`，Route A 保留，M3B-A2 `GO=true`。基线为 GitHub branch `codex/r4c-pre-m4-regression-diagnostic` head `f854d6c9db0b774687f226cfb587cc03ddc814c5` / tree `ccab1b644ef9304e5b78ef57c8fd1ff161b480b7`。完整 plan 在 `tasks/plans/2026-09-30-r4c-m3b-a2-weekly-monthly-identity.md`。只用已接受 M3B-A D 输入复用 `aggregate_bars()` 构造 W/M；本轮不建后台 worker/API/UI，不部署，不改 main。真实资格 UNKNOWN，runtime disabled，actionable=false。
+远端已判 R1 `PASS`，Route A 保留，M3B-A2 `GO=true`。A2 code/test commit `9992ba8ceb13cd45ba7132fd4d05d755e2ec74cd` / tree `536355297a6af1d65bc297e3e7fa448b76c27136` 已推送并读回 branch tip 一致。详细 plan 在 `tasks/plans/2026-09-30-r4c-m3b-a2-weekly-monthly-identity.md`。只用已接受 M3B-A D 输入复用 `aggregate_bars()` 构造 W/M；不建后台 worker/API/UI，不部署，不改 main。真实资格 UNKNOWN，runtime disabled，actionable=false。当前等 iteration66 远端复核。
 
-R1 已完成远端 PASS；其双调用点修复、full test 与推送记录保存在审计收据。当前只接着执行 iteration 66 A2。每个阶段继续等本轮远端 PASS 后再进入下一段；A2 本身明确不部署。
+R1 已完成远端 PASS；其双调用点修复和 full-test 证据保存在审计收据。A2 已本地实现、测试并推送；每个阶段继续待远端 PASS 后再进入下一段。A2 明确不部署。
 
 ## 本轮交接
 

@@ -51,7 +51,7 @@ A2 没有运行时消费者，`DEPLOYMENT_DISPOSITION=NOT_DEPLOYABLE_SUBSTAGE`�
 
 项目 venv 执行 A2 定向、`test_v103_history.py`/calendar/R4A、M2 和 M3 persistence tests。复验 M2 Windows Python 3.12.14/CZSC 1.0.1、Linux 同版本与 R5 Windows/Linux validators。冻结 M2 摘要 `091254d34ddfeeadc85cd0b17e035295bfc32f8a0cebc6776440f10be82aaeac` 和 R5 history digest `d637b4f80c749db48d06dfafe3762216d684ff2827149b4024a3de3f814fc1e9`；collision 0/0/0，弱 ID self-test 必须检出。另跑 Ruff、compileall、Node、scoped secret scan、diff-check。
 
-2026-09-30 verification: focused combined suite 96 collected, 92 passed, 4 environment skips, 0 failures/errors; M2 Win/Linux 25/25; adapter/R5 digests and collision gates unchanged; Ruff/compileall/Node/secret/diff checks passed. Evidence files are listed in the R4C receipt addendum. These results bind the current uncommitted A2 candidate and must be recorded again after commit/push with exact SHA/tree.
+2026-09-30 verification: focused combined suite 96 collected, 92 passed, 4 environment skips, 0 failures/errors; M2 Win/Linux 25/25; adapter/R5 digests and collision gates unchanged; Ruff/compileall/Node/secret/diff checks passed. Evidence files are listed in the R4C receipt addendum. The verified code/test candidate is pushed as `9992ba8ceb13cd45ba7132fd4d05d755e2ec74cd` / tree `536355297a6af1d65bc297e3e7fa448b76c27136`; exact GitHub tip readback matches.
 
 若未修改共享 R4A/日历运行时代码，A2 使用上述 focused gate；不得把上一阶段 Windows full suite 当作 A2 测试。如需修改 `candle_periods.py` 或其它共享 runtime 文件，则增加相应 RED/R4A parity 和完整 Windows pytest。
 
