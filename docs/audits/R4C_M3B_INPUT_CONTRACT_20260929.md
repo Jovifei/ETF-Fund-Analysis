@@ -32,6 +32,24 @@ Remote authorized M3B-A2 from base `f854d6c9db0b774687f226cfb587cc03ddc814c5`: d
 - A2 has no runtime consumer; `DEPLOYMENT_DISPOSITION=NOT_DEPLOYABLE_SUBSTAGE`, `PRODUCTION_GO=false`, `REAL_DATA_QUALIFICATION=UNKNOWN`, `ACTIONABLE=false`. M3B-B remains NO-GO until A2 remote PASS.
 - A2 code/test commit `9992ba8ceb13cd45ba7132fd4d05d755e2ec74cd` / tree `536355297a6af1d65bc297e3e7fa448b76c27136` is pushed on the same branch; GitHub branch readback matched at push time. The following commit is documentation-only. A2 remote review remains pending; M3B-B stays NO-GO until A2 PASS.
 
+## Iteration 67 A2-R1 remote-review follow-up — 2026-09-30
+
+The iteration-66 exact-head review confirmed final GitHub head `8b5440142c183762d202bc8c0e5a69830f0a3635` / tree `59d954885a9df3785997dbcfdfb5cc922f714df2`, retained the technical route, and returned `M3B_A2_DECISION=CHANGES_REQUIRED` for two bounded gaps:
+
+1. A W/M request blocked by its prerequisite daily freeze must not return D-series identity metadata (`logical_series_id`, `input_revision_id`, or `source_bar_ids`) as though a period identity had been constructed. The follow-up leaves those fields empty and preserves only the bounded blocker plus known price basis/as-of evidence.
+2. Historical-correction lineage coverage exercised weekly aggregation but not monthly aggregation. A two-month regression now corrects one January daily constituent and `quality_hash`; only the January aggregate identity/lineage changes, the February identity/lineage and M logical/basis namespace remain stable, and M input revision/hash changes.
+
+The implementation changes only `backend/app/research/chan_input.py` (removes three D identity fields from the blocked W/M propagation) and `backend/tests/test_chan_m3b_input.py` (two blocked-result cases and monthly lineage regression). No identity formula, D ledger, calendar aggregation, corporate-action arithmetic, persistence, Provider, adapter, worker, API, UI, migration, main, or production code changed.
+
+- RED evidence: `E:\Claude_allow\Download\ETF_R4C_M3_20260929\m3b-a2-r1-red-20260930.xml` contains two expected blocked-W/M identity failures; the monthly correction test passes against the generic implementation and locks the coverage gap.
+- Final focused gate: 99 collected, 95 passed, 4 environment skips, 0 failures/errors. All 29 `test_chan_m3b_input.py` tests pass, including the two new gates. Full JUnit is `m3b-a2-r1-final-focused-20260930.xml` in the evidence directory.
+- M2 Windows Python 3.12.10/CZSC 1.0.1: 25/25; M2 digest `091254d34ddfeeadc85cd0b17e035295bfc32f8a0cebc6776440f10be82aaeac`. The host has no 3.12.14 runtime available locally; Linux was rerun on Python 3.12.14 / glibc 2.41 and passed 25/25 with the same digest. Both adapter validators agree.
+- R5.2.1 Windows/Linux: history digest `d637b4f80c749db48d06dfafe3762216d684ff2827149b4024a3de3f814fc1e9`; semantic digest `0f4ae0322b5d390c41e618da4c342abea66baac30bce4ccfe4a5f0d713cff76f`; observation/structure/revision collisions 0/0/0; injected weak-ID collision detected on both platforms.
+- Static: Ruff, Python 3.13.14 compileall, Node syntax, scoped secret scan, and diff-check all pass. Shared R4A/calendar code stayed untouched, so the remote focused-gate exception applies; no full repository suite was run.
+- Preserved harness attempt: the first isolated Windows M2 mirror omitted `backend/app/utils/hashing.py` and failed at import (23 failures/2 passes). The exact helper was added to the isolated mirror; the rerun passed 25/25. This was a harness omission, not a product assertion failure.
+
+The code/test repair is locally verified and committed as `9f935a864f5071debbd66b0f6d4cc40e68a73a2d` / tree `04294de8952b45f4245cd2bc0b3e569322fa9857`, parent `8b5440142c183762d202bc8c0e5a69830f0a3635`. It changes only `chan_input.py` and its tests. Documentation now records the exact R1 repair. Push/readback and second exact-head remote review are pending. `M3B_A2_DECISION` remains `CHANGES_REQUIRED` until the next remote review returns `PASS`. Deployment remains `NOT_DEPLOYABLE_SUBSTAGE`, production unchanged, real-data qualification `UNKNOWN`, and `actionable=false`; no M3B-B work starts before PASS.
+
 ## Remote gate and boundary
 
 Iteration 63 was independently accepted as `PRE_M4_DIAGNOSTIC=PASS`; remote review also reconfirmed `M0_TECHNICAL_GATE=PASS`, `M0_BASELINE_GATE=PASS`, and `ROUTE_A=RETAIN`. Iteration 64 authorized only `R4C_M3B_APPLICATION_INPUT_CONTRACT` / M3B-A:

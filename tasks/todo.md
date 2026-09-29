@@ -1422,7 +1422,22 @@ Recovery implementation/next-stage plan: `tasks/plans/2026-09-30-r4c-recovery-an
 - [x] Verify D identities unchanged, run A2/R4A/M2/M3 focused gates, cross-platform M2/R5 validators and static checks.
 - [x] Update audit receipt, STATUS/HANDOFF and this plan with the A2 decision/evidence.
 - [x] Commit and push same branch; GitHub tip readback matches `9992ba8ceb13cd45ba7132fd4d05d755e2ec74cd` / tree `536355297a6af1d65bc297e3e7fa448b76c27136`.
-- [ ] Release bounded execution evidence and request exact-head remote review.
+- [x] Release bounded execution evidence and request exact-head remote review; iteration 66 returned `M3B_A2_DECISION=CHANGES_REQUIRED` and authorized the bounded follow-up below.
 - [ ] Keep A2 non-deployable; wait for remote PASS before any M3B-B work.
 
 M3B-A2 local verification result: focused group 96 collected / 92 passed / 4 environment skips / 0 failures; D ledger baseline matches, cross-platform M2/R5 digests/collisions remain frozen, static gates pass. Evidence is in `E:/Claude_allow/Download/ETF_R4C_M3_20260929/m3b-a2-final-focused-20260930.xml`, `m3b-a2-cross-platform-linux-20260930.txt`, Windows validator outputs and static log. Code/test commit `9992ba8ceb13cd45ba7132fd4d05d755e2ec74cd` is pushed; awaiting remote review.
+
+## R4C M3B-A2 R1 follow-up — iteration 67
+
+Remote iteration 66 exact-head review retained the route but returned `CHANGES_REQUIRED`: (1) blocked W/M prerequisites expose D identity metadata; (2) historical-correction lineage coverage is weekly-only. Follow `tasks/plans/2026-09-30-r4c-m3b-a2-r1-contract-repair.md`.
+
+- [x] Add RED assertions that blocked W/M results have no logical/revision/source/constituent identity metadata; two parameterized tests failed on leaked D `logical_series_id` before the fix.
+- [x] Add RED-first monthly correction lineage test with two months; only the affected month aggregate/lineage changes, M namespace/basis remain stable, revision/hash change.
+- [x] Apply minimal fix in `chan_input.py`; keep all frozen formulas and calendar/R4A semantics unchanged.
+- [x] Run A2-focused Chan tests and M2/M3/R4A gates: 99 collected, 95 passed, 4 environment skips, 0 failures/errors.
+- [x] Re-run M2 Windows Python 3.12.10/Linux Python 3.12.14 (25/25 each), M2/R5 validators and static gates; frozen digests/collision checks unchanged.
+- [x] Commit code/test repair `9f935a864f5071debbd66b0f6d4cc40e68a73a2d` / tree `04294de8952b45f4245cd2bc0b3e569322fa9857` (parent is exact iteration-66 head).
+- [ ] Update receipt/status/handoff/todo; commit docs-only changes, push both commits, verify exact GitHub tip, release bounded evidence, and request iteration-67 exact-head review.
+- [ ] Keep deployment `NOT_DEPLOYABLE_SUBSTAGE`; no M3B-B until remote PASS.
+
+Iteration 67 detail and environment/harness history: `tasks/plans/2026-09-30-r4c-m3b-a2-r1-contract-repair.md`. The first Windows M2 isolated mirror omitted `app/utils/hashing.py` and failed at import; the corrected exact mirror passed 25/25. The Windows M2 replay runtime available locally is 3.12.10; Linux is 3.12.14; both retain the same frozen digests.

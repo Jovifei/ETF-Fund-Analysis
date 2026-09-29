@@ -1,6 +1,6 @@
-# 当前状态：R4C M3B-A2 周/月输入身份实施中（2026-09-30）
+# 当前状态：R4C M3B-A2 R1 修复已测，待推送复审（2026-09-30）
 
-R1 已于远端 iteration 65 审核通过。iteration 66 A2 实现与验证已完成并推送：代码/测试提交 `9992ba8ceb13cd45ba7132fd4d05d755e2ec74cd`，tree `536355297a6af1d65bc297e3e7fa448b76c27136`；远端 branch tip 已读回一致。A2 定向 96 项中 92 passed / 4 环境跳过 / 0 失败；D 身份基线保持不变，W/M 聚合身份与 lineage 通过。M2/R5 跨平台摘要、碰撞和静态门禁通过。当前等待 iteration66 远端复核；尚未部署。
+R1 已于远端 iteration 65 审核通过。iteration 66 A2 精确审核确认 GitHub head `8b5440142c183762d202bc8c0e5a69830f0a3635`，但因 blocked W/M 结果携带 D 身份、缺少月度历史修订 lineage 回归而返回 `M3B_A2_DECISION=CHANGES_REQUIRED`；技术路线保留。iteration 67 两项修复和定向回归已通过，99 项中 95 passed / 4 环境跳过 / 0 失败；M2 Windows 3.12.10 和 Linux 3.12.14 各 25/25，冻结摘要/碰撞门禁不变。代码/测试提交 `9f935a864f5071debbd66b0f6d4cc40e68a73a2d` / tree `04294de8952b45f4245cd2bc0b3e569322fa9857`，父提交为精确 iteration66 GitHub head；当前待文档收据、推送并远端复审。M3B-B 仍 NO-GO，未部署，真实数据 UNKNOWN。详情见 `tasks/plans/2026-09-30-r4c-m3b-a2-r1-contract-repair.md`。
 
 远端已审核 iteration 65：`M3B_A_DECISION=PASS`、`ROUTE_A=RETAIN`、无技术缺陷，并授权 iteration 66 M3B-A2 周/月输入身份。A2 新计划见 [M3B-A2 weekly/monthly identity](tasks/plans/2026-09-30-r4c-m3b-a2-weekly-monthly-identity.md)。
 

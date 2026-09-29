@@ -1,8 +1,8 @@
-# 当前接手入口：R4C M3B-A2 周/月输入身份（iteration 66，2026-09-30）
+# 当前接手入口：R4C M3B-A2 R1 修复（iteration 67，2026-09-30）
 
-远端已判 R1 `PASS`，Route A 保留，M3B-A2 `GO=true`。A2 code/test commit `9992ba8ceb13cd45ba7132fd4d05d755e2ec74cd` / tree `536355297a6af1d65bc297e3e7fa448b76c27136` 已推送并读回 branch tip 一致。详细 plan 在 `tasks/plans/2026-09-30-r4c-m3b-a2-weekly-monthly-identity.md`。只用已接受 M3B-A D 输入复用 `aggregate_bars()` 构造 W/M；不建后台 worker/API/UI，不部署，不改 main。真实资格 UNKNOWN，runtime disabled，actionable=false。当前等 iteration66 远端复核。
+远端 iteration 66 对已推送 A2 head `8b5440142c183762d202bc8c0e5a69830f0a3635` 返回 `CHANGES_REQUIRED`，Route A 保留。iteration 67 已修复 blocked W/M 返回 D 身份、补了跨月历史修订 lineage 测试；定向 99 项为 95 passed / 4 环境跳过 / 0 失败，M2 Win/Linux 各 25/25。代码/测试提交 `9f935a864f5071debbd66b0f6d4cc40e68a73a2d` / tree `04294de8952b45f4245cd2bc0b3e569322fa9857`，父提交是 iteration66 精确 head。详细计划与验证见 `tasks/plans/2026-09-30-r4c-m3b-a2-r1-contract-repair.md`。当前等待收据 docs-only commit、推送和远端复审；A2 PASS 前不开始 M3B-B；不部署、不改 main。真实资格 UNKNOWN，runtime disabled，actionable=false。
 
-R1 已完成远端 PASS；其双调用点修复和 full-test 证据保存在审计收据。A2 已本地实现、测试并推送；每个阶段继续待远端 PASS 后再进入下一段。A2 明确不部署。
+R1 已完成远端 PASS；其双调用点修复和 full-test 证据保存在审计收据。A2 初次实现已推送并完成远端 review；按 iteration 66 的 bounded plan 完成两项 R1 修复、测试、推送和再次远端审查后才继续。A2 明确不部署。
 
 ## 本轮交接
 
