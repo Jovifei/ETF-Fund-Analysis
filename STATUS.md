@@ -1,4 +1,4 @@
-# 当前状态：R4C M3 已接受，pre-M4 全量测试诊断进行中（2026-09-29）
+# 当前状态：R4C M3 已接受，pre-M4 全量诊断通过，等待远端复核（2026-09-29）
 
 ## 当前阶段
 
@@ -7,7 +7,7 @@
 - M2-R1 修复提交 `73a23cb50004bea7c2994a8a0838beced812b64d` 已推送到原隔离分支，基于首个 M2 提交 `ac8e3ea3fc251d74c7d88e82550ae88cfb3d14ff`。Windows/Linux 各 25 项专项测试通过；300-bar 摘要跨平台一致，M2 与 R5.2.1 身份/碰撞/资源回归均通过。详细证据见 [R4C M2 acceptance](docs/audits/R4C_M2_ADAPTER_ACCEPTANCE_20260928.md)。
 - 远端迭代 60 确认 `M2=PASS`；迭代 61 对 M3-R1 要求两项修复；迭代 62 已确认 `M3=PASS`、Route A 保留。M3-R1 实现 `7fe11e2e02e3f980ae7ac1771f96403e8dcffe20` 已推送。`M4_IMPLEMENTATION_GO=false`，主线/产品集成也未放行。
 - M3 持久化只使用合成证据和 disposable SQLite/PostgreSQL 测试库；没有 API/read model/worker/Provider/生产集成。M3 PASS 后仅从 disabled config 移除 persistence 未实现 blocker，保留 runtime/read-model blockers、`enabled=false`、`qualification_status=BLOCKED` 和 `selection_status=SELECTED_DISABLED`。
-- 当前分支 `codex/r4c-pre-m4-regression-diagnostic` 从 M3 PASS head `47ff5c57ae6ccd40864523aa962b3a1fb80f313c` 开始。Scope B 诊断 pytest 全量长尾；全量 pytest 仍 `INTERRUPTED / NOT_VERIFIED`，在诊断完成前不开始 M4 或主线集成。记录见 [R4C M3 persistence acceptance](docs/audits/R4C_M3_PERSISTENCE_ACCEPTANCE_20260929.md)。
+- 当前分支 `codex/r4c-pre-m4-regression-diagnostic` 从 M3 PASS head `47ff5c57ae6ccd40864523aa962b3a1fb80f313c` 开始。测试修复提交 `d11d3f57571ef9c76306fda000fa1678843a4aeb` / tree `7ffe9aebb7075f8f1630b5b4f61aeb9a917aa980` 只改两个测试文件。retention 测试的重复完整 refresh 已限制为测试夹具计算；修正 stale release-inventory migration-head 断言后，全量 pytest **1297 passed / 19 skipped / 0 failures / 35 warnings，25m54s**。诊断收据见 [R4C M3 persistence acceptance](docs/audits/R4C_M3_PERSISTENCE_ACCEPTANCE_20260929.md)。等待远端复核；`M4_IMPLEMENTATION_GO=false`、`MAIN_INTEGRATION_GO=false`。
 - 阶段循环持续到项目目标完成，不等最终人工验收；仅真人决策、真实数据或生产门禁在对应节点等待。
 
 生产没有部署或修改；真实数据资格仍为 **UNKNOWN**，`actionable=false`，canonical action 未改变。当前 M3 仅使用合成证据与 disposable 测试数据库，不接入生产数据库、Provider、任务/worker、API、前端、真实行情或自动交易。

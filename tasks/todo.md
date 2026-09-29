@@ -1325,11 +1325,13 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - [x] Bind exact M3 PASS base `47ff5c57ae6ccd40864523aa962b3a1fb80f313c` and create `codex/r4c-pre-m4-regression-diagnostic`.
 - [x] Close Scope A by removing only `REVISION_PERSISTENCE_NOT_IMPLEMENTED`; retain runtime/read-model blockers and all disabled/blocked/unknown safety values.
 - [x] Record `pytest --collect-only`, total test count, and module ordering.
-- [ ] Reproduce the normal Windows full suite with `-vv --durations=20 -o faulthandler_timeout=120`, capturing live progress, last completed test, and stack dumps without terminating merely because one test is slow.
-- [ ] If the run stalls, bisect bounded module groups in collection order; investigate `backend/tests/test_decision_board.py` first as a lead, not an assumed cause.
-- [ ] For an isolated long tail inspect executor/thread shutdown, subprocess reaping, DB/SQLite locks, scheduler loops, sleeps/polls, and fixture finalizers. Do not call real Providers or external services.
-- [ ] Repair only a proven minimal test-harness/resource-lifecycle defect; rerun the complete Windows suite and the M3/M2/PG gates required by any shared test/runtime changes.
-- [ ] Record final SHA/tree, collection and suite totals/duration, stall location/root cause, repairs, and static checks; push branch and request remote review.
+- [x] Reproduce the normal Windows full suite with `-vv --durations=20 -o faulthandler_timeout=120`, capturing live progress, last completed test, and stack dumps without terminating merely because one test is slow.
+- [x] Bisect the long tail in collection order; isolate `test_snapshot_retention_keeps_last_twenty_trading_dates` after the decision-board boundary, then rerun the complete `test_decision_board.py` module.
+- [x] Inspect the long tail: faulthandler repeatedly showed NumPy `partition`, with a stable ~293 MB working set; inspection found the retention test performed 21 complete board refresh computations.
+- [x] Make the minimal test-only repair: stub support/resistance capture and payload construction while preserving the real `refresh → prune` path; update the stale release-inventory test expectation to M3 Alembic head `h9c0d1e2f3a4`.
+- [x] Rerun the complete Windows suite and verification gates: 1297 passed, 19 skipped, 0 failures/errors, 35 warnings in 25m54s; the decision-board module passes 34/34 and the retention case takes 1.30s.
+- [x] Bind the test repair to commit `d11d3f57571ef9c76306fda000fa1678843a4aeb` / tree `7ffe9aebb7075f8f1630b5b4f61aeb9a917aa980`; record 1,316 collected tests, final 1,297 passed / 19 skipped / 0 failed / 35 warnings / 25m54s, root cause, repairs, and final-output SHA-256 in the receipt.
+- [ ] Push the complete diagnostic branch and request iteration-63 remote review, including an explicit technical-route assessment and next-stage plan request.
 - [ ] Do not implement M4 or merge into main until the diagnostic exit criteria pass and the remote issues the next authorization/plan. Real data remains UNKNOWN and production unchanged.
 
 ## Review
@@ -1337,3 +1339,5 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - Remote iteration 62: `M3=PASS`, `PERSISTENCE_CONTRACT=ACCEPTED`, `ROUTE_A=RETAIN`; `M4_IMPLEMENTATION_GO=FALSE`, `MAIN_INTEGRATION_GO=FALSE`.
 - Remote accepts the previous full-suite state as `INTERRUPTED / NOT_VERIFIED` for bounded M3 acceptance but requires a complete suite or diagnosis before widening toward main/product integration. No technical-route disagreement remains.
 - Collection baseline: 1,316 items in 132 modules; the 27% boundary is inside `test_decision_board.py` at `test_due_slots_skip_lunch_and_weekends[value0-20260831-0930]`. This is a search locator, not an assumed root cause. R4B's 1,279 count predates the added M2/M3 tests; a count delta alone is not a failure.
+- Root cause: `test_snapshot_retention_keeps_last_twenty_trading_dates` performed 21 complete refreshes, including all support/resistance and payload work, while asserting only pruning. The minimal synthetic payload/capture stub retains real `refresh → prune` persistence coverage; it passes in 1.30s. The release-inventory assertion was stale by one migration and now expects the actual M3 head.
+- Final Windows repository suite: 1297 passed, 19 skipped, 0 failures/errors, 35 warnings, 25m54s. M2 Windows/Linux 25/25, R5.2.1, M3 SQLite/PG16, and static checks remain green. Diagnostic code changes are tests/config metadata only; no M4 runtime integration.

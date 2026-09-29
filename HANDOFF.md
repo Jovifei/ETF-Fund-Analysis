@@ -1,4 +1,4 @@
-# 当前接手入口：R4C M3 PASS，pre-M4 全量测试诊断进行中（2026-09-29）
+# 当前接手入口：R4C M3 PASS，pre-M4 全量诊断通过，待远端复核（2026-09-29）
 
 ## 本轮交接
 
@@ -9,7 +9,9 @@
 
 ## 下一步
 
-按 iteration63 计划完成元数据收尾并诊断 pytest 长尾：先记录 `pytest --collect-only` 顺序/总数，再用 `-vv --durations=20 -o faulthandler_timeout=120` 重现；必要时按收集顺序分模块定位，并检查线程、子进程、事务/SQLite 锁和 fixture 清理。仅允许修复明确的测试基础设施资源生命周期问题；不得进入 M4/API/read-model/主线集成。满足远端验收后再提交、推送、交远端审查。
+测试修复提交 `d11d3f57571ef9c76306fda000fa1678843a4aeb`（tree `7ffe9aebb7075f8f1630b5b4f61aeb9a917aa980`）绑定 retention 用例优化和 stale release-inventory migration-head 期望。Windows 全量 suite 为 **1297 passed、19 skipped、0 failed、35 warnings，25m54s**；全量输出文件 SHA-256 为 `8614912aa9e3d976e8fd0530f0e2ef735a3193743c2d53f925c8fd81f65f49ae`。全量之后用项目解释器重跑两个直接受影响的回归，`2 passed`，`git diff --check` 通过。详细诊断和首轮/中间轮结果见 [R4C M3 persistence acceptance](docs/audits/R4C_M3_PERSISTENCE_ACCEPTANCE_20260929.md)。
+
+接下来将该诊断分支推送到 GitHub，交远端依据 iteration 63 计划独立审核，并要求明确复核技术路线、指出分歧依据，再给出下一阶段的执行计划。`M4_IMPLEMENTATION_GO=false`；收到远端下一阶段计划及其门禁后再执行，不做主线集成或生产变更。
 
 人工验收是产品最终阶段的门，不是当前停止条件。该协作循环持续到项目目标完成；生产部署或真实数据资格仍需各自独立门禁。
 

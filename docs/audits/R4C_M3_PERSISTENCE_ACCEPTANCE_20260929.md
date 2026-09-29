@@ -131,9 +131,9 @@ Remote review of final head `47ff5c57ae6ccd40864523aa962b3a1fb80f313c` returned 
 
 Scope A in iteration 63 removes only `REVISION_PERSISTENCE_NOT_IMPLEMENTED` from `config/chan_research.json`. It retains exactly `RUNTIME_INTEGRATION_DISABLED` and `USER_FACING_READ_MODEL_NOT_INTEGRATED`; `enabled=false`, `qualification_status=BLOCKED`, `selection_status=SELECTED_DISABLED`, `engine_confirmation=unknown`, and `application_observation_status=observed` remain unchanged. No engine/version/dialect/identity, resource, real-data, actionable, or production metadata is changed.
 
-## Iteration 63 pre-M4 full-suite diagnostic plan — in progress
+## Iteration 63 pre-M4 full-suite diagnostic — PASS
 
-The diagnostic branch is `codex/r4c-pre-m4-regression-diagnostic`, created at exact M3 PASS base `47ff5c57ae6ccd40864523aa962b3a1fb80f313c`. This is a test-diagnostic stage only; it does not implement the M4 read model.
+The diagnostic branch is `codex/r4c-pre-m4-regression-diagnostic`, created at exact M3 PASS base `47ff5c57ae6ccd40864523aa962b3a1fb80f313c`. This stage contains no M4 read-model implementation.
 
 Collection baseline: `pytest --collect-only -vv` found 1,316 items in 132 modules. The prior 27% boundary lies within `test_decision_board.py` at `test_due_slots_skip_lunch_and_weekends[value0-20260831-0930]`. This is a search locator, not an assumed root cause. The R4B receipt's 1,279-test count predates M2/M3 additions; count differences alone are not failures.
 
@@ -144,4 +144,17 @@ Collection baseline: `pytest --collect-only -vv` found 1,316 items in 132 module
 - A minimal repair is allowed only for a proven test-harness/resource-lifecycle defect. Do not change product/business behavior or redesign unrelated modules.
 - Required exit: the full Windows repository suite completes with a final report; M3 focused tests stay green; rerun PG16 if shared DB/test infrastructure changes; rerun M2/R5 gates when shared runtime code changes; run applicable static checks. If the full suite still cannot complete, report `PRE_M4_DIAGNOSTIC=BLOCKED` with the smallest reproducer and stack/resource evidence. Do not start M4.
 
-The previous full suite remains `INTERRUPTED / NOT_VERIFIED`: it reached roughly 27% after about 23 minutes without a failing assertion or traceback. A standalone `test_two_refresh_requests_leave_only_one_active_job` passed in 1.21 seconds; the whole decision-board module attempt was interrupted after a long tail. This diagnostic must identify the cause or complete the suite before any main/product integration.
+The first diagnostic full run reproduced the 27% stall. The last completed test was `test_next_refresh_skips_weekend_to_next_trading_day`; collection order placed `test_snapshot_retention_keeps_last_twenty_trading_dates` next. Faulthandler repeatedly showed NumPy `partition` with a stable ~293 MB working set. Source inspection identified the cause: this retention test called the full decision-board refresh 21 times, re-running support/resistance capture and full payload construction only to test pruning.
+
+The minimal test-only repair monkeypatches support/resistance capture and `_build_payload` to return a bounded synthetic payload while retaining the real `DecisionBoardService.refresh → _prune_snapshot_dates` persistence path and 21 date boundaries. The isolated retention test then passed in 1.30 seconds; the complete `test_decision_board.py` module passed 34/34 in 12m03s.
+
+A full Windows run then found one stale release-inventory assertion expecting the pre-M3 Alembic head `g8b9c0d1e2f3`; after adding M3, the actual single head is `h9c0d1e2f3a4`. The test expectation was updated, and its isolated regression passed. The final full run completed with **1297 passed, 19 skipped, 0 failures/errors, 35 warnings in 25m54s**. The module order/collection baseline remained 1,316 items in 132 modules. The initial 1,279-item R4B count predates M2/M3 additions; the delta is not itself a defect.
+
+The diagnostic repair touches only `backend/tests/test_decision_board.py` and the stale migration-head assertion in `backend/tests/test_audit_release_20260913.py`. No business logic or runtime integration changed. The R4C API/read model, worker, Provider, M4, main merge, real data, production, canonical action, actionable, and trading paths remain out of scope. The next step is bounded remote review of the diagnostic branch; no M4 plan or authorization has been issued yet.
+
+### Final execution binding
+
+- Diagnostic test/code commit: `d11d3f57571ef9c76306fda000fa1678843a4aeb`; tree: `7ffe9aebb7075f8f1630b5b4f61aeb9a917aa980`. It changes only the two regression-test files named above; M3 Scope A metadata was already closed in the parent diagnostic commit `da7e299d4d887cefe49bfd38d75016f50cf74c82`.
+- Full Windows command: `pytest -vv --durations=20 -o faulthandler_timeout=120` using the project Python 3.13.14 environment. Final result: **1297 passed, 19 skipped, 0 failed, 0 errors, 35 warnings, 1554.92 seconds; exit code 0**. Captured output SHA-256: `8614912aa9e3d976e8fd0530f0e2ef735a3193743c2d53f925c8fd81f65f49ae`.
+- After that full run, the two directly changed regressions were rerun with the project interpreter: **2 passed**, exit code 0; `git diff --check` passed. The bounded focused output SHA-256 is `f0b99442323d7c45c9cbce71be0b588a13a630a6f4231b6d1d42a58f78b3bedd`. No product/runtime source changed after the full run.
+- The first full diagnostic attempt's faulthandler tail, the intermediate stale-head assertion failure, the final full-suite output, collection summary, and bounded post-suite regression output are retained under `E:\Claude_allow\Download\ETF_R4C_M3_20260929` for this iteration's remote evidence review.
