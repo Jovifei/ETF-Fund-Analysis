@@ -1359,7 +1359,8 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - [x] Verify no Provider creation/call, no CZSC import/execution, no DB writes, and no provisional or unsettled bar leakage into an earlier `as_of` input.
 - [x] Run M3B-A and R4A/M2 regression tests; M2 Windows/Linux 25/25 with unchanged semantic digest; R5.2.1 collision/digest gates; Ruff, compileall, scoped secret scan, and `git diff --check`. A 26-minute full suite is not required unless shared application code changes.
 - [x] Record exact plan base and tested code commit/tree, source identity formulas, tests, fail-closed results, and deployment disposition in `docs/audits/R4C_M3B_INPUT_CONTRACT_20260929.md`; update `STATUS.md`, `HANDOFF.md`, and this checklist.
-- [ ] Commit, push the exact isolated branch, release bounded execution outputs, and request remote review against the iteration-64 plan before any M3B-A2 work.
+- [x] Commit and push the exact isolated branch with the M3B-A implementation, tests, status, handoff, lessons, and acceptance receipt.
+- [ ] Release bounded iteration-64 execution outputs and request remote review against the exact pushed head before any M3B-A2 work.
 - [ ] Keep M3B-A2 blocked until iteration-64 remote review; no production deploy is applicable to this input-only substage. Apply `DEPLOY_REQUIRED` at the first coherent product slice under its approved release gates.
 
 ## Release steering and current substage decision
