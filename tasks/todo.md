@@ -1423,7 +1423,7 @@ Recovery implementation/next-stage plan: `tasks/plans/2026-09-30-r4c-recovery-an
 - [x] Update audit receipt, STATUS/HANDOFF and this plan with the A2 decision/evidence.
 - [x] Commit and push same branch; GitHub tip readback matches `9992ba8ceb13cd45ba7132fd4d05d755e2ec74cd` / tree `536355297a6af1d65bc297e3e7fa448b76c27136`.
 - [x] Release bounded execution evidence and request exact-head remote review; iteration 66 returned `M3B_A2_DECISION=CHANGES_REQUIRED` and authorized the bounded follow-up below.
-- [ ] Keep A2 non-deployable; wait for remote PASS before any M3B-B work.
+- [x] Keep A2 non-deployable; iteration 67 exact-head review returned `M3B_A2_DECISION=PASS` and authorized iteration 68 M3B-B.
 
 M3B-A2 local verification result: focused group 96 collected / 92 passed / 4 environment skips / 0 failures; D ledger baseline matches, cross-platform M2/R5 digests/collisions remain frozen, static gates pass. Evidence is in `E:/Claude_allow/Download/ETF_R4C_M3_20260929/m3b-a2-final-focused-20260930.xml`, `m3b-a2-cross-platform-linux-20260930.txt`, Windows validator outputs and static log. Code/test commit `9992ba8ceb13cd45ba7132fd4d05d755e2ec74cd` is pushed; awaiting remote review.
 
@@ -1437,7 +1437,27 @@ Remote iteration 66 exact-head review retained the route but returned `CHANGES_R
 - [x] Run A2-focused Chan tests and M2/M3/R4A gates: 99 collected, 95 passed, 4 environment skips, 0 failures/errors.
 - [x] Re-run M2 Windows Python 3.12.10/Linux Python 3.12.14 (25/25 each), M2/R5 validators and static gates; frozen digests/collision checks unchanged.
 - [x] Commit code/test repair `9f935a864f5071debbd66b0f6d4cc40e68a73a2d` / tree `04294de8952b45f4245cd2bc0b3e569322fa9857` (parent is exact iteration-66 head).
-- [ ] Update receipt/status/handoff/todo; commit docs-only changes, push both commits, verify exact GitHub tip, release bounded evidence, and request iteration-67 exact-head review.
-- [ ] Keep deployment `NOT_DEPLOYABLE_SUBSTAGE`; no M3B-B until remote PASS.
+- [x] Update receipt/status/handoff/todo; docs-only commit `6166587d718992237908099b6b89ea83f3779d3d` pushed, exact GitHub tip readback matched; bounded evidence reviewed remotely.
+- [x] Keep deployment `NOT_DEPLOYABLE_SUBSTAGE`; M3B-B remained gated until remote A2 PASS.
 
 Iteration 67 detail and environment/harness history: `tasks/plans/2026-09-30-r4c-m3b-a2-r1-contract-repair.md`. The first Windows M2 isolated mirror omitted `app/utils/hashing.py` and failed at import; the corrected exact mirror passed 25/25. The Windows M2 replay runtime available locally is 3.12.10; Linux is 3.12.14; both retain the same frozen digests.
+
+## R4C M3B-B audited worker publication — iteration 68
+
+Remote iteration 67 exact-head review returned `M3B_A2_DECISION=PASS`, technical route retained, and `M3B_B_GO=true`. M3B-C/M4/main/production remain false. Follow `tasks/plans/2026-09-30-r4c-m3b-b-audited-worker-publication.md`.
+
+- [x] Re-read B0 protocol, queue, worker, accepted freeze/adapter/contract/publisher and existing regression tests.
+- [x] Add internal bounded `chan_structures` request model without extending public `DataRequest.task`.
+- [x] Add a narrowly scoped internal queue enqueue helper using existing lock/capacity/idempotency/claim semantics and global owner scope; no normal producer.
+- [x] Add `ChanStructureService` with freeze transaction → close → exact CZSC compute → new short publication transaction; bounded per-code results and failure isolation.
+- [x] Add worker branch before runtime settings resolution and ordinary TaskService construction using a lazy service import; normal worker startup has no CZSC import and no scheduled/public producer.
+- [x] Add `test_chan_m3b_worker.py` coverage for idempotency, transaction boundaries, blocked input, worker routing, failure isolation, W/M lifecycle, bounded results, and unchanged public task routing.
+- [x] Run exact-engine CZSC 1.0.1 synthetic worker integration on Windows Python 3.12.10 and Linux Python 3.12.14; D/W/M publication and W temporary-to-settled output digest match cross-platform.
+- [x] Run disposable PostgreSQL 16.15 worker-style publication, exact retry, and chronology rejection/head-retention gate; container stopped after the run.
+- [x] Run M3B-A/A2, M2/M3, workspace jobs, R4A corporate-action, M2/R5 cross-platform, full Windows repository pytest, and static gates.
+- [x] Update execution receipt, STATUS/HANDOFF/todo, and plan; deployment remains explicitly `NOT_DEPLOYABLE_SUBSTAGE`.
+- [x] Commit code/tests as `e38d524c639a938e5bf709302c95923b9f20df1f` / tree `a00ae89bfa7045d151b8c90b3ea09695cc49307e`; receipt/status/plan documentation is committed locally.
+- [ ] Push the isolated branch, verify exact GitHub head/tree, release bounded evidence, and request iteration-68 remote exact-head review.
+- [x] Keep B `NOT_DEPLOYABLE_SUBSTAGE`; no public producer, API, UI, scheduler, main merge, production, or M3B-C scope.
+
+M3B-B local gates are complete. Full Windows pytest: 1,369 collected, 1,348 passed, 21 skipped, 0 failures/errors, 35 warnings, 1,516.123 seconds, exit 0. The `test_chan_m3b_worker.py` unit group is 17 passed / 2 environment-gated skips. Exact CZSC worker semantic digest matches on Windows/Linux (`66b8092b...096bd`); M2 and R5 frozen digests and collision checks are unchanged. PostgreSQL 16.15 exact retry and chronology-retention gate passes. See [M3B-B worker publication receipt](../docs/audits/R4C_M3B_B_WORKER_PUBLICATION_20260930.md). Await remote review after push; M3B-C remains GO=false.

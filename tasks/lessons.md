@@ -44,3 +44,4 @@
 - 2026-09-24: Provider mock 必须断言完整 URL 路径和查询合同，并用有界真实响应交叉核对；如果测试夹具照抄适配器当前参数，错误的 query/path 也会被错误地“验证”为正确。
 - 2026-09-24: 响应大小上限必须在流式读取中执行；先完整 `get()` 再检查长度不能约束下载/解压内存。按小块累计，到阈值即停止并关闭流。
 - 2026-09-29: Codex with ChatGPT 是持续的“远端计划 → 本地执行 → 测试 → GitHub → 远端审查 → 下一阶段计划”循环；不能把项目停止条件误设为最终人工验收。每轮远端审核既核对本次交付是否符合上一轮计划/收据，也要明确评估技术路线；有分歧时带上具体代码证据与取舍先回远端讨论，再改变路线。仅在具体真人决策门禁暂停对应步骤。
+- 2026-09-30: Internal Chan workers must serialize canonical JSON before queue persistence, close each freeze session before CZSC, and publish in a separate short transaction. Existing queue claim/lease and publisher idempotency are the only retry guarantees; never imply that enqueue replays failed/terminal work automatically. Per-code failures must not overwrite prior committed evidence.

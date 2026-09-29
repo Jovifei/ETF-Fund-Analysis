@@ -1,6 +1,8 @@
-# 当前状态：R4C M3B-A2 R1 修复已测，待推送复审（2026-09-30）
+# 当前状态：R4C M3B-B 本地验收完成，待推送与远端审核（2026-09-30）
 
-R1 已于远端 iteration 65 审核通过。iteration 66 A2 精确审核确认 GitHub head `8b5440142c183762d202bc8c0e5a69830f0a3635`，但因 blocked W/M 结果携带 D 身份、缺少月度历史修订 lineage 回归而返回 `M3B_A2_DECISION=CHANGES_REQUIRED`；技术路线保留。iteration 67 两项修复和定向回归已通过，99 项中 95 passed / 4 环境跳过 / 0 失败；M2 Windows 3.12.10 和 Linux 3.12.14 各 25/25，冻结摘要/碰撞门禁不变。代码/测试提交 `9f935a864f5071debbd66b0f6d4cc40e68a73a2d` / tree `04294de8952b45f4245cd2bc0b3e569322fa9857`，父提交为精确 iteration66 GitHub head；当前待文档收据、推送并远端复审。M3B-B 仍 NO-GO，未部署，真实数据 UNKNOWN。详情见 `tasks/plans/2026-09-30-r4c-m3b-a2-r1-contract-repair.md`。
+远端 iteration 67 已对 A2-R1 精确 head `6166587d718992237908099b6b89ea83f3779d3d` 复审通过：`M3B_A2_STATUS=PASS`、技术路线保留，并授权 `M3B_B_GO=true`。iteration 68 按 `tasks/plans/2026-09-30-r4c-m3b-b-audited-worker-publication.md` 执行现有 audited worker 内部 Chan job 与不可变 observation publication。`M3B_C_GO=false`、`M4_GO=false`、`MAIN_INTEGRATION_GO=false`、`PRODUCTION_GO=false`。M3B-B 是 `NOT_DEPLOYABLE_SUBSTAGE` / `PRE_RELEASE_RUNTIME_COMPONENT`；生产未变，真实数据 UNKNOWN，actionable=false。
+
+M3B-B 本地实现、测试和跨平台验收已完成。代码/测试提交 `e38d524c639a938e5bf709302c95923b9f20df1f`，tree `a00ae89bfa7045d151b8c90b3ea09695cc49307e`；当前包含收据的本地分支尚待推送。下一门禁是精确 SHA GitHub 读回后交远端 iteration-68 审核。Windows 全量 pytest 1,369 项中 1,348 passed / 21 skipped / 0 failures / 0 errors，35 warnings，1,516.123 秒，exit 0。CZSC 1.0.1 worker D/W/M 合成集成 Windows Python 3.12.10 与 Linux 3.12.14 输出摘要一致；PostgreSQL 16.15 worker retry/chronology gate 通过。M2/R5 冻结摘要与碰撞检查保持原值；Ruff、compileall、Node、secret scan、diff-check 通过。详细收据见 [M3B-B audited worker publication](docs/audits/R4C_M3B_B_WORKER_PUBLICATION_20260930.md)。
 
 远端已审核 iteration 65：`M3B_A_DECISION=PASS`、`ROUTE_A=RETAIN`、无技术缺陷，并授权 iteration 66 M3B-A2 周/月输入身份。A2 新计划见 [M3B-A2 weekly/monthly identity](tasks/plans/2026-09-30-r4c-m3b-a2-weekly-monthly-identity.md)。
 

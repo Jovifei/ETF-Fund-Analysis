@@ -1,6 +1,17 @@
-# 当前接手入口：R4C M3B-A2 R1 修复（iteration 67，2026-09-30）
+# 当前接手入口：R4C M3B-B audited worker publication（iteration 68，2026-09-30）
 
-远端 iteration 66 对已推送 A2 head `8b5440142c183762d202bc8c0e5a69830f0a3635` 返回 `CHANGES_REQUIRED`，Route A 保留。iteration 67 已修复 blocked W/M 返回 D 身份、补了跨月历史修订 lineage 测试；定向 99 项为 95 passed / 4 环境跳过 / 0 失败，M2 Win/Linux 各 25/25。代码/测试提交 `9f935a864f5071debbd66b0f6d4cc40e68a73a2d` / tree `04294de8952b45f4245cd2bc0b3e569322fa9857`，父提交是 iteration66 精确 head。详细计划与验证见 `tasks/plans/2026-09-30-r4c-m3b-a2-r1-contract-repair.md`。当前等待收据 docs-only commit、推送和远端复审；A2 PASS 前不开始 M3B-B；不部署、不改 main。真实资格 UNKNOWN，runtime disabled，actionable=false。
+远端 iteration 67 已审核通过 A2-R1：`M3B_A2_STATUS=PASS`、Route A 保留；最终 head `6166587d718992237908099b6b89ea83f3779d3d`。iteration 68 已授权 M3B-B，执行计划在 `tasks/plans/2026-09-30-r4c-m3b-b-audited-worker-publication.md`：只在现有 audited worker 内接入内部 bounded Chan job，冻结输入后关闭 DB transaction，再用 CZSC adapter 计算，最后新建短 transaction 调用现有 publisher。公共 DataRequest 不接纳该 task，不增加 API/scheduler/UI/producer，不改 M3 schema/identity，不部署。M3B-C/M4/main/production 仍 NO-GO；真实资格 UNKNOWN，actionable=false。
+
+### Iteration 68 execution handoff
+
+M3B-B implementation and all local acceptance gates are complete. Code/test commit: `e38d524c639a938e5bf709302c95923b9f20df1f`, tree `a00ae89bfa7045d151b8c90b3ea09695cc49307e`, parent `6166587d718992237908099b6b89ea83f3779d3d`. The receipt/status/plan documentation is committed locally as well; the isolated branch is not yet pushed. Next: push `codex/r4c-pre-m4-regression-diagnostic`, verify the exact GitHub SHA/tree, release bounded C2C evidence, and request remote exact-head review. Do not start M3B-C until remote review of this head and a separate remote plan.
+
+- Full Windows pytest: 1,369 collected; 1,348 passed; 21 skipped; no failures/errors; 35 warnings; 1,516.123 seconds; exit 0.
+- Exact CZSC 1.0.1 D/W/M worker test passes on Windows Python 3.12.10 and Linux Python 3.12.14 with matching digest `66b8092b122ffb1819d18e45963b3f708fca0581550fb062395efc96023096bd`; W temporary→settled, exact retry, and chronological head retention are covered; D emits two synthetic FX structures.
+- Disposable PostgreSQL 16.15 worker test passes exact retry and older-cutoff rejection/head retention; its loopback container was stopped and removed.
+- M2/R5 cross-platform frozen digests and collision checks are unchanged. R4A corporate-action tests pass 8/8. Static gates pass.
+- Deployment is `NOT_DEPLOYABLE_SUBSTAGE`; production untouched; real data `UNKNOWN`; `actionable=false`; no automated trading.
+- Full evidence inventory: `docs/audits/R4C_M3B_B_WORKER_PUBLICATION_20260930.md`.
 
 R1 已完成远端 PASS；其双调用点修复和 full-test 证据保存在审计收据。A2 初次实现已推送并完成远端 review；按 iteration 66 的 bounded plan 完成两项 R1 修复、测试、推送和再次远端审查后才继续。A2 明确不部署。
 

@@ -48,7 +48,15 @@ The implementation changes only `backend/app/research/chan_input.py` (removes th
 - Static: Ruff, Python 3.13.14 compileall, Node syntax, scoped secret scan, and diff-check all pass. Shared R4A/calendar code stayed untouched, so the remote focused-gate exception applies; no full repository suite was run.
 - Preserved harness attempt: the first isolated Windows M2 mirror omitted `backend/app/utils/hashing.py` and failed at import (23 failures/2 passes). The exact helper was added to the isolated mirror; the rerun passed 25/25. This was a harness omission, not a product assertion failure.
 
-The code/test repair is locally verified and committed as `9f935a864f5071debbd66b0f6d4cc40e68a73a2d` / tree `04294de8952b45f4245cd2bc0b3e569322fa9857`, parent `8b5440142c183762d202bc8c0e5a69830f0a3635`. It changes only `chan_input.py` and its tests. Documentation now records the exact R1 repair. Push/readback and second exact-head remote review are pending. `M3B_A2_DECISION` remains `CHANGES_REQUIRED` until the next remote review returns `PASS`. Deployment remains `NOT_DEPLOYABLE_SUBSTAGE`, production unchanged, real-data qualification `UNKNOWN`, and `actionable=false`; no M3B-B work starts before PASS.
+The code/test repair was committed as `9f935a864f5071debbd66b0f6d4cc40e68a73a2d` / tree `04294de8952b45f4245cd2bc0b3e569322fa9857`, parent `8b5440142c183762d202bc8c0e5a69830f0a3635`; it changes only `chan_input.py` and its tests. Final docs-only head `6166587d718992237908099b6b89ea83f3779d3d` / tree `f7a096be408ce908cb5e5c282b19025153ec0653` was pushed and read back from GitHub. Remote iteration 67 exact-head review returned `M3B_A2_DECISION=PASS`, retaining the route and authorizing iteration 68 `M3B_B_GO=true`.
+
+## Iteration 68 M3B-B plan accepted — 2026-09-30
+
+Remote plan: `R4C_M3B_B_AUDITED_WORKER_PUBLICATION`, plan base `6166587d718992237908099b6b89ea83f3779d3d`. It adds only an internal bounded `chan_structures` request and worker branch, reuses the audited workspace queue, accepted M3B-A/A2 input, CZSC adapter and M3 publisher, with freeze/compute/publish in separate short DB scopes. Public `DataRequest`, scheduler, UI, Provider, M3 schema, config activation, main, and production remain unchanged/forbidden.
+
+M3B-B requires focused worker/data-job tests, exact CZSC 1.0.1 worker/service integration on Windows Python 3.12.x and Linux Python 3.12.14 using synthetic rows, and one disposable PostgreSQL 16 worker-style publication/idempotency/failure integration. Because shared worker/data-job runtime changes, the full Windows repository pytest is mandatory. Deployment remains `NOT_DEPLOYABLE_SUBSTAGE` / `PRE_RELEASE_RUNTIME_COMPONENT`; M3B-C is still false and is the first release-bearing read-only product slice. Detailed scope is in `tasks/plans/2026-09-30-r4c-m3b-b-audited-worker-publication.md`.
+
+M3B-B local implementation and verification are complete; its execution receipt is `docs/audits/R4C_M3B_B_WORKER_PUBLICATION_20260930.md`. The implementation is not yet committed/pushed and awaits exact-head remote review. Production is unchanged, real-data qualification remains `UNKNOWN`, `actionable=false`, and no auto-trading is enabled.
 
 ## Remote gate and boundary
 
