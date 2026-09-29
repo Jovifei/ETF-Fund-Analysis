@@ -1,12 +1,14 @@
 # R4C M3 observed-revision persistence acceptance — 2026-09-29
 
-**State:** `IMPLEMENTED_TESTED_PENDING_REMOTE_REVIEW`
+**State:** `M3_R1_IMPLEMENTED_TESTED_PENDING_PUSH_AND_REMOTE_REVIEW`
 
 **Branch:** `codex/r4c-m3-persistence`
 
 **Accepted M2 base:** `641759eb467ef743f35c142edd50a8208bb2cfa7` / tree `9b4c934c4d8d562ace876f5c5f49c5b0042b4bc1`
 
 **M3 implementation commit:** `ce0aa9b899b6d04ea682581b90343fa2973394ce` / tree `626f80f1011188f5fa429d43b37c83a60e6668e9`
+
+**M3-R1 code commit:** `7fe11e2e02e3f980ae7ac1771f96403e8dcffe20` / tree `c38c3020a603e8e8233c985f23cf936fe237e165`
 
 Remote iteration 60 accepted M2 and returned the M3 persistence publication plan. Jovi's standing instruction authorizes the repeating remote-plan/local-execution/test/GitHub/remote-review loop. This receipt records local evidence only; M3 still requires remote review before the next stage.
 
@@ -88,3 +90,29 @@ The full project `pytest -q` run was interrupted after about 23 minutes at 27% w
 ## Remote review request
 
 Review the exact pushed head on `codex/r4c-m3-persistence` against iteration 60's M3 plan. Verify migration parity, SQLite/PostgreSQL immutability, atomic rollback, exact retry/conflict semantics, concurrency, chronology, basis/config namespace isolation, shared M2 transition parity, and all scope boundaries. Explicitly accept or request changes to the three design points above. If M3 is accepted, remove only `REVISION_PERSISTENCE_NOT_IMPLEMENTED` as instructed by the M3 plan, retain runtime/read-model blockers, and issue the next detailed stage plan. Do not infer real-data qualification or production readiness from these synthetic gates.
+
+## Iteration 61 remote review and M3-R1 repair — 2026-09-29
+
+Remote review decision: `M3=CHANGES_REQUIRED`, `ROUTE_A=RETAIN`, `M4_GO=FALSE`. It accepted the no-cascade evidence design, immutable evidence triggers, stream sequence/composite head FK, PostgreSQL advisory locking, shared M2 transition helper, and M2/R5 parity. It found two bounded gaps:
+
+1. The stream-head trigger blocked DELETE and sequence rewind, but raw SQL could still UPDATE duplicated stream namespace columns such as `config_id` or `instrument`.
+2. Rollback tests covered only a failed first head insert. The plan also required a failed child revision/transition insertion during a later publication to preserve an already committed head and history.
+
+R1 changes on the same branch:
+
+- Kept Alembic revision `h9c0d1e2f3a4`; no second migration was added. SQLite rejects changes to each stream-head identity column. PostgreSQL uses a row-identity comparison and the same immutable rule.
+- Both dialects allow an unchanged pointer or a pointer update whose sequence strictly advances to another observation. The composite FK binds an advancing pointer to the exact immutable observation. Raw SQL tests cover stream ID/config/instrument mutation rejection, pointer no-ops, and rewind rejection.
+- Two injected later-publication failures (`ChanStructureRevision` and `ChanObservedTransition`) now run after an observation is committed. On rollback, each test compares the previous head and ordered immutable-row snapshots and confirms no failed observation row remains.
+- The R1 Windows target set has 41 collected items: 40 passed, 1 PostgreSQL-only skipped. That PostgreSQL case was separately run and passed against a fresh disposable PostgreSQL 16 container.
+- SQLite and PostgreSQL migration gates assert both `alembic heads` and `alembic current` identify the single head `h9c0d1e2f3a4`.
+
+R1 M2/R5 regressions were rerun. All 25 M2 focused tests pass on Windows and Linux with CZSC 1.0.1; the 300-bar semantic digest remains `091254d34ddfeeadc85cd0b17e035295bfc32f8a0cebc6776440f10be82aaeac`; the R5.2.1 history digest remains `d637b4f80c749db48d06dfafe3762216d684ff2827149b4024a3de3f814fc1e9`; observation/structure/revision collision counts are zero and the injected weak-ID collision is detected.
+
+| R1 evidence | Windows 11 / Python 3.12.14 | Linux x86_64 / Python 3.12.14 |
+|---|---:|---:|
+| M2 300-bar warm adapter | 7.183 ms | 6.117 ms |
+| Combined M2 prefix workload | 1,020.981 ms | 895.522 ms |
+| M2 peak RSS | 139,849,728 bytes | 217,305,088 bytes |
+| R5.2.1 prefix sweep | 1,539.917 ms | 1,319.982 ms |
+
+R1 Ruff, compileall, Node check, scoped secret scan, and diff check pass. The remote accepts the full-suite interruption as `INTERRUPTED / NOT_VERIFIED` for this bounded M3 gate; before widening toward main or product integration, complete the full suite or diagnose its long-tail section. The persistence blocker remains in config, runtime remains disabled, and M4 has not started.

@@ -1296,3 +1296,22 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - Ruff, compileall, Node check, scoped secret scan, and `git diff --check` pass. Full project pytest was interrupted after about 23 minutes at 27% without final report; the candidate decision-board queue test passes alone in 1.21s, while a separate run of the whole module was also interrupted after a long tail. Record full suite as `INTERRUPTED`, not PASS; no traceback/failing assertion was captured.
 - `config/chan_research.json` remains disabled and blocked with existing runtime/persistence/read-model reason codes pending remote M3 acceptance. Real-data qualification remains `UNKNOWN`; no production database, provider, API, worker, deployment, or trading path was used.
 - GitHub branch `codex/r4c-m3-persistence` contains implementation commit `ce0aa9b899b6d04ea682581b90343fa2973394ce` and the M3 acceptance receipt. Remote review request is the next action; no M4 implementation has started.
+
+# R4C M3-R1 stream-head identity and later rollback coverage — 2026-09-29
+
+## Plan
+
+- [x] Bind the exact remote M3 review head `e941371f6ea27010ae079f7b7ce4a6d41d6e4171`; retain branch `codex/r4c-m3-persistence` and migration ID `h9c0d1e2f3a4`.
+- [x] Add RED raw-SQL tests proving SQLite and PostgreSQL reject UPDATE to stream-head namespace fields including `stream_id` and `config_id`.
+- [x] Harden SQLite/PostgreSQL head triggers: identity columns immutable; pointer no-op allowed; changed pointer requires strictly increasing sequence and the composite FK must resolve.
+- [x] Add failure injection after one observation is committed: revision insert failure and transition insert failure on a later observation must preserve previous head/history and leave no partial new observation/revisions/transitions.
+- [x] Run the M3 targeted Windows/migration suite, PostgreSQL 16 concurrency/immutability gate, M2 Windows/Linux 25/25, M2 semantic/resource probes, R5.2.1 validator, Alembic heads/current, Ruff, compileall, secret scan, Node and diff checks.
+- [x] Update the receipt with iteration-61 findings, R1 verification, and explicit Alembic heads/current evidence.
+- [ ] Commit/push the same branch and release bounded diff/test output for iteration-62 remote review.
+- [ ] Do not enter M4 unless remote marks M3 PASS and provides the next plan. Keep runtime disabled, persistence blocker present until PASS, real-data UNKNOWN, and production unchanged.
+
+## Review
+
+- Remote iteration 61: M3 `CHANGES_REQUIRED`; Route A retained; M4 remains unauthorized. Accepted: no-cascade immutable evidence, evidence-table triggers, stream sequence/composite head FK, PG advisory concurrency lock, shared M2 transition helper, Windows/Linux M2 and R5 parity. Findings: head identity columns can still be changed by raw SQL; no later-publication revision/transition failure test proves prior committed head survives.
+- Remote explicitly accepts the current full-suite record as `INTERRUPTED / NOT_VERIFIED` for this bounded M3 gate; before widening toward main/product integration, complete or diagnose the long-tail full-suite interruption.
+- R1 RED: raw SQL head `config_id`/`instrument` UPDATE was not rejected; initial rollback tests also exposed that the test fixture reused an external transaction, so its rollback removed the supposedly committed baseline. GREEN: migration triggers now reject identity mutation on both dialects; failure tests use independent committed Sessions and compare complete head/observation/revision/transition snapshots after injected later-publication failures. Normal target suite: 40 PASS / 1 PG-only SKIP; fresh PG16 concurrency/identity mutation gate: PASS; Alembic heads/current: single `h9c0d1e2f3a4`.
