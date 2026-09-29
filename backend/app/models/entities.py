@@ -17,6 +17,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
@@ -853,6 +854,134 @@ class SupportResistanceSnapshotRevision(Base):
     source_bars: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     computed_by: Mapped[str] = mapped_column(String(16), default="scheduled", nullable=False)
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ChanResearchObservation(Base):
+    """Immutable validated input observation for one namespaced R4C stream."""
+
+    __tablename__ = "chan_research_observations"
+    __table_args__ = (
+        UniqueConstraint("stream_id", "observation_id", name="uq_chan_observation_stream_id"),
+        UniqueConstraint("stream_id", "sequence_number", name="uq_chan_observation_stream_sequence"),
+        UniqueConstraint(
+            "stream_id", "sequence_number", "observation_id", name="uq_chan_observation_stream_sequence_id"
+        ),
+        Index("ix_chan_observations_stream_cutoff", "stream_id", "cutoff", "cutoff_at"),
+        CheckConstraint("cutoff > 0", name="ck_chan_observation_cutoff_positive"),
+        CheckConstraint("sequence_number > 0", name="ck_chan_observation_sequence_positive"),
+        CheckConstraint("engine_confirmation = 'unknown'", name="ck_chan_observation_unconfirmed"),
+        CheckConstraint("application_observation_status = 'observed'", name="ck_chan_observation_observed"),
+    )
+
+    observation_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    stream_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    instrument: Mapped[str] = mapped_column(String(64), nullable=False)
+    interval: Mapped[str] = mapped_column(String(16), nullable=False)
+    series_id: Mapped[str] = mapped_column(String(256), nullable=False)
+    price_basis_id: Mapped[str] = mapped_column(String(256), nullable=False)
+    adjustment_version: Mapped[str] = mapped_column(String(256), nullable=False)
+    input_revision_id: Mapped[str] = mapped_column(String(256), nullable=False)
+    settlement_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    config_id: Mapped[str] = mapped_column(String(256), nullable=False)
+    input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    cutoff: Mapped[int] = mapped_column(Integer, nullable=False)
+    cutoff_bar_id: Mapped[str] = mapped_column(String(256), nullable=False)
+    cutoff_at: Mapped[str] = mapped_column(String(40), nullable=False)
+    engine_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    engine_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    dialect_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    engine_confirmation: Mapped[str] = mapped_column(String(16), nullable=False)
+    application_observation_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+
+
+class ChanStructureRevision(Base):
+    """Immutable structure evidence emitted by one validated observation."""
+
+    __tablename__ = "chan_structure_revisions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["stream_id", "observation_id"],
+            ["chan_research_observations.stream_id", "chan_research_observations.observation_id"],
+            name="fk_chan_revision_observation",
+        ),
+        UniqueConstraint("stream_id", "observation_id", "structure_key", name="uq_chan_revision_observation_structure"),
+        Index("ix_chan_revisions_stream_observation", "stream_id", "observation_id"),
+    )
+
+    revision_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    stream_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    observation_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    structure_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+
+
+class ChanObservedTransition(Base):
+    """Immutable transition evidence; absence is explicit for complete observations."""
+
+    __tablename__ = "chan_observed_transitions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["stream_id", "observation_id"],
+            ["chan_research_observations.stream_id", "chan_research_observations.observation_id"],
+            name="fk_chan_transition_observation",
+        ),
+        ForeignKeyConstraint(["revision_id"], ["chan_structure_revisions.revision_id"], name="fk_chan_transition_revision"),
+        ForeignKeyConstraint(
+            ["prior_revision_id"],
+            ["chan_structure_revisions.revision_id"],
+            name="fk_chan_transition_prior_revision",
+        ),
+        CheckConstraint(
+            "status IN ('OBSERVED_NEW', 'OBSERVED_CHANGED', 'OBSERVED_UNCHANGED', 'OBSERVED_ABSENT')",
+            name="ck_chan_transition_status",
+        ),
+        CheckConstraint("reappearance = false OR status = 'OBSERVED_NEW'", name="ck_chan_transition_reappearance"),
+        Index("ix_chan_transitions_stream_structure", "stream_id", "structure_key"),
+    )
+
+    stream_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    observation_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    structure_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    cutoff_bar_id: Mapped[str] = mapped_column(String(256), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    revision_id: Mapped[str | None] = mapped_column(String(64))
+    prior_revision_id: Mapped[str | None] = mapped_column(String(64))
+    reappearance: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class ChanResearchStreamHead(Base):
+    """One mutable pointer per stream; evidence tables remain append-only."""
+
+    __tablename__ = "chan_research_stream_heads"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["stream_id", "latest_sequence_number", "latest_observation_id"],
+            [
+                "chan_research_observations.stream_id",
+                "chan_research_observations.sequence_number",
+                "chan_research_observations.observation_id",
+            ],
+            name="fk_chan_stream_head_observation",
+        ),
+        CheckConstraint("latest_sequence_number > 0", name="ck_chan_stream_head_sequence_positive"),
+    )
+
+    stream_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    latest_sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    instrument: Mapped[str] = mapped_column(String(64), nullable=False)
+    interval: Mapped[str] = mapped_column(String(16), nullable=False)
+    series_id: Mapped[str] = mapped_column(String(256), nullable=False)
+    price_basis_id: Mapped[str] = mapped_column(String(256), nullable=False)
+    adjustment_version: Mapped[str] = mapped_column(String(256), nullable=False)
+    config_id: Mapped[str] = mapped_column(String(256), nullable=False)
+    engine_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    engine_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    dialect_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    latest_observation_id: Mapped[str] = mapped_column(String(64), nullable=False)
 
 
 class SignalSnapshot(Base):

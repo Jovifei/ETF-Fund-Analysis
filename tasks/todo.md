@@ -1269,3 +1269,28 @@ Application code is unchanged in this worktree. Production remains SHA `0dbd3fe`
 - RED: Windows focused suite had 6 failures reproducing the two replay defects and stale reason-code list. GREEN: Windows/Linux now pass 25 focused tests; same-ID conflict, canonical order, namespace isolation, and combined resource gates pass.
 - Independent local R1 review found no remaining actionable issue; it confirmed the R5 identity formulas are unchanged and the replacement config reason codes describe real blocked work.
 - No M3, production, auto-trading, Provider, real-data qualification, database, API, worker, frontend, or canonical-action work is authorized in this repair.
+
+# R4C M3 persistence publication core — 2026-09-29
+
+## Plan
+
+- [x] Bind remote M2 PASS head `641759eb467ef743f35c142edd50a8208bb2cfa7` / tree `9b4c934c4d8d562ace876f5c5f49c5b0042b4bc1` and create isolated branch `codex/r4c-m3-persistence` without touching the dirty owner checkout.
+- [x] Re-read branch-local R4B revision models, service publication path, migration `g8b9c0d1e2f3`, and SQLite/PostgreSQL regression conventions.
+- [x] Add RED schema/publication tests before implementation for migration parity, idempotency/conflict, atomic rollback, stream head, append-only evidence, M2 replay parity, and PostgreSQL concurrency.
+- [x] Add one Alembic migration and four bounded persistence models: immutable observation, structure revision, transition, and mutable stream head.
+- [x] Add a transactional publication service that accepts validated `ResearchObservation`, verifies canonical evidence hashes and stream chronology, derives transitions with the shared M2 helper, inserts all immutable records, then advances the head.
+- [x] Preserve same-ID identical retry as a no-op and fail closed on same-ID conflicting evidence; preserve prior head and all immutable rows on any failed publication.
+- [x] Keep API/read model, GET computation, worker/scheduler, frontend, Provider, real data, canonical action, actionable, production, and auto-trading out of scope. Run only synthetic rows in disposable test databases.
+- [x] Run focused Windows tests, SQLite migration/service tests, ephemeral PostgreSQL 16 upgrade/roundtrip/rollback/concurrency tests, M2 Windows/Linux parity, R5.2.1 identity/collision regression, Ruff, compileall, scoped secret scan, and diff check.
+- [ ] Commit/push the M3 evidence and handoff on the isolated branch; request remote review before any M4 plan.
+
+## Review
+
+- Remote iteration 60: `M2=PASS`, route A retained, M3 plan received, `M3_GO=false` until explicit stage authorization; no persistence work may be inferred from M2 PASS alone.
+- Jovi’s earlier standing authorization explicitly directs the repeating cycle “remote plan → local execution → tests → GitHub → remote review → next plan”; this M3 execution is proceeding under that authorization, limited to the plan above and disposable test databases. Production database/business rows and real data remain out of scope.
+- Branch-local R4B precedent: `SupportResistanceSnapshotRevision` plus `_upsert()` appends content-addressed revisions while maintaining a mutable current snapshot; `test_postdeploy_board.py` covers same-day append, identical recomputation, self-integrity, and failure preserving the previous current revision; accepted migration head is `g8b9c0d1e2f3`.
+- RED: M3 persistence tests fail against the M2 base because the four tables/publisher and completion contracts do not exist yet. GREEN: exact M3/M2/Alembic/decision-board target set has 39 collected items: 38 pass and the environment-gated PostgreSQL case skips in the normal Windows run. A separate fresh PostgreSQL 16 loopback container passes M3 Alembic upgrade/check/downgrade/re-upgrade/check, concurrent same-ID retry and distinct same-cutoff revisions, SQL UPDATE/DELETE immutability, and head rewind rejection.
+- Windows and Linux Python 3.12.14 with CZSC 1.0.1 each pass all 25 M2 focused tests. M2 300-bar digest matches (`091254d34ddfeeadc85cd0b17e035295bfc32f8a0cebc6776440f10be82aaeac`); R5.2.1 history digest matches across platforms (`d637b4f80c749db48d06dfafe3762216d684ff2827149b4024a3de3f814fc1e9`), all three collision counts are zero, and injected collision self-test is detected.
+- R4B audit showed its revision table used service convention without database immutability triggers and used cascading instrument deletion. M3 therefore adds SQLite/PostgreSQL update/delete guards, non-cascading evidence references, and a monotonic per-stream sequence bound with the head pointer. The sequence distinguishes valid same-cutoff revisions and does not change M2 observation/structure/revision identity formulas. Ask the remote reviewer to assess these implementation choices against the M3 plan.
+- Ruff, compileall, Node check, scoped secret scan, and `git diff --check` pass. Full project pytest was interrupted after about 23 minutes at 27% without final report; the candidate decision-board queue test passes alone in 1.21s, while a separate run of the whole module was also interrupted after a long tail. Record full suite as `INTERRUPTED`, not PASS; no traceback/failing assertion was captured.
+- `config/chan_research.json` remains disabled and blocked with existing runtime/persistence/read-model reason codes pending remote M3 acceptance. Real-data qualification remains `UNKNOWN`; no production database, provider, API, worker, deployment, or trading path was used.

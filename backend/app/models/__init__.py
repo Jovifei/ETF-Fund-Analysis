@@ -5,6 +5,10 @@ from app.models.entities import (
     AuthSession,
     AuthUser,
     CalibrationProfile,
+    ChanObservedTransition,
+    ChanResearchObservation,
+    ChanResearchStreamHead,
+    ChanStructureRevision,
     DailyBar,
     DecisionBoardProvisionalInput,
     DecisionBoardSlotRun,
@@ -16,6 +20,7 @@ from app.models.entities import (
     HoldingImportSession,
     IndicatorSnapshot,
     Instrument,
+    MarketBar,
     MarketContextRegistry,
     MarketContextSnapshot,
     NewsItem,
@@ -30,11 +35,13 @@ from app.models.entities import (
     TaskRun,
     UnitCertificationEvidence,
     UserWatchlistEntry,
-    MarketBar,
 )
 from app.workspace.models import (
-    WorkspaceBridgeDevice, WorkspaceDataJob, WorkspaceImportBatch,
-    WorkspacePreference, WorkspaceResearchJob,
+    WorkspaceBridgeDevice,
+    WorkspaceDataJob,
+    WorkspaceImportBatch,
+    WorkspacePreference,
+    WorkspaceResearchJob,
 )
 
 __all__ = [
@@ -46,6 +53,7 @@ __all__ = [
     "UserWatchlistEntry", "HoldingImportSession", "HoldingImportCandidate",
     "NewsItem", "RuntimeSetting", "SectorSnapshot", "SupportResistanceSnapshot",
     "SupportResistanceSnapshotRevision",
+    "ChanResearchObservation", "ChanStructureRevision", "ChanObservedTransition", "ChanResearchStreamHead",
     "TaskRun", "MarketBar", "ProviderAudit", "EventLog", "ReportArtifact",
     "UnitCertificationEvidence",
     "WorkspaceBridgeDevice", "WorkspaceDataJob", "WorkspaceImportBatch",

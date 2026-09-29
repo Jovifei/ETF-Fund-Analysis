@@ -1,5 +1,6 @@
 # Lessons
 
+- 2026-09-29: 持续 C2C 项目中，不能把“最终人工验收”表述为阶段循环的停止条件；远端计划/本地实现与测试/GitHub/远端复核/下一阶段计划持续进行，只在计划明确要求 Jovi 本人决策的具体门禁暂停。
 - 2026-09-28: Jovi's C2C workflow is a continuing stage loop: remote plan/review, local implementation and tests, GitHub push, then remote audit and the next plan. Human acceptance is a later product gate, not a stop condition between stages; raise technical-route disagreements to the remote reviewer with evidence.
 - 2026-09-23: Windows checkout settings can leave tracked `.sh` files as CRLF in the Git blob; Linux then fails before the script body with `/usr/bin/env: bash\r`. Pin `*.sh text eol=lf` in `.gitattributes` and assert shell entrypoints contain no CR byte; `shellcheck` alone does not catch the shebang failure.
 - 2026-09-23: A green CI image build can exceed a small production host's cgroup during Vue typechecking or native wheel compilation. Set build-stage-only Node/Cargo limits, keep Docker build CPU/memory bounded, and verify production before replacing containers; do not raise limits until the host can safely provide them.

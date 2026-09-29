@@ -1,6 +1,7 @@
 """Pure append-only replay for the selected observed-revision research dialect."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from app.research.chan_contract import ChanContractError, ResearchObservation, StructureEvidence
@@ -15,6 +16,67 @@ class ObservedTransition:
     revision_id: str | None
     prior_revision_id: str | None = None
     reappearance: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ObservedStructureState:
+    """Minimum prior state needed to derive one observation's transitions."""
+
+    geometry: tuple[tuple[str, float], ...]
+    engine_state: str | None
+    revision_id: str
+
+
+def derive_observed_transitions(
+    observation: ResearchObservation,
+    previous_current: Mapping[str, StructureEvidence | ObservedStructureState],
+    seen_structure_keys: frozenset[str],
+) -> tuple[ObservedTransition, ...]:
+    """Derive one deterministic transition batch for memory and DB replay."""
+    current: dict[str, StructureEvidence] = {}
+    for structure in observation.structures:
+        if structure.structure_key in current:
+            raise ChanContractError("duplicate_structure_key", "an observation cannot contain duplicate structure keys")
+        current[structure.structure_key] = structure
+
+    events: list[ObservedTransition] = []
+    for key in sorted(current):
+        structure = current[key]
+        previous = previous_current.get(key)
+        if previous is None:
+            status = "OBSERVED_NEW"
+            reappearance = key in seen_structure_keys
+        elif previous.geometry == structure.geometry and previous.engine_state == structure.engine_state:
+            status = "OBSERVED_UNCHANGED"
+            reappearance = False
+        else:
+            status = "OBSERVED_CHANGED"
+            reappearance = False
+        events.append(
+            ObservedTransition(
+                observation_id=observation.observation_id,
+                cutoff_bar_id=observation.cutoff_bar_id,
+                structure_key=key,
+                status=status,
+                revision_id=structure.revision_id,
+                prior_revision_id=previous.revision_id if previous else None,
+                reappearance=reappearance,
+            )
+        )
+
+    for key in sorted(previous_current.keys() - current.keys()):
+        prior = previous_current[key]
+        events.append(
+            ObservedTransition(
+                observation_id=observation.observation_id,
+                cutoff_bar_id=observation.cutoff_bar_id,
+                structure_key=key,
+                status="OBSERVED_ABSENT",
+                revision_id=None,
+                prior_revision_id=prior.revision_id,
+            )
+        )
+    return tuple(events)
 
 
 class ObservedRevisionReplay:
@@ -71,57 +133,13 @@ class ObservedRevisionReplay:
                     )
                 return ()
 
-        current: dict[str, StructureEvidence] = {}
-        for structure in observation.structures:
-            if structure.structure_key in current:
-                raise ChanContractError("duplicate_structure_key", "an observation cannot contain duplicate structure keys")
-            current[structure.structure_key] = structure
-
-        events: list[ObservedTransition] = []
-        for key in sorted(current):
-            structure = current[key]
-            previous = self._current.get(key)
-            if previous is None:
-                status = "OBSERVED_NEW"
-                reappearance = key in self._seen_keys
-            elif (
-                previous.geometry == structure.geometry
-                and previous.engine_state == structure.engine_state
-            ):
-                status = "OBSERVED_UNCHANGED"
-                reappearance = False
-            else:
-                status = "OBSERVED_CHANGED"
-                reappearance = False
-            events.append(
-                ObservedTransition(
-                    observation_id=observation.observation_id,
-                    cutoff_bar_id=observation.cutoff_bar_id,
-                    structure_key=key,
-                    status=status,
-                    revision_id=structure.revision_id,
-                    prior_revision_id=previous.revision_id if previous else None,
-                    reappearance=reappearance,
-                )
-            )
-
-        for key in sorted(self._current.keys() - current.keys()):
-            prior = self._current[key]
-            events.append(
-                ObservedTransition(
-                    observation_id=observation.observation_id,
-                    cutoff_bar_id=observation.cutoff_bar_id,
-                    structure_key=key,
-                    status="OBSERVED_ABSENT",
-                    revision_id=None,
-                    prior_revision_id=prior.revision_id,
-                )
-            )
+        events = derive_observed_transitions(observation, self._current, self._seen_keys)
+        current = {structure.structure_key: structure for structure in observation.structures}
 
         # Build the full next state before committing so any validation failure
         # leaves the replay reusable and does not pin an invalid stream identity.
         next_observations = self._observations + (observation,)
-        next_history = self._history + tuple(events)
+        next_history = self._history + events
         next_seen_keys = self._seen_keys | frozenset(current)
         next_stream_identity = self._stream_identity or identity
         (
@@ -131,4 +149,4 @@ class ObservedRevisionReplay:
             self._seen_keys,
             self._stream_identity,
         ) = (next_observations, next_history, current, next_seen_keys, next_stream_identity)
-        return tuple(events)
+        return events
