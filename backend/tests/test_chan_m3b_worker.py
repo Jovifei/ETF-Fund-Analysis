@@ -252,11 +252,20 @@ def _request_for(*codes, interval="D"):
 
 
 def _install_fake_sessions(monkeypatch, module):
-    state = {"active": None, "opened": [], "adapter_sessions": [], "publisher_sessions": []}
+    state = {
+        "active": None,
+        "opened": [],
+        "adapter_sessions": [],
+        "publisher_sessions": [],
+        "instrument": SimpleNamespace(kind="ETF"),
+    }
 
     class FakeSession:
         def get(self, _model, _key):
             return SimpleNamespace(sequence_number=7)
+
+        def scalar(self, _statement):
+            return state["instrument"]
 
     @contextmanager
     def fake_session_scope():
@@ -311,6 +320,88 @@ def test_structure_service_skips_engine_and_publication_for_blocked_input(monkey
     assert result["qualification_changed"] is False
     assert result["actionable"] is False
     assert len(state["opened"]) == 1
+
+
+@pytest.mark.parametrize(
+    ("kind", "expected_reason"),
+    [("STOCK", "unsupported_instrument_type"), (None, "instrument_missing")],
+)
+def test_structure_service_blocks_missing_or_non_etf_instrument_before_freeze(
+    monkeypatch, kind, expected_reason
+):
+    from app.services import chan_structure_service as module
+
+    state = _install_fake_sessions(monkeypatch, module)
+    state["instrument"] = None if kind is None else SimpleNamespace(kind=kind)
+
+    def freeze(*_args, **_kwargs):
+        pytest.fail("ineligible Chan instrument must be rejected before input freeze")
+
+    class UnexpectedAdapter:
+        def observe(self, _prepared):
+            pytest.fail("ineligible Chan instrument must not reach CZSC")
+
+    class UnexpectedPublisher:
+        def __init__(self, _session):
+            pytest.fail("ineligible Chan instrument must not publish")
+
+    monkeypatch.setattr(module, "freeze_chan_input", freeze)
+    monkeypatch.setattr(module, "ChanObservationPublisher", UnexpectedPublisher)
+    status, result = module.ChanStructureService(settings=SimpleNamespace(), adapter=UnexpectedAdapter()).run(
+        _request_for("600000.SH")
+    )
+
+    assert status == "partial"
+    assert result["items"] == [
+        {
+            "ts_code": "600000.SH",
+            "interval": "D",
+            "status": "blocked",
+            "reason_code": expected_reason,
+        }
+    ]
+    assert len(state["opened"]) == 1
+
+
+def test_structure_service_allows_lof_instrument_through_normal_freeze_path(monkeypatch):
+    from app.research.chan_input import FrozenChanInput
+    from app.services import chan_structure_service as module
+
+    state = _install_fake_sessions(monkeypatch, module)
+    state["instrument"] = SimpleNamespace(kind="LOF")
+    prepared = _prepared_input("501018.SH")
+    observation = import_module("app.research.chan_contract").make_observation(prepared, [])
+    freeze_calls = []
+
+    def freeze(db, _settings, code, *, interval, as_of):
+        assert db is state["active"]
+        assert code == "501018.SH"
+        assert interval == "D"
+        freeze_calls.append(as_of)
+        return FrozenChanInput(status="prepared", prepared=prepared, price_basis_id="basis-raw-v1")
+
+    class Adapter:
+        def observe(self, value):
+            assert value is prepared
+            assert state["active"] is None
+            return observation
+
+    class Publisher:
+        def __init__(self, db):
+            assert db is state["active"]
+
+        def publish(self, _observation):
+            return SimpleNamespace(already_published=False)
+
+    monkeypatch.setattr(module, "freeze_chan_input", freeze)
+    monkeypatch.setattr(module, "ChanObservationPublisher", Publisher)
+    status, result = module.ChanStructureService(settings=SimpleNamespace(), adapter=Adapter()).run(
+        _request_for("501018.SH")
+    )
+
+    assert status == "succeeded"
+    assert result["items"][0]["status"] == "published"
+    assert freeze_calls == [datetime(2026, 9, 30, 7, 15, tzinfo=UTC)]
 
 
 def test_structure_service_closes_freeze_before_compute_and_publishes_in_new_transaction(monkeypatch):
@@ -559,13 +650,15 @@ def isolated_worker_runtime(tmp_path, monkeypatch):
     monkeypatch.setattr(chan_structure_service, "session_scope", session_scope)
 
     code = "510300.SH"
-    with session_scope() as db:
+    lof_code = "501018.SH"
+
+    def add_synthetic_history(db, ts_code: str, kind: str) -> None:
         instrument = Instrument(
-            ts_code=code,
-            symbol="510300",
-            name="Synthetic ETF",
-            kind="ETF",
-            exchange="SH",
+            ts_code=ts_code,
+            symbol=ts_code[:6],
+            name=f"Synthetic {kind}",
+            kind=kind,
+            exchange=ts_code[-2:],
             enabled=True,
         )
         db.add(instrument)
@@ -596,12 +689,22 @@ def isolated_worker_runtime(tmp_path, monkeypatch):
                 offset += 1
             current += timedelta(days=1)
 
-    def run_job(interval: str, as_of: datetime, *, request_key: str | None = None):
+    with session_scope() as db:
+        add_synthetic_history(db, code, "ETF")
+        add_synthetic_history(db, lof_code, "LOF")
+
+    def run_job(
+        interval: str,
+        as_of: datetime,
+        *,
+        request_key: str | None = None,
+        codes: list[str] | None = None,
+    ):
         request = ChanStructuresJobRequest.model_validate(
             {
                 "schema_version": "r4c-chan-job-v1",
                 "task": "chan_structures",
-                "codes": [code],
+                "codes": codes or [code],
                 "interval": interval,
                 "as_of": as_of,
             }
@@ -626,7 +729,7 @@ def isolated_worker_runtime(tmp_path, monkeypatch):
             return row.status, dict(row.result_json or {})
 
     try:
-        yield SimpleNamespace(engine=engine, run_job=run_job, code=code)
+        yield SimpleNamespace(engine=engine, run_job=run_job, code=code, lof_code=lof_code)
     finally:
         engine.dispose()
 
@@ -736,6 +839,296 @@ def test_worker_publishes_synthetic_d_w_m_and_preserves_immutable_chronology(iso
             separators=(",", ":"),
         )
     )
+
+
+def test_worker_historical_correction_appends_observation_on_same_stream(isolated_worker_runtime):
+    from importlib.metadata import PackageNotFoundError, version
+
+    from app.models import DailyBar, Instrument
+    from app.models.entities import (
+        ChanObservedTransition,
+        ChanResearchObservation,
+        ChanResearchStreamHead,
+        ChanStructureRevision,
+    )
+    from app.research.chan_contract import ENGINE_VERSION
+    from app.utils.hashing import stable_hash
+    from sqlalchemy import func, select
+
+    try:
+        installed = version("czsc")
+    except PackageNotFoundError:
+        pytest.skip("pinned CZSC correction integration runs in the dedicated Python 3.12 environment")
+    assert installed == ENGINE_VERSION == "1.0.1"
+
+    runtime = isolated_worker_runtime
+    as_of = datetime.fromisoformat("2026-01-30T15:15:00+08:00")
+    first_status, first_result = runtime.run_job("D", as_of)
+    assert first_status == "succeeded", first_result
+    first_item = first_result["items"][0]
+    assert first_item["status"] == "published"
+
+    with Session(runtime.engine) as db:
+        first = db.get(ChanResearchObservation, first_item["observation_id"])
+        assert first is not None
+        stream_id = first.stream_id
+        prior_revision_ids = tuple(
+            db.scalars(
+                select(ChanStructureRevision.revision_id)
+                .where(
+                    ChanStructureRevision.stream_id == stream_id,
+                    ChanStructureRevision.observation_id == first.observation_id,
+                )
+                .order_by(ChanStructureRevision.revision_id)
+            )
+        )
+        prior_transition_rows = tuple(
+            db.execute(
+                select(
+                    ChanObservedTransition.structure_key,
+                    ChanObservedTransition.status,
+                    ChanObservedTransition.revision_id,
+                )
+                .where(
+                    ChanObservedTransition.stream_id == stream_id,
+                    ChanObservedTransition.observation_id == first.observation_id,
+                )
+                .order_by(ChanObservedTransition.structure_key)
+            ).all()
+        )
+        instrument = db.scalar(select(Instrument).where(Instrument.ts_code == runtime.code))
+        corrected = db.scalar(
+            select(DailyBar).where(
+                DailyBar.instrument_id == instrument.id,
+                DailyBar.trade_date == datetime(2026, 1, 14).date(),
+                DailyBar.adjust == "none",
+            )
+        )
+        assert corrected is not None
+        corrected.quality_hash = stable_hash({"corrected": corrected.quality_hash, "revision": 2})
+        db.commit()
+
+    second_status, second_result = runtime.run_job("D", as_of)
+    assert second_status == "succeeded", second_result
+    second_item = second_result["items"][0]
+    assert second_item["status"] == "published"
+    assert second_item["observation_id"] != first_item["observation_id"]
+    assert second_item["input_hash"] != first_item["input_hash"]
+    assert second_item["publication_sequence"] == first_item["publication_sequence"] + 1
+
+    with Session(runtime.engine) as db:
+        first = db.get(ChanResearchObservation, first_item["observation_id"])
+        second = db.get(ChanResearchObservation, second_item["observation_id"])
+        assert first is not None and second is not None
+        assert second.stream_id == first.stream_id == stream_id
+        assert second.input_revision_id != first.input_revision_id
+        assert second.sequence_number == first.sequence_number + 1
+        current_revision_ids = tuple(
+            db.scalars(
+                select(ChanStructureRevision.revision_id)
+                .where(
+                    ChanStructureRevision.stream_id == stream_id,
+                    ChanStructureRevision.observation_id == first.observation_id,
+                )
+                .order_by(ChanStructureRevision.revision_id)
+            )
+        )
+        current_transition_rows = tuple(
+            db.execute(
+                select(
+                    ChanObservedTransition.structure_key,
+                    ChanObservedTransition.status,
+                    ChanObservedTransition.revision_id,
+                )
+                .where(
+                    ChanObservedTransition.stream_id == stream_id,
+                    ChanObservedTransition.observation_id == first.observation_id,
+                )
+                .order_by(ChanObservedTransition.structure_key)
+            ).all()
+        )
+        assert current_revision_ids == prior_revision_ids
+        assert current_transition_rows == prior_transition_rows
+        assert db.scalar(
+            select(func.count()).select_from(ChanResearchObservation).where(
+                ChanResearchObservation.stream_id == stream_id
+            )
+        ) == 2
+        head = db.get(ChanResearchStreamHead, stream_id)
+        assert head.latest_observation_id == second_item["observation_id"]
+        assert head.latest_sequence_number == second_item["publication_sequence"]
+
+
+def test_worker_publication_failure_isolates_batch_and_preserves_existing_head(
+    isolated_worker_runtime, monkeypatch
+):
+    from app.models import DailyBar, Instrument
+    from app.models.entities import (
+        ChanObservedTransition,
+        ChanResearchObservation,
+        ChanResearchStreamHead,
+        ChanStructureRevision,
+    )
+    from app.research.chan_contract import make_observation
+    from app.services import chan_structure_service
+    from app.services.chan_observation_service import ChanObservationPublisher
+    from app.utils.hashing import stable_hash
+    from sqlalchemy import func, select
+
+    runtime = isolated_worker_runtime
+    failing_code = runtime.code
+    successful_code = runtime.lof_code
+    assert successful_code == "501018.SH"
+
+    class SyntheticAdapter:
+        def observe(self, prepared):
+            return make_observation(prepared, [])
+
+    monkeypatch.setattr(chan_structure_service, "ChanAdapter", SyntheticAdapter)
+    attempted_observations = []
+
+    class BatchFailPublisher:
+        def __init__(self, db):
+            self.db = db
+            self.delegate = ChanObservationPublisher(db)
+
+        def publish(self, observation):
+            publication = self.delegate.publish(observation)
+            if observation.instrument == failing_code:
+                attempted_observations.append(observation.observation_id)
+                raise RuntimeError("untrusted private publisher detail")
+            return publication
+
+    monkeypatch.setattr(chan_structure_service, "ChanObservationPublisher", BatchFailPublisher)
+    as_of = datetime.fromisoformat("2026-01-30T15:15:00+08:00")
+    batch_status, batch_result = runtime.run_job("D", as_of, codes=[successful_code, failing_code])
+    assert batch_status == "partial", batch_result
+    batch_items = {item["ts_code"]: item for item in batch_result["items"]}
+    assert batch_items[successful_code]["status"] == "published"
+    assert batch_items[failing_code]["status"] == "failed"
+    assert batch_items[failing_code]["reason_code"] == "publication_failed"
+    assert "untrusted private publisher detail" not in str(batch_result)
+    assert batch_result["provider_called"] is False
+    assert batch_result["models_called"] is False
+    assert batch_result["qualification_changed"] is False
+    assert batch_result["actionable"] is False
+    batch_failed_observation_id = attempted_observations[-1]
+
+    with Session(runtime.engine) as db:
+        successful_observation = db.get(
+            ChanResearchObservation, batch_items[successful_code]["observation_id"]
+        )
+        assert successful_observation is not None
+        assert db.get(ChanResearchObservation, batch_failed_observation_id) is None
+        assert db.scalar(
+            select(func.count()).select_from(ChanResearchStreamHead).where(
+                ChanResearchStreamHead.instrument == successful_code
+            )
+        ) == 1
+        assert db.scalar(
+            select(func.count()).select_from(ChanResearchStreamHead).where(
+                ChanResearchStreamHead.instrument == failing_code
+            )
+        ) == 0
+
+    # Establish a valid head for the code that failed above, then inject a
+    # failure after the publisher staged the next immutable write.
+    monkeypatch.setattr(chan_structure_service, "ChanObservationPublisher", ChanObservationPublisher)
+    baseline_status, baseline_result = runtime.run_job("D", as_of, codes=[failing_code])
+    assert baseline_status == "succeeded", baseline_result
+    baseline_item = baseline_result["items"][0]
+    assert baseline_item["status"] == "published"
+    baseline_observation_id = baseline_item["observation_id"]
+    with Session(runtime.engine) as db:
+        baseline_observation = db.get(ChanResearchObservation, baseline_observation_id)
+        assert baseline_observation is not None
+        stream_id = baseline_observation.stream_id
+        baseline_revision_ids = tuple(
+            db.scalars(
+                select(ChanStructureRevision.revision_id)
+                .where(ChanStructureRevision.stream_id == stream_id)
+                .order_by(ChanStructureRevision.revision_id)
+            )
+        )
+        baseline_transitions = tuple(
+            db.execute(
+                select(
+                    ChanObservedTransition.observation_id,
+                    ChanObservedTransition.structure_key,
+                    ChanObservedTransition.status,
+                    ChanObservedTransition.revision_id,
+                )
+                .where(ChanObservedTransition.stream_id == stream_id)
+                .order_by(ChanObservedTransition.observation_id, ChanObservedTransition.structure_key)
+            ).all()
+        )
+
+    with Session(runtime.engine) as db:
+        instrument = db.scalar(select(Instrument).where(Instrument.ts_code == failing_code))
+        corrected = db.scalar(
+            select(DailyBar).where(
+                DailyBar.instrument_id == instrument.id,
+                DailyBar.trade_date == datetime(2026, 1, 14).date(),
+                DailyBar.adjust == "none",
+            )
+        )
+        assert corrected is not None
+        corrected.quality_hash = stable_hash({"prior": corrected.quality_hash, "failed_revision": 3})
+        db.commit()
+
+    failed_observations = []
+
+    class FailAfterStagingPublisher:
+        def __init__(self, db):
+            self.delegate = ChanObservationPublisher(db)
+
+        def publish(self, observation):
+            failed_observations.append(observation.observation_id)
+            self.delegate.publish(observation)
+            raise RuntimeError("controlled publication failure detail")
+
+    monkeypatch.setattr(chan_structure_service, "ChanObservationPublisher", FailAfterStagingPublisher)
+    failed_status, failed_result = runtime.run_job("D", as_of, codes=[failing_code])
+    assert failed_status == "failed", failed_result
+    failed_item = failed_result["items"][0]
+    assert failed_item["status"] == "failed"
+    assert failed_item["reason_code"] == "publication_failed"
+    assert "controlled publication failure detail" not in str(failed_result)
+    failed_observation_id = failed_observations[-1]
+    assert failed_observation_id != baseline_observation_id
+
+    with Session(runtime.engine) as db:
+        head = db.get(ChanResearchStreamHead, stream_id)
+        assert head.latest_observation_id == baseline_observation_id
+        assert head.latest_sequence_number == baseline_item["publication_sequence"]
+        assert db.get(ChanResearchObservation, baseline_observation_id) is not None
+        assert db.get(ChanResearchObservation, failed_observation_id) is None
+        assert db.scalar(
+            select(func.count()).select_from(ChanResearchObservation).where(
+                ChanResearchObservation.stream_id == stream_id
+            )
+        ) == 1
+        current_revision_ids = tuple(
+            db.scalars(
+                select(ChanStructureRevision.revision_id)
+                .where(ChanStructureRevision.stream_id == stream_id)
+                .order_by(ChanStructureRevision.revision_id)
+            )
+        )
+        current_transitions = tuple(
+            db.execute(
+                select(
+                    ChanObservedTransition.observation_id,
+                    ChanObservedTransition.structure_key,
+                    ChanObservedTransition.status,
+                    ChanObservedTransition.revision_id,
+                )
+                .where(ChanObservedTransition.stream_id == stream_id)
+                .order_by(ChanObservedTransition.observation_id, ChanObservedTransition.structure_key)
+            ).all()
+        )
+        assert current_revision_ids == baseline_revision_ids
+        assert current_transitions == baseline_transitions
 
 
 @pytest.fixture

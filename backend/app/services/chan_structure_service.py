@@ -5,8 +5,11 @@ import re
 from collections import Counter
 from typing import Any
 
+from sqlalchemy import select
+
 from app.core.config import Settings, get_settings
 from app.db.session import session_scope
+from app.models import Instrument
 from app.research.chan_adapter import ChanAdapter, ChanAdapterError
 from app.research.chan_contract import ChanContractError
 from app.research.chan_input import BLOCKED_REASON_CODES, FrozenChanInput, freeze_chan_input
@@ -15,6 +18,7 @@ from app.workspace.protocol import ChanStructuresJobRequest
 
 _REASON_CODE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _STRUCTURE_KINDS = ("fx", "bi", "zs")
+_SERVICE_BLOCKED_REASON_CODES = BLOCKED_REASON_CODES | {"unsupported_instrument_type"}
 
 
 class ChanStructureService:
@@ -50,6 +54,11 @@ class ChanStructureService:
 
     def _freeze(self, code: str, interval: str, as_of) -> FrozenChanInput:
         with session_scope() as db:
+            instrument = db.scalar(select(Instrument).where(Instrument.ts_code == code))
+            if instrument is None:
+                return FrozenChanInput(status="blocked", reason_code="instrument_missing")
+            if instrument.kind not in {"ETF", "LOF"}:
+                return FrozenChanInput(status="blocked", reason_code="unsupported_instrument_type")
             return freeze_chan_input(
                 db,
                 self.settings,
@@ -87,7 +96,11 @@ class ChanStructureService:
                 continue
 
             if frozen.status == "blocked":
-                reason = frozen.reason_code if frozen.reason_code in BLOCKED_REASON_CODES else "history_qualification_blocked"
+                reason = (
+                    frozen.reason_code
+                    if frozen.reason_code in _SERVICE_BLOCKED_REASON_CODES
+                    else "history_qualification_blocked"
+                )
                 outcomes.append(
                     {
                         "ts_code": code,
