@@ -1458,7 +1458,38 @@ Remote iteration 67 exact-head review returned `M3B_A2_DECISION=PASS`, technical
 - [x] Update execution receipt, STATUS/HANDOFF/todo, and plan; deployment remains explicitly `NOT_DEPLOYABLE_SUBSTAGE`.
 - [x] Commit code/tests as `e38d524c639a938e5bf709302c95923b9f20df1f` / tree `a00ae89bfa7045d151b8c90b3ea09695cc49307e`; receipt/status/plan documentation is committed locally.
 - [x] Push the isolated branch and verify exact GitHub SHA/tree readback.
-- [ ] Release bounded C2C execution evidence and request iteration-68 remote exact-head review.
+- [x] Release bounded C2C execution evidence and request iteration-68 remote exact-head review; remote returned `M3B_B_STATUS=CHANGES_REQUIRED` and authorized iteration 69 R1.
 - [x] Keep B `NOT_DEPLOYABLE_SUBSTAGE`; no public producer, API, UI, scheduler, main merge, production, or M3B-C scope.
 
-M3B-B local gates are complete. Full Windows pytest: 1,369 collected, 1,348 passed, 21 skipped, 0 failures/errors, 35 warnings, 1,516.123 seconds, exit 0. The `test_chan_m3b_worker.py` unit group is 17 passed / 2 environment-gated skips. Exact CZSC worker semantic digest matches on Windows/Linux (`66b8092b...096bd`); M2 and R5 frozen digests and collision checks are unchanged. PostgreSQL 16.15 exact retry and chronology-retention gate passes. See [M3B-B worker publication receipt](../docs/audits/R4C_M3B_B_WORKER_PUBLICATION_20260930.md). Await remote review after push; M3B-C remains GO=false.
+Iteration 68 local gates passed: Windows pytest 1,369 collected, 1,348 passed, 21 skipped, 0 failures/errors, 35 warnings, 1,516.123 seconds, exit 0. `test_chan_m3b_worker.py` was 17 passed / 2 environment-gated skips. Exact CZSC worker digest matched Windows/Linux (`66b8092b...096bd`); M2/R5 frozen digests and collision checks are unchanged; PostgreSQL 16.15 retry/chronology passed. Remote iteration 68 then found the type-scope defect and missing worker correction/publication-failure coverage. Iteration 69 R1 is the current gate; M3B-C remains GO=false.
+
+## R4C M3B-B-R1 scope and failure isolation — iteration 69
+
+Remote iteration 68 exact-head review returned `M3B_B_STATUS=CHANGES_REQUIRED`, retained the technical route, and authorized `M3B_B_R1_GO=true`. See `tasks/plans/2026-09-30-r4c-m3b-b-r1-scope-failure-isolation.md`.
+
+- [x] Record the review findings: enforce ETF/LOF persisted instrument type; add end-to-end historical correction coverage; prove publication failure isolation and existing-head preservation.
+- [x] Save the bounded remote R1 plan and update C2C checkpoint to iteration 69 `PLAN_RECEIVED`.
+- [x] Add scope regressions: ETF and LOF proceed; non-ETF/LOF and missing instruments block before freeze/CZSC/publication; public `DataRequest` still rejects Chan.
+- [x] Add worker-level historical correction: same as_of and stream, changed input/observation, increased sequence, prior immutable evidence retained.
+- [x] Add publication-failure regressions: code A's commit survives code B's failure; failed later same-stream publication rolls back and preserves old head/history; no raw exception persists.
+- [x] Implement only the instrument eligibility gate in `chan_structure_service.py`; leave `chan_input.py`, protocol, queue, worker, identities, publisher, schema, API, scheduler, UI, Provider and config untouched.
+- [x] Run focused worker/A2/M2/M3/workspace/R4A regressions, exact CZSC 1.0.1 Windows/Linux integration, disposable PostgreSQL 16.15, full Windows pytest, M2/R5 cross-platform validators, and static gates.
+- [x] Commit R1 code/tests as `ec473eb40d3e28bc7c51a74c3a0a91f7679296f8` / tree `c8f705eec059538d97f635a6b3f886bd5d77faa0`, parent `e28766ad4dc5d186b335d4cca5cecb3ec3930f10`.
+- [ ] Finalize/commit R1 docs; push and verify exact GitHub head/tree; release evidence and request iteration-69 remote exact-head review.
+- [x] Keep deployment `NOT_DEPLOYABLE_SUBSTAGE`; M3B-C/M4/main/production false; real data UNKNOWN; actionable=false.
+
+### Iteration 69 R1 progress
+
+- [x] Add RED pre-freeze eligibility cases for syntactically valid non-ETF/LOF and missing instruments; both failed before the service gate was implemented.
+- [x] Enforce persisted `Instrument.kind in {ETF, LOF}` inside the short eligibility/freeze transaction; add bounded `unsupported_instrument_type`; do not touch `chan_input.py`.
+- [x] Verify ETF and LOF pass the normal service path; non-ETF/LOF and missing instruments block before freeze/CZSC/publication.
+- [x] Add same-as_of worker history correction test using a changed daily `quality_hash`; prove same stream, changed input/observation, sequence increment, old evidence retained and head advanced.
+- [x] Add worker SQLite publication failure isolation: code A commits while B fails; verify bounded `publication_failed`, no raw exception, and A's evidence remains committed.
+- [x] Add rollback/head regression: after a valid head, staged later publication failure leaves prior observation, revisions, transitions and head unchanged; attempted observation is absent.
+- [x] Focused R4C/Workspace/R4A tests: 100 collected, 99 passed, 1 environment skip, 0 failures/errors; separate CZSC worker suite passes on Windows 3.12.10 and Linux 3.12.14.
+- [x] Disposable PostgreSQL 16.15 retry/chronology/head gate passes; M2/R5 frozen digests and collision checks unchanged; static gates pass.
+- [x] Full Windows suite: 1,374 collected, 1,352 passed, 22 skipped, 0 failures/errors, 35 warnings, 1,514.182 seconds, exit 0.
+- [x] Commit the R1 code/test fix as `ec473eb40d3e28bc7c51a74c3a0a91f7679296f8`; final docs commit, push, and remote review remain.
+- [x] Keep R1 `NOT_DEPLOYABLE_SUBSTAGE`; M3B-C/M4/main/production false; real data UNKNOWN; actionable=false.
+
+R1 code/test scope is limited to `backend/app/services/chan_structure_service.py` and `backend/tests/test_chan_m3b_worker.py`. Remote exact-head review and any next-stage plan remain open.

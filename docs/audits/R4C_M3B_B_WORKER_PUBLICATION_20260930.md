@@ -6,7 +6,7 @@ C2C task: `c2c_a1d7`, iteration 68
 
 Remote plan base: `6166587d718992237908099b6b89ea83f3779d3d` / tree `f7a096be408ce908cb5e5c282b19025153ec0653`
 
-Local implementation and GitHub push/readback are complete; remote exact-head review is pending.
+Local implementation and GitHub push/readback completed. Remote exact-head review of `e28766ad4dc5d186b335d4cca5cecb3ec3930f10` returned `M3B_B_STATUS=CHANGES_REQUIRED`, retained the route, and authorized M3B-B-R1.
 
 Code/test commit: `e38d524c639a938e5bf709302c95923b9f20df1f` / tree `a00ae89bfa7045d151b8c90b3ea09695cc49307e`, parent `6166587d718992237908099b6b89ea83f3779d3d`.
 
@@ -66,4 +66,18 @@ No production endpoint, Provider, model, real market-data source, or production 
 
 ## Remaining gate
 
-Attach bounded execution evidence to C2C and ask remote ChatGPT to review the pushed exact head against iteration 68. Keep M3B-C, M4, main integration, and production disabled until that review and a new remote plan.
+Iteration 68 remote review found that the service did not enforce persisted `Instrument.kind` as ETF/LOF before freeze/engine, and that worker-level historical correction and publication-failure isolation/head-retention tests were missing. Follow `tasks/plans/2026-09-30-r4c-m3b-b-r1-scope-failure-isolation.md`; only `chan_structure_service.py` and `test_chan_m3b_worker.py` are authorized code/test files. Keep M3B-C, M4, main integration, and production disabled until the R1 exact-head review and a new remote plan.
+
+### Iteration 69 R1 local verification
+
+R1 code/test changes are limited to `backend/app/services/chan_structure_service.py` and `backend/tests/test_chan_m3b_worker.py`. Code/test commit is `ec473eb40d3e28bc7c51a74c3a0a91f7679296f8` / tree `c8f705eec059538d97f635a6b3f886bd5d77faa0`, parent `e28766ad4dc5d186b335d4cca5cecb3ec3930f10`; the documentation receipt commit, push, and exact-head review remain.
+
+- Eligibility is checked from persisted `Instrument.kind` in the short freeze scope. Missing instruments and non-ETF/LOF kinds return bounded blocked reasons before freeze/CZSC/publisher. ETF and LOF follow the normal path; `chan_input.py` and identities are unchanged.
+- RED-first scope cases failed before the type gate and pass afterward. Same-as_of historical D correction is tested through worker→freeze→CZSC 1.0.1→publisher; the stream stays stable, input/observation changes, sequence advances, old evidence remains, and the head advances.
+- Publication failure isolation and rollback tests pass on SQLite: code A's committed observation survives code B's publication failure; a later staged failure leaves the old head/observation/revisions/transitions intact and the attempted observation absent. Failure details remain bounded.
+- `test_chan_m3b_worker.py`: repository Python 3.13.14 = 24 collected, 21 passed, 3 environment skips; Windows Python 3.12.10 and Linux Python 3.12.14 = 24 collected, 23 passed, 1 PG fixture skip each. Exact worker D/W/M semantic digest stays `66b8092b122ffb1819d18e45963b3f708fca0581550fb062395efc96023096bd` on both platforms.
+- Focused M3B-A/A2, M2/M3 persistence, workspace jobs and R4A gate: 100 collected, 99 passed, 1 skip, 0 failures/errors.
+- Disposable PostgreSQL 16.15 retry/idempotency/chronology/head-retention passes. Frozen M2/R5 digests and collision checks are unchanged.
+- Final Windows full suite: 1,374 collected, 1,352 passed, 22 skipped, 0 failures/errors, 35 warnings, 1,514.182 seconds, exit 0. Ruff, compileall, Node syntax, scoped secret scan and diff-check pass.
+
+R1 local evidence is under `E:/Claude_allow/Download/ETF_R4C_M3_20260929/` and `iteration69-linux/`. No real data/Provider, production database, deployment or trading was used. Next: finalize/commit the R1 documentation, push and verify the exact branch head, then request remote iteration-69 review; do not start M3B-C until PASS and a separate plan.

@@ -1,8 +1,10 @@
-# 当前状态：R4C M3B-B 本地验收完成，待推送与远端审核（2026-09-30）
+# 当前状态：R4C M3B-B-R1 本地验收完成，待推送和远端复审（2026-09-30）
 
 远端 iteration 67 已对 A2-R1 精确 head `6166587d718992237908099b6b89ea83f3779d3d` 复审通过：`M3B_A2_STATUS=PASS`、技术路线保留，并授权 `M3B_B_GO=true`。iteration 68 按 `tasks/plans/2026-09-30-r4c-m3b-b-audited-worker-publication.md` 执行现有 audited worker 内部 Chan job 与不可变 observation publication。`M3B_C_GO=false`、`M4_GO=false`、`MAIN_INTEGRATION_GO=false`、`PRODUCTION_GO=false`。M3B-B 是 `NOT_DEPLOYABLE_SUBSTAGE` / `PRE_RELEASE_RUNTIME_COMPONENT`；生产未变，真实数据 UNKNOWN，actionable=false。
 
-M3B-B 本地实现、测试和跨平台验收已完成。代码/测试提交 `e38d524c639a938e5bf709302c95923b9f20df1f`，tree `a00ae89bfa7045d151b8c90b3ea09695cc49307e`；执行收据与计划也已提交并推送，GitHub SHA/tree 与本地推送头读回一致。当前门禁为远端 iteration-68 精确头审核。Windows 全量 pytest 1,369 项中 1,348 passed / 21 skipped / 0 failures / 0 errors，35 warnings，1,516.123 秒，exit 0。CZSC 1.0.1 worker D/W/M 合成集成 Windows Python 3.12.10 与 Linux 3.12.14 输出摘要一致；PostgreSQL 16.15 worker retry/chronology gate 通过。M2/R5 冻结摘要与碰撞检查保持原值；Ruff、compileall、Node、secret scan、diff-check 通过。详细收据见 [M3B-B audited worker publication](docs/audits/R4C_M3B_B_WORKER_PUBLICATION_20260930.md)。
+Iteration 68 的 M3B-B 代码、测试和收据已提交并推送，远端按精确 head `e28766ad4dc5d186b335d4cca5cecb3ec3930f10` 完成审核：`M3B_B_STATUS=CHANGES_REQUIRED`，路线保留，并授权 `M3B_B_R1_GO=true`。iteration 69 R1 修复和回归已完成，仅修改 `chan_structure_service.py` 与 `test_chan_m3b_worker.py`；代码/测试提交 `ec473eb40d3e28bc7c51a74c3a0a91f7679296f8` / tree `c8f705eec059538d97f635a6b3f886bd5d77faa0`，父提交为 e28766，尚待收据提交和推送。修复阻断非 ETF/LOF 和缺失标的进入 CZSC，并补上历史修订 worker 生命周期和发布事务失败隔离/head 保留测试。计划见 [M3B-B-R1](tasks/plans/2026-09-30-r4c-m3b-b-r1-scope-failure-isolation.md)。生产未变；M3B-C/M4/main/production 仍 false，真实数据 UNKNOWN，actionable=false。
+
+iteration 69 完整 Windows pytest 为 1,374 collected / 1,352 passed / 22 skipped / 0 failures / 0 errors / 35 warnings / 1,514.182 秒 / exit 0。worker 回归在 Windows Python 3.12.10 为 23 passed / 1 PostgreSQL-fixture skip，在 Linux Python 3.12.14 为 23 passed / 1 skip；D/W/M frozen digest 仍为 `66b8092b122ffb1819d18e45963b3f708fca0581550fb062395efc96023096bd`。同 as_of 历史修订、ETF/LOF 门禁、批量发布失败隔离、旧 head 回滚保护均通过；PG16.15 retry/chronology gate 通过；M2/R5 digest/collision gates 不变。R1 当前待提交推送和远端精确头复审。详细收据见 [M3B-B audited worker publication](docs/audits/R4C_M3B_B_WORKER_PUBLICATION_20260930.md)。
 
 远端已审核 iteration 65：`M3B_A_DECISION=PASS`、`ROUTE_A=RETAIN`、无技术缺陷，并授权 iteration 66 M3B-A2 周/月输入身份。A2 新计划见 [M3B-A2 weekly/monthly identity](tasks/plans/2026-09-30-r4c-m3b-a2-weekly-monthly-identity.md)。
 

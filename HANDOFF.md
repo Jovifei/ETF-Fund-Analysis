@@ -1,10 +1,12 @@
-# 当前接手入口：R4C M3B-B audited worker publication（iteration 68，2026-09-30）
+# 当前接手入口：R4C M3B-B-R1 scope and failure isolation（iteration 69，2026-09-30）
 
 远端 iteration 67 已审核通过 A2-R1：`M3B_A2_STATUS=PASS`、Route A 保留；最终 head `6166587d718992237908099b6b89ea83f3779d3d`。iteration 68 已授权 M3B-B，执行计划在 `tasks/plans/2026-09-30-r4c-m3b-b-audited-worker-publication.md`：只在现有 audited worker 内接入内部 bounded Chan job，冻结输入后关闭 DB transaction，再用 CZSC adapter 计算，最后新建短 transaction 调用现有 publisher。公共 DataRequest 不接纳该 task，不增加 API/scheduler/UI/producer，不改 M3 schema/identity，不部署。M3B-C/M4/main/production 仍 NO-GO；真实资格 UNKNOWN，actionable=false。
 
-### Iteration 68 execution handoff
+### Iteration 68 review and iteration 69 handoff
 
-M3B-B implementation and all local acceptance gates are complete. Code/test commit: `e38d524c639a938e5bf709302c95923b9f20df1f`, tree `a00ae89bfa7045d151b8c90b3ea09695cc49307e`, parent `6166587d718992237908099b6b89ea83f3779d3d`. The receipt/status/plan documentation is committed and pushed; GitHub readback matched the local SHA/tree. Push any final handoff update before sending bounded C2C evidence and requesting remote exact-head review. Do not start M3B-C until remote review of the pushed head and a separate remote plan.
+Remote iteration 68 reviewed the exact pushed head `e28766ad4dc5d186b335d4cca5cecb3ec3930f10` / tree `30a1904edd9d95fe5a24f94b17773cf415abba79`, retained the route, and returned `M3B_B_STATUS=CHANGES_REQUIRED`, `M3B_B_R1_GO=true`. Remote found a missing persisted `Instrument.kind in {ETF, LOF}` gate and two worker-level evidence gaps: historical correction through freeze→adapter→publisher, and publication failure isolation/head preservation. Iteration 69 R1 implementation and required tests are now complete; only the service and worker test file changed in code.
+
+Follow `tasks/plans/2026-09-30-r4c-m3b-b-r1-scope-failure-isolation.md`. The eligibility gate and RED-first scope tests pass; corrected historical input now appends a revision on the same stream; publication failure isolation and rollback/head retention pass on SQLite. Focused gates (100 collected / 99 passed / 1 skip), exact CZSC Windows/Linux, disposable PG16, M2/R5, and static gates pass. Full Windows pytest is 1,374 collected / 1,352 passed / 22 skipped / 0 failed/errors / 35 warnings / 1,514.182s / exit 0. R1 code/test commit `ec473eb40d3e28bc7c51a74c3a0a91f7679296f8` / tree `c8f705eec059538d97f635a6b3f886bd5d77faa0`, parent `e28766ad4dc5d186b335d4cca5cecb3ec3930f10`. Next: finalize the receipt, push, read back exact GitHub SHA/tree, release iteration-69 evidence, and request remote exact-head review. Do not start M3B-C before exact-head PASS and a new remote plan.
 
 - Full Windows pytest: 1,369 collected; 1,348 passed; 21 skipped; no failures/errors; 35 warnings; 1,516.123 seconds; exit 0.
 - Exact CZSC 1.0.1 D/W/M worker test passes on Windows Python 3.12.10 and Linux Python 3.12.14 with matching digest `66b8092b122ffb1819d18e45963b3f708fca0581550fb062395efc96023096bd`; W temporary→settled, exact retry, and chronological head retention are covered; D emits two synthetic FX structures.
