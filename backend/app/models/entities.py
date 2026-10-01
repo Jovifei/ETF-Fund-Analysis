@@ -488,10 +488,50 @@ class QuoteSnapshot(Base):
     volume: Mapped[float | None] = mapped_column(Float)
     amount: Mapped[float | None] = mapped_column(Float)
     premium_rate: Mapped[float | None] = mapped_column(Float)
+    iopv: Mapped[float | None] = mapped_column(Float)
+    latest_shares: Mapped[float | None] = mapped_column(Float)
+    main_net_inflow: Mapped[float | None] = mapped_column(Float)
+    super_large_net_inflow: Mapped[float | None] = mapped_column(Float)
+    large_net_inflow: Mapped[float | None] = mapped_column(Float)
+    medium_net_inflow: Mapped[float | None] = mapped_column(Float)
+    small_net_inflow: Mapped[float | None] = mapped_column(Float)
+    flow_contract: Mapped[str | None] = mapped_column(String(32))
     source: Mapped[str] = mapped_column(String(32))
     is_realtime: Mapped[bool] = mapped_column(Boolean, default=False)
     degraded_reason: Mapped[str | None] = mapped_column(Text)
     quality_hash: Mapped[str] = mapped_column(String(64), index=True)
+
+
+class EtfShareScale(Base):
+    """Exchange-published share totals and the adjacent-session delta.
+
+    ``shares`` is 份 as published by the AKShare exchange helper. The delta is a
+    research proxy for creation/redemption direction. It is not a trading signal.
+    """
+
+    __tablename__ = "etf_share_scales"
+    __table_args__ = (
+        UniqueConstraint(
+            "instrument_id", "trade_date", "source",
+            name="uq_etf_share_scale_instrument_date_source",
+        ),
+        Index("ix_etf_share_scale_instrument_date", "instrument_id", "trade_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id", ondelete="CASCADE"), index=True)
+    trade_date: Mapped[date] = mapped_column(Date, index=True)
+    shares: Mapped[float] = mapped_column(Float, nullable=False)
+    previous_trade_date: Mapped[date | None] = mapped_column(Date)
+    previous_shares: Mapped[float | None] = mapped_column(Float)
+    share_delta: Mapped[float | None] = mapped_column(Float)
+    share_delta_ratio: Mapped[float | None] = mapped_column(Float)
+    day_over_day: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    proxy: Mapped[str] = mapped_column(String(16), nullable=False)
+    source: Mapped[str] = mapped_column(String(40), nullable=False)
+    exchange: Mapped[str] = mapped_column(String(8), nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    quality_hash: Mapped[str] = mapped_column(String(64), nullable=False)
 
 
 class SectorSnapshot(Base):

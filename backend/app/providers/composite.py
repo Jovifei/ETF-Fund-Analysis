@@ -407,6 +407,12 @@ class CompositeProvider(MarketProvider):
             lambda item: {item.ts_code},
         )
 
+    def fetch_share_scales(self, codes: list[str], start_date: date, end_date: date):
+        return self._invoke(
+            "fetch_share_scales",
+            lambda provider: provider.fetch_share_scales(codes, start_date, end_date),
+        )
+
     def fetch_sector_snapshots(self, trade_date: date | None = None) -> list[SectorRecord]:
         return self._invoke(
             "fetch_sector_snapshots", lambda provider: provider.fetch_sector_snapshots(trade_date)

@@ -24,12 +24,14 @@ from app.models import (
     DailyBar,
     DecisionBoardProvisionalInput,
     DecisionBoardSnapshot,
+    EtfShareScale,
     ForecastSnapshot,
     IndicatorSnapshot,
     Instrument,
     QuoteSnapshot,
     TaskRun,
 )
+from app.services.flow_share_research import FLOW_CONTRACT, build_flow_share_view
 from app.services.signal_grade_service import GRADE_ORDER, SignalGradeService, classify_row
 from app.services.support_resistance_service import SupportResistanceService
 from app.services.trading_calendar_service import TradingCalendarService
@@ -37,7 +39,7 @@ from app.utils.indicators_v05 import calculate_indicators
 from app.utils.numbers import finite_or_none
 from app.utils.support_resistance import build_support_resistance
 
-READ_MODEL_VERSION = "decision-read-v108-research-basis"
+READ_MODEL_VERSION = "decision-read-v109-flow-share"
 HORIZONS = (1, 3, 5, 10)
 # Must match docs/INTRADAY_REFRESH_CADENCE.md and refresh_policy windows.
 # Lunch 11:31–12:59 is intentionally absent.  14:50–15:00 is every 2 minutes.
@@ -438,6 +440,8 @@ class DecisionBoardService:
             "groups": groups,
             "counts": counts,
             "rows": rows,
+            "flow_share_contract": FLOW_CONTRACT,
+            "flow_share_changes_grade": False,
             "research_only": True,
             "automatic_orders": False,
         }
@@ -677,6 +681,7 @@ class DecisionBoardService:
                 "status": "mock" if quote_is_mock else ("missing" if quote is None else freshness),
                 "actionable": False,
             },
+            "flow_share": build_flow_share_view(quote, self._latest_share_scale(db, instrument.id)),
             "provisional": provisional_status,
             "history": history,
             "forecast_scenario": scenario,
@@ -684,6 +689,18 @@ class DecisionBoardService:
             "research_only": True,
             "actionable": False,
         }
+
+    @staticmethod
+    def _latest_share_scale(db: Session, instrument_id: int) -> EtfShareScale | None:
+        rows = db.scalars(
+            select(EtfShareScale)
+            .where(EtfShareScale.instrument_id == instrument_id)
+            .order_by(EtfShareScale.trade_date.desc(), EtfShareScale.id.desc())
+        ).all()
+        if not rows:
+            return None
+        with_delta = next((row for row in rows if row.share_delta is not None), None)
+        return with_delta or rows[0]
 
     @staticmethod
     def _status(indicator, quote, generated_at: datetime) -> tuple[str, str]:
@@ -979,6 +996,8 @@ class DecisionBoardService:
             "groups": {grade: [] for grade in (*GRADE_ORDER, "数据异常")},
             "counts": {grade: 0 for grade in (*GRADE_ORDER, "数据异常")},
             "rows": [],
+            "flow_share_contract": FLOW_CONTRACT,
+            "flow_share_changes_grade": False,
             "research_only": True,
             "automatic_orders": False,
         }
