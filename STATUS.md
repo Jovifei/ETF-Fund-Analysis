@@ -1,10 +1,18 @@
-# 当前状态：R4C M3B-B-R1 本地验收完成，待推送和远端复审（2026-09-30）
+# 当前状态：R4C M3B-C 本地实现与验证 PASS，待 GitHub exact-head 远端审核（2026-10-01）
 
-远端 iteration 67 已对 A2-R1 精确 head `6166587d718992237908099b6b89ea83f3779d3d` 复审通过：`M3B_A2_STATUS=PASS`、技术路线保留，并授权 `M3B_B_GO=true`。iteration 68 按 `tasks/plans/2026-09-30-r4c-m3b-b-audited-worker-publication.md` 执行现有 audited worker 内部 Chan job 与不可变 observation publication。`M3B_C_GO=false`、`M4_GO=false`、`MAIN_INTEGRATION_GO=false`、`PRODUCTION_GO=false`。M3B-B 是 `NOT_DEPLOYABLE_SUBSTAGE` / `PRE_RELEASE_RUNTIME_COMPONENT`；生产未变，真实数据 UNKNOWN，actionable=false。
+Iteration 70 的 M3B-C 实现已完成。全量 Windows pytest 为 1,399 collected / 1,376 passed / 23 skipped / 0 failures；PostgreSQL 16 Python 3.12 Linux worker→private GET / immutable corruption / zero-DML 用例 1 passed；Windows 3.12.9 与 Linux 3.12.14 的 M2/R5 语义摘要完全一致。Ruff（限本次改动文件）、compileall、Node syntax、secret scan、diff-check 均通过。详细数据见 [M3B-C 接受收据](docs/audits/R4C_M3B_C_READ_MODEL_ACCEPTANCE_20261001.md)。
 
-Iteration 68 的 M3B-B 代码、测试和收据已提交并推送，远端按精确 head `e28766ad4dc5d186b335d4cca5cecb3ec3930f10` 完成审核：`M3B_B_STATUS=CHANGES_REQUIRED`，路线保留，并授权 `M3B_B_R1_GO=true`。iteration 69 R1 修复和回归已完成，仅修改 `chan_structure_service.py` 与 `test_chan_m3b_worker.py`；代码/测试提交 `ec473eb40d3e28bc7c51a74c3a0a91f7679296f8` / tree `c8f705eec059538d97f635a6b3f886bd5d77faa0`，父提交为 e28766，尚待收据提交和推送。修复阻断非 ETF/LOF 和缺失标的进入 CZSC，并补上历史修订 worker 生命周期和发布事务失败隔离/head 保留测试。计划见 [M3B-B-R1](tasks/plans/2026-09-30-r4c-m3b-b-r1-scope-failure-isolation.md)。生产未变；M3B-C/M4/main/production 仍 false，真实数据 UNKNOWN，actionable=false。
+执行 checkout 已按 Jovi 指示位于 E 盘项目内 `.local/etf-r4c-m3bc`；Git 元数据独立，原始 C 盘 worktree 和 Owner main 未改。下一步提交并推送 M3B-C 允许的文件，向远端提交可读证据进行 exact-head review。`M3B_C_RELEASE_GO=false`；远端代码 PASS 后仍须单独 release plan 与备份/恢复/回滚/live-smoke 门禁。M4/main/production=false，真实数据 UNKNOWN，actionable=false，无自动交易。
 
-iteration 69 完整 Windows pytest 为 1,374 collected / 1,352 passed / 22 skipped / 0 failures / 0 errors / 35 warnings / 1,514.182 秒 / exit 0。worker 回归在 Windows Python 3.12.10 为 23 passed / 1 PostgreSQL-fixture skip，在 Linux Python 3.12.14 为 23 passed / 1 skip；D/W/M frozen digest 仍为 `66b8092b122ffb1819d18e45963b3f708fca0581550fb062395efc96023096bd`。同 as_of 历史修订、ETF/LOF 门禁、批量发布失败隔离、旧 head 回滚保护均通过；PG16.15 retry/chronology gate 通过；M2/R5 digest/collision gates 不变。R1 当前待提交推送和远端精确头复审。详细收据见 [M3B-B audited worker publication](docs/audits/R4C_M3B_B_WORKER_PUBLICATION_20260930.md)。
+---
+
+# 历史状态：R4C M3B-C iteration 70 计划已接受，实施授权 / 发布另设门禁（2026-09-30）
+
+远端 iteration 67 已对 A2-R1 精确 head `6166587d718992237908099b6b89ea83f3779d3d` 复审通过：`M3B_A2_STATUS=PASS`、技术路线保留，并授权 `M3B_B_GO=true`。iteration 68 按 `tasks/plans/2026-09-30-r4c-m3b-b-audited-worker-publication.md` 执行现有 audited worker 内部 Chan job 与不可变 observation publication。Iteration68 当时的后续门禁为 `M3B_C_GO=false`、`M4_GO=false`、`MAIN_INTEGRATION_GO=false`、`PRODUCTION_GO=false`。M3B-B 是 `NOT_DEPLOYABLE_SUBSTAGE` / `PRE_RELEASE_RUNTIME_COMPONENT`；生产未变，真实数据 UNKNOWN，actionable=false。
+
+Iteration 68 的 M3B-B 代码、测试和收据已提交并推送，远端按精确 head `e28766ad4dc5d186b335d4cca5cecb3ec3930f10` 完成审核：`M3B_B_STATUS=CHANGES_REQUIRED`，路线保留，并授权 `M3B_B_R1_GO=true`。iteration 69 R1 修复和回归已完成，仅修改 `chan_structure_service.py` 与 `test_chan_m3b_worker.py`；代码/测试提交 `ec473eb40d3e28bc7c51a74c3a0a91f7679296f8` / tree `c8f705eec059538d97f635a6b3f886bd5d77faa0`，最终头 `f6ac2af15373be38797fb57dd6b2aff15b353fa2` 已推送且远端复审 `M3B_B_DECISION=PASS`。路线保留；iteration 70 已授权 M3B-C 实施，计划见 [M3B-C read model](tasks/plans/2026-09-30-r4c-m3b-c-persisted-read-model.md)。M3B-C release gate 仍 false；M4/main/production 仍 false，真实数据 UNKNOWN，actionable=false。
+
+Iteration 69 final head `f6ac2af15373be38797fb57dd6b2aff15b353fa2` passed remote review: `M3B_B_DECISION=PASS`. Iteration 70 authorizes the persisted read model/private GET (`M3B_C_IMPLEMENTATION_GO=true`); full plan: [M3B-C persisted read model](tasks/plans/2026-09-30-r4c-m3b-c-persisted-read-model.md). M3B-C is `DEPLOY_REQUIRED_AFTER_REMOTE_PASS`, but release GO and production GO remain false until a separate backup/restore/rollback/live-smoke gate is opened. Real data remains UNKNOWN; actionable=false; no trading.
 
 远端已审核 iteration 65：`M3B_A_DECISION=PASS`、`ROUTE_A=RETAIN`、无技术缺陷，并授权 iteration 66 M3B-A2 周/月输入身份。A2 新计划见 [M3B-A2 weekly/monthly identity](tasks/plans/2026-09-30-r4c-m3b-a2-weekly-monthly-identity.md)。
 

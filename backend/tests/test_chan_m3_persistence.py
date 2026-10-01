@@ -342,7 +342,6 @@ def test_config_removes_only_m3_persistence_blocker_after_remote_pass():
     assert config["selection_contract"]["engine_confirmation"] == "unknown"
     assert config["reason_codes"] == [
         "RUNTIME_INTEGRATION_DISABLED",
-        "USER_FACING_READ_MODEL_NOT_INTEGRATED",
     ]
 
 

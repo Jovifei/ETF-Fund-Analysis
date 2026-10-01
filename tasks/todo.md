@@ -1461,7 +1461,7 @@ Remote iteration 67 exact-head review returned `M3B_A2_DECISION=PASS`, technical
 - [x] Release bounded C2C execution evidence and request iteration-68 remote exact-head review; remote returned `M3B_B_STATUS=CHANGES_REQUIRED` and authorized iteration 69 R1.
 - [x] Keep B `NOT_DEPLOYABLE_SUBSTAGE`; no public producer, API, UI, scheduler, main merge, production, or M3B-C scope.
 
-Iteration 68 local gates passed: Windows pytest 1,369 collected, 1,348 passed, 21 skipped, 0 failures/errors, 35 warnings, 1,516.123 seconds, exit 0. `test_chan_m3b_worker.py` was 17 passed / 2 environment-gated skips. Exact CZSC worker digest matched Windows/Linux (`66b8092b...096bd`); M2/R5 frozen digests and collision checks are unchanged; PostgreSQL 16.15 retry/chronology passed. Remote iteration 68 then found the type-scope defect and missing worker correction/publication-failure coverage. Iteration 69 R1 is the current gate; M3B-C remains GO=false.
+Iteration 68 local gates passed: Windows pytest 1,369 collected, 1,348 passed, 21 skipped, 0 failures/errors, 35 warnings, 1,516.123 seconds, exit 0. Remote iteration 68 found the type-scope defect and missing worker correction/publication-failure coverage; iteration 69 R1 then closed all findings. Remote exact-head review at `f6ac2af15373be38797fb57dd6b2aff15b353fa2` returned `M3B_B_DECISION=PASS`, route retained, and authorized M3B-C implementation. M3B-C release GO remains false.
 
 ## R4C M3B-B-R1 scope and failure isolation — iteration 69
 
@@ -1475,7 +1475,7 @@ Remote iteration 68 exact-head review returned `M3B_B_STATUS=CHANGES_REQUIRED`, 
 - [x] Implement only the instrument eligibility gate in `chan_structure_service.py`; leave `chan_input.py`, protocol, queue, worker, identities, publisher, schema, API, scheduler, UI, Provider and config untouched.
 - [x] Run focused worker/A2/M2/M3/workspace/R4A regressions, exact CZSC 1.0.1 Windows/Linux integration, disposable PostgreSQL 16.15, full Windows pytest, M2/R5 cross-platform validators, and static gates.
 - [x] Commit R1 code/tests as `ec473eb40d3e28bc7c51a74c3a0a91f7679296f8` / tree `c8f705eec059538d97f635a6b3f886bd5d77faa0`, parent `e28766ad4dc5d186b335d4cca5cecb3ec3930f10`.
-- [ ] Finalize/commit R1 docs; push and verify exact GitHub head/tree; release evidence and request iteration-69 remote exact-head review.
+- [x] Finalize/commit R1 docs; push and verify exact GitHub head/tree; release iteration-69 evidence and request remote exact-head review.
 - [x] Keep deployment `NOT_DEPLOYABLE_SUBSTAGE`; M3B-C/M4/main/production false; real data UNKNOWN; actionable=false.
 
 ### Iteration 69 R1 progress
@@ -1489,7 +1489,49 @@ Remote iteration 68 exact-head review returned `M3B_B_STATUS=CHANGES_REQUIRED`, 
 - [x] Focused R4C/Workspace/R4A tests: 100 collected, 99 passed, 1 environment skip, 0 failures/errors; separate CZSC worker suite passes on Windows 3.12.10 and Linux 3.12.14.
 - [x] Disposable PostgreSQL 16.15 retry/chronology/head gate passes; M2/R5 frozen digests and collision checks unchanged; static gates pass.
 - [x] Full Windows suite: 1,374 collected, 1,352 passed, 22 skipped, 0 failures/errors, 35 warnings, 1,514.182 seconds, exit 0.
-- [x] Commit the R1 code/test fix as `ec473eb40d3e28bc7c51a74c3a0a91f7679296f8`; final docs commit, push, and remote review remain.
+- [x] Commit the R1 code/test fix as `ec473eb40d3e28bc7c51a74c3a0a91f7679296f8`; final docs commit `f6ac2af15373be38797fb57dd6b2aff15b353fa2` was pushed/read back; remote iteration 69 returned PASS and authorized M3B-C implementation.
 - [x] Keep R1 `NOT_DEPLOYABLE_SUBSTAGE`; M3B-C/M4/main/production false; real data UNKNOWN; actionable=false.
 
-R1 code/test scope is limited to `backend/app/services/chan_structure_service.py` and `backend/tests/test_chan_m3b_worker.py`. Remote exact-head review and any next-stage plan remain open.
+R1 code/test scope was limited to `backend/app/services/chan_structure_service.py` and `backend/tests/test_chan_m3b_worker.py`. Code/test `ec473eb40d3e28bc7c51a74c3a0a91f7679296f8` and final head `f6ac2af15373be38797fb57dd6b2aff15b353fa2` were pushed/read back; remote iteration 69 accepted R1.
+
+## R4C M3B-C persisted read model/private GET — iteration 70
+
+Remote iteration 69 returned `M3B_B_DECISION=PASS`, `M3B_C_IMPLEMENTATION_GO=true`, `M3B_C_RELEASE_GO=false`, and `DEPLOYMENT_DISPOSITION=DEPLOY_REQUIRED_AFTER_REMOTE_PASS`. Follow `tasks/plans/2026-09-30-r4c-m3b-c-persisted-read-model.md`. Remote iteration-70 `PLAN_UPDATE` authorized only the exact `backend/tests/test_chan_m2_contract.py` config reason-list update; M2 code/identity tests remain untouched. The read-model suite first proved tampered transition/missing absence/reappearance cases RED before the canonical replay verifier was added. Remote `PLAN_UPDATE`s authorized the exact M2 config assertion update and the semantics-preserving `api.py` baseline Ruff cleanup (one Annotated `as_of` default and three inline E402 suppressions only); the base SHA had four identical Ruff findings.
+
+- [x] Record remote PASS and save the detailed iteration-70 read-model/release plan.
+- [x] Read current STATUS/HANDOFF, read-model/Kline/API/Chan-persistence contracts, config and related tests before editing.
+- [x] Add RED tests for latest persisted stream selection, integrity fail-closed, bounded read contract, auth/no-store, zero-side-effect GET/Kline compatibility, and transition tamper/missing-absence failures.
+- [x] Implement the canonical read-only `ChanReadService` using verified persisted observation/revision/transition/head rows; do not add historical PIT semantics.
+- [x] Add one authenticated private Chan GET with D/W/M interval, no POST/as_of/refresh/enqueue, and `Cache-Control: private, no-store`.
+- [x] Replace Kline GET-time legacy `chanlun` computation with persisted R4C projections; preserve `segments=None` and fail closed on missing evidence.
+- [x] Remove only `USER_FACING_READ_MODEL_NOT_INTEGRATED` from Chan config; retain disabled/BLOCKED/SELECTED_DISABLED/runtime-disabled state.
+- [x] Run M3B-C/B/A/A2/M2/M3/workspace/Kline/R4A gates, PG16 vertical slice, full Windows pytest, M2/R5 Win/Linux, and static checks.
+- [ ] Commit/push, verify exact GitHub SHA/tree, release iteration-70 evidence, and request remote exact-head review.
+- [ ] Keep `M3B_C_RELEASE_GO=false` and do not deploy until remote exact-head PASS opens a separate backup/restore/rehearsal/rollback/live-smoke release gate.
+- [x] Keep M4/main/production false; real data UNKNOWN; actionable=false; no auto-trading.
+
+## 2026-10-01 Execution workspace relocation
+
+- Jovi requires the execution checkout to stay under the project writable root.
+- Active checkout: E:\project\ETF-Fund-Analysis\.local\etf-r4c-m3bc
+- Independent Git metadata; branch codex/r4c-m3bc-relocated; base f6ac2af15373be38797fb57dd6b2aff15b353fa2.
+- All 16 pending tracked/untracked files copied and SHA256 verified against the old checkout before documentation updates.
+- Original C-drive checkout and Owner main checkout preserved. No deployment performed.
+- [x] Relocate pending work without altering Owner state.
+- [x] Repair predecessor chronology, latest historical witness integrity, and PostgreSQL in-memory corruption coverage.
+- [x] Restart complete regression; validate Windows/Linux contracts and static gates.
+- [ ] Push exact candidate to GitHub and obtain remote review, then follow release gates.
+
+### Iteration 70 local verification review — 2026-10-01
+
+- [x] Add predecessor chronology regressions for both cutoff sequence and normalized cutoff_at; mutate ORM row/payload/hash consistently so the chronology guard is exercised independently of payload-integrity checks.
+- [x] Replace unbounded historical revision scan with one same-stream/key latest prior non-null transition witness ordered by observation sequence and limited to one row; verify its immutable observation, full revision set, namespace, and key/revision reference; corruption fails closed.
+- [x] Add tests for corrupt witness observation hash, revision hash, transition reference, and SQL-level bounded query.
+- [x] Extend the disposable PostgreSQL 16 gate: perform a migrated synthetic worker→private GET, repeat GET, then mutate observation and revision hashes in memory under `no_autoflush`; assert fail-closed, rollback, stable Chan/job row counts, and zero INSERT/UPDATE/DELETE/REPLACE.
+- [x] Read-model test file: 24 passed / 1 PG fixture skipped / 1 warning on Windows Python 3.13.14. PostgreSQL 16.15 vertical slice on Python 3.12.14 Linux: 1 passed / 1 warning.
+- [x] Full Windows repository suite: 1,399 collected / 1,376 passed / 23 skipped / 0 failures; exit 0. A first run had one OCR child-start timeout; that test passed alone and in the second complete run; no out-of-scope OCR change was made.
+- [x] Exact CZSC 1.0.1 Windows 3.12.9/Linux 3.12.14 M2 digest matched: `091254d34ddfeeadc85cd0b17e035295bfc32f8a0cebc6776440f10be82aaeac`.
+- [x] R5 Windows/Linux semantic digest matched: `0f4ae0322b5d390c41e618da4c342abea66baac30bce4ccfe4a5f0d713cff76f`; history digest matched: `d637b4f80c749db48d06dfafe3762216d684ff2827149b4024a3de3f814fc1e9`; normal collision count 0 and injected weak-ID self-test detected the collision.
+- [x] Scoped Ruff, compileall, Node syntax, scoped secret scan, and `git diff --check` passed.
+- [ ] Stage only iteration-70 authorized M3B-C files, commit/push, release readable evidence through C2C, and request remote exact-head review.
+- [ ] Keep `M3B_C_RELEASE_GO=false`, M4/main/production false, real-data qualification UNKNOWN, and actionable=false until separate remote review/release gates.

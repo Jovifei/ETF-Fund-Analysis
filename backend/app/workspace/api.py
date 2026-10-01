@@ -48,8 +48,17 @@ def detail(code: str, db: DB, settings: Config, user: User) -> dict:
     return result
 
 
+@private_router.get("/workspace/instruments/{code}/chan")
+def chan_evidence(code: str, db: DB, response: Response, interval: Literal["D", "W", "M"] = "D") -> dict:
+    response.headers["Cache-Control"] = "private, no-store"
+    result = read_model.chan_evidence(db, code, interval)
+    if result is None:
+        raise HTTPException(404, _instrument_missing_reason(db, code))
+    return result
+
+
 @private_router.get("/workspace/instruments/{code}/chart")
-def chart(code: str, db: DB, settings: Config, user: User, interval: str = "1d", limit: int = Query(default=260, ge=30, le=1500), as_of: datetime | None = Query(default=None)) -> dict:
+def chart(code: str, db: DB, settings: Config, user: User, interval: str = "1d", limit: int = Query(default=260, ge=30, le=1500), as_of: Annotated[datetime | None, Query()] = None) -> dict:
     if interval not in {"1d", "1w", "1mo", "30m", "60m"}:
         raise HTTPException(422, "unsupported_chart_interval")
     if as_of is not None and read_model.market_time(as_of) > read_model.market_time(datetime.now(read_model.SHANGHAI)):
@@ -85,7 +94,7 @@ def factors(db: DB, settings: Config, user: User) -> dict:
 
 private_router.include_router(actions_router)
 private_router.include_router(revision_router)
-from app.workspace.journal import router as journal_router
+from app.workspace.journal import router as journal_router  # noqa: E402
 
 private_router.include_router(journal_router)
 # Machine credentials never inherit the legacy browser authentication path.
@@ -167,8 +176,8 @@ def news_status(db: DB, settings: Config, user: User):
     from app.workspace.news_status import read
     return read(db, settings=settings)
 
-from app.workspace.ai_api import members as member_router
-from app.workspace.ai_api import router as ai_router
+from app.workspace.ai_api import members as member_router  # noqa: E402
+from app.workspace.ai_api import router as ai_router  # noqa: E402
 
 private_router.include_router(ai_router)
 private_router.include_router(member_router)

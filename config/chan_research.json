@@ -30,8 +30,7 @@
     }
   },
   "reason_codes": [
-    "RUNTIME_INTEGRATION_DISABLED",
-    "USER_FACING_READ_MODEL_NOT_INTEGRATED"
+    "RUNTIME_INTEGRATION_DISABLED"
   ],
   "accepted_application_sha": "43bfbf6929a70f520c216b759edbaa433e920e91",
   "accepted_application_tree": "12d217af3edbe34c67bc36e75b4395ab4917b001"

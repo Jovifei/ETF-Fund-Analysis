@@ -13,21 +13,26 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-import pandas as pd
 from sqlalchemy import case, select
 from sqlalchemy.orm import Session
 
 from app.core.config import PROJECT_ROOT, Settings, get_settings
-from app.models import DailyBar, ForecastSnapshot, IndicatorSnapshot, Instrument, QuoteSnapshot, SectorSnapshot
+from app.models import (
+    DailyBar,
+    ForecastSnapshot,
+    IndicatorSnapshot,
+    Instrument,
+    QuoteSnapshot,
+    SectorSnapshot,
+)
 from app.services.current_decision_service import CurrentDecisionService
 from app.utils.indicator_state import (
     kdj_state_view,
-    macd_state_view,
     ma_state_view,
+    macd_state_view,
     rsi_state_view,
     td_state_view,
     thresholds_from_strategy,
@@ -54,15 +59,6 @@ def _pct(value: float | None) -> float | None:
     不可能数值。单位口径一旦存疑应停止信号，而不是猜测性换算。
     """
     return round(value, 2) if value is not None else None
-
-
-def _chanlun_importable() -> bool:
-    try:
-        import chanlun  # noqa: F401
-
-        return True
-    except ImportError:
-        return False
 
 
 def _forecast_note(diagnostics: Any) -> str:
@@ -104,32 +100,14 @@ class KlineStabilizationService:
         previous = dict(rows[1].values_json or {}) if len(rows) > 1 else {}
         return latest, previous
 
-    def _bars_frame(self, db: Session, instrument_id: int) -> pd.DataFrame:
-        rows = db.scalars(
-            select(DailyBar)
+    def _recent_daily_closes(self, db: Session, instrument_id: int) -> list[float | None]:
+        values = db.scalars(
+            select(DailyBar.close)
             .where(DailyBar.instrument_id == instrument_id)
             .order_by(DailyBar.trade_date.desc())
-            .limit(420)  # 足够覆盖 10 日窗口 + 历史匹配
+            .limit(6)
         ).all()
-        rows = list(reversed(rows))
-        if not rows:
-            return pd.DataFrame()
-        return pd.DataFrame(
-            [
-                {
-                    "trade_date": row.trade_date,
-                    "open": row.open,
-                    "high": row.high,
-                    "low": row.low,
-                    "close": row.close,
-                    # Missing volume/amount stay missing. 0 is a real empty
-                    # session, not a stand-in for unknown units or a null bar.
-                    "volume": _finite(row.volume),
-                    "amount": _finite(row.amount),
-                }
-                for row in rows
-            ]
-        )
+        return [_finite(value) for value in reversed(values)]
 
     def _latest_quote(self, db: Session, instrument_id: int) -> QuoteSnapshot | None:
         return db.scalar(
@@ -268,61 +246,40 @@ class KlineStabilizationService:
 
     # ---------- 指标快照 ----------
 
-    # ---------- 缠论（chanlun，可选） ----------
+    # ---------- Persisted Chan compatibility summary ----------
 
     @staticmethod
-    def _chanlun_state(frame: pd.DataFrame) -> dict[str, Any]:
-        """基于 chanlun 框架计算缠论摘要；框架不可用时返回 unavailable。"""
-        try:
-            import chanlun
-        except ImportError:
-            return {"available": False, "note": "chanlun 未安装"}
-        try:
-            if frame.empty or "close" not in frame.columns:
-                return {"available": False, "note": "数据不足"}
-            import datetime as dt
-
-            klines = []
-            for i, row in frame.iterrows():
-                ts = row.get("trade_date")
-                if hasattr(ts, "timestamp"):  # datetime
-                    ts_int = int(ts.timestamp())
-                elif hasattr(ts, "toordinal"):  # datetime.date
-                    ts_int = int(dt.datetime.combine(ts, dt.time()).timestamp())
-                else:
-                    ts_int = int(ts)
-                volume = _finite(row.get("volume"))
-                klines.append(
-                    chanlun.K线.创建普K(
-                        "CHAN",
-                        ts_int,
-                        float(row["open"]),
-                        float(row["high"]),
-                        float(row["low"]),
-                        float(row["close"]),
-                        # Third-party chanlun requires a float. Missing volume
-                        # is not a zero session; this stub stays inside the
-                        # adapter and is never written back to DailyBar.
-                        0.0 if volume is None else volume,
-                        i,
-                        86400,
-                    )
-                )
-            config = chanlun.缠论配置()
-            obs = chanlun.观察者("CHAN", 86400, config)
-            for kline in klines:
-                obs.增加原始K线(kline)
-            return {
-                "available": True,
-                "fenxing": len(getattr(obs, "分型序列", []) or []),
-                "bi": len(getattr(obs, "笔序列", []) or []),
-                "segments": len(getattr(obs, "线段序列", []) or []),
-                "zs": len(getattr(obs, "中枢序列", []) or []),
-                "note": "缠论(分型/笔/线段/中枢) 研究视图",
+    def _persisted_chan_summary(db: Session, instrument: Instrument) -> dict[str, Any]:
+        if instrument.kind not in {"ETF", "LOF"}:
+            view: dict[str, Any] = {
+                "available": False,
+                "reason_code": "unsupported_instrument_type",
+                "counts": {},
+                "observation_id": None,
+                "settlement_status": None,
             }
-        except Exception as exc:  # 框架异常不阻断看板
-            logger.warning("chanlun analysis failed: %s", exc)
-            return {"available": False, "note": f"缠论计算失败: {type(exc).__name__}"}
+        else:
+            from app.services.chan_read_service import read_latest
+
+            view = read_latest(db, instrument.ts_code, "D")
+
+        available = view.get("available") is True
+        counts = view.get("counts") if available else {}
+        counts = counts if isinstance(counts, dict) else {}
+        reason = view.get("reason_code")
+        return {
+            "available": available,
+            "fenxing": counts.get("fx") if available else None,
+            "bi": counts.get("bi") if available else None,
+            "zs": counts.get("zs") if available else None,
+            "segments": None,
+            "source": "persisted_r4c_observed_revision",
+            "observation_id": view.get("observation_id"),
+            "settlement_status": view.get("settlement_status"),
+            "engine_confirmation": "unknown",
+            "reason_code": reason,
+            "note": reason or "persisted R4C observed revision",
+        }
 
     # ---------- 行构建 ----------
 
@@ -336,8 +293,6 @@ class KlineStabilizationService:
     ) -> dict[str, Any]:
         # 指标状态唯一数据源：IndicatorSnapshot.values_json（与 signal_grade 同一口径）。
         values, previous_values = self._latest_indicator_values(db, instrument.id)
-        # 完整价格序列仅剩缠论需要；chanlun 不可用时不再加载任何日线。
-        frame = self._bars_frame(db, instrument.id) if _chanlun_importable() else pd.DataFrame()
         quote = self._latest_quote(db, instrument.id)
 
         today_pct = _pct(_finite(quote.pct_change)) if quote else None
@@ -378,7 +333,7 @@ class KlineStabilizationService:
                     else "weighted_historical_neighbor_up_frequency"
                 ),
             }
-        chan = self._chanlun_state(frame)
+        chan = self._persisted_chan_summary(db, instrument)
         if current_decision is None:
             decision_snapshot_id, decisions = CurrentDecisionService(self.settings).resolve_many(db, [instrument])
             current_decision = decisions.get(str(instrument.ts_code).strip().upper())
@@ -403,9 +358,12 @@ class KlineStabilizationService:
         # 近1周：优先读落库 return_5d（与指标引擎同一口径）
         week_label = "—"
         ret5 = _finite(values.get("return_5d"))
-        if ret5 is None and len(frame) >= 6:
-            close = frame["close"]
-            ret5 = (float(close.iloc[-1]) / float(close.iloc[-6]) - 1) if float(close.iloc[-6]) > 0 else None
+        if ret5 is None:
+            recent_closes = self._recent_daily_closes(db, instrument.id)
+            first_close = recent_closes[0] if len(recent_closes) == 6 else None
+            last_close = recent_closes[-1] if len(recent_closes) == 6 else None
+            if first_close is not None and last_close is not None and first_close > 0:
+                ret5 = last_close / first_close - 1
         if ret5 is not None:
             week_label = f"{ret5 * 100:+.1f}%"
 
@@ -456,7 +414,7 @@ class KlineStabilizationService:
             "as_of": datetime.now(self.timezone).isoformat(timespec="seconds"),
         }
 
-    # ---------- 汇总 ----------    # ---------- 汇总 ----------
+    # ---------- 汇总 ----------
 
     def summary(self, db: Session) -> dict[str, Any]:
         instruments = self._instruments(db)
@@ -489,6 +447,6 @@ class KlineStabilizationService:
                 "本看板为研究视图，不构成投资建议，不生成自动订单。",
                 "action 与主页共用唯一 current decision；TD/MA/MACD/KDJ/RSI/缠论只作解释，不生成第二套动作。",
                 "明日预测读取与主页相同的持久化 ForecastSnapshot；未校准 p_up 仅表示历史相似样本上涨占比。",
-                "缠论指标基于 chanlun 框架计算，仅作研究视图。",
+                "缠论兼容摘要读取已持久化的 R4C 观测修订，仅作研究视图。",
             ],
         }

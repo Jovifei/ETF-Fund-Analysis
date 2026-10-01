@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -285,6 +286,22 @@ def _stored_structure_state(
         engine_state=payload.get("engine_state"),
         revision_id=row.revision_id,
     )
+
+
+def verified_observation_payload(row: ChanResearchObservation) -> dict[str, Any]:
+    """Return a detached observation payload after the canonical M3 checks pass."""
+
+    return deepcopy(_stored_observation_payload(row))
+
+
+def verified_structure_payload(
+    row: ChanStructureRevision,
+    observation_row: ChanResearchObservation,
+) -> dict[str, Any]:
+    """Return detached structure evidence only after canonical key/revision checks pass."""
+
+    _stored_structure_state(row, observation_row)
+    return deepcopy(row.payload_json)
 
 
 class ChanObservationPublisher:

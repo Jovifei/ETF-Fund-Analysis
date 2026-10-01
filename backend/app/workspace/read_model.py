@@ -321,6 +321,23 @@ def instrument_detail(db: Session, settings: Settings, code: str, user_id: int |
     }
 
 
+def chan_evidence(db: Session, code: str, interval: str) -> dict | None:
+    """Return the latest persisted Chan view for a catalog ETF/LOF only."""
+    normalized = str(code or "").strip().upper()
+    instrument = db.scalar(
+        select(Instrument).where(
+            Instrument.ts_code == normalized,
+            Instrument.kind.in_(("ETF", "LOF")),
+        )
+    )
+    if instrument is None:
+        return None
+
+    from app.services.chan_read_service import read_latest
+
+    return read_latest(db, instrument.ts_code, interval)
+
+
 def chart_data(db: Session, settings: Settings, code: str, interval: str, limit: int, *, as_of: datetime | None = None) -> dict | None:
     as_of = market_time(as_of or datetime.now(SHANGHAI)).astimezone(SHANGHAI)
     if interval in ("1w", "1mo"):

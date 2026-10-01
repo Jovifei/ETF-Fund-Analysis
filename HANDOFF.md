@@ -1,21 +1,20 @@
-# 当前接手入口：R4C M3B-B-R1 scope and failure isolation（iteration 69，2026-09-30）
+# 当前接手入口：R4C M3B-C persisted read model/private GET（iteration 70，2026-10-01）
 
-远端 iteration 67 已审核通过 A2-R1：`M3B_A2_STATUS=PASS`、Route A 保留；最终 head `6166587d718992237908099b6b89ea83f3779d3d`。iteration 68 已授权 M3B-B，执行计划在 `tasks/plans/2026-09-30-r4c-m3b-b-audited-worker-publication.md`：只在现有 audited worker 内接入内部 bounded Chan job，冻结输入后关闭 DB transaction，再用 CZSC adapter 计算，最后新建短 transaction 调用现有 publisher。公共 DataRequest 不接纳该 task，不增加 API/scheduler/UI/producer，不改 M3 schema/identity，不部署。M3B-C/M4/main/production 仍 NO-GO；真实资格 UNKNOWN，actionable=false。
+远端 iteration 69 精确审核接受 M3B-B-R1：最终 head `f6ac2af15373be38797fb57dd6b2aff15b353fa2`，`M3B_B_DECISION=PASS`，技术路线保留。Iteration 70 授权 `M3B_C_IMPLEMENTATION_GO=true`；实施计划见 `tasks/plans/2026-09-30-r4c-m3b-c-persisted-read-model.md`。本地 M3B-C 代码和验证已完成，收据见 [M3B-C 接受证据](docs/audits/R4C_M3B_C_READ_MODEL_ACCEPTANCE_20261001.md)。当前 exact-head 仍待提交、推送及远端审核；`M3B_C_RELEASE_GO=false`。M4/main/production 保持 false，真实数据 UNKNOWN，actionable=false，无自动交易。
 
-### Iteration 68 review and iteration 69 handoff
+## 当前状态与交接动作
 
-Remote iteration 68 reviewed the exact pushed head `e28766ad4dc5d186b335d4cca5cecb3ec3930f10` / tree `30a1904edd9d95fe5a24f94b17773cf415abba79`, retained the route, and returned `M3B_B_STATUS=CHANGES_REQUIRED`, `M3B_B_R1_GO=true`. Remote found a missing persisted `Instrument.kind in {ETF, LOF}` gate and two worker-level evidence gaps: historical correction through freeze→adapter→publisher, and publication failure isolation/head preservation. Iteration 69 R1 implementation and required tests are now complete; only the service and worker test file changed in code.
+- 代码已实现只读 latest-persisted Chan 服务、私有 D/W/M GET、Kline 持久化兼容投影；不提供 `as_of` / historical PIT，不触发 Provider、CZSC、模型或写入。
+- 远端确认的三个修复已完成：前序 cutoff 与 cutoff_at 单调性、最新历史重现 transition witness 完整性和有界读取、PostgreSQL 原位篡改 fail-closed / no-DML 测试。
+- 本地验证已通过：全量 Windows 1,399 collected / 1,376 passed / 23 skipped / 0 failures；PG16 Linux vertical slice 1/1；Windows/Linux M2 与 R5 冻结摘要匹配；Ruff、compileall、Node、secret scan、diff-check 全绿。详见接受收据。
+- 下一步在本隔离目录仅提交 iteration 70 授权的 M3B-C 变更（不纳入旧 R1 计划文档的遗留修改），推送分支并向绑定的 ChatGPT 项目会话提交可读执行证据，请求 exact-head 审查。
+- 远端代码审核 PASS 后，等待单独 release-gate 计划，按备份/恢复演练、回滚与线上 smoke 门禁执行。现在不部署。
 
-Follow `tasks/plans/2026-09-30-r4c-m3b-b-r1-scope-failure-isolation.md`. The eligibility gate and RED-first scope tests pass; corrected historical input now appends a revision on the same stream; publication failure isolation and rollback/head retention pass on SQLite. Focused gates (100 collected / 99 passed / 1 skip), exact CZSC Windows/Linux, disposable PG16, M2/R5, and static gates pass. Full Windows pytest is 1,374 collected / 1,352 passed / 22 skipped / 0 failed/errors / 35 warnings / 1,514.182s / exit 0. R1 code/test commit `ec473eb40d3e28bc7c51a74c3a0a91f7679296f8` / tree `c8f705eec059538d97f635a6b3f886bd5d77faa0`, parent `e28766ad4dc5d186b335d4cca5cecb3ec3930f10`. Next: finalize the receipt, push, read back exact GitHub SHA/tree, release iteration-69 evidence, and request remote exact-head review. Do not start M3B-C before exact-head PASS and a new remote plan.
+## R1 已接受基线
 
-- Full Windows pytest: 1,369 collected; 1,348 passed; 21 skipped; no failures/errors; 35 warnings; 1,516.123 seconds; exit 0.
-- Exact CZSC 1.0.1 D/W/M worker test passes on Windows Python 3.12.10 and Linux Python 3.12.14 with matching digest `66b8092b122ffb1819d18e45963b3f708fca0581550fb062395efc96023096bd`; W temporary→settled, exact retry, and chronological head retention are covered; D emits two synthetic FX structures.
-- Disposable PostgreSQL 16.15 worker test passes exact retry and older-cutoff rejection/head retention; its loopback container was stopped and removed.
-- M2/R5 cross-platform frozen digests and collision checks are unchanged. R4A corporate-action tests pass 8/8. Static gates pass.
-- Deployment is `NOT_DEPLOYABLE_SUBSTAGE`; production untouched; real data `UNKNOWN`; `actionable=false`; no automated trading.
-- Full evidence inventory: `docs/audits/R4C_M3B_B_WORKER_PUBLICATION_20260930.md`.
-
-R1 已完成远端 PASS；其双调用点修复和 full-test 证据保存在审计收据。A2 初次实现已推送并完成远端 review；按 iteration 66 的 bounded plan 完成两项 R1 修复、测试、推送和再次远端审查后才继续。A2 明确不部署。
+- 迭代69 修复提交 `ec473eb40d3e28bc7c51a74c3a0a91f7679296f8` / tree `c8f705eec059538d97f635a6b3f886bd5d77faa0`，最终头 `f6ac2af15373be38797fb57dd6b2aff15b353fa2` 已 GitHub 读回并由远端 PASS。
+- R1 全量 Windows pytest：1,374 collected / 1,352 passed / 22 skipped / 0 failures/errors；CZSC 1.0.1 worker D/W/M digest Windows/Linux 一致；PG16.15、M2/R5 与静态门禁通过。
+- M3B-B 仍为 `NOT_DEPLOYABLE_SUBSTAGE`，无生产变更，真实行情资格 UNKNOWN。
 
 ## 本轮交接
 
@@ -121,3 +120,15 @@ Bridge 登录使用 bridge/etf_agent_bridge.py 的 login 子命令；不要改�
 无生产部署授权时，只做本地/隔离验收。需要上线另行批准；任何数据迁移先备份和恢复演练。不要把恢复旧数据/旧代码用来绕过新资格门禁。恢复备份前保护其后新增的持仓、自选、复盘与审阅写入。模型API主密钥、账户凭据、行情Token不得进入Git、聊天或截图。
 
 [旧交接全文](docs/archive/pre-audit-close-20260913/HANDOFF.md)仅保留历史，不覆盖以上规则。完整缠论、自动训练、支付订阅、自动云地同步仍未实现。
+
+## 2026-10-01 Execution workspace relocation
+
+- Jovi requires the execution checkout to stay under the project writable root.
+- Active checkout: E:\project\ETF-Fund-Analysis\.local\etf-r4c-m3bc
+- Independent Git metadata; branch codex/r4c-m3bc-relocated; base f6ac2af15373be38797fb57dd6b2aff15b353fa2.
+- All 16 pending tracked/untracked files copied and SHA256 verified against the old checkout before documentation updates.
+- Original C-drive checkout and Owner main checkout preserved. No deployment performed.
+- [x] Relocate pending work without altering Owner state.
+- [ ] Repair predecessor chronology, latest historical witness integrity, and PostgreSQL in-memory corruption coverage.
+- [ ] Restart complete regression; validate Windows/Linux contracts and static gates.
+- [ ] Push exact candidate to GitHub and obtain remote review, then follow release gates.

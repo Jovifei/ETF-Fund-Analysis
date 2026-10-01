@@ -257,7 +257,6 @@ def test_config_keeps_selected_engine_disabled_after_m3_persistence():
     assert config["selection_contract"]["engine_confirmation"] == "unknown"
     assert config["reason_codes"] == [
         "RUNTIME_INTEGRATION_DISABLED",
-        "USER_FACING_READ_MODEL_NOT_INTEGRATED",
     ]
 
 

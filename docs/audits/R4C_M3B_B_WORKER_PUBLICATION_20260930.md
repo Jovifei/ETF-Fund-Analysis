@@ -14,7 +14,7 @@ Code/test commit: `e38d524c639a938e5bf709302c95923b9f20df1f` / tree `a00ae89bfa7
 
 Iteration 67 accepted M3B-A2 and authorized M3B-B. This stage connects an internal bounded Chan request to the existing workspace data-job queue and worker, freezes each code's accepted input in a short transaction, closes that transaction before CZSC runs, then writes through the existing immutable `ChanObservationPublisher` in a separate short transaction.
 
-M3B-B is `NOT_DEPLOYABLE_SUBSTAGE` / `PRE_RELEASE_RUNTIME_COMPONENT`. It has no ordinary producer, public enqueue route, read model, scheduler, UI, or production activation. Production was not contacted or changed. Real-data qualification remains `UNKNOWN`; `actionable=false`; automatic trading remains absent. M3B-C and later stages remain blocked pending this head's remote review and a separate remote plan.
+M3B-B is `NOT_DEPLOYABLE_SUBSTAGE` / `PRE_RELEASE_RUNTIME_COMPONENT`. It has no ordinary producer, public enqueue route, read model, scheduler, UI, or production activation. Production was not contacted or changed. Real-data qualification remains `UNKNOWN`; `actionable=false`; automatic trading remains absent. After R1 passed, iteration 70 authorized M3B-C implementation; M3B-C release, M4, main integration and production remain gated.
 
 ## Implementation
 
@@ -66,11 +66,11 @@ No production endpoint, Provider, model, real market-data source, or production 
 
 ## Remaining gate
 
-Iteration 68 remote review found that the service did not enforce persisted `Instrument.kind` as ETF/LOF before freeze/engine, and that worker-level historical correction and publication-failure isolation/head-retention tests were missing. Follow `tasks/plans/2026-09-30-r4c-m3b-b-r1-scope-failure-isolation.md`; only `chan_structure_service.py` and `test_chan_m3b_worker.py` are authorized code/test files. Keep M3B-C, M4, main integration, and production disabled until the R1 exact-head review and a new remote plan.
+Iteration 68 findings were fixed in R1 and the remote exact-head review accepted `f6ac2af15373be38797fb57dd6b2aff15b353fa2` as `M3B_B_DECISION=PASS`. Iteration 70 authorizes M3B-C implementation under `tasks/plans/2026-09-30-r4c-m3b-c-persisted-read-model.md`; production release remains gated and M4/main/production remain false.
 
 ### Iteration 69 R1 local verification
 
-R1 code/test changes are limited to `backend/app/services/chan_structure_service.py` and `backend/tests/test_chan_m3b_worker.py`. Code/test commit is `ec473eb40d3e28bc7c51a74c3a0a91f7679296f8` / tree `c8f705eec059538d97f635a6b3f886bd5d77faa0`, parent `e28766ad4dc5d186b335d4cca5cecb3ec3930f10`; the documentation receipt commit, push, and exact-head review remain.
+R1 code/test changes are limited to `backend/app/services/chan_structure_service.py` and `backend/tests/test_chan_m3b_worker.py`. Code/test commit is `ec473eb40d3e28bc7c51a74c3a0a91f7679296f8` / tree `c8f705eec059538d97f635a6b3f886bd5d77faa0`, parent `e28766ad4dc5d186b335d4cca5cecb3ec3930f10`; docs were pushed at final head `f6ac2af15373be38797fb57dd6b2aff15b353fa2`, which remote iteration-69 review accepted as `M3B_B_DECISION=PASS`.
 
 - Eligibility is checked from persisted `Instrument.kind` in the short freeze scope. Missing instruments and non-ETF/LOF kinds return bounded blocked reasons before freeze/CZSC/publisher. ETF and LOF follow the normal path; `chan_input.py` and identities are unchanged.
 - RED-first scope cases failed before the type gate and pass afterward. Same-as_of historical D correction is tested through worker→freeze→CZSC 1.0.1→publisher; the stream stays stable, input/observation changes, sequence advances, old evidence remains, and the head advances.
@@ -80,4 +80,4 @@ R1 code/test changes are limited to `backend/app/services/chan_structure_service
 - Disposable PostgreSQL 16.15 retry/idempotency/chronology/head-retention passes. Frozen M2/R5 digests and collision checks are unchanged.
 - Final Windows full suite: 1,374 collected, 1,352 passed, 22 skipped, 0 failures/errors, 35 warnings, 1,514.182 seconds, exit 0. Ruff, compileall, Node syntax, scoped secret scan and diff-check pass.
 
-R1 local evidence is under `E:/Claude_allow/Download/ETF_R4C_M3_20260929/` and `iteration69-linux/`. No real data/Provider, production database, deployment or trading was used. Next: finalize/commit the R1 documentation, push and verify the exact branch head, then request remote iteration-69 review; do not start M3B-C until PASS and a separate plan.
+R1 local evidence is under `E:/Claude_allow/Download/ETF_R4C_M3_20260929/` and `iteration69-linux/`. No real data/Provider, production database, deployment or trading was used. Remote iteration 69 accepted R1. Iteration 70 authorizes M3B-C implementation; follow `tasks/plans/2026-09-30-r4c-m3b-c-persisted-read-model.md`. No production release is authorized until a separate release gate covers backup/restore, rollback and live smoke.
