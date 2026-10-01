@@ -1,0 +1,22 @@
+{
+  "counts": {
+    "chan_research_observations": 0,
+    "chan_structure_revisions": 0,
+    "chan_observed_transitions": 0,
+    "chan_research_stream_heads": 0,
+    "workspace_data_jobs": 3,
+    "provider_audits": 27229,
+    "queued_running": 0,
+    "chan_jobs": 0
+  },
+  "alembic": "h9c0d1e2f3a4",
+  "chan_config": {
+    "enabled": false,
+    "qualification_status": "BLOCKED",
+    "selection_status": "SELECTED_DISABLED",
+    "reason_codes": [
+      "RUNTIME_INTEGRATION_DISABLED"
+    ]
+  },
+  "observed_at": "2026-10-02T01:41:50.189785+08:00"
+}

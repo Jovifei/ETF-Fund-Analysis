@@ -1,3 +1,19 @@
+# Iteration 71 release relay — 2026-10-02
+
+- [x] Remote exact-SHA M3B-C code review PASS at `3a13575f58ae6f8aad0face1a8e42391d2356518`.
+- [x] Reconcile Jovi-accepted current production baseline `3069ab72` without retroactive historical approval.
+- [x] Build exact-source off-host candidate; retain image configuration digest and archive SHA-256 receipt.
+- [x] Classify old v106 diagnostics by routing, IDs, images, ports, aliases and mounts; obtain Jovi's authorization to remove unused remnants.
+- [x] Stop/remove only three unused diagnostic containers; preserve shared data/images and verify live ETF health and production container IDs.
+- [x] Publish and validate a fresh backup using reviewed candidate script via fully buffered stdin, without retention deletion. Archive `fund_decision_20261002_002706_pZSmts.sql.gz`, 341436962 bytes, mode 0600; gzip/checksum PASS. Initial unbuffered attempt exited 0 but published no archive and is not PASS.
+- [x] Restore that exact backup to isolated disposable PostgreSQL 16; baseline e609200001/38 public tables, candidate upgrade to h9c0d1e2f3a4/43 tables and schema check PASS.
+- [x] Smoke exact candidate on restored copy; private auth, packaged UI, worker startup and dormant scheduler startup PASS; D/W/M repeated Chan GET 0 DML and unchanged job/provider/evidence counts.
+- [x] Demonstrate rollback with exact reconciled pre-release image and upgraded copy: IMAGE_ONLY PASS, old actual API healthy and auth/read/static PASS; schema retained.
+- [x] Switch production after remote R1-R7 PASS and R8 GO; exact images/schema/platform/static/anonymous auth boundary PASS. Private authenticated live GET and R10 remain pending normal login.
+- [ ] Return full release evidence for remote review before M4. Resolve C2C workspace identity mismatch before connector-dependent review.
+
+Review: cleanup/preflight/deployment PASS; code3a13575 deployed with display version1.0.8. Final private live acceptance pending Jovi normal login. Star Photo and active Tesla/Jourvolt retained. Medicine-box deployment location unverified on this Docker host. Real data UNKNOWN; no automated trading. Receipt: `docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md`.
+
 # Freshness recovery — 2026-09-21
 
 - [x] Trace live ingestion, computation and scheduler outcomes.

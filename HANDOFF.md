@@ -1,4 +1,12 @@
-# 当前接手入口：R4C M3B-C persisted read model/private GET（iteration 70，2026-10-01）
+# 当前接手入口：iteration71 已部署，私有验收与远端最终审核待完成（2026-10-02）
+
+优先读 [production receipt](docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md)、[R5–R7 rehearsal](docs/audits/R4C_RELEASE_R5_REHEARSAL_20261002.md) 和本聊天 C2C c2c_a1d7 checkpoint。代码3a13575已部署，镜像配置547533c5、Alembic h9c0d1e2f3a4，平台检查通过；运行时仍禁用，真实数据 UNKNOWN。新备份与旧镜像保留，IMAGE_ONLY 回滚已演练。
+
+下一动作：登录问题已向 Jovi 提出，正常登录完成后通过既有浏览器会话检查私有 Chan GET，立即比较同次请求前后八项聚合计数。不要读取密码、Cookie、Token或已有会话，不建生产测试用户。C2C 已绿色并由远端确认工作区正确；不重发 INIT/旧执行请求，不改其他项目连接。完成R9/R10后提交最终文档并请远端复核R12，只有其通过才请求M4计划。继续使用 E 盘项目内执行目录，保留 Owner main 脏区。
+
+---
+
+# 历史接手入口：R4C M3B-C persisted read model/private GET（iteration 70，2026-10-01）
 
 远端 iteration 69 精确审核接受 M3B-B-R1：最终 head `f6ac2af15373be38797fb57dd6b2aff15b353fa2`，`M3B_B_DECISION=PASS`，技术路线保留。Iteration 70 授权 `M3B_C_IMPLEMENTATION_GO=true`；实施计划见 `tasks/plans/2026-09-30-r4c-m3b-c-persisted-read-model.md`。本地 M3B-C 代码和验证已完成，收据见 [M3B-C 接受证据](docs/audits/R4C_M3B_C_READ_MODEL_ACCEPTANCE_20261001.md)。当前 exact-head 仍待提交、推送及远端审核；`M3B_C_RELEASE_GO=false`。M4/main/production 保持 false，真实数据 UNKNOWN，actionable=false，无自动交易。
 

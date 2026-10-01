@@ -1,4 +1,12 @@
-# 当前状态：R4C M3B-C 本地实现与验证 PASS，待 GitHub exact-head 远端审核（2026-10-01）
+# 当前状态：R4C M3B-C 已部署，待正常登录后的私有线上验收（2026-10-02）
+
+远端 iteration71 已通过 R1–R7 并放行受控 R8。代码 `3a13575f58ae6f8aad0face1a8e42391d2356518` / tree `70c5ea87fc84ed027202c8df0622f5e44f717a9e` 已于上海时间01:36切换上线。三服务使用镜像配置 digest `547533c5...`；API/worker健康、scheduler运行，Alembic `h9c0d1e2f3a4`，公开健康、页面/静态、匿名私有401均通过。新备份与 IMAGE_ONLY 回滚验证通过并保留。发布收据见 [production receipt](docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md)。
+
+接下来使用 Jovi 正常登录的网页会话完成私有 Chan GET 和 R10 同次 GET 前后计数不变，再交远端最终复核；登录问题已提出，禁止重复索取或读取密码/Cookie/Token、创建生产测试用户、绕过认证。C2C 错配已安全修复并远端核验。执行目录位于项目内 E 盘 `.local/etf-r4c-m3bc`；Owner main 与原 C 盘 worktree 保持原状。M4/main 尚未授权，真实数据 UNKNOWN，actionable=false，无自动交易。
+
+---
+
+# 历史状态：R4C M3B-C 本地实现与验证 PASS，待 GitHub exact-head 远端审核（2026-10-01）
 
 Iteration 70 的 M3B-C 实现已完成。全量 Windows pytest 为 1,399 collected / 1,376 passed / 23 skipped / 0 failures；PostgreSQL 16 Python 3.12 Linux worker→private GET / immutable corruption / zero-DML 用例 1 passed；Windows 3.12.9 与 Linux 3.12.14 的 M2/R5 语义摘要完全一致。Ruff（限本次改动文件）、compileall、Node syntax、secret scan、diff-check 均通过。详细数据见 [M3B-C 接受收据](docs/audits/R4C_M3B_C_READ_MODEL_ACCEPTANCE_20261001.md)。
 
