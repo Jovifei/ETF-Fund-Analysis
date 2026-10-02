@@ -28,23 +28,25 @@ def _module(status: str, reason_code: str | None) -> dict:
 
 
 def build_detail_availability(existing: dict, *, support_resistance: dict | None = None, chart: dict | None = None) -> dict:
-    """Build detail-availability-v1 from existing evidence.
+    """Build detail-availability-v1 from existing read-model evidence.
 
-    Existing eight-module status/reasons are preserved. Forecast horizon reasons
-    remain outside this aggregate and are never converted into other module
-    shortages. Support/resistance distinguishes missing snapshots from evidence
-    that exists but cannot be overlaid because chart qualification blocks it.
+    The first eight modules are passed through without reinterpretation.
+    Forecast horizon diagnostics remain owned by their source rows. Structural
+    evidence is fail-closed: an SR snapshot is only available when the chart
+    evidence explicitly confirms that overlay is allowed.
     """
     result = {name: existing.get(name, _module("unknown", "not_reported")) for name in MODULE_ORDER[:-1]}
 
     chart = chart or {}
-    if support_resistance:
-        if chart.get("sr_overlay_allowed") is False:
-            result["support_resistance"] = _module("blocked", chart.get("raw_overlay_reason") or "support_resistance_overlay_blocked")
-        else:
-            result["support_resistance"] = _module("available", None)
-    else:
+    if support_resistance is None:
         result["support_resistance"] = _module("unavailable", "support_resistance_not_generated")
+    elif chart.get("sr_overlay_allowed") is True:
+        result["support_resistance"] = _module("available", None)
+    else:
+        result["support_resistance"] = _module(
+            "blocked",
+            chart.get("raw_overlay_reason") or "support_resistance_overlay_blocked",
+        )
 
     return {
         "contract_version": DETAIL_AVAILABILITY_VERSION,
