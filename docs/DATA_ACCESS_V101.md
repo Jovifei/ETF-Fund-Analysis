@@ -103,8 +103,30 @@ Tushare 主链现价失败时直接尝试下一现价源，不对每一只 ETF �
 
 本次远端探测只证明 AKShare Sina 价格日线与新闻可读；两只样本的成交量缺失，目录和公开 quote unavailable。Tushare Token 的存在不等于权限，本次目录、日线、现价和新闻均未通过。由于没有完整量价资格，系统不会用 0 填成交量、Mock 或模型推断来生成新的操作级信号。配置与回滚细节见 [部署收据](DEPLOYMENT_RECEIPT_V101_20260907.md) 和 [生产覆盖文件](../deploy/compose.production.v101.yml)。
 
+## 免费加仓/减仓研究字段（etf-flow-share-v1）
+
+公开路径只读 AKShare，不启用 FTShare，也不在生产配置里用 Mock 补这些字段。
+
+| 观察 | 来源 | 入库 | 不能当成 |
+|---|---|---|---|
+| IOPV、基金折价率（百分比，原样保存、不反号、不用价格和 IOPV 重算）、主力/超大单/大单/中单/小单净流入净额、最新份额 | `fund_etf_spot_em` | `quote_snapshots`，合同 `etf-spot-flow-v1` | 实时成交资格或操作指令 |
+| 上交所基金份额 | `fund_etf_scale_sse` | `etf_share_scales`，单位为助手返回的「份」 | 第二套单位换算 |
+| 深交所基金份额日频 | 优先 `fund_scale_daily_szse`；该函数不存在时才读 `fund_etf_scale_szse` | 同上。没有统计日期的快照不入库，也不改记成今天 | 缺失日的插值 |
+
+相邻且交易日历已验证的两个公布日，份额差大于 0 标「份额增加」，小于 0 标「份额减少」。日期不连续或日历未验证时仍保存差额，但代理为「不可用」。这些字段出现在 `/api/signals/grade` 和决策板快照的 `flow_share` 中，与既有分级并列；`flow_share.actionable` 恒为 false，也不改写分级。
+
+刷新：
+
+```text
+POST /api/tasks/refresh_quotes
+POST /api/tasks/refresh_share_scales
+POST /api/tasks/refresh_decision_board
+```
+
+`refresh_quotes` 写入现货资金流和 IOPV。`refresh_share_scales` 只拉最近最多 12 个自然日（深交所日频接口本身不允许超过 6 个月）。决策板是已保存快照，需要第三次任务后才会带上新的 `flow_share`；`/api/signals/grade` 在前两步写入后即可读取。Mock 运行会跳过份额抓取并在审计里记 `mock_share_scale_blocked`。
+
 ## 本版没有接通的能力不是不存在的接口
 
-本版尚未闭环：真实基金净值/IOPV 与溢折价、ETF 穿透持仓、可靠机构持仓变化、5/15 分钟历史 PIT、独立研报全文采集及经校准上涨概率。它们不能由缺失字段、合成数据或模型推断补齐。后续需分别建立数据契约、授权、历史覆盖与验证，不因为 Tushare/AKShare 总体可读就一并标为可用。
+本版尚未闭环：经独立验证的基金净值、ETF 穿透持仓、可靠机构持仓变化、5/15 分钟历史 PIT、独立研报全文采集及经校准上涨概率。现货 IOPV、折溢价、资金流和交易所份额日差只按上表做研究展示；字段缺失时保持空值，不能由合成数据或模型推断补齐，也不因为 Tushare/AKShare 总体可读就标成可操作。
 
 如果价格回退只有 Sina 日线，本版允许查看其价格 K 线；缺少量能会阻断新的共享量价信号。后续东财返回完整量能时，会从旧价格历史的最早日期重抓；不会永远卡在增量窗口之外的缺量记录。数据接入状态的“最后已验证源时间”只统计 timestamp_verified 的记录，抓取时间单独显示。

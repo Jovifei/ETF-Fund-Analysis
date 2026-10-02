@@ -10,6 +10,7 @@ from app.providers.types import (
     NewsRecord,
     QuoteRecord,
     SectorRecord,
+    ShareScaleRecord,
 )
 
 
@@ -123,6 +124,15 @@ class MarketProvider(ABC):
     def fetch_concept_snapshots(self, trade_date: date | None = None) -> list[SectorRecord]:
         """概念板块涨跌家数快照。"""
         raise CapabilityUnavailable("concept snapshots unavailable for this provider")
+
+    def fetch_share_scales(self, codes: list[str], start_date: date, end_date: date) -> list[ShareScaleRecord]:
+        """Exchange share totals used only as a research 申赎 proxy.
+
+        Providers that do not expose a free public helper must refuse. Callers
+        must not replace that refusal with mock shares.
+        """
+
+        raise CapabilityUnavailable("share scale unavailable for this provider")
 
     def fetch_market_breadth(self, trade_date: date | None = None) -> SectorRecord | None:
         """全市场涨跌家数（宽度）。返回单条 board_type='market' 的快照，无数据返回 None。"""

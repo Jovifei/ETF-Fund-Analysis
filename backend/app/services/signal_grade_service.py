@@ -12,7 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import PROJECT_ROOT, Settings, get_settings
-from app.models import ForecastSnapshot, IndicatorSnapshot, Instrument, QuoteSnapshot
+from app.models import EtfShareScale, ForecastSnapshot, IndicatorSnapshot, Instrument, QuoteSnapshot
+from app.services.flow_share_research import FLOW_CONTRACT, build_flow_share_view
 from app.services.kline_stabilization_service import KlineStabilizationService
 from app.utils.indicator_state import (
     classify_kdj,
@@ -254,6 +255,7 @@ class SignalGradeService:
         latest_indicators = self._latest_indicators(db)
         previous_indicators = self._previous_indicators(db, latest_indicators)
         latest_quotes = self._latest_quotes(db)
+        latest_scales = self._latest_share_scales(db)
         latest_forecasts = self._latest_horizon_forecasts(db, 1)
 
         classified: list[dict[str, Any]] = []
@@ -261,6 +263,7 @@ class SignalGradeService:
             indicator = latest_indicators.get(instrument.id)
             values = dict(indicator.values_json) if indicator and indicator.values_json else {}
             quote = latest_quotes.get(instrument.id)
+            flow_share = build_flow_share_view(quote, latest_scales.get(instrument.id))
             pct = quote_percent_points_to_ratio(quote.pct_change) if quote else _f(values, "return_1d")
             previous = previous_indicators.get(instrument.id)
             row = classify_row(values, pct_change=pct, previous=previous, cfg=self.config)
@@ -281,6 +284,7 @@ class SignalGradeService:
                 "quote_is_mock": self.settings.market_provider == "mock",
                 "research_only": True,
                 "actionable": False,
+                "flow_share": flow_share,
                 # 板块涨跌家数：复用 K线企稳分析看板的真实板块口径
                 # （全市场宽度 / 行业板块 / 概念板块）。
                 # 旧实现是"池内同主题 ETF 互比"，因每主题仅 1 只 ETF 而恒为不可用。
@@ -301,6 +305,8 @@ class SignalGradeService:
         )
         return {
             "version": self.version,
+            "flow_share_contract": FLOW_CONTRACT,
+            "flow_share_changes_grade": False,
             "disclaimer": self.config.get("disclaimer", "研究提示，非操作指令"),
             "research_only": True,
             "writes_holdings": False,
@@ -339,6 +345,22 @@ class SignalGradeService:
         latest: dict[int, QuoteSnapshot] = {}
         for row in rows:
             latest.setdefault(row.instrument_id, row)
+        return latest
+
+    @staticmethod
+    def _latest_share_scales(db: Session) -> dict[int, EtfShareScale]:
+        rows = db.scalars(
+            select(EtfShareScale).order_by(
+                EtfShareScale.instrument_id,
+                EtfShareScale.trade_date.desc(),
+                EtfShareScale.id.desc(),
+            )
+        ).all()
+        latest: dict[int, EtfShareScale] = {}
+        for row in rows:
+            current = latest.get(row.instrument_id)
+            if current is None or (current.share_delta is None and row.share_delta is not None):
+                latest[row.instrument_id] = row
         return latest
 
     @staticmethod
