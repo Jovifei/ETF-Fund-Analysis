@@ -1,32 +1,45 @@
-# S8-F0 Initial Source Matrix — 2026-10-02
+# S8-F0 Source Evidence Matrix v2 — 2026-10-02
 
-Status: UNKNOWN / INITIAL REVIEW
+Status: UNKNOWN / EVIDENCE_COLLECTION
 
-No source is marked FEASIBLE, CONDITIONAL, or NOT_FEASIBLE_WITHIN_SCOPE yet.
+This matrix separates repository code inventory from upstream capability. Capability does not imply project permission or qualification.
 
-| Source | 5m/15m | Volume | Amount | Time/PIT | License/Fee | Status |
-|---|---|---|---|---|---|---|
-| Tushare Pro | Candidate source; exact ETF probe pending | UNKNOWN | UNKNOWN | UNKNOWN | Official permission/cost conditions require verification | UNKNOWN |
-| AKShare | Open-source interface ecosystem; exact upstream endpoint pending | UNKNOWN | UNKNOWN | UNKNOWN | Open-source package license does not prove every upstream data right | UNKNOWN |
-| Existing repository adapters | Inventory pending | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN |
+| Source | Official reference | Access date | Repository adapter | 5m/15m scope | Volume evidence | Amount evidence | Time/PIT evidence | License/Fee | Status |
+|---|---|---|---|---|---|---|---|---|---|
+| Tushare Pro | https://tushare.pro/document/2 | 2026-10-02 | Pending inventory | Official minute capability requires scoped verification | Pending endpoint dictionary | Pending endpoint dictionary | Pending | Permission/cost must be verified | UNKNOWN |
+| AKShare | https://akshare.akfamily.xyz/ | 2026-10-02 | Pending inventory | Interface capability separate from upstream source | Pending upstream verification | Pending upstream verification | Pending | Package license does not prove upstream rights | UNKNOWN |
+| Sina/other sources | Pending official source review | 2026-10-02 | Pending inventory | Pending | Pending | Pending | Pending | Pending | UNKNOWN |
+| Existing repository adapters | Pending code inventory | 2026-10-02 | Pending | Pending | Pending | Pending | Pending | Pending | UNKNOWN |
 
-## Evidence policy
+## Frozen probe contract
 
-Names are investigation candidates only. They do not prove current permission, availability, or suitability.
+- ETF scope: 510300.SH plus one second ETF selected before execution.
+- Window: 20 trading days connectivity/evidence check only.
+- Frequencies: native 5m, native 15m, and causal 5m->15m if supported.
+- Maximum 20 requests/source.
+- Timeout 10 seconds/request.
+- Stop on permission failure or repeated provider failure.
 
-Required next evidence:
-- adapter inventory from repository
-- official documentation review
-- bounded isolated sample probe if legally accessible
-- unit and timestamp verification
+## Required evidence
 
-No conclusion about purchasing, permanent price-only boundaries, or qualification status is recorded.
+Each source must bind:
+- endpoint/interface
+- official documentation URL
+- access date
+- access condition
+- field dictionary
+- volume unit
+- amount unit
+- source timestamp versus fetch timestamp
+- history/PIT/adjustment contract
+- license/storage/repeat access limits
+- bounded probe receipt
 
-## Operational constraints
+## Conclusion policy
 
-No credentials, tokens, private URLs, production writes, migrations, or data qualification changes.
+FEASIBLE requires evidence.
+CONDITIONAL requires identified unresolved conditions.
+NOT_FEASIBLE_WITHIN_SCOPE requires scoped failure evidence.
+UNKNOWN remains valid when evidence is incomplete.
 
-## Initial external reference notes
-
-Tushare documentation indicates minute-data permissions are separate from ordinary point permissions; exact project suitability still requires scoped verification.
-AKShare documentation describes an open-source financial data interface, but upstream data rights and endpoint stability require separate verification.
+No procurement, credentials, production writes, schema changes, or qualification promotion.
