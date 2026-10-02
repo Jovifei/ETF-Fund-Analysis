@@ -92,11 +92,12 @@ the isolation change. No runtime database behavior is changed.
 - The separate stable F0-only aggregate was 1490 collected / 1479 passed /
   11 skipped / 0 failures, 1684.152 seconds. The combined local run was about
   66% shorter (2.96× faster), despite its three additional regression tests.
-  This measured local comparison does not replace exact pushed-commit CI, which
-  remains pending.
+  This measured local comparison is separate from the exact pushed-commit CI
+  evidence below.
 - Independent performance and test-isolation code reviews: PASS. Reviewed F0
-  files were integrated with matching hashes. Publication is pending parent
-  coordination; no push, image build, remote-CI pass or deployment is claimed.
+  files were integrated with matching hashes and published by normal fast-forward
+  to the existing branch. Exact remote tree equality and CI are verified below.
+  No production deployment is claimed.
 
 Frozen code/test SHA-256s:
 
@@ -109,3 +110,37 @@ The Windows-only bound project-hub reporter and local root-doc synchronization
 are unavailable in this cloud checkout. They remain a handoff item; no local
 reporter execution or hub acceptance is claimed. Shared progress/status records
 were reconciled with the F0 terminal evidence for this combined candidate.
+
+## Exact-commit remote CI closure
+
+The existing branch was updated without force to
+[`b7990877cac4f79ef7e2530ed0f94b55b943f533`](https://github.com/Jovifei/ETF-Fund-Analysis/commit/b7990877cac4f79ef7e2530ed0f94b55b943f533),
+parent `67d1a648efa549b3c52743ce5c839ccc527cfec9`. The returned remote tree
+`439b15f6eddf2c2dc0d5c0daba604105a3e6a5a0` exactly matched the independently
+reviewed 17-file staged candidate. The remote head was re-read after publication.
+
+All three exact-head workflows are terminal SUCCESS:
+
+- [Full CI 37038405848](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37038405848): `2026-10-02T17:05:57Z` through approximately `17:20:49Z` (14m52s), within the unchanged 35-minute budget
+- [Workspace CI 37038405866](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37038405866): backend contracts, high-severity dependency gate, TypeScript, Vue tests/build, isolated browser smoke, authenticated journeys and responsive/chart acceptance
+- [Platform audit 37038405846](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37038405846): temporary PostgreSQL concurrency/migration contracts and Windows bridge/ACL/environment checks
+
+The full-CI JUnit was downloaded and inspected: **1493 collected, 1482 passed,
+11 existing skips, zero failures/errors, 651.036 seconds**. JUnit SHA-256:
+`1a24633d9f52ac34f28bb6af7bfd97c74b8255a19c5dc419d60662e224989eda`.
+Every downstream full-CI step succeeded, including Python compilation, JavaScript
+syntax/tests, secret scan, clean Alembic migration, shell/Compose validation,
+production image build, PostgreSQL-backed image smoke, inventory, image export
+and artifact uploads. These steps had not run on the timed-out baseline.
+
+Verified artifact identities:
+
+- `audit-ci-37038405848`, artifact `11242825264`: downloaded ZIP SHA-256 matches the GitHub digest `70c0a2dde3d1b9b513f36c4c62b74be7f2e7ff964d8224b7a3e00c5d66cf0e77`
+- `production-image-37038405848`, artifact `11242795241`: 397,930,548 bytes; GitHub artifact digest `2ae859e6a849a7e70da6b9e514de8a51630b870fe76f8403843c93d5d776221f`; expires 2026-10-09
+- Downloaded release inventory binds the source SHA/tree above to local CI image ID `sha256:04416daea509677fc1c0faf3eb03321cc806f0bcad6d0695027aab53bd4ab0c9`, migration head `f0e1d2c3b4a5`, matching app/frontend versions 1.0.5, a clean tracked source and zero untracked application files
+
+The inventory explicitly says `production_deployed=false`, qualification
+`not_asserted` and `published_image_digest_missing`: no image was published to a
+registry and no production release completeness is asserted. No real-provider
+probe or production action was performed. This section binds its verdict to
+`b799087`; a later documentation-only head must be checked independently.

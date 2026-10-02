@@ -57,3 +57,14 @@ For `67d1a648efa549b3c52743ce5c839ccc527cfec9`, the separate dependency-CI monit
 - [ci 37029499272](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37029499272): CANCELLED at the existing 35-minute job limit, last pytest output 29%. No failed assertion or completed JUnit receipt was reported; subsequent compile/static/migration/Docker stages did not execute in that workflow. The prior baseline `f9001f5` exhibited the same timeout pattern.
 
 This is partial CI success plus a full-CI timeout, not a complete CI pass. The existing timeout is being investigated separately; this F0 batch does not alter workflow YAML or weaken tests. No deployment or stage-acceptance gate is advanced.
+
+## 合并后精确提交CI闭环 — 2026-10-03
+
+后继合并候选`b7990877cac4f79ef7e2530ed0f94b55b943f533`的
+[full CI](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37038405848)、
+[workspace-ci](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37038405866)和
+[audit-platforms](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37038405846)
+均SUCCESS。远端完整1493项收集/1482通过/11既有跳过/0失败，651.036秒；
+整个CI约14分52秒，迁移和Docker后续门禁均已运行通过。此结论绑定后继SHA，
+不把历史67d1a64取消改写为PASS。详见[性能及产物证据](CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md#exact-commit-remote-ci-closure)。
+依赖中剩余moderate/low未因此消失；无生产部署或资格晋升。

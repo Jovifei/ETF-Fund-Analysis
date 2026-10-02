@@ -1,10 +1,14 @@
+## 精确提交CI全部通过 — 2026-10-03 01:26 上海
+
+既有分支已普通快进至`b7990877cac4f79ef7e2530ed0f94b55b943f533`，源码tree`439b15f6eddf2c2dc0d5c0daba604105a3e6a5a0`。[完整CI](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37038405848)、[workspace-ci](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37038405866)与[audit-platforms](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37038405846)均SUCCESS。GitHub完整回归1493收集/1482通过/11既有跳过/0失败，651.036秒；整个CI约14分52秒。迁移、Docker构建/隔离冒烟、镜像导出/审计产物均通过，35分钟限制与全部门禁未放宽。镜像仅CI产物，未发布registry/未部署；真实资格仍UNKNOWN、actionable=false。收据见[CI证据](docs/audits/CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md#exact-commit-remote-ci-closure)。
+
 ## F0与CI性能合并候选验证 — 2026-10-03 00:59 上海
 
-合并候选完整回归1493项收集/1482通过/11既有跳过/0失败，569.823秒（9分30秒）；独立审核通过。热点中位数等值优化及单项测试事务清理保留所有断言/门禁，未延长35分钟CI限制。相同云端F0独立候选为1684.152秒；精确推送提交CI仍待执行。真实数据UNKNOWN、actionable=false、不部署。见[性能与合并验证收据](docs/audits/CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md)。
+合并候选完整回归1493项收集/1482通过/11既有跳过/0失败，569.823秒（9分30秒）；独立审核通过。热点中位数等值优化及单项测试事务清理保留所有断言/门禁，未延长35分钟CI限制。相同云端F0独立候选为1684.152秒；精确提交CI结果见上文。真实数据UNKNOWN、actionable=false、不部署。见[性能与合并验证收据](docs/audits/CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md)。
 
 ## F0离线编排准备 — 2026-10-02
 
-固定双ETF/原生5m15m、20个XSHG交易日、请求预算/超时/失败停止与脱敏收据已补齐；58项聚焦测试和静态检查PASS，独立代码审核无阻断项。稳定F0候选完整回归1490项收集/1479通过/11跳过/0失败；合并候选结果见上文，精确提交CI另验。真实访问/量额/PIT/许可与可行性仍UNKNOWN，actionable=false，不部署。见[本轮收据](docs/audits/S8_F0_OFFLINE_ORCHESTRATION_20261002.md)。
+固定双ETF/原生5m15m、20个XSHG交易日、请求预算/超时/失败停止与脱敏收据已补齐；58项聚焦测试和静态检查PASS，独立代码审核无阻断项。稳定F0候选完整回归1490项收集/1479通过/11跳过/0失败；合并候选及精确提交CI结果见上文。真实访问/量额/PIT/许可与可行性仍UNKNOWN，actionable=false，不部署。见[本轮收据](docs/audits/S8_F0_OFFLINE_ORCHESTRATION_20261002.md)。
 
 ## 前端依赖门禁修复 — 2026-10-02 23:43 上海
 

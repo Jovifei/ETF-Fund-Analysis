@@ -46,6 +46,8 @@ independently reviewed scalar-median performance correction and test transaction
 isolation. The complete combined aggregate passed: 1493 collected, 1482 passed,
 11 existing skips, 0 failures/errors, exit 0, 569.823 seconds. This is separate
 from the F0-only 1490-case run above. See the [combined receipt](CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md)
-for exact hashes, parity evidence and the existing CI timeout diagnosis. Exact
-pushed-commit CI remains pending; real probes, deployment and qualification are
-unchanged.
+for exact hashes, parity evidence and the existing CI timeout diagnosis. Exact b799087
+full/workspace/audit CI is now SUCCESS; the full CI JUnit independently records
+1493 collected, 1482 passed, 11 skipped and zero failures in 651.036 seconds.
+See the linked closure receipt for all run/artifact identities. Real probes,
+deployment and qualification are unchanged.

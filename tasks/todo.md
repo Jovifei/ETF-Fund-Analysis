@@ -4,7 +4,7 @@
 - [x] 中位数返回值/完整payload等值回归及独立审核通过，无窗口/阈值/资格变更。
 - [x] 旧基线复现单项测试未来快照/指标删除泄漏；保留全部断言并在finally回滚，独立审核通过。
 - [x] 合并候选完整回归1493收集、1482通过、11既有跳过、0失败，569.823秒；27项JS测试及静态门禁通过。
-- [ ] 经父任务协调发布至既有分支后，核验精确提交完整CI及后续镜像门禁；无生产部署。
+- [x] 普通快进发布b799087至既有分支；精确full/workspace/audit三项CI全部PASS，迁移和镜像构建/隔离冒烟/导出均通过；无生产部署。
 - [ ] Windows项目hub与根docs同步待本地环境；真实F0访问/许可/PIT仍UNKNOWN。
 
 Review: docs/audits/CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md；F0独立1490项收据与合并候选1493项分别保留。
@@ -17,7 +17,7 @@ Review: docs/audits/CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md；F0独立1490项
 - [x] Pass 58 focused runner/parser/production-boundary tests plus scoped Ruff, compile, JS syntax and secret scan.
 - [x] Obtain independent code review, with matching file hashes and independent focused rerun.
 - [x] Finish stable F0-only full backend regression: 1,490 collected, 1,479 passed, 11 skipped, zero failures/errors.
-- [ ] Validate any combined candidate independently and verify Actions at its exact published commit.
+- [x] Independently validate the combined candidate and verify all three Actions workflows at exact code commit b799087; a later documentation-only head is checked separately.
 - [ ] Verify specifically authorized real access and license/storage/time contracts before any real probe.
 
 Receipt: `docs/audits/S8_F0_OFFLINE_ORCHESTRATION_20261002.md`. Offline fixtures only; no deployment, runtime enablement or qualification promotion.
@@ -27,7 +27,7 @@ Receipt: `docs/audits/S8_F0_OFFLINE_ORCHESTRATION_20261002.md`. Offline fixtures
 - [x] Reproduce the high-severity npm audit failure at `f9001f5`.
 - [x] Update only brace-expansion `2.1.4` → `2.1.7` in the lockfile; preserve the manifest and Vitest major version.
 - [x] Run the high-severity audit gate, typecheck, 73 Vue tests, production build, Python compile, browser JS syntax/27 tests, and secret scan in cloud.
-- [ ] Verify the complete Actions suite for the exact published commit.
+- [x] Verify the complete Actions suite on successor combined commit b799087; retain the historical 67d1a64 timeout as a failed baseline.
 - [ ] Synchronize the Windows project-hub report and local root docs when the authorized local environment is available.
 
 Receipt: `docs/audits/FRONTEND_DEPENDENCY_GATE_20261002.md`. Remaining audit findings: 2 moderate and 1 low. No production deployment or acceptance promotion.
