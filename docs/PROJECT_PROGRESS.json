@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "roadmap_version": "2026-10-02-v2",
-  "updated_at": "2026-10-02T19:12:00.035528+08:00",
+  "updated_at": "2026-10-02T23:43:00+08:00",
   "current_stage": "S8-F0证据调查 / S2私有验收待完成",
   "current_iteration": 71,
   "planning_source": "同一远端ChatGPT v2方向修订（只读核验摘要）及本地现场元数据核验；无新增源码独立审核",
@@ -2047,6 +2047,11 @@
       "date": "2026-10-02",
       "iteration": 71,
       "description": "远端fixture验证器修复已接收，本地NaN timeout补修后19项聚焦测试PASS，收据8c45a5d已回传远端审核；官方文档级能力已证，实际授权样本/许可/PIT待核。F0无生产部署。"
+    },
+    {
+      "date": "2026-10-02",
+      "iteration": 71,
+      "description": "云端复现前端高危依赖门禁失败；brace-expansion仅锁文件2.1.4→2.1.7，高危审计门禁exit 0（0 high/critical；仍2 moderate、1 low），typecheck、73项Vue测试及构建PASS。完整远端CI待精确新提交核验，不改变部署/阶段验收/真实数据资格；收据 docs/audits/FRONTEND_DEPENDENCY_GATE_20261002.md。Windows本地hub与根docs同步待本地环境。"
     }
   ],
   "incoming_candidate": {
@@ -2088,5 +2093,20 @@
     "pit": "UNKNOWN",
     "feasibility": "UNKNOWN",
     "deploy": "NOT_DEPLOYABLE_SUBSTAGE"
+  },
+  "frontend_dependency_gate_current_batch": {
+    "baseline_sha": "f9001f5189c1722aef47baaf52454afb04605b9b",
+    "code": "LOCKFILE_ONLY_BRACE_EXPANSION_2_1_7",
+    "tests": "CLOUD_AUDIT_HIGH_PASS_TYPECHECK_PASS_73_VUE_PASS_BUILD_PASS",
+    "audit_remaining": {
+      "high": 0,
+      "critical": 0,
+      "moderate": 2,
+      "low": 1
+    },
+    "remote_ci": "PENDING_EXACT_PUBLISHED_SHA",
+    "deploy": "NOT_DEPLOYED",
+    "local_hub_sync": "PENDING_WINDOWS_LOCAL_EXECUTOR",
+    "evidence": "docs/audits/FRONTEND_DEPENDENCY_GATE_20261002.md"
   }
 }

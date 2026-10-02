@@ -1,3 +1,13 @@
+# Frontend dependency gate repair — 2026-10-02
+
+- [x] Reproduce the high-severity npm audit failure at `f9001f5`.
+- [x] Update only brace-expansion `2.1.4` → `2.1.7` in the lockfile; preserve the manifest and Vitest major version.
+- [x] Run the high-severity audit gate, typecheck, 73 Vue tests, production build, Python compile, browser JS syntax/27 tests, and secret scan in cloud.
+- [ ] Verify the complete Actions suite for the exact published commit.
+- [ ] Synchronize the Windows project-hub report and local root docs when the authorized local environment is available.
+
+Receipt: `docs/audits/FRONTEND_DEPENDENCY_GATE_20261002.md`. Remaining audit findings: 2 moderate and 1 low. No production deployment or acceptance promotion.
+
 # Iteration 71 release relay — 2026-10-02
 
 - [x] Remote exact-SHA M3B-C code review PASS at `3a13575f58ae6f8aad0face1a8e42391d2356518`.

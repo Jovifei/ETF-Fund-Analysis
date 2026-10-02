@@ -1,3 +1,7 @@
+## 前端依赖门禁修复 — 2026-10-02 23:43 上海
+
+云端基于f9001f5仅将brace-expansion锁文件2.1.4升级2.1.7；高危审计门禁、typecheck、73项Vue测试及构建PASS，仍有2项moderate和1项low。精确新提交的完整CI待核验，不改变生产及阶段验收。收据见[依赖门禁](docs/audits/FRONTEND_DEPENDENCY_GATE_20261002.md)；Windows hub/根docs同步待本地环境。
+
 ## 最新发布接力 — 2026-10-02 19:38 上海
 
 S2可用性面板已发布：源码abae131，镜像配置38c2c13c，schema f0不变；API/worker健康，公开检查通过。真实登录后详情和实体手机验收待完成，UNKNOWN/actionable=false。收据见docs/audits/S2_AVAILABILITY_RELEASE_20261002.md；以下旧身份按历史理解。

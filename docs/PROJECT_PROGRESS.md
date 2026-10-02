@@ -2,7 +2,7 @@
 
 > 本文件由 scripts/update_project_progress.py 从 PROJECT_PROGRESS.json 生成。修改台账后重新生成，勿直接修改本文件。
 
-更新：2026-10-02T19:12:00.035528+08:00 · iteration 71 · 当前 S8-F0证据调查 / S2私有验收待完成
+更新：2026-10-02T23:43:00+08:00 · iteration 71 · 当前 S8-F0证据调查 / S2私有验收待完成
 
 [总阶段路线图](PROJECT_MASTER_ROADMAP.md) · [图形进度板](PROJECT_PROGRESS.html) · [维护规则](PROJECT_PROGRESS_MAINTENANCE.md)
 
@@ -273,3 +273,4 @@
 - 2026-10-02 / iteration71：S2三服务image-only发布，API/worker健康，schema f0不变，匿名边界401通过；私有真实功能及手机验收待完成。备份/旧镜像回滚点保留。
 - 2026-10-02 / iteration71：S8-F0远端计划/矩阵首批已接收；本地2项无网络能力边界测试PASS，证实Tushare Adapter未启用5m/15m，属于实现缺口非上游无能力。远端矩阵5e109416已接收；真实数据/许可/PIT结论UNKNOWN。只读磁盘盘点完成，无删除。
 - 2026-10-02 / iteration71：远端fixture验证器修复已接收，本地NaN timeout补修后19项聚焦测试PASS，收据8c45a5d已回传远端审核；官方文档级能力已证，实际授权样本/许可/PIT待核。F0无生产部署。
+- 2026-10-02 / iteration71：云端复现前端高危依赖门禁失败；brace-expansion仅锁文件2.1.4→2.1.7，高危审计门禁exit 0（0 high/critical；仍2 moderate、1 low），typecheck、73项Vue测试及构建PASS。完整远端CI待精确新提交核验，不改变部署/阶段验收/真实数据资格；收据 docs/audits/FRONTEND_DEPENDENCY_GATE_20261002.md。Windows本地hub与根docs同步待本地环境。
