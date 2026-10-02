@@ -2,11 +2,11 @@
 
 > 本文件由 scripts/update_project_progress.py 从 PROJECT_PROGRESS.json 生成。修改台账后重新生成，勿直接修改本文件。
 
-更新：2026-10-02T19:12:00.035528+08:00 · iteration 71 · 当前 S8-F0优先 / S3-S4接收并行
+更新：2026-10-02T19:12:00.035528+08:00 · iteration 71 · 当前 S8-F0证据调查 / S2私有验收待完成
 
 [总阶段路线图](PROJECT_MASTER_ROADMAP.md) · [图形进度板](PROJECT_PROGRESS.html) · [维护规则](PROJECT_PROGRESS_MAINTENANCE.md)
 
-**当前下一步：** 完成S2/WU1完整回归和发布门禁；S8-F0证据对账及当前S3/S4接收仍独立待完成
+**当前下一步：** 远端补官方分钟接口单位/时间/权限证据与fixture-only有界探测；本地接收验证回传，不启用生产
 
 全项目验收分母尚未冻结；以下显示阶段状态和证据闭环，不能推算全项目完成百分比。
 
@@ -271,3 +271,4 @@
 - 2026-10-02 / iteration71：Jovi授权本地补齐WU1，abae131已推送并远端代码审核通过；聚焦后端12/前端73/typecheck/build通过；窄屏模拟E2E通过，完整后端回归仍在跑。非实体手机/部署验收。
 - 2026-10-02 / iteration71：WU1完整pytest退出0（1432项收集，含条件跳过，不臆测通过总数），前端73项/类型构建/窄屏E2E通过；候选镜像构建中，未部署。
 - 2026-10-02 / iteration71：S2三服务image-only发布，API/worker健康，schema f0不变，匿名边界401通过；私有真实功能及手机验收待完成。备份/旧镜像回滚点保留。
+- 2026-10-02 / iteration71：S8-F0远端计划/矩阵首批已接收；本地2项无网络能力边界测试PASS，证实Tushare Adapter未启用5m/15m，属于实现缺口非上游无能力。远端矩阵5e109416已接收；真实数据/许可/PIT结论UNKNOWN。只读磁盘盘点完成，无删除。
