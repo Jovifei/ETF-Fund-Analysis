@@ -1,5 +1,7 @@
 # 新工程接手入口
 
+最新角色：Jovi明确要求[GitHub远端主实现接力](docs/REMOTE_LOCAL_RELAY.md)：远端规划/审核/修复/主要实现并提交GitHub，本地接收、编译测试、手机网页验证和修复回传。本轮先核实远端实际写入/执行工具，不能以只读文件连接假装已提交。
+
 从main继续，先读[状态](STATUS.md)、[总路线](docs/PROJECT_MASTER_ROADMAP.md)、[进度](docs/PROJECT_PROGRESS.md)。当前优先S8-F0数据可行性，与63c426a上线功能的独立接收并行。
 
 ## 当前边界与下一动作
