@@ -77,5 +77,5 @@ def parse_minute_fixture(*, interval: str, expected_code: str, rows: list[dict])
 def validate_probe_limits(*, request_count: int, timeout_seconds: int) -> None:
     if isinstance(request_count, bool) or not isinstance(request_count, int) or request_count < 0 or request_count > 20:
         raise ProbeSchemaError("f0_request_bound_invalid")
-    if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or timeout_seconds <= 0 or timeout_seconds > 10:
+    if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, (int, float)) or not math.isfinite(timeout_seconds) or timeout_seconds <= 0 or timeout_seconds > 10:
         raise ProbeSchemaError("f0_timeout_bound_invalid")

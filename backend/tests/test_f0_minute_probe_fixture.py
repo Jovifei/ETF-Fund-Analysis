@@ -47,3 +47,8 @@ def test_fixture_does_not_claim_real_data():
     assert value["volume_unit"] == "upstream_declared_only"
     assert value["amount_unit"] == "upstream_declared_only"
     assert "not publication/PIT certification" in value["time_assumption"]
+
+@pytest.mark.parametrize('timeout', [float('nan'), float('inf'), -float('inf')])
+def test_non_finite_timeout_is_rejected(timeout):
+    with pytest.raises(ProbeSchemaError):
+        validate_probe_limits(request_count=1, timeout_seconds=timeout)

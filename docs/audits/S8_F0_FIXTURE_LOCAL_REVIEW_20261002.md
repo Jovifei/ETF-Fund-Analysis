@@ -7,3 +7,8 @@ Added10 meaningful boundary cases; all10 fail because parser accepts NaN/infinit
 Also review: output currently discards observed numerical/timestamp evidence; timestamps accept only datetime while official response describes trade_time string. Freeze parsing/assumed-zone versus certified time semantics before any actual probe. Unit names must remain documentation-declared evidence, not real-data qualification.
 
 Fix remote module against failing tests, then local rerun and GitHub receipt review. S8-F0 conclusion UNKNOWN.
+
+## Remote repair reception
+- Received58efa6a;16 targeted tests passed. Local review additionally reproduced NaN timeout acceptance; applied a minimal finite-timeout check plus3 boundary tests.
+- Final targeted run:19 passed; module compile PASS. No upstream transport, credential access, provider activation or production change.
+- Fixture validation prepares an investigation only; live samples, project access/license and publication/PIT remain UNKNOWN. No FEASIBLE conclusion.
