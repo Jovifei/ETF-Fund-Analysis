@@ -1,4 +1,10 @@
-# 当前接手入口：iteration71 已部署，私有验收与远端最终审核待完成（2026-10-02）
+# 当前接手入口：总路线v2 / S8-F0优先与63c426a部署接收并行
+
+先读根docs/PROJECT_MASTER_ROADMAP.md、PROJECT_PROGRESS.json、PROJECT_PROGRESS_MAINTENANCE.md、planning/S8_F0_DATA_FEASIBILITY_SPIKE.md。当前生产63c426a/f0/v109已现场只读核验；图层/流量份额已上线但独立合同/功能/发布收据待接收。旧3a/9of13为历史，不再作为当前阻塞基线。S8-F0调查尚未执行，先核5m/15m量额/时间/PIT/许可费用；成功不代表统计有效，采购决策交Jovi。低风险按授权自主执行，关键合同/资格独立审核，进度随实质变化更新。总览分支codex/project-master-roadmap-20261002，项目内.local/etf-project-roadmap；保护其他既有工作。
+
+---
+
+# 历史接手入口：iteration71旧部署收据
 
 总规划交付分支 `codex/project-master-roadmap-20261002` / `.local/etf-project-roadmap`，基于最新远端候选e0fcb17；后者新增代码尚未独立接收审核/部署。下一顺序：iteration71闭环→候选接收与合同路线分类→正式S4/M4计划，避免重复实现或把合入当PASS。
 

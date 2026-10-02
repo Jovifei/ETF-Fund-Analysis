@@ -1,4 +1,10 @@
-# 当前状态：R4C M3B-C 已部署，待正常登录后的私有线上验收（2026-10-02）
+# 当前状态：63c426a已部署待独立接收；S8-F0数据可行性优先（2026-10-02）
+
+只读核验确认三服务镜像源码63c426a、配置digest b07f9ca2、Alembic f0e1d2c3b4a5，决策板13:29按decision-read-v109-flow-share生成。相关图层/份额功能已上线，合同和完整验收待独立核对。Chan配置关闭，真实数据UNKNOWN。当前目标是S8-F0有界分钟量额数据可行性，与当前部署接收并行；方向决定前暂缓S5–S7扩张。见docs/PROJECT_MASTER_ROADMAP.md、PROJECT_PROGRESS.md和audits/CURRENT_PRODUCTION_IDENTITY_20261002.md。旧9/13和h9回滚证据仅历史，不能追认f0新发布。
+
+---
+
+# 历史状态：3a13575 / iteration71 发布记录（已被新部署取代）
 
 最新GitHub开发候选e0fcb17含外部图层/Chan/ETF流量份额代码，尚未独立接受或验证上线。此工作区 `codex/project-master-roadmap-20261002` 仅交付总规划和进度文档；候选基线不等于部署3a13575，详见总路线图当前版本。
 

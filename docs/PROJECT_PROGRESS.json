@@ -1,24 +1,24 @@
 {
   "schema_version": 1,
-  "roadmap_version": "2026-10-02-v1",
-  "updated_at": "2026-10-02T14:15:38+08:00",
-  "current_stage": "S3",
+  "roadmap_version": "2026-10-02-v2",
+  "updated_at": "2026-10-02T14:43:22+08:00",
+  "current_stage": "S8-F0优先 / S3-S4接收并行",
   "current_iteration": 71,
-  "planning_source": "既有远端ChatGPT总体规划+口径修订；本轮文件连接不可用",
-  "deployed_code_sha": "3a13575f58ae6f8aad0face1a8e42391d2356518",
-  "deployed_tree": "70c5ea87fc84ed027202c8df0622f5e44f717a9e",
+  "planning_source": "同一远端ChatGPT v2方向修订（只读核验摘要）及本地现场元数据核验；无新增源码独立审核",
+  "deployed_code_sha": "63c426aa9954d950d397c56ad0ece6273da6f19d",
+  "deployed_tree": "30906b8b325a68c456d222abc7f48c3c354c793f",
   "release_evidence_head": "70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b",
   "docs_commit_lookup": "git log -1 -- docs/PROJECT_MASTER_ROADMAP.md docs/PROJECT_PROGRESS.json",
-  "alembic": "h9c0d1e2f3a4",
+  "alembic": "f0e1d2c3b4a5",
   "real_data": "UNKNOWN",
   "actionable": false,
   "runtime_activated": false,
   "auto_trading": false,
-  "next_task": "正常登录后同次私有GET立即前后计数 → R12远端审核 → e0fcb17候选独立接收/合同路线分类 → S4正式计划",
+  "next_task": "优先S8-F0分钟量额数据可行性；并行核对63c426a发布收据、v109刷新和S3/S4持久化路线，依据结果选择最小OOS研究或价格研究产品边界",
   "blockers": [
-    "R9私有验收等待正常登录；R10和R12随其闭环",
-    "固定规划文件连接启动超时；当前路线图依据既有远端聊天，文件复核待恢复",
-    "GitHub新增e0fcb17图层/流量份额候选；测试、路线独立审查与上线待验证，不等于部署3a13575"
+    "5m/15m真实量额、单位/时间/PIT及成本可行性未解决：先做S8-F0，不再排在所有UX之后",
+    "63c426a已部署；完整发布收据、f0迁移回滚兼容、图层合同和私有功能独立接收待核对",
+    "远端文件连接启动超时：方向/合同审查待恢复或以明确范围摘要讨论，不冻结全部已授权低风险工程"
   ],
   "release_gates": [
     {
@@ -455,15 +455,15 @@
       "id": "S3",
       "name": "研究基座与Chan后端",
       "legacy": "R4A/R4B/R4C M0–M3",
-      "status": "后端已部署；私有发布验收收尾",
+      "status": "当前63c426a已部署；增量与私有验收待独立接收",
       "counter_frozen": false,
       "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
       "dimensions": {
-        "code": "PASS",
-        "tests": "PASS",
+        "code": "部分PASS",
+        "tests": "部分PASS",
         "review": "部分PASS",
         "deploy": "PASS",
-        "live": "部分PASS"
+        "live": "待核对"
       },
       "units": [
         {
@@ -742,21 +742,21 @@
           "na_reasons": {}
         }
       ],
-      "scope_note": "这些维度仅概括当前M3B-C代码/发布；S3完整历史证据仍待映射"
+      "scope_note": "旧3a代码审查仍保留历史证据，63增量需独立接收；台账旧子任务状态不追认新发布"
     },
     {
       "id": "S4",
       "name": "图表与Chan用户体验",
       "legacy": "R4C M4/M5",
-      "status": "外部候选已提交；本聊天接收及路线审查待完成",
+      "status": "相关实现已上线；合同兼容与功能验收待审查",
       "counter_frozen": false,
       "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
       "dimensions": {
         "code": "IN_PROGRESS",
         "tests": "待核对",
         "review": "PENDING",
-        "deploy": "PENDING",
-        "live": "PENDING"
+        "deploy": "PASS",
+        "live": "待核对"
       },
       "units": [
         {
@@ -1479,7 +1479,7 @@
       "id": "S8",
       "name": "数据资格、回测与校准",
       "legacy": "R6",
-      "status": "真实数据UNKNOWN；未通过",
+      "status": "F0数据可行性提前为关键路径；真实数据UNKNOWN",
       "counter_frozen": false,
       "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
       "dimensions": {
@@ -1490,6 +1490,25 @@
         "live": "待核对"
       },
       "units": [
+        {
+          "id": "S8-F0",
+          "name": "1–2工作日真实分钟量额数据可行性",
+          "dimensions": {
+            "code": "N/A",
+            "tests": "TODO",
+            "review": "PENDING",
+            "deploy": "N/A",
+            "live": "N/A"
+          },
+          "evidence": [
+            "docs/planning/S8_F0_DATA_FEASIBILITY_SPIKE.md"
+          ],
+          "na_reasons": {
+            "code": "调查与隔离样本验证，不修改产品代码",
+            "deploy": "不做生产部署或采购",
+            "live": "可行性不等于生产数据资格，另行资格阶段"
+          }
+        },
         {
           "id": "S8-U01",
           "name": "真实数据清单",
@@ -1988,6 +2007,11 @@
       "date": "2026-10-02",
       "iteration": 71,
       "description": "推送发现外部代码推进e0fcb17；保留远端改动，基于该候选创建独立总规划分支，S4改为候选实现待审查。 远端确认候选不等于接受，先完成发布再按S4或S1/S3/S8合同分类审核。"
+    },
+    {
+      "date": "2026-10-02",
+      "iteration": 71,
+      "description": "根据Jovi转交两位AI评价修订v2：现场确认63c426a/f0/v109，旧9/13降历史；S8-F0前置，当前部署接收并行，按风险分级减少逐步骤等待。"
     }
   ],
   "incoming_candidate": {
@@ -1996,7 +2020,17 @@
     "scope": "外部Cursor图表/Chan/prior-range及ETF流量份额Provider/schema候选",
     "tests": "待核对",
     "review": "PENDING",
-    "deploy": "未验证",
-    "docs_branch": "codex/project-master-roadmap-20261002"
-  }
+    "deploy": "PASS",
+    "docs_branch": "codex/project-master-roadmap-20261002",
+    "status": "DEPLOYED_PENDING_INDEPENDENT_ACCEPTANCE",
+    "deployed_via_main": "63c426aa9954d950d397c56ad0ece6273da6f19d"
+  },
+  "image_config_digest": "sha256:b07f9ca23150db6567170d3a041afb0abf65d571fbd45ce44266585ee62366b5",
+  "production_status": "DEPLOYED_PENDING_INDEPENDENT_ACCEPTANCE",
+  "current_evidence": "docs/audits/CURRENT_PRODUCTION_IDENTITY_20261002.md",
+  "read_model_version": "decision-read-v109-flow-share",
+  "board_generated_at": "2026-10-02T13:29:31.364035+08:00",
+  "release_counter_title": "历史iteration71清单（3a13575；当前已被63c426a取代）",
+  "release_counter_note": "9/13仅为旧部署发布检查记录，不能代表当前版本或S3完成率；63c426a完整收据与独立接收待核对。",
+  "release_evidence_label": "历史发布证据基线"
 }
