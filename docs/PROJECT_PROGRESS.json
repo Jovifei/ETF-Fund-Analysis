@@ -5,7 +5,7 @@
   "current_stage": "S8-F0优先 / S3-S4接收并行",
   "current_iteration": 71,
   "planning_source": "同一远端ChatGPT v2方向修订（只读核验摘要）及本地现场元数据核验；无新增源码独立审核",
-  "deployed_code_sha": "63c426aa9954d950d397c56ad0ece6273da6f19d",
+  "deployed_code_sha": "abae131770713465c6d65d29c1513fc88b8dc40d",
   "deployed_tree": "30906b8b325a68c456d222abc7f48c3c354c793f",
   "release_evidence_head": "70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b",
   "docs_commit_lookup": "git log -1 -- docs/PROJECT_MASTER_ROADMAP.md docs/PROJECT_PROGRESS.json",
@@ -2032,6 +2032,11 @@
       "date": "2026-10-02",
       "iteration": 71,
       "description": "WU1完整pytest退出0（1432项收集，含条件跳过，不臆测通过总数），前端73项/类型构建/窄屏E2E通过；候选镜像构建中，未部署。"
+    },
+    {
+      "date": "2026-10-02",
+      "iteration": 71,
+      "description": "S2三服务image-only发布，API/worker健康，schema f0不变，匿名边界401通过；私有真实功能及手机验收待完成。备份/旧镜像回滚点保留。"
     }
   ],
   "incoming_candidate": {
@@ -2045,8 +2050,8 @@
     "status": "DEPLOYED_PENDING_INDEPENDENT_ACCEPTANCE",
     "deployed_via_main": "63c426aa9954d950d397c56ad0ece6273da6f19d"
   },
-  "image_config_digest": "sha256:b07f9ca23150db6567170d3a041afb0abf65d571fbd45ce44266585ee62366b5",
-  "production_status": "DEPLOYED_PENDING_INDEPENDENT_ACCEPTANCE",
+  "image_config_digest": "sha256:38c2c13c109798cf780cbee7637d78f243c31c80a1d8efcca7974fd1d5a22dbd",
+  "production_status": "DEPLOYED_PENDING_AUTHENTICATED_LIVE_ACCEPTANCE",
   "current_evidence": "docs/audits/CURRENT_PRODUCTION_IDENTITY_20261002.md",
   "read_model_version": "decision-read-v109-flow-share",
   "board_generated_at": "2026-10-02T13:29:31.364035+08:00",
@@ -2058,9 +2063,9 @@
     "code": "IMPLEMENTED",
     "tests": "FULL_BACKEND_EXIT0_FRONTEND73_PASS",
     "remote_review": "CODE_ACCEPTED_RELEASE_PENDING",
-    "deploy": "NOT_RUN",
+    "deploy": "DEPLOYED_PUBLIC_SMOKE_PASS_PRIVATE_PENDING",
     "phone": "NOT_RUN",
     "mobile_viewport": "PASS",
-    "evidence": "docs/handoffs/LOCAL_S2_IMPLEMENTATION.md"
+    "evidence": "docs/audits/S2_AVAILABILITY_RELEASE_20261002.md"
   }
 }

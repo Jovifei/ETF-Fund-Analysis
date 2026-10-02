@@ -45,7 +45,7 @@
 
 ## 版本与卡点
 
-- 已部署代码：`63c426aa9954d950d397c56ad0ece6273da6f19d`；tree `30906b8b325a68c456d222abc7f48c3c354c793f`。
+- 已部署代码：`abae131770713465c6d65d29c1513fc88b8dc40d`；tree `30906b8b325a68c456d222abc7f48c3c354c793f`。
 - 历史发布证据基线：`70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b`。最新总览文档提交查询：`git log -1 -- docs/PROJECT_MASTER_ROADMAP.md docs/PROJECT_PROGRESS.json`。
 - Alembic：`f0e1d2c3b4a5`。
 - 真实数据：UNKNOWN；actionable=false；运行时激活=false；自动交易=false。
@@ -53,8 +53,8 @@
 - 63c426a已部署；完整发布收据、f0迁移回滚兼容、图层合同和私有功能独立接收待核对
 - 远端文件连接启动超时：方向/合同审查待恢复或以明确范围摘要讨论，不冻结全部已授权低风险工程
 
-- 当前身份核验：[DEPLOYED_PENDING_INDEPENDENT_ACCEPTANCE](docs/audits/CURRENT_PRODUCTION_IDENTITY_20261002.md)；仅元数据核验，不替代完整发布验收。
-- 镜像：`sha256:b07f9ca23150db6567170d3a041afb0abf65d571fbd45ce44266585ee62366b5`；决策板 `decision-read-v109-flow-share` / `2026-10-02T13:29:31.364035+08:00`。
+- 当前身份核验：[DEPLOYED_PENDING_AUTHENTICATED_LIVE_ACCEPTANCE](docs/audits/CURRENT_PRODUCTION_IDENTITY_20261002.md)；仅元数据核验，不替代完整发布验收。
+- 镜像：`sha256:38c2c13c109798cf780cbee7637d78f243c31c80a1d8efcca7974fd1d5a22dbd`；决策板 `decision-read-v109-flow-share` / `2026-10-02T13:29:31.364035+08:00`。
 
 ## 阶段候选任务与五维状态
 
@@ -270,3 +270,4 @@
 - 2026-10-02 / iteration71：审核并直接修改Qoder下一阶段原计划，映射WU0/WU1/WU2，纠正未证实前提及映射/版本/发布要求；仅计划审核，未实施产品代码或数据调查。
 - 2026-10-02 / iteration71：Jovi授权本地补齐WU1，abae131已推送并远端代码审核通过；聚焦后端12/前端73/typecheck/build通过；窄屏模拟E2E通过，完整后端回归仍在跑。非实体手机/部署验收。
 - 2026-10-02 / iteration71：WU1完整pytest退出0（1432项收集，含条件跳过，不臆测通过总数），前端73项/类型构建/窄屏E2E通过；候选镜像构建中，未部署。
+- 2026-10-02 / iteration71：S2三服务image-only发布，API/worker健康，schema f0不变，匿名边界401通过；私有真实功能及手机验收待完成。备份/旧镜像回滚点保留。
