@@ -45,7 +45,7 @@
 
 ## 版本与卡点
 
-- 已部署代码：`abae131770713465c6d65d29c1513fc88b8dc40d`；tree `30906b8b325a68c456d222abc7f48c3c354c793f`。
+- 已部署代码：`abae131770713465c6d65d29c1513fc88b8dc40d`；tree `7fa29922e716dfdca87ad908fe19aac1c57d2301`。
 - 历史发布证据基线：`70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b`。最新总览文档提交查询：`git log -1 -- docs/PROJECT_MASTER_ROADMAP.md docs/PROJECT_PROGRESS.json`。
 - Alembic：`f0e1d2c3b4a5`。
 - 真实数据：UNKNOWN；actionable=false；运行时激活=false；自动交易=false。
@@ -53,7 +53,7 @@
 - 63c426a已部署；完整发布收据、f0迁移回滚兼容、图层合同和私有功能独立接收待核对
 - 远端文件连接启动超时：方向/合同审查待恢复或以明确范围摘要讨论，不冻结全部已授权低风险工程
 
-- 当前身份核验：[DEPLOYED_PENDING_AUTHENTICATED_LIVE_ACCEPTANCE](docs/audits/CURRENT_PRODUCTION_IDENTITY_20261002.md)；仅元数据核验，不替代完整发布验收。
+- 当前身份核验：[DEPLOYED_PENDING_AUTHENTICATED_LIVE_ACCEPTANCE](docs/audits/S2_AVAILABILITY_RELEASE_20261002.md)；仅元数据核验，不替代完整发布验收。
 - 镜像：`sha256:38c2c13c109798cf780cbee7637d78f243c31c80a1d8efcca7974fd1d5a22dbd`；决策板 `decision-read-v109-flow-share` / `2026-10-02T13:29:31.364035+08:00`。
 
 ## 阶段候选任务与五维状态

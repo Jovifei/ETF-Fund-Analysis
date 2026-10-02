@@ -1,3 +1,7 @@
+## 最新发布接力 — 2026-10-02 19:38 上海
+
+S2可用性面板已发布：源码abae131，镜像配置38c2c13c，schema f0不变；API/worker健康，公开检查通过。真实登录后详情和实体手机验收待完成，UNKNOWN/actionable=false。收据见docs/audits/S2_AVAILABILITY_RELEASE_20261002.md；以下旧身份按历史理解。
+
 # 当前状态 — 2026-10-02
 
 个人ETF/LOF研究工作台，无自动交易。main已收拢R4C持久化读模型、图表研究层、流量/份额研究字段和总路线/进度文档。

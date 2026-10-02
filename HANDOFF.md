@@ -1,3 +1,7 @@
+## 最新发布接力 — 2026-10-02 19:38 上海
+
+S2可用性面板已发布：源码abae131，镜像配置38c2c13c，schema f0不变；API/worker健康，公开检查通过。真实登录后详情和实体手机验收待完成，UNKNOWN/actionable=false。收据见docs/audits/S2_AVAILABILITY_RELEASE_20261002.md；以下旧身份按历史理解。
+
 # 新工程接手入口
 
 最新角色：Jovi明确要求[GitHub远端主实现接力](docs/REMOTE_LOCAL_RELAY.md)：远端规划/审核/修复/主要实现并提交GitHub，本地接收、编译测试、手机网页验证和修复回传。本轮先核实远端实际写入/执行工具，不能以只读文件连接假装已提交。
