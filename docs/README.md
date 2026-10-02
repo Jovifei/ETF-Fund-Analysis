@@ -1,3 +1,32 @@
+# 当前交付与接手（2026-10-02）
+
+## main tip（已集成）
+
+| 项 | 值 |
+|---|---|
+| Git tip | `63c426aa9954d950d397c56ad0ece6273da6f19d`（`63c426a`） |
+| 集成来源 | [PR #41](https://github.com/Jovifei/ETF-Fund-Analysis/pull/41) ← R4C 分支 + [#39](https://github.com/Jovifei/ETF-Fund-Analysis/pull/39) + [#40](https://github.com/Jovifei/ETF-Fund-Analysis/pull/40) |
+| Alembic head | `f0e1d2c3b4a5`（其上为 Chan 观测 `h9c0d1e2f3a4` ← SR 修订 `g8b9c0d1e2f3` …） |
+| 真实数据资格 | **UNKNOWN**；`actionable=false` |
+
+### 相对旧 docs 入口的更正
+
+- 不再把「R4C M1 尚未开始 / R2–R4B 仅本地候选 / 生产 Alembic=`e609200001`」写成**当前**事实。那些是 2026-09-23～09-28 时段收据；R4C M3B-C 与后续 chart/flow 已进入 `main` 源码 tip。
+- 生产**运行中**镜像是否已等于本 tip，仍以当日部署收据与现场检查为准（R4C M3B-C 收据绑定过 `3a13575` / Alembic `h9c0d1e2f3a4`；flow 迁移 `f0e1d2c3b4a5` 若未上线则生产 head 可能仍落后于 git tip）。
+
+## 入口
+
+- [当前状态](../STATUS.md)
+- [当前交接](../HANDOFF.md)
+- [接收入口](../START_HERE.md)
+- [支撑/压力与缠论边界](SUPPORT_RESISTANCE_SEMANTICS.md)
+- [数据接入与 flow_share](DATA_ACCESS_V101.md)
+- [盘中刷新节奏](INTRADAY_REFRESH_CADENCE.md)
+- [实现矩阵](IMPLEMENTATION_MATRIX.md)
+- [R4C M3B-C 生产收据](audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md)
+- [R4C 读模型接受](audits/R4C_M3B_C_READ_MODEL_ACCEPTANCE_20261001.md)
+
+---
 # 当前交付与接手（2026-09-28）
 
 ## 生产收据与已接受本地候选

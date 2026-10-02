@@ -2,7 +2,7 @@
 
 # 当前实现矩阵（v0.8.x）
 
-更新时间：2026-09-06  
+更新时间：2026-10-02（增量对齐 main `63c426a`；下列多数行仍保留 v0.8 叙事）  
 应用发行版本：`0.8.0`  
 导航合同：`v0.8.1`
 
@@ -35,6 +35,10 @@
 | Scheduler | 已实现并增强 miss/resilience | 30s tick、slot/misfire/coalescing、失败隔离 | 继续观察长期交易日运行和 provider 异常 |
 | 报告/审计 | 已实现 | provider audit、task、report hash | 长期归档/恢复演练可持续增强 |
 | 阿里云生产部署 | v0.8.0 有成功记录 | healthy API/scheduler/db、迁移、同步 | 本轮/未来每次变更仍需独立部署验证 |
+| R4C Chan 持久化读模型 | 源码已在 main | M3 迁移 `h9c0d1e2f3a4`、worker 发布、private GET、chart overlay | 引擎可仍禁用；无 historical PIT GET；非完整缠论买卖点；真实资格 UNKNOWN |
+| 图表研究图层 / 缠论叠加 | 源码已在 main（PR #39） | `EtfChart` 勾选图层、`chan_chart_overlay`、简化 `chan-structure-simplified-v1` | 持久化优先画笔/中枢；简化结构才含段；校验失败不退回 |
+| ETF flow_share | 源码已在 main（PR #40） | Alembic `f0e1d2c3b4a5`、`flow_share_research`、决策板/grade 行字段 | 研究展示 only；不改 grade；Mock 阻断；生产是否已 migrate 另计 |
+| 外部 14:30/14:45 decision digests | 非仓内功能 | — | Bot 例程；仓内以 INTRADAY_REFRESH_CADENCE 槽位为准 |
 | 自动交易 | **明确不实现** | AGENTS 合同 | 不得由 Agent 擅自加入 |
 
 ---

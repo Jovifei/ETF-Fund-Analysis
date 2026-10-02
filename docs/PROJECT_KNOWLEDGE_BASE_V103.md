@@ -272,3 +272,16 @@ UI 的页面拆分、持仓与详情融合、更多新闻和图表增强可以�
 - [v1.0.3 开源吸收落点](OSS_APPLIED_V103.md)
 - [历史存储合同](HISTORY_STORAGE_V103.md)
 - [部署指南](ALIYUN_DEPLOYMENT.md)
+
+---
+
+## 2026-10-02 main tip 增量（事实摘要）
+
+记录日期：2026-10-02。绑定 tip `63c426aa9954d950d397c56ad0ece6273da6f19d`。不替代上文按日期理解的历史数字。
+
+1. **缠论**：主路径是 R4C 持久化 observed-revision（笔、中枢计数与几何）。图表缺合格快照时才用 `chan-structure-simplified-v1`。支撑压力里的 `chan_zone_approx` 仍是区间重叠近似，不要写成「已实现完整缠论」。
+2. **研究图层**：BOX / PIVOT / 指标参考 / CHAN 等为详情页勾选层，公式仍在服务端。
+3. **flow_share**：合同 `etf-flow-share-v1`；公开东财资金流与交易所份额日差；并列研究，不改分级。
+4. **迁移 head**：仓库唯一 Alembic head `f0e1d2c3b4a5`。
+5. **Digests**：14:30/14:45 决策 digests 视为外部 Bot 例程，不是仓内调度功能证明。
+

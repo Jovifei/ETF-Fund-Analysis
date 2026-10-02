@@ -22,3 +22,7 @@
 决策快照与日线层独立：盘中槽位成功（09:30–15:00）的 `target_trade_date` 仍是上一已结算交易日，不能当作今日 15:15 之后的结算收据。因此日线/指标/预测已经 succeeded 时，只要今日还没有结算合同下的 board 收据，调度仍会补跑 `refresh_decision_board`，不会因为上游成功而跳过缺失的决策板。
 
 实现位置：`backend/app/workspace/refresh_policy.py`、`backend/app/services/decision_board_service.py` 的 `SLOT_TIMES`、`backend/app/scheduler.py`、`backend/app/services/settlement.py`。
+
+## 与外部 Bot digest 的边界
+
+每日「14:30 / 14:45 决策 digest」若在聊天或自动化助手中出现，默认视为 **外部 Bot 例程**，不必存在于本仓库 scheduler。本文件只约束仓内 `refresh_decision_board` 等槽位任务。不要把 Bot 推送文案或例程时刻表写进生产 Compose，也不要用 digest 成功代替 Provider/资格证据。
