@@ -1,4 +1,10 @@
-# 当前接手入口：iteration71 已部署，私有验收与远端最终审核待完成（2026-10-02）
+# 当前接手入口：总路线v2 / S8-F0优先与63c426a部署接收并行
+
+先读根docs/PROJECT_MASTER_ROADMAP.md、PROJECT_PROGRESS.json、PROJECT_PROGRESS_MAINTENANCE.md、planning/S8_F0_DATA_FEASIBILITY_SPIKE.md。当前生产63c426a/f0/v109已现场只读核验；图层/流量份额已上线但独立合同/功能/发布收据待接收。旧3a/9of13为历史，不再作为当前阻塞基线。S8-F0调查尚未执行，先核5m/15m量额/时间/PIT/许可费用；成功不代表统计有效，采购决策交Jovi。低风险按授权自主执行，关键合同/资格独立审核，进度随实质变化更新。总览分支codex/project-master-roadmap-20261002，项目内.local/etf-project-roadmap；保护其他既有工作。
+
+---
+
+# 历史接手入口：iteration71旧部署收据
 
 优先读 [production receipt](docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md)、[R5–R7 rehearsal](docs/audits/R4C_RELEASE_R5_REHEARSAL_20261002.md) 和本聊天 C2C c2c_a1d7 checkpoint。代码3a13575已部署，镜像配置547533c5、Alembic h9c0d1e2f3a4，平台检查通过；运行时仍禁用，真实数据 UNKNOWN。新备份与旧镜像保留，IMAGE_ONLY 回滚已演练。
 

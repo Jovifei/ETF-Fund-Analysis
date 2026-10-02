@@ -1,4 +1,10 @@
-# 当前状态：R4C M3B-C 已部署，待正常登录后的私有线上验收（2026-10-02）
+# 当前状态：63c426a已部署待独立接收；S8-F0数据可行性优先（2026-10-02）
+
+只读核验确认三服务镜像源码63c426a、配置digest b07f9ca2、Alembic f0e1d2c3b4a5，决策板13:29按decision-read-v109-flow-share生成。相关图层/份额功能已上线，合同和完整验收待独立核对。Chan配置关闭，真实数据UNKNOWN。当前目标是S8-F0有界分钟量额数据可行性，与当前部署接收并行；方向决定前暂缓S5–S7扩张。见docs/PROJECT_MASTER_ROADMAP.md、PROJECT_PROGRESS.md和audits/CURRENT_PRODUCTION_IDENTITY_20261002.md。旧9/13和h9回滚证据仅历史，不能追认f0新发布。
+
+---
+
+# 历史状态：3a13575 / iteration71 发布记录（已被新部署取代）
 
 远端 iteration71 已通过 R1–R7 并放行受控 R8。代码 `3a13575f58ae6f8aad0face1a8e42391d2356518` / tree `70c5ea87fc84ed027202c8df0622f5e44f717a9e` 已于上海时间01:36切换上线。三服务使用镜像配置 digest `547533c5...`；API/worker健康、scheduler运行，Alembic `h9c0d1e2f3a4`，公开健康、页面/静态、匿名私有401均通过。新备份与 IMAGE_ONLY 回滚验证通过并保留。发布收据见 [production receipt](docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md)。
 
