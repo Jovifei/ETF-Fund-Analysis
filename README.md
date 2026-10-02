@@ -1,4 +1,4 @@
-> **当前 main（2026-10-02）**：tip `63c426a` 已含 R4C 持久化缠论读模型、详情图研究图层/缠论叠加（PR #39）、免费 ETF 资金流与份额差研究字段（PR #40，Alembic `f0e1d2c3b4a5`）。先读 [START_HERE.md](START_HERE.md)、[STATUS.md](STATUS.md)、[HANDOFF.md](HANDOFF.md)。真实数据资格仍为 UNKNOWN；无自动交易。
+> **当前入口**：[START_HERE](START_HERE.md) · [状态](STATUS.md) · [总路线](docs/PROJECT_MASTER_ROADMAP.md) · [进度](docs/PROJECT_PROGRESS.md)。观察到的生产应用源码为 `63c426a`，主线之后的文档/清理提交不等于生产重新部署。真实数据UNKNOWN，无自动交易。
 
 > **历史说明**：下方仍保留工程基础介绍。早期 “v1.0.1 / 0.7.0” 横幅不代表当前 tip 版本身份；以 STATUS 与 Git SHA 为准。
 
@@ -6,7 +6,7 @@
 
 一个面向中国场内 ETF/LOF 的个人私有研究系统。它把行情、日线、技术指标、主题新闻、持仓和多期限预测整理成可审计的信号看板，并按北京时间自动刷新。
 
-当前文档对齐 Git tip：`63c426a`（发行展示号可能仍是历史 health/APP_VERSION，不以显示号替代 SHA）。
+当前main已收拢代码与总规划。生产应用源码、文档提交与独立验收分别记录；近期优先S8-F0数据可行性及已上线功能接收。
 
 > 本项目不连接券商、不自动下单，也不构成投资建议。技术指标、仓位约束和信号状态由确定性程序计算；分析模型只能生成带来源的文本审阅候选，不能计算指标、预测、仓位或交易动作。预测基线保持 `not_calibrated`，在完成真实数据的 walk-forward 验证前，不应作为确定性收益判断。
 

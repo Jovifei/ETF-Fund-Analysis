@@ -31,7 +31,7 @@
 
 当前线上只读核验：三服务源码标签与GitHub main均为 `63c426aa9954d950d397c56ad0ece6273da6f19d`，Git tree `30906b8b325a68c456d222abc7f48c3c354c793f`，镜像配置digest `b07f9ca23150db6567170d3a041afb0abf65d571fbd45ce44266585ee62366b5`，Alembic `f0e1d2c3b4a5`。最新决策板2026-10-02 13:29:31上海时间生成，读模型 `decision-read-v109-flow-share`；Chan运行配置仍关闭。证据见 [当前生产身份核验](audits/CURRENT_PRODUCTION_IDENTITY_20261002.md)。这证明部署及快照版本事实，不证明功能、数据或统计资格通过。
 
-此前 `3a13575` / h9及文档 `70e2a0d`、iteration71 9/13发布清单降为历史记录。63c426a已包含e0fcb17及Cursor图层/简化Chan/prior-range/ETF流量份额代码，状态为 **DEPLOYED_PENDING_INDEPENDENT_ACCEPTANCE**。新发布完整收据、迁移与回滚兼容、真实私有功能验收还需独立核对；不得用旧镜像演练追认新发布。总规划分支仍为 `codex/project-master-roadmap-20261002`，项目内 `.local/etf-project-roadmap`。
+此前 `3a13575` / h9及文档 `70e2a0d`、iteration71 9/13发布清单降为历史记录。63c426a已包含e0fcb17及Cursor图层/简化Chan/prior-range/ETF流量份额代码，状态为 **DEPLOYED_PENDING_INDEPENDENT_ACCEPTANCE**。新发布完整收据、迁移与回滚兼容、真实私有功能验收还需独立核对；不得用旧镜像演练追认新发布。总规划已归并到main；原文档分支与工作区退出当前接手入口。
 
 ## 调整后的关键路径
 

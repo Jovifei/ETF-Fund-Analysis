@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "roadmap_version": "2026-10-02-v2",
-  "updated_at": "2026-10-02T14:43:22+08:00",
+  "updated_at": "2026-10-02T16:27:55+08:00",
   "current_stage": "S8-F0优先 / S3-S4接收并行",
   "current_iteration": 71,
   "planning_source": "同一远端ChatGPT v2方向修订（只读核验摘要）及本地现场元数据核验；无新增源码独立审核",
@@ -2012,6 +2012,11 @@
       "date": "2026-10-02",
       "iteration": 71,
       "description": "根据Jovi转交两位AI评价修订v2：现场确认63c426a/f0/v109，旧9/13降历史；S8-F0前置，当前部署接收并行，按风险分级减少逐步骤等待。"
+    },
+    {
+      "date": "2026-10-02",
+      "iteration": 71,
+      "description": "按Jovi授权提交main并整合2个有效文档分支；17条已吸收/替代历史仅归并记录；收拢当前入口、归档旧交付清单、清理可再生缓存。产品资格与部署不变。 验证：后端唯一覆盖1402通过/23条件跳过，前端71通过；2个受访问保护的合成目录保留，主线收尾不改变生产部署。"
     }
   ],
   "incoming_candidate": {
@@ -2021,7 +2026,7 @@
     "tests": "待核对",
     "review": "PENDING",
     "deploy": "PASS",
-    "docs_branch": "codex/project-master-roadmap-20261002",
+    "docs_branch": "main",
     "status": "DEPLOYED_PENDING_INDEPENDENT_ACCEPTANCE",
     "deployed_via_main": "63c426aa9954d950d397c56ad0ece6273da6f19d"
   },
