@@ -20,3 +20,9 @@ Remote patches and conversion scripts were not applied. Request source review ag
 - Separate collection verification: 1432 tests collected. Exact pass/skip totals not emitted by repository double-quiet configuration, so no fabricated totals.
 - Frontend 73 tests / typecheck/build, narrow viewport E2E1, compileall and Node syntax passed.
 - Candidate Docker build running. Production not switched; physical phone/live acceptance NOT_RUN.
+
+## Candidate image preparation
+- Local Docker build completed with source revision label abae131770713465c6d65d29c1513fc88b8dc40d.
+- Local Docker desktop image ID: sha256:96848354a65b7797b5ee1d08bca5fe2dde29ccf1830c9cbf8f3d1b805a51d246 (not claimed as production config digest).
+- Disposable network-none image import/helper smoke PASS. This does not replace live API/auth/worker checks.
+- Remote reviewed completed full regression and accepted release-candidate state; production backup/rollback/cutover/live gates still pending.
