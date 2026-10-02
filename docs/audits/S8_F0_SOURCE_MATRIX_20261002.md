@@ -1,4 +1,4 @@
-# S8-F0 Source Evidence Matrix v3 — 2026-10-02
+# S8-F0 Source Evidence Matrix v4 — 2026-10-03 Asia/Shanghai
 
 Status: UNKNOWN / EVIDENCE_COLLECTION
 
@@ -6,7 +6,7 @@ This matrix separates repository implementation from upstream capability. Adapte
 
 | Source | Official reference | Access date | Repository evidence | Scope finding | Unit/time finding | Access conclusion |
 |---|---|---|---|---|---|---|
-| Tushare Pro | https://tushare.pro/document/2 | 2026-10-02 | `backend/app/providers/tushare.py` exists. `fetch_minute_bars` currently accepts only `30m`/`60m`; 5m/15m rejects before transport. | Repository does not prove upstream lack of 5m/15m. Adapter implementation gap identified. | Daily contract has explicit volume/amount normalization; minute 5m/15m unit evidence pending. | UNKNOWN / adapter gap |
+| Tushare Pro | https://tushare.pro/document/2?doc_id=387 | 2026-10-03 | Production adapter still accepts only `30m`/`60m`; 5m/15m rejects before transport. Separate offline runner has no real transport. | Native 5m/15m and >10-year history documented; actual access/sample coverage not verified. | Minute dictionary declares volume in shares and amount in CNY; independent sample units, bar closure, publication time and PIT not verified. | UNKNOWN / project access and license unresolved |
 | FTShare | Pending official endpoint/license citation | 2026-10-02 | `backend/app/providers/ftshare.py` exists with bounded HTTP adapter and pinned endpoints. | Endpoint capability requires upstream scope verification. | Adapter validates source timestamps/fields; no 5m/15m qualification. | UNKNOWN |
 | AKShare | https://akshare.akfamily.xyz/ | 2026-10-02 | `backend/app/providers/akshare.py` exists. | Package presence does not prove upstream minute rights. | Source-specific unit verification remains required. | UNKNOWN |
 | Sina | Pending official source citation | 2026-10-02 | `backend/app/providers/sina.py` is bounded quote adapter. | Quote capability is not minute OHLCV qualification. | Quantity units remain unverified unless documented. | UNKNOWN |
@@ -15,10 +15,10 @@ This matrix separates repository implementation from upstream capability. Adapte
 
 Targets:
 - 510300.SH
-- second ETF selected before receipt
+- 512480.SH, frozen by the existing fixture handoff
 
 Window:
-- 20 trading days connectivity/evidence check only
+- last 20 verified XSHG sessions strictly before 2026-09-30; connectivity/evidence check only
 
 Frequencies:
 - native 5m
@@ -51,3 +51,9 @@ Required receipt:
 - probe result
 
 Conclusion remains UNKNOWN until evidence is complete.
+
+## Offline preparation and current documentary access evidence
+
+[Offline orchestration receipt](S8_F0_OFFLINE_ORCHESTRATION_20261002.md): four fixed native pair/interval operations, maximum 20 attempts, maximum 10-second cooperative asynchronous fixture deadline, no retries and stop on the first capability/permission/timeout/schema/transport failure. Focused tests and independent code review pass; actual probe remains NOT_RUN.
+
+[Official evidence recheck](S8_F0_TUSHARE_EVIDENCE_20261002.md): the linked permission table lists a generic personal historical-minute tier at CNY 2,000/year, separately from points. ETF inclusion and actual project eligibility require confirmation. Service terms do not establish this project's cloud storage/PIT rights. No purchase, account action, agreement acceptance or real provider request was made.

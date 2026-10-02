@@ -1,3 +1,27 @@
+## CI性能与F0合并候选 — 2026-10-03
+
+- [x] 复现67d1a64的35分钟完整CI取消，定位小数组NumPy中位数CPU热点。
+- [x] 中位数返回值/完整payload等值回归及独立审核通过，无窗口/阈值/资格变更。
+- [x] 旧基线复现单项测试未来快照/指标删除泄漏；保留全部断言并在finally回滚，独立审核通过。
+- [x] 合并候选完整回归1493收集、1482通过、11既有跳过、0失败，569.823秒；27项JS测试及静态门禁通过。
+- [ ] 经父任务协调发布至既有分支后，核验精确提交完整CI及后续镜像门禁；无生产部署。
+- [ ] Windows项目hub与根docs同步待本地环境；真实F0访问/许可/PIT仍UNKNOWN。
+
+Review: docs/audits/CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md；F0独立1490项收据与合并候选1493项分别保留。
+
+# F0 offline orchestration — 2026-10-02
+
+- [x] Read the frozen F0 plan and add failing runner tests before implementation.
+- [x] Freeze the ETF pair, native intervals and verified XSHG 20-session window before 2026-09-30.
+- [x] Enforce request budget, cooperative async timeout, source failure stops and sanitized deterministic receipts.
+- [x] Pass 58 focused runner/parser/production-boundary tests plus scoped Ruff, compile, JS syntax and secret scan.
+- [x] Obtain independent code review, with matching file hashes and independent focused rerun.
+- [x] Finish stable F0-only full backend regression: 1,490 collected, 1,479 passed, 11 skipped, zero failures/errors.
+- [ ] Validate any combined candidate independently and verify Actions at its exact published commit.
+- [ ] Verify specifically authorized real access and license/storage/time contracts before any real probe.
+
+Receipt: `docs/audits/S8_F0_OFFLINE_ORCHESTRATION_20261002.md`. Offline fixtures only; no deployment, runtime enablement or qualification promotion.
+
 # Frontend dependency gate repair — 2026-10-02
 
 - [x] Reproduce the high-severity npm audit failure at `f9001f5`.

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from math import isfinite
+from statistics import median
 from typing import Any
 
 import numpy as np
@@ -111,9 +112,11 @@ def _pivots(rows: list[dict[str, Any]], instrument: str, basis_id: str, window: 
 
 
 def _clusters(events: list[dict[str, Any]], tolerance: float) -> list[list[dict[str, Any]]]:
+    # _normalize guarantees finite positive Python floats. Scalar medians keep
+    # the same arithmetic without allocating a NumPy array at every cutoff.
     clusters: list[list[dict[str, Any]]] = []
     for event in sorted(events, key=lambda item: (item["price"], item["origin_at"], item["touch_id"])):
-        if not clusters or abs(event["price"] - float(np.median([item["price"] for item in clusters[-1]]))) > tolerance:
+        if not clusters or abs(event["price"] - float(median([item["price"] for item in clusters[-1]]))) > tolerance:
             clusters.append([event])
         else:
             clusters[-1].append(event)
@@ -250,11 +253,11 @@ def _first_confirmed_box(rows: list[dict[str, Any]], pivots: list[dict[str, Any]
         for upper_events in highs:
             if len(upper_events) < 2:
                 continue
-            upper = float(np.median([item["price"] for item in upper_events]))
+            upper = float(median([item["price"] for item in upper_events]))
             for lower_events in lows:
                 if len(lower_events) < 2:
                     continue
-                lower = float(np.median([item["price"] for item in lower_events]))
+                lower = float(median([item["price"] for item in lower_events]))
                 width = upper - lower
                 if width <= 0 or not float(settings["minimum_width_atr"]) <= width / atr <= float(settings["maximum_width_atr"]):
                     last_failure = "box_width_out_of_range"
@@ -398,8 +401,8 @@ def build_price_structures(
         lows = [_separated(group, int(settings["minimum_touch_gap"])) for group in _clusters([p for p in known if p["side"] == "low"], tolerance)]
         pairs = [(upper, lower) for upper in highs for lower in lows if len(upper) >= 2 and len(lower) >= 2]
         if pairs:
-            upper_events, lower_events = max(pairs, key=lambda pair: (len(pair[0]) + len(pair[1]), -abs(float(np.median([p["price"] for p in pair[0]])) - float(np.median([p["price"] for p in pair[1]])))))
-            upper, lower = float(np.median([p["price"] for p in upper_events])), float(np.median([p["price"] for p in lower_events]))
+            upper_events, lower_events = max(pairs, key=lambda pair: (len(pair[0]) + len(pair[1]), -abs(float(median([p["price"] for p in pair[0]])) - float(median([p["price"] for p in pair[1]])))))
+            upper, lower = float(median([p["price"] for p in upper_events])), float(median([p["price"] for p in lower_events]))
             events = upper_events + lower_events
             origin = min(p["index"] for p in events)
             structure_id = stable_hash({"algorithm": ALGORITHM_VERSION, "instrument": instrument,

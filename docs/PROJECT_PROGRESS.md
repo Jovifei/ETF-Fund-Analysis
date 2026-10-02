@@ -2,11 +2,11 @@
 
 > 本文件由 scripts/update_project_progress.py 从 PROJECT_PROGRESS.json 生成。修改台账后重新生成，勿直接修改本文件。
 
-更新：2026-10-02T23:43:00+08:00 · iteration 71 · 当前 S8-F0证据调查 / S2私有验收待完成
+更新：2026-10-03T00:59:18+08:00 · iteration 71 · 当前 S8-F0证据调查 / S2私有验收待完成
 
 [总阶段路线图](PROJECT_MASTER_ROADMAP.md) · [图形进度板](PROJECT_PROGRESS.html) · [维护规则](PROJECT_PROGRESS_MAINTENANCE.md)
 
-**当前下一步：** 远端补官方分钟接口单位/时间/权限证据与fixture-only有界探测；本地接收验证回传，不启用生产
+**当前下一步：** 发布已审查F0与CI性能合并候选并核验精确提交CI；实际授权访问、许可与时间合同仍另核，不启用生产
 
 全项目验收分母尚未冻结；以下显示阶段状态和证据闭环，不能推算全项目完成百分比。
 
@@ -274,3 +274,7 @@
 - 2026-10-02 / iteration71：S8-F0远端计划/矩阵首批已接收；本地2项无网络能力边界测试PASS，证实Tushare Adapter未启用5m/15m，属于实现缺口非上游无能力。远端矩阵5e109416已接收；真实数据/许可/PIT结论UNKNOWN。只读磁盘盘点完成，无删除。
 - 2026-10-02 / iteration71：远端fixture验证器修复已接收，本地NaN timeout补修后19项聚焦测试PASS，收据8c45a5d已回传远端审核；官方文档级能力已证，实际授权样本/许可/PIT待核。F0无生产部署。
 - 2026-10-02 / iteration71：云端复现前端高危依赖门禁失败；brace-expansion仅锁文件2.1.4→2.1.7，高危审计门禁exit 0（0 high/critical；仍2 moderate、1 low），typecheck、73项Vue测试及构建PASS。完整远端CI待精确新提交核验，不改变部署/阶段验收/真实数据资格；收据 docs/audits/FRONTEND_DEPENDENCY_GATE_20261002.md。Windows本地hub与根docs同步待本地环境。
+- 2026-10-02 / iteration71：F0离线编排补齐固定双ETF/原生5m15m、截止2026-09-30前20个XSHG交易日、每源≤20请求/每次≤10秒、预算与拒绝/超时/结构失败停止及脱敏收据；58项聚焦测试和静态检查PASS，独立代码审核及独立58项复跑PASS，完整回归/精确提交CI待完成。真实探测、许可/PIT和可行性仍UNKNOWN，不部署；收据 docs/audits/S8_F0_OFFLINE_ORCHESTRATION_20261002.md。 官方端点/权限/服务协议复核：历史分钟通用个人参考价2000元/年，ETF具体权益与本项目存储/PIT许可未证；未采购或访问真实数据。
+- 2026-10-03 / iteration71：67d1a64精确CI：workspace-ci37029499191与audit-platforms37029499188成功，完整ci37029499272在35分钟限制取消（pytest29%，无JUnit），不得标完整通过。F0初轮1486项仅2个环境缺依赖失败，补云端venv的AKShare/socksio后60项复跑PASS；稳定最终1490项完整回归重跑中，未发布新代码。
+- 2026-10-03 / iteration71：稳定F0独立候选完整回归最终通过：1490项收集、1479通过、11跳过、0失败/错误，exit0，1684.152秒，代码/测试hash与独立审核一致。后续合并性能候选须独立验证，不继承为精确远端CI通过；仍无真实探测、部署或资格晋升。
+- 2026-10-03 / iteration71：CI性能与F0合并候选完整回归PASS：1493收集、1482通过、11既有跳过、0失败/错误，exit0，569.823秒；相同云端F0独立候选1684.152秒。中位数完整payload等值及边界测试、单项共享数据库清理均独立审核通过；27项JS测试和静态检查PASS。35分钟限制、全部断言和后续CI门禁不变；精确提交CI待核验，不部署、不晋升真实资格。收据 docs/audits/CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md。

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "roadmap_version": "2026-10-02-v2",
-  "updated_at": "2026-10-02T23:43:00+08:00",
+  "updated_at": "2026-10-03T00:59:18+08:00",
   "current_stage": "S8-F0证据调查 / S2私有验收待完成",
   "current_iteration": 71,
   "planning_source": "同一远端ChatGPT v2方向修订（只读核验摘要）及本地现场元数据核验；无新增源码独立审核",
@@ -14,7 +14,7 @@
   "actionable": false,
   "runtime_activated": false,
   "auto_trading": false,
-  "next_task": "远端补官方分钟接口单位/时间/权限证据与fixture-only有界探测；本地接收验证回传，不启用生产",
+  "next_task": "发布已审查F0与CI性能合并候选并核验精确提交CI；实际授权访问、许可与时间合同仍另核，不启用生产",
   "blockers": [
     "5m/15m真实量额、单位/时间/PIT及成本可行性未解决：先做S8-F0，不再排在所有UX之后",
     "63c426a已部署；完整发布收据、f0迁移回滚兼容、图层合同和私有功能独立接收待核对",
@@ -2052,6 +2052,26 @@
       "date": "2026-10-02",
       "iteration": 71,
       "description": "云端复现前端高危依赖门禁失败；brace-expansion仅锁文件2.1.4→2.1.7，高危审计门禁exit 0（0 high/critical；仍2 moderate、1 low），typecheck、73项Vue测试及构建PASS。完整远端CI待精确新提交核验，不改变部署/阶段验收/真实数据资格；收据 docs/audits/FRONTEND_DEPENDENCY_GATE_20261002.md。Windows本地hub与根docs同步待本地环境。"
+    },
+    {
+      "date": "2026-10-02",
+      "iteration": 71,
+      "description": "F0离线编排补齐固定双ETF/原生5m15m、截止2026-09-30前20个XSHG交易日、每源≤20请求/每次≤10秒、预算与拒绝/超时/结构失败停止及脱敏收据；58项聚焦测试和静态检查PASS，独立代码审核及独立58项复跑PASS，完整回归/精确提交CI待完成。真实探测、许可/PIT和可行性仍UNKNOWN，不部署；收据 docs/audits/S8_F0_OFFLINE_ORCHESTRATION_20261002.md。 官方端点/权限/服务协议复核：历史分钟通用个人参考价2000元/年，ETF具体权益与本项目存储/PIT许可未证；未采购或访问真实数据。"
+    },
+    {
+      "date": "2026-10-03",
+      "iteration": 71,
+      "description": "67d1a64精确CI：workspace-ci37029499191与audit-platforms37029499188成功，完整ci37029499272在35分钟限制取消（pytest29%，无JUnit），不得标完整通过。F0初轮1486项仅2个环境缺依赖失败，补云端venv的AKShare/socksio后60项复跑PASS；稳定最终1490项完整回归重跑中，未发布新代码。"
+    },
+    {
+      "date": "2026-10-03",
+      "iteration": 71,
+      "description": "稳定F0独立候选完整回归最终通过：1490项收集、1479通过、11跳过、0失败/错误，exit0，1684.152秒，代码/测试hash与独立审核一致。后续合并性能候选须独立验证，不继承为精确远端CI通过；仍无真实探测、部署或资格晋升。"
+    },
+    {
+      "date": "2026-10-03",
+      "iteration": 71,
+      "description": "CI性能与F0合并候选完整回归PASS：1493收集、1482通过、11既有跳过、0失败/错误，exit0，569.823秒；相同云端F0独立候选1684.152秒。中位数完整payload等值及边界测试、单项共享数据库清理均独立审核通过；27项JS测试和静态检查PASS。35分钟限制、全部断言和后续CI门禁不变；精确提交CI待核验，不部署、不晋升真实资格。收据 docs/audits/CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md。"
     }
   ],
   "incoming_candidate": {
@@ -2084,15 +2104,24 @@
     "evidence": "docs/audits/S2_AVAILABILITY_RELEASE_20261002.md"
   },
   "s8_f0_current_batch": {
-    "scope": "fixture-only準备及官方文档调查",
-    "code_sha": "8c45a5d",
-    "tests": "19_FOCUSED_PASS",
+    "scope": "离线fixture有界编排准备；真实探测未执行",
+    "tests": "F0_ONLY_FINAL_1490_COLLECTED_1479_PASS_11_SKIP_0_FAILURES",
     "real_upstream_probe": "NOT_RUN",
     "access": "UNKNOWN",
     "license": "UNKNOWN",
     "pit": "UNKNOWN",
     "feasibility": "UNKNOWN",
-    "deploy": "NOT_DEPLOYABLE_SUBSTAGE"
+    "deploy": "NOT_DEPLOYABLE_SUBSTAGE",
+    "baseline_sha": "67d1a648efa549b3c52743ce5c839ccc527cfec9",
+    "code": "OFFLINE_ORCHESTRATION_IMPLEMENTED",
+    "remote_review": "INDEPENDENT_CODE_REVIEW_PASS_FILE_HASH_BOUND",
+    "evidence": "docs/audits/S8_F0_OFFLINE_ORCHESTRATION_20261002.md",
+    "official_evidence": "ETF_ENDPOINT_AND_PUBLIC_PERMISSION_TERMS_RECHECKED_PROJECT_ACCESS_UNKNOWN",
+    "previous_fixture_receipt_sha": "8c45a5d",
+    "code_identity": "Current branch docs/source lookup plus file SHA-256s in the orchestration receipt",
+    "next_validation": "EXACT_COMMIT_CI_PENDING",
+    "combined_tests": "1493_COLLECTED_1482_PASS_11_EXISTING_SKIP_0_FAILURES",
+    "combined_evidence": "docs/audits/CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md"
   },
   "frontend_dependency_gate_current_batch": {
     "baseline_sha": "f9001f5189c1722aef47baaf52454afb04605b9b",
@@ -2104,9 +2133,29 @@
       "moderate": 2,
       "low": 1
     },
-    "remote_ci": "PENDING_EXACT_PUBLISHED_SHA",
+    "remote_ci": "WORKSPACE_AND_AUDIT_PASS_FULL_CI_TIMEOUT",
     "deploy": "NOT_DEPLOYED",
     "local_hub_sync": "PENDING_WINDOWS_LOCAL_EXECUTOR",
-    "evidence": "docs/audits/FRONTEND_DEPENDENCY_GATE_20261002.md"
+    "evidence": "docs/audits/FRONTEND_DEPENDENCY_GATE_20261002.md",
+    "code_sha": "67d1a648efa549b3c52743ce5c839ccc527cfec9",
+    "remote_ci_runs": {
+      "workspace": 37029499191,
+      "audit": 37029499188,
+      "full_ci": 37029499272
+    }
+  },
+  "ci_performance_current_batch": {
+    "baseline_sha": "67d1a648efa549b3c52743ce5c839ccc527cfec9",
+    "scope": "Scalar median numerical/payload parity and one shared-test transaction rollback",
+    "code": "IMPLEMENTED_NO_ALGORITHM_OR_THRESHOLD_CHANGE",
+    "tests": "COMBINED_1493_COLLECTED_1482_PASS_11_EXISTING_SKIP_0_FAILURES",
+    "local_duration_seconds": 569.823,
+    "comparison_f0_only_seconds": 1684.152,
+    "remote_review": "INDEPENDENT_NUMERIC_AND_TEST_ISOLATION_REVIEW_PASS",
+    "remote_ci": "EXACT_PUSHED_COMMIT_PENDING",
+    "timeout_minutes": 35,
+    "deploy": "NOT_DEPLOYED",
+    "evidence": "docs/audits/CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md",
+    "junit_sha256": "327d76124b732b43b4a077ecb7c6c7468cd123b6489c35afa7ae4c9b5e933703"
   }
 }

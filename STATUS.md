@@ -1,3 +1,11 @@
+## F0与CI性能合并候选验证 — 2026-10-03 00:59 上海
+
+合并候选完整回归1493项收集/1482通过/11既有跳过/0失败，569.823秒（9分30秒）；独立审核通过。热点中位数等值优化及单项测试事务清理保留所有断言/门禁，未延长35分钟CI限制。相同云端F0独立候选为1684.152秒；精确推送提交CI仍待执行。真实数据UNKNOWN、actionable=false、不部署。见[性能与合并验证收据](docs/audits/CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md)。
+
+## F0离线编排准备 — 2026-10-02
+
+固定双ETF/原生5m15m、20个XSHG交易日、请求预算/超时/失败停止与脱敏收据已补齐；58项聚焦测试和静态检查PASS，独立代码审核无阻断项。稳定F0候选完整回归1490项收集/1479通过/11跳过/0失败；合并候选结果见上文，精确提交CI另验。真实访问/量额/PIT/许可与可行性仍UNKNOWN，actionable=false，不部署。见[本轮收据](docs/audits/S8_F0_OFFLINE_ORCHESTRATION_20261002.md)。
+
 ## 前端依赖门禁修复 — 2026-10-02 23:43 上海
 
 云端基于f9001f5仅将brace-expansion锁文件2.1.4升级2.1.7；高危审计门禁、typecheck、73项Vue测试及构建PASS，仍有2项moderate和1项low。精确新提交的完整CI待核验，不改变生产及阶段验收。收据见[依赖门禁](docs/audits/FRONTEND_DEPENDENCY_GATE_20261002.md)；Windows hub/根docs同步待本地环境。

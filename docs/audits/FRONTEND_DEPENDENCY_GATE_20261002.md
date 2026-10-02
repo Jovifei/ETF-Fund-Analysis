@@ -47,3 +47,13 @@ No stage acceptance percentage, production/source identity, real-data qualificat
 - `vitest.log`: SHA-256 `c1ce61a2ce926555befc1a496910e33640df5473d4b4ccb46fd720c3e5bdb08e`
 - `build.log`: SHA-256 `9ca750ce9f09d95961f4927f6cfcb8eba16019a11dc8915a3c4333a7a53eb907`
 - `browser-js-tests.log`: SHA-256 `874380cb3174a392a4375d10c26bf7c208c6fd436ba7650311140c1a9bb7f0f6`
+
+## Exact published-commit CI outcome — 2026-10-03 Asia/Shanghai
+
+For `67d1a648efa549b3c52743ce5c839ccc527cfec9`, the separate dependency-CI monitor verified these terminal outcomes:
+
+- [workspace-ci 37029499191](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37029499191): SUCCESS, including browser journeys and responsive checks.
+- [audit-platforms 37029499188](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37029499188): SUCCESS.
+- [ci 37029499272](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37029499272): CANCELLED at the existing 35-minute job limit, last pytest output 29%. No failed assertion or completed JUnit receipt was reported; subsequent compile/static/migration/Docker stages did not execute in that workflow. The prior baseline `f9001f5` exhibited the same timeout pattern.
+
+This is partial CI success plus a full-CI timeout, not a complete CI pass. The existing timeout is being investigated separately; this F0 batch does not alter workflow YAML or weaken tests. No deployment or stage-acceptance gate is advanced.
