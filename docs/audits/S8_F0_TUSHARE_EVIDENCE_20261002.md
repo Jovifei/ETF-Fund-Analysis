@@ -47,3 +47,11 @@ Do not reuse daily contract evidence:
 Tushare minute feasibility: UNKNOWN.
 
 No procurement, credential access, provider enablement, production write, or qualification promotion performed.
+
+## Independently verified endpoint documentation (2026-10-02)
+
+Primary source: https://tushare.pro/document/2?doc_id=387 (ETF historical minutes), read directly by local Codex.
+
+The published etf_mins dictionary lists native 1/5/15/30/60 minute frequencies, an8000-row request limit and more than10 years of historical coverage. It defines vol as shares and amount as CNY. trade_time is labelled trading time; this does not establish bar closure, publication time or point-in-time revision guarantees. Project permission, storage/reuse license, actual samples and usable PIT remain unverified. These are documentation-level capabilities, not access or data qualification PASS.
+
+Implication: required frequencies are documented upstream, while current project Adapter disables5m/15m. Overall feasibility remains UNKNOWN until access/license/time/PIT evidence is resolved. Do not repeat a homepage-only capability search or classify this as upstream unsupported.
