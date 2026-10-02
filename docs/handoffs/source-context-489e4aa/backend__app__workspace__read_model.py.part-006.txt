@@ -1,0 +1,100 @@
+        if structure_status.get("qualified") and provisional_status.get("used_for_derived_values") and provisional_bar:
+            for box in structure_status["boxes"]:
+                tolerance = number(box.get("confirmation_tolerance"))
+                high, low = number(provisional_bar.get("high")), number(provisional_bar.get("low"))
+                if tolerance is None or high is None or low is None:
+                    continue
+                above, below = high > box["upper"] + tolerance, low < box["lower"] - tolerance
+                if above or below:
+                    box["intraday_state"] = {"state": "breakout_attempt", "side": "both" if above and below else "upper" if above else "lower",
+                        "observed_at": provisional_bar.get("date"), "source_id": stable_hash({"provisional_id": provisional.id, "structure_id": box["structure_id"]})}
+    structure_status["read_as_of"] = iso(as_of)
+    structure_status["interval"] = "1d"
+    price_only = legacy_units or any(row["volume"] is None for row in rows)
+    if price_only or continuity_issue or not raw_overlay_allowed:
+        sr = None
+    latest_raw_close = number(rows[-1]["close"]) if rows else None
+    latest_research_close = number(research_rows[-1]["close"]) if research_rows else None
+    research_cost_overlay_allowed = adjust == "none" and latest_raw_close is not None and latest_research_close is not None and abs(latest_raw_close - latest_research_close) <= 1e-12
+    return {
+        "ts_code": code, "interval": interval, "available": bool(series), "bars": series[-limit:],
+        "research_bars": research_series[-limit:],
+        "reason": "history_qualification_blocked" if continuity_issue else None,
+        "adjust": adjust, "currency": "CNY", "source_bars": len(rows), "history_truncated": truncated,
+        "indicator_version": strategy["indicator_version"], "indicator_basis": "shared_python_core_formulas_on_research_price_series",
+        "input_hash": input_hash, "series_id": series_id,
+        "chart_contract_version": "chart-read-v1.2.0", "display_price_basis": f"source_adjustment:{adjust}",
+        "research_price_basis": research_price_basis, "research_price_basis_id": research_price_basis_id,
+        "research_basis_evidence_ids": basis_events, "raw_overlay_allowed": raw_overlay_allowed,
+        "raw_overlay_reason": "history_qualification_blocked" if continuity_issue else "price_basis_mismatch" if price_basis_changed else None,
+        "core_snapshot_match": matches, "source_as_of": rows[-1]["date"] if rows else None,
+        "as_of": iso(as_of), "computed_at": iso(datetime.now(SHANGHAI)),
+        "history_issue": continuity_issue, "return_basis": "unadjusted_price_not_total_return" if adjust == "none" else adjust,
+        "qualification": continuity_issue if continuity_issue else "mock" if mock else "legacy_units_unverified" if legacy_units else "historical_price_only" if price_only else "research_only", "actionable": False,
+        "cost_overlay_allowed": adjust == "none", "research_cost_overlay_allowed": research_cost_overlay_allowed,
+        "sr_overlay_allowed": raw_overlay_allowed and len(adjustments) == 1 and bool(sr),
+        "support_resistance": sr if raw_overlay_allowed and len(adjustments) == 1 else None,
+        "price_structures": structure_status if raw_overlay_allowed else {**structure_status, "qualified": False, "reason": "price_basis_mismatch", "boxes": []},
+        "research_price_structures": structure_status,
+        "indicator_note": "拆分调整研究序列与原始行情的价格口径不同；原始图已隐藏未映射的指标和支撑压力，切换到研究序列可查看。" if price_basis_changed else "盘中指标基于临时行情计算，收盘后由正式日线替换；不生成操作级信号。" if provisional_status.get("used_for_derived_values") else "历史价格指标可展示；量能缺失或旧单位未验证，禁止生成操作级信号。" if price_only else "图表由服务端统一公式生成；支撑压力为当前快照，不是历史当时已知的点位。",
+    }
+
+
+def factor_view(db: Session, settings: Settings) -> dict:
+    configured = list(settings.load_strategy().get("factor_analysis", {}).get("factors", DEFAULT_FACTORS))
+    artifact = db.scalar(select(ReportArtifact).where(ReportArtifact.report_type == "factor_effectiveness", ReportArtifact.user_id.is_(None)).order_by(ReportArtifact.as_of_time.desc(), ReportArtifact.id.desc()).limit(1))
+    report = None
+    if artifact:
+        try:
+            path = Path(artifact.file_path).resolve(strict=True)
+            path.relative_to(settings.reports_dir.resolve())
+            with path.open("rb") as handle:
+                raw = handle.read(4_000_001)
+            if len(raw) > 4_000_000:
+                raise ValueError("report too large")
+            parsed = json.loads(raw)
+            if parsed.get("report_type") == "factor_effectiveness" and stable_hash(parsed) == artifact.content_hash:
+                report = parsed
+        except (OSError, ValueError, TypeError):
+            report = None
+    return {"registry": [{"name": name, "status": "research_candidate", "strategy_promotion": False} for name in configured], "name_count": len(configured), "validated_count": None, "report": report, "actionable": False, "note": "名称数量不是独立有效因子数量；诊断结果不代表样本外合格。"}
+
+
+def portfolio_risk(db: Session, settings: Settings, user_id: int | None) -> dict:
+    portfolio = holdings_view(db, settings, user_id)
+    items = portfolio["items"][:60]
+    codes = [item["ts_code"] for item in items]
+    pairs = db.execute(select(Instrument.ts_code, DailyBar).join(DailyBar, DailyBar.instrument_id == Instrument.id).where(Instrument.ts_code.in_(codes), DailyBar.adjust == "none").order_by(DailyBar.trade_date.desc()).limit(20000)).all() if codes else []
+    from app.providers.data_contract import price_history_issue
+    grouped = {code: [] for code in codes}
+    for code, bar in pairs:
+        grouped[code].append(bar)
+    history_issues = {code: issue for code, bars in grouped.items()
+                      if (issue := price_history_issue(list(reversed(bars))[-121:]))}
+    records = [{"code": code, "date": bar.trade_date, "close": bar.close} for code, bar in pairs
+               if code not in history_issues]
+    correlations = [{"left": left, "right": right, "correlation": None, "observations": 0,
+                     "reason": "history_not_qualified"} for i, left in enumerate(codes)
+                    for right in codes[i+1:] if left in history_issues or right in history_issues]
+    if records:
+        prices = pd.DataFrame(records).pivot(index="date", columns="code", values="close").sort_index().tail(121)
+        returns = prices.pct_change(fill_method=None)
+        for i, left in enumerate(codes):
+            for right in codes[i + 1:]:
+                if left not in returns or right not in returns:
+                    continue
+                sample = returns[[left, right]].dropna()
+                correlation = sample[left].corr(sample[right]) if len(sample) >= 40 else None
+                correlations.append({"left": left, "right": right, "correlation": number(correlation), "observations": len(sample)})
+    theme_weights: dict[str, float] = {}
+    for item in items:
+        if item["weight"] is not None:
+            key = item["theme"] or "未分类"
+            theme_weights[key] = theme_weights.get(key, 0) + item["weight"]
+    return {"pricing_complete": portfolio["pricing_complete"], "max_weight": max((item["weight"] or 0 for item in items), default=0) if portfolio["pricing_complete"] else None, "theme_weights": theme_weights, "correlations": correlations, "history_issues": history_issues, "basis": "last_120_daily_return_pearson_unadjusted_research", "limitations": ["不含未录入现金和资产", "收益相关性不是成分股重叠", "未复权收益会受分红影响", "个人成本不参与共享市场信号"], "actionable": False}
+
+
+def sector_overview(db: Session, settings: Settings) -> dict:
+    """Two bounded read-only SQL queries; no all-market grade/indicator hydration."""
+    ranked = select(SectorSnapshot.id, func.row_number().over(partition_by=[SectorSnapshot.board_type, SectorSnapshot.sector_name], order_by=[SectorSnapshot.trade_date.desc(), SectorSnapshot.fetched_at.desc(), SectorSnapshot.id.desc()]).label("rn")).subquery()
+    rows = db.scalars(select(SectorSnapshot).join(ranked, ranked.c.id == SectorSnapshot.id).where(ranked.c.rn == 1).order_by(SectorSnapshot.board_type, SectorSnapshot.sector_name).limit(2000)).all()
