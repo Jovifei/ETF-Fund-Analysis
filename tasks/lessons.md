@@ -53,3 +53,7 @@
 
 ## 2026-10-01 Workspace location correction
 Choose isolated execution directories beneath the authorized project writable root. Verify independent Git metadata and preserve pending files with SHA256 before switching execution. Do not treat a managed C-drive worktree as writable merely because it is readable.
+
+## 2026-10-02 总阶段与进度治理
+- 大阶段必须有稳定ID、目标、步骤和验收；子任务接力同时更新根docs总览，不能只维护细粒度聊天状态。
+- 平台健康和演练不替代私有线上验收；历史阶段不能反推出新台账PASS，分母正式冻结后才计算阶段比例。

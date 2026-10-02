@@ -1,0 +1,1987 @@
+{
+  "schema_version": 1,
+  "roadmap_version": "2026-10-02-v1",
+  "updated_at": "2026-10-02T14:07:22+08:00",
+  "current_stage": "S3",
+  "current_iteration": 71,
+  "planning_source": "既有远端ChatGPT总体规划+口径修订；本轮文件连接不可用",
+  "deployed_code_sha": "3a13575f58ae6f8aad0face1a8e42391d2356518",
+  "deployed_tree": "70c5ea87fc84ed027202c8df0622f5e44f717a9e",
+  "release_evidence_head": "70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b",
+  "docs_commit_lookup": "git log -1 -- docs/PROJECT_MASTER_ROADMAP.md docs/PROJECT_PROGRESS.json",
+  "alembic": "h9c0d1e2f3a4",
+  "real_data": "UNKNOWN",
+  "actionable": false,
+  "runtime_activated": false,
+  "auto_trading": false,
+  "next_task": "正常登录后，同次私有GET立即前后计数验证 → R12最终收据 → 远端审核 → S4正式计划",
+  "blockers": [
+    "R9私有验收等待正常登录；R10和R12随其闭环",
+    "固定规划文件连接启动超时；当前路线图依据既有远端聊天，文件复核待恢复"
+  ],
+  "release_gates": [
+    {
+      "id": "R1",
+      "name": "源码身份",
+      "status": "PASS",
+      "evidence": "docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md @ 70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b"
+    },
+    {
+      "id": "R2",
+      "name": "在线基线对账",
+      "status": "PASS",
+      "evidence": "docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md @ 70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b"
+    },
+    {
+      "id": "R3",
+      "name": "不可变构建",
+      "status": "PASS",
+      "evidence": "docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md @ 70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b"
+    },
+    {
+      "id": "R4",
+      "name": "隔离及新备份",
+      "status": "PASS",
+      "evidence": "docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md @ 70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b"
+    },
+    {
+      "id": "R5",
+      "name": "恢复迁移演练",
+      "status": "PASS",
+      "evidence": "docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md @ 70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b"
+    },
+    {
+      "id": "R6",
+      "name": "候选演练验证",
+      "status": "PASS",
+      "evidence": "docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md @ 70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b"
+    },
+    {
+      "id": "R7",
+      "name": "回滚演练",
+      "status": "PASS",
+      "evidence": "docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md @ 70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b"
+    },
+    {
+      "id": "R8",
+      "name": "受控部署",
+      "status": "PASS",
+      "evidence": "docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md @ 70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b"
+    },
+    {
+      "id": "R9-platform",
+      "name": "平台线上检查",
+      "status": "PASS",
+      "evidence": "docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md @ 70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b"
+    },
+    {
+      "id": "R9-private",
+      "name": "正常登录私有检查",
+      "status": "PENDING",
+      "evidence": "待正常登录后的同次GET收据"
+    },
+    {
+      "id": "R10",
+      "name": "同次GET零副作用",
+      "status": "PENDING",
+      "evidence": "待完成"
+    },
+    {
+      "id": "R11",
+      "name": "回滚触发与就绪",
+      "status": "READY",
+      "evidence": "docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md @ 70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b"
+    },
+    {
+      "id": "R12",
+      "name": "最终收据远端接受",
+      "status": "PENDING",
+      "evidence": "待完成"
+    }
+  ],
+  "stages": [
+    {
+      "id": "S0",
+      "name": "基础、安全与证据治理",
+      "legacy": "R1 / A-U1～U3 / 旧P基础",
+      "status": "基础已有；历史验收待核对",
+      "counter_frozen": false,
+      "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
+      "dimensions": {
+        "code": "待核对",
+        "tests": "待核对",
+        "review": "待核对",
+        "deploy": "待核对",
+        "live": "待核对"
+      },
+      "units": [
+        {
+          "id": "S0-U01",
+          "name": "认证/私有API",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S0-U02",
+          "name": "账户资料与访问关闭",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S0-U03",
+          "name": "非操作级输出",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S0-U04",
+          "name": "来源和证据绑定",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S0-U05",
+          "name": "源码镜像收据",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S0-U06",
+          "name": "备份恢复回滚",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S0-U07",
+          "name": "凭据MockProvider隔离",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S0-U08",
+          "name": "旧阶段核对",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        }
+      ]
+    },
+    {
+      "id": "S1",
+      "name": "数据生命周期与及时性",
+      "legacy": "R2",
+      "status": "已有实现；最终历史证据待核对",
+      "counter_frozen": false,
+      "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
+      "dimensions": {
+        "code": "待核对",
+        "tests": "待核对",
+        "review": "待核对",
+        "deploy": "待核对",
+        "live": "待核对"
+      },
+      "units": [
+        {
+          "id": "S1-U01",
+          "name": "行情及时性",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S1-U02",
+          "name": "日线分钟时间资格",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S1-U03",
+          "name": "暂定结算隔离",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S1-U04",
+          "name": "历史实时显示",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S1-U05",
+          "name": "跨页面一致性",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S1-U06",
+          "name": "Provider降级",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S1-U07",
+          "name": "数据健康",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S1-U08",
+          "name": "R2证据核对",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        }
+      ]
+    },
+    {
+      "id": "S2",
+      "name": "详情与研究解释",
+      "legacy": "R3",
+      "status": "已有实现；完整验收待核对",
+      "counter_frozen": false,
+      "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
+      "dimensions": {
+        "code": "待核对",
+        "tests": "待核对",
+        "review": "待核对",
+        "deploy": "待核对",
+        "live": "待核对"
+      },
+      "units": [
+        {
+          "id": "S2-U01",
+          "name": "数据可用性矩阵",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S2-U02",
+          "name": "决策解释",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S2-U03",
+          "name": "快照变化解释",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S2-U04",
+          "name": "预测状态区分",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S2-U05",
+          "name": "价格口径一致",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S2-U06",
+          "name": "持仓关联",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S2-U07",
+          "name": "R3最终证据",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        }
+      ]
+    },
+    {
+      "id": "S3",
+      "name": "研究基座与Chan后端",
+      "legacy": "R4A/R4B/R4C M0–M3",
+      "status": "后端已部署；私有发布验收收尾",
+      "counter_frozen": false,
+      "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
+      "dimensions": {
+        "code": "PASS",
+        "tests": "PASS",
+        "review": "部分PASS",
+        "deploy": "PASS",
+        "live": "部分PASS"
+      },
+      "units": [
+        {
+          "id": "S3-U01",
+          "name": "研究价格口径",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S3-U02",
+          "name": "支撑压力不可变快照",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S3-U03",
+          "name": "引擎方言资格",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S3-U04",
+          "name": "结构修订身份",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S3-U05",
+          "name": "因果输入回放",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S3-U06",
+          "name": "日因果冻结输入",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S3-U07",
+          "name": "周月聚合血缘",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S3-U08",
+          "name": "不可变持久化",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S3-U09",
+          "name": "审计worker发布",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S3-U10",
+          "name": "PG并发幂等恢复",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S3-U11",
+          "name": "验证读取服务",
+          "dimensions": {
+            "code": "PASS",
+            "tests": "PASS",
+            "review": "PASS",
+            "deploy": "PASS",
+            "live": "PENDING"
+          },
+          "evidence": [
+            "docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md @ 70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b",
+            "M3B-C代码审查 iteration70 / SHA3a13575"
+          ],
+          "na_reasons": {}
+        },
+        {
+          "id": "S3-U12",
+          "name": "私有DWM GET",
+          "dimensions": {
+            "code": "PASS",
+            "tests": "PASS",
+            "review": "PASS",
+            "deploy": "PASS",
+            "live": "PENDING"
+          },
+          "evidence": [
+            "docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md @ 70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b",
+            "M3B-C代码审查 iteration70 / SHA3a13575"
+          ],
+          "na_reasons": {}
+        },
+        {
+          "id": "S3-U13",
+          "name": "移除GET时旧计算",
+          "dimensions": {
+            "code": "PASS",
+            "tests": "PASS",
+            "review": "PASS",
+            "deploy": "PASS",
+            "live": "PENDING"
+          },
+          "evidence": [
+            "docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md @ 70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b",
+            "M3B-C代码审查 iteration70 / SHA3a13575"
+          ],
+          "na_reasons": {}
+        },
+        {
+          "id": "S3-U14",
+          "name": "损坏阻断",
+          "dimensions": {
+            "code": "PASS",
+            "tests": "PASS",
+            "review": "PASS",
+            "deploy": "PASS",
+            "live": "PENDING"
+          },
+          "evidence": [
+            "docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md @ 70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b",
+            "M3B-C代码审查 iteration70 / SHA3a13575"
+          ],
+          "na_reasons": {}
+        },
+        {
+          "id": "S3-U15",
+          "name": "PG读取零DML",
+          "dimensions": {
+            "code": "PASS",
+            "tests": "PASS",
+            "review": "PASS",
+            "deploy": "PASS",
+            "live": "PENDING"
+          },
+          "evidence": [
+            "docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md @ 70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b",
+            "M3B-C代码审查 iteration70 / SHA3a13575"
+          ],
+          "na_reasons": {}
+        },
+        {
+          "id": "S3-U16",
+          "name": "生产部署",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S3-U17",
+          "name": "平台线上检查",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S3-U18",
+          "name": "正常登录私有检查",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S3-U19",
+          "name": "同次GET零副作用",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S3-U20",
+          "name": "最终收据远端接受",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        }
+      ],
+      "scope_note": "这些维度仅概括当前M3B-C代码/发布；S3完整历史证据仍待映射"
+    },
+    {
+      "id": "S4",
+      "name": "图表与Chan用户体验",
+      "legacy": "R4C M4/M5",
+      "status": "下一产品阶段；实施未放行",
+      "counter_frozen": false,
+      "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
+      "dimensions": {
+        "code": "TODO",
+        "tests": "TODO",
+        "review": "PENDING",
+        "deploy": "TODO",
+        "live": "TODO"
+      },
+      "units": [
+        {
+          "id": "S4-U01",
+          "name": "证据图坐标",
+          "dimensions": {
+            "code": "TODO",
+            "tests": "TODO",
+            "review": "PENDING",
+            "deploy": "TODO",
+            "live": "TODO"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S4-U02",
+          "name": "分型标记",
+          "dimensions": {
+            "code": "TODO",
+            "tests": "TODO",
+            "review": "PENDING",
+            "deploy": "TODO",
+            "live": "TODO"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S4-U03",
+          "name": "笔绘制",
+          "dimensions": {
+            "code": "TODO",
+            "tests": "TODO",
+            "review": "PENDING",
+            "deploy": "TODO",
+            "live": "TODO"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S4-U04",
+          "name": "中枢区域",
+          "dimensions": {
+            "code": "TODO",
+            "tests": "TODO",
+            "review": "PENDING",
+            "deploy": "TODO",
+            "live": "TODO"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S4-U05",
+          "name": "暂定结算区分",
+          "dimensions": {
+            "code": "TODO",
+            "tests": "TODO",
+            "review": "PENDING",
+            "deploy": "TODO",
+            "live": "TODO"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S4-U06",
+          "name": "修订变化解释",
+          "dimensions": {
+            "code": "TODO",
+            "tests": "TODO",
+            "review": "PENDING",
+            "deploy": "TODO",
+            "live": "TODO"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S4-U07",
+          "name": "口径错配阻断",
+          "dimensions": {
+            "code": "TODO",
+            "tests": "TODO",
+            "review": "PENDING",
+            "deploy": "TODO",
+            "live": "TODO"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S4-U08",
+          "name": "支撑压力Chan层级",
+          "dimensions": {
+            "code": "TODO",
+            "tests": "TODO",
+            "review": "PENDING",
+            "deploy": "TODO",
+            "live": "TODO"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S4-U09",
+          "name": "响应式交互",
+          "dimensions": {
+            "code": "TODO",
+            "tests": "TODO",
+            "review": "PENDING",
+            "deploy": "TODO",
+            "live": "TODO"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S4-U10",
+          "name": "缺快照损坏空态",
+          "dimensions": {
+            "code": "TODO",
+            "tests": "TODO",
+            "review": "PENDING",
+            "deploy": "TODO",
+            "live": "TODO"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S4-U11",
+          "name": "截图端到端验收",
+          "dimensions": {
+            "code": "TODO",
+            "tests": "TODO",
+            "review": "PENDING",
+            "deploy": "TODO",
+            "live": "TODO"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S4-U12",
+          "name": "生产发布",
+          "dimensions": {
+            "code": "TODO",
+            "tests": "TODO",
+            "review": "PENDING",
+            "deploy": "TODO",
+            "live": "TODO"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S4-U13",
+          "name": "线上UI验收",
+          "dimensions": {
+            "code": "TODO",
+            "tests": "TODO",
+            "review": "PENDING",
+            "deploy": "TODO",
+            "live": "TODO"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        }
+      ]
+    },
+    {
+      "id": "S5",
+      "name": "消息与事件关联",
+      "legacy": "N1",
+      "status": "基础/验收待核对；待正式计划",
+      "counter_frozen": false,
+      "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
+      "dimensions": {
+        "code": "待核对",
+        "tests": "待核对",
+        "review": "待核对",
+        "deploy": "待核对",
+        "live": "待核对"
+      },
+      "units": [
+        {
+          "id": "S5-U01",
+          "name": "事件schema",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S5-U02",
+          "name": "来源发布时间生效时间",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S5-U03",
+          "name": "资产主题指数关联",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S5-U04",
+          "name": "持仓关联",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S5-U05",
+          "name": "价格结构时间窗口",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S5-U06",
+          "name": "去重聚合",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S5-U07",
+          "name": "冲突可信度",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S5-U08",
+          "name": "图表标注",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S5-U09",
+          "name": "AI证据引用",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S5-U10",
+          "name": "研究收件箱",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S5-U11",
+          "name": "无副作用读取",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S5-U12",
+          "name": "验收发布",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        }
+      ]
+    },
+    {
+      "id": "S6",
+      "name": "AI与本地执行产品闭环",
+      "legacy": "R5",
+      "status": "研发接力已使用；产品验收待核对",
+      "counter_frozen": false,
+      "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
+      "dimensions": {
+        "code": "待核对",
+        "tests": "待核对",
+        "review": "待核对",
+        "deploy": "待核对",
+        "live": "待核对"
+      },
+      "units": [
+        {
+          "id": "S6-U01",
+          "name": "工作区身份",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S6-U02",
+          "name": "请求收据协议",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S6-U03",
+          "name": "读写权限边界",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S6-U04",
+          "name": "本地沙箱",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S6-U05",
+          "name": "AI研究计划",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S6-U06",
+          "name": "本地执行",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S6-U07",
+          "name": "测试证据",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S6-U08",
+          "name": "远端审核",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S6-U09",
+          "name": "生产授权记录",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S6-U10",
+          "name": "失败恢复",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S6-U11",
+          "name": "身份错配恢复",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S6-U12",
+          "name": "可见审计轨迹",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        }
+      ]
+    },
+    {
+      "id": "S7",
+      "name": "持仓、组合与风险",
+      "legacy": "旧P持仓/因子/风险",
+      "status": "基础已有；完整阶段待核对",
+      "counter_frozen": false,
+      "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
+      "dimensions": {
+        "code": "待核对",
+        "tests": "待核对",
+        "review": "待核对",
+        "deploy": "待核对",
+        "live": "待核对"
+      },
+      "units": [
+        {
+          "id": "S7-U01",
+          "name": "持仓导入维护",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S7-U02",
+          "name": "成本市值未定价",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S7-U03",
+          "name": "主题行业暴露",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S7-U04",
+          "name": "单标的风险",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S7-U05",
+          "name": "集中度",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S7-U06",
+          "name": "相关性",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S7-U07",
+          "name": "波动回撤",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S7-U08",
+          "name": "流动性量能",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S7-U09",
+          "name": "事件暴露",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S7-U10",
+          "name": "结构关联",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S7-U11",
+          "name": "情景压力",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S7-U12",
+          "name": "风险解释",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S7-U13",
+          "name": "页面验收",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S7-U14",
+          "name": "发布线上验收",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        }
+      ]
+    },
+    {
+      "id": "S8",
+      "name": "数据资格、回测与校准",
+      "legacy": "R6",
+      "status": "真实数据UNKNOWN；未通过",
+      "counter_frozen": false,
+      "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
+      "dimensions": {
+        "code": "待核对",
+        "tests": "待核对",
+        "review": "待核对",
+        "deploy": "待核对",
+        "live": "待核对"
+      },
+      "units": [
+        {
+          "id": "S8-U01",
+          "name": "真实数据清单",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S8-U02",
+          "name": "来源覆盖",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S8-U03",
+          "name": "时间戳资格",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S8-U04",
+          "name": "量额单位",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S8-U05",
+          "name": "复权企业行动",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S8-U06",
+          "name": "异常检测",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S8-U07",
+          "name": "历史修订",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S8-U08",
+          "name": "PIT数据集",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S8-U09",
+          "name": "泄漏审计",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S8-U10",
+          "name": "walk-forward",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S8-U11",
+          "name": "样本外指标",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S8-U12",
+          "name": "跨周期稳定性",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S8-U13",
+          "name": "费用滑点",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S8-U14",
+          "name": "预测校准",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S8-U15",
+          "name": "概率可靠性",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S8-U16",
+          "name": "阈值敏感度",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S8-U17",
+          "name": "置信度校准",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S8-U18",
+          "name": "失效环境",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S8-U19",
+          "name": "资格收据",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S8-U20",
+          "name": "actionable独立决定",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        }
+      ]
+    },
+    {
+      "id": "S9",
+      "name": "稳定运营与持续发布",
+      "legacy": "跨阶段运维发布",
+      "status": "持续治理；本轮文件连接待恢复",
+      "counter_frozen": false,
+      "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
+      "dimensions": {
+        "code": "待核对",
+        "tests": "待核对",
+        "review": "待核对",
+        "deploy": "待核对",
+        "live": "待核对"
+      },
+      "units": [
+        {
+          "id": "S9-U01",
+          "name": "构建来源",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S9-U02",
+          "name": "备份恢复目标",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S9-U03",
+          "name": "回滚演练",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S9-U04",
+          "name": "迁移演练",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S9-U05",
+          "name": "服务监测",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S9-U06",
+          "name": "调度健康",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S9-U07",
+          "name": "Provider健康",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S9-U08",
+          "name": "数据质量",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S9-U09",
+          "name": "规划连接监测",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S9-U10",
+          "name": "工作区错配恢复",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S9-U11",
+          "name": "诊断隔离",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S9-U12",
+          "name": "配置漂移",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S9-U13",
+          "name": "收据自动化",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S9-U14",
+          "name": "保留策略",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S9-U15",
+          "name": "灾难恢复",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        },
+        {
+          "id": "S9-U16",
+          "name": "依赖安全维护",
+          "dimensions": {
+            "code": "待核对",
+            "tests": "待核对",
+            "review": "待核对",
+            "deploy": "待核对",
+            "live": "待核对"
+          },
+          "evidence": [],
+          "na_reasons": {}
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "date": "2026-10-02",
+      "iteration": 71,
+      "description": "远端制定S0–S9路线图并接受撤销17/20、演练与线上分列、R10同次GET八项计数等修订；形成总规划和自动生成进度机制。"
+    }
+  ]
+}

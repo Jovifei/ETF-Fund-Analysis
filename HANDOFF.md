@@ -1,5 +1,7 @@
 # 当前接手入口：iteration71 已部署，私有验收与远端最终审核待完成（2026-10-02）
 
+总阶段路线采用 `docs/PROJECT_MASTER_ROADMAP.md` S0–S9，进度源为 `docs/PROJECT_PROGRESS.json`，生成器 `scripts/update_project_progress.py`。每次实质实现/测试/审查/部署/验收/阻塞变化更新并检查，提交后同步根docs；禁止首稿17/20误计。2026-10-02总规划与计数修订已远端回复，但文件连接启动超时仍待恢复；保持既有发布验收门禁。
+
 优先读 [production receipt](docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md)、[R5–R7 rehearsal](docs/audits/R4C_RELEASE_R5_REHEARSAL_20261002.md) 和本聊天 C2C c2c_a1d7 checkpoint。代码3a13575已部署，镜像配置547533c5、Alembic h9c0d1e2f3a4，平台检查通过；运行时仍禁用，真实数据 UNKNOWN。新备份与旧镜像保留，IMAGE_ONLY 回滚已演练。
 
 下一动作：登录问题已向 Jovi 提出，正常登录完成后通过既有浏览器会话检查私有 Chan GET，立即比较同次请求前后八项聚合计数。不要读取密码、Cookie、Token或已有会话，不建生产测试用户。C2C 已绿色并由远端确认工作区正确；不重发 INIT/旧执行请求，不改其他项目连接。完成R9/R10后提交最终文档并请远端复核R12，只有其通过才请求M4计划。继续使用 E 盘项目内执行目录，保留 Owner main 脏区。

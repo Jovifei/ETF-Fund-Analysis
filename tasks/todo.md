@@ -1551,3 +1551,11 @@ Remote iteration 69 returned `M3B_B_DECISION=PASS`, `M3B_C_IMPLEMENTATION_GO=tru
 - [x] Scoped Ruff, compileall, Node syntax, scoped secret scan, and `git diff --check` passed.
 - [ ] Stage only iteration-70 authorized M3B-C files, commit/push, release readable evidence through C2C, and request remote exact-head review.
 - [ ] Keep `M3B_C_RELEASE_GO=false`, M4/main/production false, real-data qualification UNKNOWN, and actionable=false until separate remote review/release gates.
+
+# 项目总路线图与进度治理 — 2026-10-02
+- [x] 同一远端聊天规划S0–S9及阶段实施步骤。
+- [x] 讨论并撤销首稿17/20误计；保留iteration71发布检查9/13PASS。
+- [x] 根docs总规划、JSON台账、生成MD/HTML及维护契约已建立。
+- [x] 生成器与--check通过；接力自动化更新维护规则并保持原PAUSED。
+- [ ] 后续每次实质状态变化更新台账、生成检查、提交并同步根docs。
+当前仍等待私有R9/R10/R12；M4/main未放行。
