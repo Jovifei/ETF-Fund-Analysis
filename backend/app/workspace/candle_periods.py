@@ -1,15 +1,31 @@
 """Read-only chart research. Calendar candles and price levels are not forecasts."""
 from __future__ import annotations
 
+import re
 from calendar import monthrange
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from app.utils.chan_structure import build_chan_structure
 from app.utils.hashing import stable_hash
+from app.utils.prior_range import prior_high_low_range
 from app.utils.support_resistance import build_support_resistance
 from app.workspace.chart import cached_indicator_series, number
+
+_HIDDEN_STRUCTURE_REASONS = {"price_basis_mismatch", "history_qualification_blocked", "snapshot_after_as_of", "interval_unsupported"}
+_GROUP_RULES = (
+    ("MA", re.compile(r"MA\d|均线")),
+    ("MACD", re.compile(r"MACD")),
+    ("KDJ", re.compile(r"KDJ")),
+    ("RSI", re.compile(r"RSI")),
+    ("BOLL", re.compile(r"布林|BOLL", re.I)),
+    ("ATR", re.compile(r"ATR", re.I)),
+    ("FIB", re.compile(r"Fibonacci")),
+    ("CHAN", re.compile(r"缠论")),
+    ("PIVOT", re.compile(r"分形|趋势线|区间|TD9|成交|pivot", re.I)),
+)
 
 PERIODS=('1d','1w','1mo')
 TZ=ZoneInfo('Asia/Shanghai')
@@ -89,12 +105,27 @@ def chart_studies(rows: list[dict], config: dict, period: str) -> dict:
                 index=line.get(endpoint+'_index')
                 if isinstance(index,int) and 0<=index<len(series): line[endpoint+'_date']=series[index]['date']
     for level in result.get('levels',[]):
-        methods=level.get('methods',[])
-        groups=[]
-        for group,words in {'MA':['MA'],'MACD':['MACD'],'KDJ':['KDJ'],'RSI':['RSI'],'BOLL':['布林'],'ATR':['ATR'],'FIB':['Fibonacci'],'CHAN':['缠论'],'PIVOT':['分形','趋势线','区间','TD9','成交']}.items():
-            if any(word in str(methods) for word in words): groups.append(group)
+        methods=' '.join(map(str, level.get('methods', [])))
+        groups=[group for group, pattern in _GROUP_RULES if pattern.search(methods)]
         level['groups']=groups or ['PIVOT']
+    result['chan_structure']=build_chan_structure(series, interval=period)
     return result
+
+
+def _drawable_candidate(candidate: object) -> bool:
+    return isinstance(candidate, dict) and isinstance(candidate.get("lower"), (int, float)) and isinstance(candidate.get("upper"), (int, float)) and isinstance(candidate.get("origin_at"), str)
+
+
+def attach_live_prior_range(structures: dict | None, bars: list[dict], period: str) -> dict:
+    """Add a non-persisted prior high/low only when no audited box can be drawn."""
+    source = structures if isinstance(structures, dict) else {}
+    base = {**source, "boxes": list(source.get("boxes") or [])}
+    if period != "1d" or base.get("reason") in _HIDDEN_STRUCTURE_REASONS:
+        return base
+    if base["boxes"] or _drawable_candidate(base.get("candidate")):
+        return base
+    base["live_prior_range"] = prior_high_low_range(bars)
+    return base
 
 
 def transform_chart(result: dict, period: str, config: dict, limit: int=500, *, now: datetime | None=None) -> dict:
@@ -133,9 +164,9 @@ def transform_chart(result: dict, period: str, config: dict, limit: int=500, *, 
         'raw_overlay_reason': result.get('raw_overlay_reason') or (None if raw_overlay_allowed else 'price_basis_mismatch'),
         'basis_transition': bool(result.get('raw_overlay_reason') == 'price_basis_mismatch'),
         'research_cost_overlay_allowed': bool(result.get('research_cost_overlay_allowed')),
-        'price_structures': (result.get('price_structures') if period == '1d' else {
+        'price_structures': (attach_live_prior_range(result.get('price_structures'), bars[-limit:], period) if period == '1d' else {
             'qualified': False, 'reason': 'interval_unsupported', 'boxes': [], 'actionable': False, 'interval': period}),
-        'research_price_structures': (result.get('research_price_structures') if period == '1d' else {
+        'research_price_structures': (attach_live_prior_range(result.get('research_price_structures'), research_series[-limit:], period) if period == '1d' else {
             'qualified': False, 'reason': 'interval_unsupported', 'boxes': [], 'actionable': False, 'interval': period}),
         'actionable': False,
         'indicator_note': '日/周/月K按实际历史OHLC聚合；指标按同一拆分调整研究序列重算。价位为当前研究参考，不是历史当时已知的交易信号。'}

@@ -69,6 +69,10 @@ def chart(code: str, db: DB, settings: Config, user: User, interval: str = "1d",
     if interval=="1d":
         from app.workspace.candle_periods import transform_chart
         result=transform_chart(result,interval,settings.load_strategy()["indicator"],limit,now=as_of)
+    chan_interval = {"1d": "D", "1w": "W", "1mo": "M"}.get(interval)
+    if chan_interval is not None:
+        from app.workspace.chan_chart_overlay import annotate_chart_chan
+        result = annotate_chart_chan(result, read_model.chan_evidence(db, code.upper(), chan_interval))
     return result
 
 
