@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import fixture from '../../backend/tests/fixtures/chan_chart_projection.json'
+import fixture from './fixtures/chan_chart_projection.json'
 import type { ChartData } from '../src/lib/types'
 
 const mocked = vi.hoisted(() => ({ chart: { setPriceVolumePrecision: vi.fn(), applyNewData: vi.fn(), createIndicator: vi.fn(), createOverlay: vi.fn(), subscribeAction: vi.fn(), unsubscribeAction: vi.fn(), setBarSpace: vi.fn(), scrollToRealTime: vi.fn(), resize: vi.fn(), removeIndicator: vi.fn(), removeOverlay: vi.fn() } }))

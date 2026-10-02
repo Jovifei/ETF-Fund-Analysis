@@ -96,7 +96,7 @@ the concurrent documentation commit. Full Vue/typecheck/build, the 41-case
 timezone suite, 27 legacy JavaScript cases and scoped static checks were rerun
 successfully. No runtime edit was made during recovery.
 
-Frozen SHA-256s:
+Frozen SHA-256s for the original `3eb0451` projection batch (paths below are historical):
 
 - `frontend/src/lib/chartAdapter.ts`: `d1cbf6da048422e6f362984d212ad61a8887c41353d01861744aeaa9f49bb8ae`
 - `frontend/tests/chan-projection.test.ts`: `c74c32bc35006f402797c138b9782ce124a7433f6d1827b4a392ff60f469273b`
@@ -144,3 +144,59 @@ The reviewed runtime and final test hash above passed the complete suite:
 exit 0, 556.370 seconds. Final JUnit SHA-256:
 `f205768e6f58b5cd6378c77fc8a869928588a2de5e9cb5f94978c59ec1e54824`. This is a local aggregate result; exact-publication
 CI and actual hosted browser execution still require their own evidence.
+
+
+## First exact-head hosted evidence and packaging correction
+
+The reviewed 13-file tree `876fcc1b3c0d2f0451c4b9ca2c7131ef9d87f24d`
+was published by ordinary non-forced fast-forward to
+[`3eb04515e4f96cd8bcb3df39e29ab5fca885addb`](https://github.com/Jovifei/ETF-Fund-Analysis/commit/3eb04515e4f96cd8bcb3df39e29ab5fca885addb),
+parent `c61e4935ae3cc5ce62e29ba9ce09f3ec27f48e76`. The remote head and exact
+tree were independently reread; concurrent closure docs were preserved.
+
+- [Workspace CI 37046437828](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37046437828): SUCCESS, including 102 Vue tests, **28 real Chromium smoke tests**, five authenticated journeys and 18 responsive cases. The new persisted-timestamp/toggle/narrow-viewport test passed in 4.3 seconds.
+- [Platform audit 37046437916](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37046437916): SUCCESS for temporary PostgreSQL and Windows bridge/ACL contracts.
+- [Full CI 37046437887](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37046437887): **FAILED at Docker frontend build**, after all 1495 backend cases finished (1484 passed / 11 existing skips / zero failures or errors, 967.754 seconds). Python/JavaScript/static checks and clean migration had passed. Image smoke/inventory/export did not run; this workflow is not an overall PASS.
+
+The exact-head workspace artifact `11244727938` (22,709,036 bytes) was downloaded
+and its SHA-256 verified against GitHub:
+`b70965ae0bbac803fbad9a1cd86cf0a542c62960f19e675fa9de6e3fa7e2b53c`.
+Desktop, 390px and disabled-layer screenshots were inspected: the synthetic
+persisted purple zone is drawn when enabled and absent when disabled. This is
+hosted synthetic-browser evidence, not private production or physical-phone
+acceptance. The local Chromium EPERM remains an environment limitation.
+
+Full-CI audit artifact `11244639767` ZIP SHA-256:
+`8a6db2a3894a970df5a165309f8c5541fcb97c4ad36e71e08d3015b59b350d8e`.
+Its downloaded JUnit SHA-256 is
+`c617b058e8844f93aaf70ad4af77a2f9787d198bfc8737b5bee6a602bca20b51`.
+
+### Packaging cause and bounded correction
+
+`backend/Dockerfile` copies only `frontend/` into its frontend builder. The two
+new TypeScript tests imported their shared JSON from `backend/tests/fixtures`,
+which exists in a complete checkout but not that build stage. Docker correctly
+failed typecheck with TS2307. A clean tracked-source frontend-only directory
+reproduced both errors before the correction.
+
+The one unchanged shared fixture now lives at
+`frontend/tests/fixtures/chan_chart_projection.json`. Both TypeScript consumers
+use local frontend paths; the Python projection contract locates that same file
+from its resolved repository root, using UTF-8. Fixture content, runtime code,
+Dockerfile, workflow gates and assertions are unchanged. The corrected
+frontend-only context passes typecheck and production build without a backend
+tests directory. All 102 Vue tests and five focused backend projection contracts
+pass. Independent review and corrected-head full CI are recorded separately;
+previous browser success does not automatically mark the next commit green.
+
+Independent packaging review: PASS. The reviewer independently checked a fresh
+frontend-only context with no backend directory, ran its typecheck, 29 projection
+cases, the backend shared-fixture contract, Playwright discovery and whitespace.
+All four corrected hashes matched; runtime and ownership-test hashes are unchanged.
+
+Corrected packaging SHA-256s:
+
+- Shared fixture: `4f80a626c95ac020cc779169317efe935a032d505cd35d4e212ef5b81e002952`
+- `frontend/tests/chan-projection.test.ts`: `4dbdbfd09b45413ece28ccaef6cf985e85577dc02e0efcec0823f2170b67799d`
+- `frontend/e2e/chan-projection.spec.ts`: `e3062b8b8f85e03f7c42dddd406afa82d849af64a2ed504bee33f2bbda60e788`
+- `backend/tests/test_chan_chart_overlay.py`: `56e47a32ddbe493e86d4a6090f1afb80429adeccf411d3f8fb0c8628ca544b5a`

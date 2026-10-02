@@ -124,7 +124,8 @@ def test_chart_route_attaches_non_actionable_chan_observation(bootstrapped):
 
 
 def test_frontend_fixture_matches_persisted_backend_projection():
-    fixture = json.loads((Path(__file__).parent / "fixtures" / "chan_chart_projection.json").read_text(encoding="utf-8"))
+    fixture_path = Path(__file__).resolve().parents[2] / "frontend" / "tests" / "fixtures" / "chan_chart_projection.json"
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
     chart = fixture["chart"]
 
     assert chart["chan_observation"] == project_persisted_chan(

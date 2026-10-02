@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import fixture from '../../backend/tests/fixtures/chan_chart_projection.json' with { type: 'json' }
+import fixture from '../tests/fixtures/chan_chart_projection.json' with { type: 'json' }
 
 declare global {
   interface Window { chanZoneDraws: Array<{ width: number; height: number }> }

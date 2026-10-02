@@ -1,3 +1,7 @@
+## WU2真实浏览器通过与构建修复 — 2026-10-03 02:38 上海
+
+精确3eb0451的28项Chromium烟测（含新增中枢）、5项登录、18项响应式及平台审计通过，桌面/390px/关闭图层截图已校验。完整后端1484通过/11跳过，但Docker前端构建缺少跨目录测试fixture而失败，后续镜像门禁未运行。已将同一fixture移到前端构建上下文内，独立前端类型/构建、102 Vue和5项后端合同通过；修复后的精确CI仍待核验。未部署、actionable=false。见[证据与修复](docs/audits/WU2_CHAN_CALENDAR_PROJECTION_20261003.md#first-exact-head-hosted-evidence-and-packaging-correction)。
+
 ## WU2缠论中枢坐标修复 — 2026-10-03 02:12 上海
 
 已修复持久化完整时间戳无法匹配日线蜡烛、导致中枢消失的问题；仅匹配来源日历日期到真实蜡烛，缺失/无效端点跳过，不重算价格或晋升资格。102项Vue、41项时区回归、27项旧JS、完整1495收集/1484通过/11既有跳过/0失败，独立审核PASS。既有持仓独立性测试的新闻时间衰减偶发误差已作测试内隔离，保留全部断言。精确提交CI和真实浏览器回归待核；云端Chromium启动受限，不声称截图验收。未部署、actionable=false。见[本轮收据](docs/audits/WU2_CHAN_CALENDAR_PROJECTION_20261003.md)。
