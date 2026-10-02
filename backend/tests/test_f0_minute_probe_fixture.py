@@ -6,47 +6,44 @@ from app.providers.f0_minute_probe import ProbeSchemaError, parse_minute_fixture
 
 
 def row(code="510300.SH"):
-    return {
-        "ts_code": code,
-        "open": 4.0,
-        "high": 4.2,
-        "low": 3.9,
-        "close": 4.1,
-        "vol": 100,
-        "amount": 1000,
-        "trade_time": datetime(2026, 9, 30, 10, 5),
-    }
+    return {"ts_code": code, "open": 4.0, "high": 4.2, "low": 3.9, "close": 4.1, "vol": 100, "amount": 1000, "trade_time": "2026-09-30T10:05:00"}
 
 
-def test_fixture_accepts_scoped_5m_and_15m_without_network():
-    assert parse_minute_fixture(interval="5m", expected_code="510300.SH", rows=[row()])
+def test_fixture_keeps_scoped_intervals_and_evidence_without_qualification():
+    result = parse_minute_fixture(interval="5m", expected_code="510300.SH", rows=[row()])
+    assert result[0]["qualified"] is False
+    assert result[0]["actionable"] is False
+    assert result[0]["volume"] == 100
+    assert result[0]["amount"] == 1000
+
     assert parse_minute_fixture(interval="15m", expected_code="512480.SH", rows=[row("512480.SH")])
 
 
-def test_fixture_rejects_identity_and_ohlc_errors():
-    with pytest.raises(ProbeSchemaError, match="identity"):
-        parse_minute_fixture(interval="5m", expected_code="510300.SH", rows=[row("512480.SH")])
+@pytest.mark.parametrize("field,value", [("close", float("nan")), ("open", float("inf")), ("vol", -1), ("amount", -1), ("open", True)])
+def test_fixture_rejects_invalid_numeric_evidence(field, value):
     bad = row()
-    bad["low"] = 9
-    with pytest.raises(ProbeSchemaError, match="ohlc"):
+    bad[field] = value
+    with pytest.raises(ProbeSchemaError):
         parse_minute_fixture(interval="5m", expected_code="510300.SH", rows=[bad])
 
 
-def test_probe_limits_and_no_qualification_path():
-    validate_probe_limits(request_count=20, timeout_seconds=10)
-    with pytest.raises(ProbeSchemaError):
-        validate_probe_limits(request_count=21, timeout_seconds=10)
-    with pytest.raises(ProbeSchemaError):
-        validate_probe_limits(request_count=1, timeout_seconds=11)
+def test_fixture_rejects_ohlc_envelope_and_identity():
+    bad = row()
+    bad["high"] = 3
+    with pytest.raises(ProbeSchemaError, match="ohlc"):
+        parse_minute_fixture(interval="5m", expected_code="510300.SH", rows=[bad])
+    with pytest.raises(ProbeSchemaError, match="identity"):
+        parse_minute_fixture(interval="5m", expected_code="510300.SH", rows=[row("512480.SH")])
 
-@pytest.mark.parametrize('field,value', [('close', float('nan')), ('open', float('inf')), ('vol', -1), ('amount', -1), ('open', True), ('close', 10)])
-def test_fixture_rejects_invalid_numeric_evidence(field, value):
-    bad=row()
-    bad[field]=value
-    with pytest.raises(ProbeSchemaError):
-        parse_minute_fixture(interval='5m', expected_code='510300.SH', rows=[bad])
 
-@pytest.mark.parametrize('count,timeout', [(-1,10),(1,0),(True,10),(1,True)])
-def test_probe_rejects_invalid_limits(count, timeout):
+@pytest.mark.parametrize("count,timeout", [(-1, 10), (21, 10), (1, 0), (1, 11), (True, 10), (1, True)])
+def test_fixture_rejects_invalid_probe_limits(count, timeout):
     with pytest.raises(ProbeSchemaError):
         validate_probe_limits(request_count=count, timeout_seconds=timeout)
+
+
+def test_fixture_does_not_claim_real_data():
+    value = parse_minute_fixture(interval="5m", expected_code="510300.SH", rows=[row()])[0]
+    assert value["volume_unit"] == "upstream_declared_only"
+    assert value["amount_unit"] == "upstream_declared_only"
+    assert "not publication/PIT certification" in value["time_assumption"]
