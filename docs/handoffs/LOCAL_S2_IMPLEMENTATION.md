@@ -7,3 +7,10 @@ Implemented nine-module detail availability and detail-availability-v1, mounted 
 Checks actually run: backend focused/API 12 passed; frontend 18 files / 73 tests passed; typecheck, build, compileall and Node syntax passed. Full backend pytest running; no full PASS claim. Phone/live validation and deployment NOT_RUN. WU0/WU2 remain independent pending evidence.
 
 Remote patches and conversion scripts were not applied. Request source review against NEXT_STAGE_REMOTE_EXECUTION.md, especially SR history/overlay precedence, per-horizon reasons and safe unknown-code rendering.
+
+## Narrow viewport verification
+- Added frontend/e2e/detail-availability.spec.ts.
+- Existing Chrome, isolated Mock test server on port18297: 1 E2E passed, 390x844 viewport, nine modules visible, no horizontal overflow, no non-GET API requests.
+- First attempt blocked because Playwright bundled browser missing; retried using existing Chrome. This is simulated viewport evidence, not physical phone acceptance.
+- Full backend pytest remains running; production still old image b07f9ca2 / schema f0e1d2c3b4a5 verified read-only.
+- Retired invalid remote patches/scripts and source-transfer chunks from current branch; history retained.
