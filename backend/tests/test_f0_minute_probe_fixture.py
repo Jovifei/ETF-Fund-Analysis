@@ -38,3 +38,15 @@ def test_probe_limits_and_no_qualification_path():
         validate_probe_limits(request_count=21, timeout_seconds=10)
     with pytest.raises(ProbeSchemaError):
         validate_probe_limits(request_count=1, timeout_seconds=11)
+
+@pytest.mark.parametrize('field,value', [('close', float('nan')), ('open', float('inf')), ('vol', -1), ('amount', -1), ('open', True), ('close', 10)])
+def test_fixture_rejects_invalid_numeric_evidence(field, value):
+    bad=row()
+    bad[field]=value
+    with pytest.raises(ProbeSchemaError):
+        parse_minute_fixture(interval='5m', expected_code='510300.SH', rows=[bad])
+
+@pytest.mark.parametrize('count,timeout', [(-1,10),(1,0),(True,10),(1,True)])
+def test_probe_rejects_invalid_limits(count, timeout):
+    with pytest.raises(ProbeSchemaError):
+        validate_probe_limits(request_count=count, timeout_seconds=timeout)
