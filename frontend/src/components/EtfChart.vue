@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
 import { popupLayout } from '../lib/popupLayout'
 import { serverStudies, studyAvailable, volumeAvailable } from '../lib/chartStudies'
-import { ChartAdapter, groupsForLevel } from '../lib/chartAdapter'
+import { ChartAdapter, chanOverlay, groupsForLevel } from '../lib/chartAdapter'
 import { num, levelPrice } from '../lib/format'
 import type { ChartBar, ChartData } from '../lib/types'
 const props=defineProps<{data:ChartData;cost?:number|null;label?:string;allowMinutes?:boolean}>()
@@ -12,7 +12,7 @@ const priceBasis=ref<'raw'|'research'>('raw')
 const basisTransition=computed(()=>props.data.basis_transition===true&&!!props.data.research_bars?.length)
 const displayData=computed<ChartData>(()=>{
  if(priceBasis.value==='research'&&props.data.research_bars)return {...props.data,bars:props.data.research_bars,support_resistance:props.data.research_support_resistance??null,price_structures:props.data.research_price_structures,sr_overlay_allowed:props.data.research_sr_overlay_allowed??false,cost_overlay_allowed:props.data.research_cost_overlay_allowed??false}
- if(props.data.raw_overlay_allowed===false)return {...props.data,bars:props.data.bars.map(bar=>({...bar,indicators:{}})),studies:props.data.studies?{...props.data.studies,chan_structure:undefined}:undefined,support_resistance:null,price_structures:{qualified:false,reason:'price_basis_mismatch',interval:props.data.interval,actionable:false,boxes:[]},sr_overlay_allowed:false}
+ if(props.data.raw_overlay_allowed===false)return {...props.data,bars:props.data.bars.map(bar=>({...bar,indicators:{}})),studies:props.data.studies?{...props.data.studies,chan_structure:undefined}:undefined,chan_observation:props.data.chan_observation?{...props.data.chan_observation,drawable:false,fallback_allowed:false,disclaimer:'原始行情与研究价格口径不同，缠论结构已隐藏。'}:undefined,support_resistance:null,price_structures:{qualified:false,reason:'price_basis_mismatch',interval:props.data.interval,actionable:false,boxes:[]},sr_overlay_allowed:false}
  return props.data
 })
 const data=displayData
@@ -54,15 +54,7 @@ const structureText=computed(()=>{
  if(value&&Object.prototype.hasOwnProperty.call(value,'live_prior_range'))return `${reason} 可见日线不足或价格无效，前高前低也无法绘制。`
  return reason
 })
-const chanNote=computed(()=>{
- const raw=(displayData.value.studies?.chan_structure ?? displayData.value.support_resistance?.chan_structure) as Record<string,unknown>|undefined
- if(!raw||typeof raw!=='object')return '当前图表没有缠论结构。'
- if(raw.available===false)return String(raw.disclaimer||raw.note||'缠论结构不可用。')
- const count=(key:string)=>Array.isArray(raw[key])?raw[key].length:0
- const bi=count('bi'),duan=count('segments'),zs=count('zhongshu')
- if(!bi&&!duan&&!zs)return '简化缠论未形成笔、段或中枢。'
- return `简化缠论 · 笔 ${bi} · 段 ${duan} · 中枢 ${zs}。不是完整 CZSC，不含背驰和买卖点。`
-})
+const chanNote=computed(()=>chanOverlay(displayData.value).note)
 const displayedBox=computed(()=>{
  const boxes=displayData.value.price_structures?.boxes??[]
  return boxes.filter(box=>!['failed_breakout','invalidated','expired'].includes(box.state)).at(-1)??boxes.at(-1)

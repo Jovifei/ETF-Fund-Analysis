@@ -1,6 +1,6 @@
 /** Only projects server numbers: no financial formula is implemented in the browser. */
 import { init, dispose, registerIndicator, registerOverlay, ActionType, type Chart, type KLineData, type OverlayCreate } from 'klinecharts'
-import type { ChartBar, ChartData, PriceBox, SupportLevel } from './types'
+import type { ChartBar, ChartData, ChanObservation, PriceBox, SupportLevel } from './types'
 import { levelPrice } from './format'
 import { serverStudies, studyAvailable, volumeAvailable } from './chartStudies'
 let registered = false
@@ -27,6 +27,27 @@ export function groupsForLevel(level: SupportLevel): string[] {
   if (/缠论/.test(methods)) push('CHAN')
   if (category === 'price_reference' || category === 'mixed_reference') push('DERIVED')
   return groups.length ? groups : ['PIVOT']
+}
+export function chanOverlay(data: Pick<ChartData, 'chan_observation' | 'studies' | 'support_resistance'>): { mode: 'persisted' | 'simplified' | 'blocked' | 'absent'; geometry: ChanObservation | Record<string, unknown> | null; note: string } {
+  const observation = data.chan_observation
+  if (observation?.drawable) {
+    const fx = Number(observation.counts?.fx ?? 0)
+    const bi = Array.isArray(observation.bi) ? observation.bi.length : 0
+    const zs = Array.isArray(observation.zhongshu) ? observation.zhongshu.length : 0
+    const skipped = observation.undrawable_bi ? ` ${observation.undrawable_bi} 笔因方向不明未绘制。` : ''
+    return { mode: 'persisted', geometry: observation, note: `已保存缠论 · 分型 ${fx} · 笔 ${bi} · 中枢 ${zs}。来自持久化 CZSC 观测，不含线段、背驰和买卖点。${skipped}` }
+  }
+  if (observation && observation.fallback_allowed === false) {
+    return { mode: 'blocked', geometry: null, note: observation.disclaimer || '已保存缠论读模型未通过校验，不改用简化结构代替。' }
+  }
+  const withheld = observation?.available && observation.fallback_allowed && observation.disclaimer ? observation.disclaimer : ''
+  const raw = (data.studies?.chan_structure ?? data.support_resistance?.chan_structure) as Record<string, unknown> | undefined
+  if (!raw || typeof raw !== 'object') return { mode: 'absent', geometry: null, note: withheld || '当前图表没有缠论结构。' }
+  if (raw.available === false) return { mode: 'simplified', geometry: null, note: [withheld, String(raw.disclaimer || raw.note || '缠论结构不可用。')].filter(Boolean).join(' ') }
+  const count = (key: string) => Array.isArray(raw[key]) ? raw[key].length : 0
+  const bi = count('bi'), duan = count('segments'), zs = count('zhongshu')
+  const body = !bi && !duan && !zs ? '简化缠论未形成笔、段或中枢。' : `简化缠论 · 笔 ${bi} · 段 ${duan} · 中枢 ${zs}。不是完整 CZSC，不含背驰和买卖点。`
+  return { mode: 'simplified', geometry: raw, note: [withheld, body].filter(Boolean).join(' ') }
 }
 const definitions = serverStudies.map(def=>({name:'SERVER_'+def.key,fields:[...def.fields],title:def.key+' · 服务端',height:def.height}))
 
@@ -132,7 +153,7 @@ export class ChartAdapter {
           this.box({ kind: 'daily_box', structure_id: 'live-prior-high-low', lower: live.lower, upper: live.upper, mid: (live.lower + live.upper) / 2, origin_at: live.origin_at, confirmed_at: null, state: 'candidate', source_ids: [], touch_count: 0, upper_touch_count: 0, lower_touch_count: 0, volume_confirmation_available: false }, live.valid_until ?? sourceDate, '前高前低')
         }
       }
-      if (selected.includes('CHAN')) this.chan(data.studies?.chan_structure ?? data.support_resistance?.chan_structure)
+      if (selected.includes('CHAN')) this.chan(chanOverlay(data).geometry)
   }
   private chan(raw: unknown) {
     if (!raw || typeof raw !== 'object') return
@@ -152,7 +173,8 @@ export class ChartAdapter {
     const origin = typeof zone.start_date === 'string' ? zone.start_date : ''
     const until = typeof zone.end_date === 'string' ? zone.end_date : ''
     if (!origin || !until || !Number.isFinite(lower) || !Number.isFinite(upper) || lower >= upper) return
-    this.box({ kind: 'daily_box', structure_id: `chan-${String(zone.source ?? 'bi')}`, lower, upper, mid: (lower + upper) / 2, origin_at: origin, confirmed_at: origin, valid_until: until, state: 'confirmed', source_ids: [], touch_count: 0, upper_touch_count: 0, lower_touch_count: 0, volume_confirmation_available: false }, until, zone.source === 'segment' ? '段中枢' : '笔中枢', { color: '#b388ff', fill: '#b388ff18' })
+    const label = zone.source === 'segment' ? '段中枢' : zone.source === 'persisted' ? '已保存中枢' : '笔中枢'
+    this.box({ kind: 'daily_box', structure_id: `chan-${String(zone.source ?? 'bi')}`, lower, upper, mid: (lower + upper) / 2, origin_at: origin, confirmed_at: origin, valid_until: until, state: 'confirmed', source_ids: [], touch_count: 0, upper_touch_count: 0, lower_touch_count: 0, volume_confirmation_available: false }, until, label, { color: '#b388ff', fill: '#b388ff18' })
   }
   private timestamp(day: unknown) {
     if (typeof day !== 'string' || !day) return undefined

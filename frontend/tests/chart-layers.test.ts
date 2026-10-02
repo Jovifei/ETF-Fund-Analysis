@@ -34,4 +34,16 @@ describe('research layer copy', () => {
     expect(wrapper.get('[data-testid="chart-chan-note"]').text()).toContain('简化缠论 · 笔 1 · 段 2 · 中枢 1')
     expect(wrapper.get('[data-testid="chart-chan-note"]').text()).toContain('不是完整 CZSC')
   })
+
+  it('labels a persisted Chan observation instead of the simplified count', async () => {
+    const wrapper = chart({
+      chan_observation: { available: true, drawable: true, fallback_allowed: false, actionable: false, qualified: false, counts: { fx: 4, bi: 1, zs: 1 }, bi: [{}], segments: [], zhongshu: [{}] },
+      studies: { chan_structure: { available: true, bi: [{}, {}], segments: [{}], zhongshu: [{}] } },
+    })
+    await flushPromises()
+    await wrapper.get('.study-controls').findAll('label').find(label => label.text() === '缠论笔段中枢')!.get('input').setValue(true)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="chart-chan-note"]').text()).toContain('已保存缠论 · 分型 4 · 笔 1 · 中枢 1')
+    expect(wrapper.get('[data-testid="chart-chan-note"]').text()).toContain('持久化 CZSC')
+  })
 })

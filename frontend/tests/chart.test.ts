@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChartBar, ChartData } from '../src/lib/types'
 const mocked = vi.hoisted(() => ({ definitions: [] as any[], overlayDefinitions: [] as any[], chart: { setPriceVolumePrecision: vi.fn(), applyNewData: vi.fn(), createIndicator: vi.fn(), createOverlay: vi.fn(), subscribeAction: vi.fn(), unsubscribeAction: vi.fn(), setBarSpace: vi.fn(), scrollToRealTime: vi.fn(), resize: vi.fn(), removeIndicator: vi.fn(), removeOverlay: vi.fn() }, disposed: vi.fn() }))
 vi.mock('klinecharts', () => ({ init: () => mocked.chart, dispose: mocked.disposed, registerIndicator: (v: any) => mocked.definitions.push(v), registerOverlay: (v: any) => mocked.overlayDefinitions.push(v), ActionType: { OnCrosshairChange: 'crosshair' } }))
-import { ChartAdapter, groupsForLevel, projectBars } from '../src/lib/chartAdapter'
+import { ChartAdapter, chanOverlay, groupsForLevel, projectBars } from '../src/lib/chartAdapter'
 const bar: ChartBar = { date: '2026-09-01', open: 2, high: 3, low: 1, close: 2.5, volume: 5, amount: 10, indicators: { macd_hist: .012345, kdj_k: 72.234, rsi14: 61.278, ma20: null, boll_upper: 3.45678, boll_mid: 2.12345, boll_lower: .79012 } }
 beforeEach(() => { vi.clearAllMocks(); vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }) })
 describe('ChartAdapter has no independent indicator formulas', () => {
@@ -111,6 +111,35 @@ describe('ChartAdapter has no independent indicator formulas', () => {
     expect(zones[0].extendData.label).toBe('笔中枢')
     expect(zones[0].points.map((point: any) => point.value)).toEqual([2.5, 1.5])
     adapter.destroy()
+  })
+
+  it('draws persisted Chan bi and zhongshu instead of the simplified fallback', () => {
+    const bars = ['2026-09-01', '2026-09-03', '2026-09-08'].map(date => ({ ...bar, date }))
+    const data = { ts_code: '512480.SH', interval: '1d', available: true, bars, studies: { chan_structure: {
+      available: true, bi: [{ start_date: '2026-09-01', end_date: '2026-09-03', start_price: 9, end_price: 8 }],
+      segments: [{ start_date: '2026-09-01', end_date: '2026-09-08', start_price: 9, end_price: 7 }], zhongshu: [],
+    } }, chan_observation: {
+      available: true, drawable: true, fallback_allowed: false, actionable: false, qualified: false,
+      counts: { fx: 2, bi: 1, zs: 1 }, undrawable_bi: 1,
+      bi: [{ start_date: '2026-09-01', end_date: '2026-09-03', start_price: 1, end_price: 3, source: 'persisted' }],
+      segments: [],
+      zhongshu: [{ start_date: '2026-09-01', end_date: '2026-09-08', zd: 1.6, zg: 2.8, source: 'persisted' }],
+    } } as any
+    expect(chanOverlay(data).note).toContain('已保存缠论')
+    expect(chanOverlay(data).note).toContain('1 笔因方向不明未绘制')
+    expect(chanOverlay(data).mode).toBe('persisted')
+    const adapter = new ChartAdapter(document.createElement('div'), data, null, () => {}, ['CHAN'])
+    const overlays = mocked.chart.createOverlay.mock.calls.map(call => call[0])
+    const strokes = overlays.filter((item: any) => item.name === 'segment')
+    const zones = overlays.filter((item: any) => item.name === 'researchBox')
+    expect(strokes).toHaveLength(1)
+    expect(strokes[0].points.map((point: any) => point.value)).toEqual([1, 3])
+    expect(zones).toHaveLength(1)
+    expect(zones[0].extendData.label).toBe('已保存中枢')
+    adapter.destroy()
+    const blocked = chanOverlay({ chan_observation: { available: false, drawable: false, fallback_allowed: false, disclaimer: '已保存缠论读模型未通过校验，不改用简化结构代替。' }, studies: { chan_structure: { bi: [{ start_date: '2026-09-01', end_date: '2026-09-03', start_price: 1, end_price: 3 }] } } })
+    expect(blocked.mode).toBe('blocked')
+    expect(blocked.geometry).toBeNull()
   })
 })
 
