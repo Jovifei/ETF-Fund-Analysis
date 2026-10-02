@@ -1581,3 +1581,11 @@ Review：新计划WU0先对账、WU1归S2、WU2并行当前S3/S4接收；产品�
 - [ ] 在既有远端聊天核实实际GitHub写入/执行能力并发起阶段实施。
 - [ ] 接收真实分支/SHA/交接，独立工作区运行测试/编译/手机网页验收后修复回传。
 
+
+## S2 local completion authorized by Jovi — 2026-10-02
+- [x] Integrate detail availability helper, independent version and nine modules.
+- [x] Mount detail matrix; safe localized statuses and independent horizon reasons.
+- [x] Preserve history/basis guards and UNKNOWN/actionable=false.
+- [x] Backend focused/API 12 passed; frontend 73 passed; typecheck/build/compileall/node syntax passed.
+- [ ] Full backend pytest regression (running); remote review; mobile web and release gates.
+Review: isolated project-local checkout; owner main and production unchanged. Earlier remote apply scripts/patches are not used.

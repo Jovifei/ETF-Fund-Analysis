@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { availabilityLabels, availabilityModuleOrder, availabilityReason } from '../lib/availability'
+import type { DetailAvailability } from '../lib/types'
+import { availabilityLabels, availabilityModuleOrder, availabilityReason, availabilityStatus } from '../lib/availability'
 
 type ModuleState = { status?: string; reason_code?: string | null }
 
-const props = defineProps<{ availability?: Record<string, ModuleState> }>()
+const props = defineProps<{ availability?: DetailAvailability }>()
 
 const rows = computed(() => availabilityModuleOrder.map((key) => ({
   key,
@@ -21,8 +22,9 @@ const rows = computed(() => availabilityModuleOrder.map((key) => ({
     <div class="card-body">
       <div v-for="row in rows" :key="row.key" class="availability-row">
         <strong>{{ row.label }}</strong>
-        <span>{{ row.value?.status ?? '未提供状态' }}</span>
+        <span>{{ availabilityStatus(row.value?.status) }}</span>
         <small v-if="row.value?.reason_code">{{ availabilityReason(row.value.reason_code) }}</small>
+        <small v-for="(state, horizon) in row.value?.by_horizon" :key="horizon">{{ horizon }} 日：{{ availabilityStatus(state.status) }} · {{ availabilityReason(state.reason_code) }}</small>
       </div>
     </div>
   </section>

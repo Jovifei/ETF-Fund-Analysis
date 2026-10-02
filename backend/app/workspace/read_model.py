@@ -37,6 +37,7 @@ from app.utils.hashing import stable_hash
 from app.workspace.catalog_search import matching_reason, search_terms
 from app.workspace.chart import CORE_FIELDS, cached_indicator_series, number
 from app.workspace.config import workspace_settings
+from app.workspace.detail_availability import build_detail_availability, forecast_availability
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
@@ -294,6 +295,17 @@ def instrument_detail(db: Session, settings: Settings, code: str, user_id: int |
         "decision": {"status": "available" if row else "unavailable",
                      "reason_code": decision_reason},
     }
+    sr_evidence = SupportResistanceService(settings).latest(db, inst.id)
+    sr_visible = None if issue or not (display_chart or {}).get("raw_overlay_allowed", True) else sr_evidence
+    availability_result = build_detail_availability(
+        availability, support_resistance=sr_evidence,
+        chart={**(display_chart or {}), "history_issue": issue or chart_history_issue},
+    )
+    availability = availability_result["modules"]
+    availability["forecasts"]["by_horizon"] = {
+        str(h): forecast_availability(forecasts.get((inst.id, h)), forecast_issues[str(h)], history_issue=issue)
+        for h in (1, 3, 5, 10)
+    }
     decision_explanation = {
         "conclusion": row.get("grade") if row else None,
         "primary_basis": row.get("grade_reason") if row else None,
@@ -306,7 +318,7 @@ def instrument_detail(db: Session, settings: Settings, code: str, user_id: int |
         "instrument": {"ts_code": code, "name": inst.name, "kind": inst.kind, "theme_l1": inst.theme_l1, "theme_l2": inst.theme_l2, "benchmark": inst.benchmark, "enabled": bool(inst.enabled)},
         "decision": compact_row(row) if row else None, "snapshot_id": (row or {}).get("snapshot_id"),
         "decision_time": (row or {}).get("generated_at"), "quote": view_quote,
-        "availability": availability, "decision_explanation": decision_explanation,
+        "availability": availability, "availability_contract_version": availability_result["contract_version"], "decision_explanation": decision_explanation,
         "snapshot_issues": {"indicator": indicator_issues, "forecasts": forecast_issues},
         "read_as_of": iso(read_as_of), "daily_as_of": (display_chart or {}).get("source_as_of") or (last or {}).get("date"),
         "target_trade_date": expected.isoformat() if expected else None,
@@ -314,7 +326,7 @@ def instrument_detail(db: Session, settings: Settings, code: str, user_id: int |
         "indicator_input_hash": (display_chart or {}).get("input_hash"), "chart_series_id": (display_chart or {}).get("series_id"),
         "indicator_values": display_values, "indicator_version": (display_chart or {}).get("indicator_version") or (indicator.version if indicator and not issue else settings.load_strategy()["indicator_version"]),
         "indicator_as_of": indicator_as_of, "forecasts": forecast_rows,
-        "support_resistance": None if issue or not (display_chart or {}).get("raw_overlay_allowed", True) else SupportResistanceService(settings).latest(db, inst.id),
+        "support_resistance": sr_visible,
         "forecast_scenario": DecisionBoardService._forecast_scenario(
             (display_chart or {}).get("research_bars", []), forecast_rows), "holding": personal,
         "actionable": False, "research_only": True,
