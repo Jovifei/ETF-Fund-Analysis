@@ -14,3 +14,9 @@ Remote patches and conversion scripts were not applied. Request source review ag
 - First attempt blocked because Playwright bundled browser missing; retried using existing Chrome. This is simulated viewport evidence, not physical phone acceptance.
 - Full backend pytest remains running; production still old image b07f9ca2 / schema f0e1d2c3b4a5 verified read-only.
 - Retired invalid remote patches/scripts and source-transfer chunks from current branch; history retained.
+
+## Full regression completion
+- Ran pytest -q --basetemp E:/Claude_allow/Download/etf-s2-regression-20261002 to completion: exit0, no failures, conditional skips present.
+- Separate collection verification: 1432 tests collected. Exact pass/skip totals not emitted by repository double-quiet configuration, so no fabricated totals.
+- Frontend 73 tests / typecheck/build, narrow viewport E2E1, compileall and Node syntax passed.
+- Candidate Docker build running. Production not switched; physical phone/live acceptance NOT_RUN.

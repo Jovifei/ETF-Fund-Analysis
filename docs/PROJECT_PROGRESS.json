@@ -2027,6 +2027,11 @@
       "date": "2026-10-02",
       "iteration": 71,
       "description": "Jovi授权本地补齐WU1，abae131已推送并远端代码审核通过；聚焦后端12/前端73/typecheck/build通过；窄屏模拟E2E通过，完整后端回归仍在跑。非实体手机/部署验收。"
+    },
+    {
+      "date": "2026-10-02",
+      "iteration": 71,
+      "description": "WU1完整pytest退出0（1432项收集，含条件跳过，不臆测通过总数），前端73项/类型构建/窄屏E2E通过；候选镜像构建中，未部署。"
     }
   ],
   "incoming_candidate": {
@@ -2051,7 +2056,7 @@
   "s2_current_batch": {
     "source_sha": "abae131",
     "code": "IMPLEMENTED",
-    "tests": "FOCUSED_PASS_FULL_RUNNING",
+    "tests": "FULL_BACKEND_EXIT0_FRONTEND73_PASS",
     "remote_review": "CODE_ACCEPTED_RELEASE_PENDING",
     "deploy": "NOT_RUN",
     "phone": "NOT_RUN",
