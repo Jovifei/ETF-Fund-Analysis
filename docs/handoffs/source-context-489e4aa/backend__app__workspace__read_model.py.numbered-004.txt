@@ -1,0 +1,100 @@
+0301:         "evidence_caveats": [item["reason_code"] for item in availability.values() if item.get("reason_code")],
+0302:         "computed_at": row.get("generated_at") if row else None,
+0303:         "actionable": False,
+0304:     }
+0305:     return {
+0306:         "instrument": {"ts_code": code, "name": inst.name, "kind": inst.kind, "theme_l1": inst.theme_l1, "theme_l2": inst.theme_l2, "benchmark": inst.benchmark, "enabled": bool(inst.enabled)},
+0307:         "decision": compact_row(row) if row else None, "snapshot_id": (row or {}).get("snapshot_id"),
+0308:         "decision_time": (row or {}).get("generated_at"), "quote": view_quote,
+0309:         "availability": availability, "decision_explanation": decision_explanation,
+0310:         "snapshot_issues": {"indicator": indicator_issues, "forecasts": forecast_issues},
+0311:         "read_as_of": iso(read_as_of), "daily_as_of": (display_chart or {}).get("source_as_of") or (last or {}).get("date"),
+0312:         "target_trade_date": expected.isoformat() if expected else None,
+0313:         "history_issue": issue, "indicator_basis": (display_chart or {}).get("indicator_basis") or ("persisted_snapshot" if indicator and not issue else "historical_price_display"),
+0314:         "indicator_input_hash": (display_chart or {}).get("input_hash"), "chart_series_id": (display_chart or {}).get("series_id"),
+0315:         "indicator_values": display_values, "indicator_version": (display_chart or {}).get("indicator_version") or (indicator.version if indicator and not issue else settings.load_strategy()["indicator_version"]),
+0316:         "indicator_as_of": indicator_as_of, "forecasts": forecast_rows,
+0317:         "support_resistance": None if issue or not (display_chart or {}).get("raw_overlay_allowed", True) else SupportResistanceService(settings).latest(db, inst.id),
+0318:         "forecast_scenario": DecisionBoardService._forecast_scenario(
+0319:             (display_chart or {}).get("research_bars", []), forecast_rows), "holding": personal,
+0320:         "actionable": False, "research_only": True,
+0321:     }
+0322: 
+0323: 
+0324: def chan_evidence(db: Session, code: str, interval: str) -> dict | None:
+0325:     """Return the latest persisted Chan view for a catalog ETF/LOF only."""
+0326:     normalized = str(code or "").strip().upper()
+0327:     instrument = db.scalar(
+0328:         select(Instrument).where(
+0329:             Instrument.ts_code == normalized,
+0330:             Instrument.kind.in_(("ETF", "LOF")),
+0331:         )
+0332:     )
+0333:     if instrument is None:
+0334:         return None
+0335: 
+0336:     from app.services.chan_read_service import read_latest
+0337: 
+0338:     return read_latest(db, instrument.ts_code, interval)
+0339: 
+0340: 
+0341: def chart_data(db: Session, settings: Settings, code: str, interval: str, limit: int, *, as_of: datetime | None = None) -> dict | None:
+0342:     as_of = market_time(as_of or datetime.now(SHANGHAI)).astimezone(SHANGHAI)
+0343:     if interval in ("1w", "1mo"):
+0344:         from app.workspace.candle_periods import transform_chart
+0345:         raw=chart_data(db,settings,code,"1d",workspace_settings().chart_history_limit,as_of=as_of)
+0346:         return transform_chart(raw,interval,settings.load_strategy()["indicator"],limit,now=as_of) if raw else None
+0347:     inst = db.scalar(select(Instrument).where(Instrument.ts_code == code, Instrument.kind.in_(("ETF", "LOF"))))
+0348:     if inst is None:
+0349:         return None
+0350:     if interval != "1d":
+0351:         rows = list(reversed(db.scalars(select(MarketBar).where(
+0352:             MarketBar.instrument_id == inst.id, MarketBar.interval == interval, MarketBar.bar_time <= as_of
+0353:         ).order_by(MarketBar.bar_time.desc()).limit(limit)).all()))
+0354:         return {"ts_code": code, "interval": interval, "available": bool(rows), "bars": [{"date": iso(market_time(row.bar_time)), "open": row.open, "high": row.high, "low": row.low, "close": row.close, "volume": row.volume, "amount": row.amount, "source": row.source, "indicators": {}} for row in rows], "reason": None if rows else "minute_data_unavailable", "qualification": "unverified", "as_of": iso(as_of), "computed_at": iso(datetime.now(SHANGHAI)), "source_as_of": iso(market_time(rows[-1].bar_time)) if rows else None, "cost_overlay_allowed": False, "sr_overlay_allowed": False, "actionable": False, "indicator_note": "分钟指标尚未取得统一口径资格，不用日线指标代替。"}
+0355:     adjustments = list(db.scalars(select(DailyBar.adjust).where(
+0356:         DailyBar.instrument_id == inst.id, DailyBar.trade_date <= as_of.date()
+0357:     ).distinct()))
+0358:     if not adjustments:
+0359:         return {"ts_code": code, "interval": interval, "available": False, "bars": [], "reason": "history_not_prepared", "as_of": iso(as_of), "computed_at": iso(datetime.now(SHANGHAI)), "actionable": False}
+0360:     adjust = "none" if "none" in adjustments else adjustments[0] if len(adjustments) == 1 else None
+0361:     if adjust is None:
+0362:         return {"ts_code": code, "interval": interval, "available": False, "bars": [], "reason": "missing_or_ambiguous_price_basis", "as_of": iso(as_of), "computed_at": iso(datetime.now(SHANGHAI)), "actionable": False}
+0363:     maximum = workspace_settings().chart_history_limit
+0364:     stored = db.scalars(select(DailyBar).where(
+0365:         DailyBar.instrument_id == inst.id, DailyBar.adjust == adjust, DailyBar.trade_date <= as_of.date()
+0366:     ).order_by(DailyBar.trade_date.desc()).limit(maximum + 1)).all()
+0367:     truncated = len(stored) > maximum
+0368:     stored = list(reversed(stored[:maximum]))
+0369:     from app.providers.corporate_action_contract import research_history_rows
+0370:     from app.providers.corporate_action_contract import research_price_basis as build_research_price_basis
+0371:     research_stored = (
+0372:         stored
+0373:         if settings.market_provider == "mock" or adjust != "none"
+0374:         else research_history_rows(stored, code, effective_through=as_of.date())
+0375:     )
+0376:     research_objects = list(research_stored)
+0377:     rows = [{"date": iso(row.trade_date), "open": row.open, "high": row.high, "low": row.low, "close": row.close, "volume": row.volume, "amount": row.amount, "source": row.source} for row in stored]
+0378:     research_rows = [{"date": iso(row.trade_date), "open": row.open, "high": row.high, "low": row.low, "close": row.close, "volume": row.volume, "amount": row.amount, "source": row.source} for row in research_stored]
+0379:     if any(any(number(row[key]) is None for key in ("open", "high", "low", "close")) or row["low"] > min(row["open"], row["close"]) or row["high"] < max(row["open"], row["close"]) for row in rows):
+0380:         return {"ts_code": code, "interval": interval, "available": False, "bars": [], "reason": "invalid_ohlc", "as_of": iso(as_of), "computed_at": iso(datetime.now(SHANGHAI)), "actionable": False}
+0381:     strategy = settings.load_strategy()
+0382:     from app.providers.data_contract import LEGACY_SOURCES, UNVERIFIED_UNIT_SOURCES, price_history_issue
+0383:     from app.services.decision_board_service import DecisionBoardService
+0384:     provisional = db.scalar(select(DecisionBoardProvisionalInput).where(
+0385:         DecisionBoardProvisionalInput.instrument_id == inst.id,
+0386:     ).order_by(DecisionBoardProvisionalInput.observed_at.desc(), DecisionBoardProvisionalInput.id.desc()).limit(1))
+0387:     provisional_status = DecisionBoardService(settings)._provisional_status(
+0388:         db, inst.id, provisional, as_of
+0389:     ) if provisional is not None else {"used_for_derived_values": False}
+0390:     if provisional_status.get("used_for_derived_values") and provisional is not None:
+0391:         from types import SimpleNamespace
+0392:         provisional_bar = {
+0393:             "date": iso(market_time(provisional.observed_at)), "open": provisional.open_price,
+0394:             "high": provisional.high_price, "low": provisional.low_price,
+0395:             "close": provisional.last_price, "volume": provisional.volume,
+0396:             "amount": provisional.amount, "source": provisional.source,
+0397:             "is_provisional": True, "timestamp_verified": bool(provisional.timestamp_verified),
+0398:         }
+0399:         provisional_object = SimpleNamespace(
+0400:             trade_date=market_time(provisional.observed_at).date(), open=provisional.open_price,

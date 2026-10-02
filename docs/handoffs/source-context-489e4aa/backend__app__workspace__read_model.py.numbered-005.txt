@@ -1,0 +1,100 @@
+0401:             high=provisional.high_price, low=provisional.low_price, close=provisional.last_price,
+0402:             pre_close=None, volume=provisional.volume, amount=provisional.amount,
+0403:             source=provisional.source, adjust=adjust, fetched_at=provisional.created_at,
+0404:             quality_hash=None,
+0405:         )
+0406:         research_provisional = (
+0407:             provisional_object
+0408:             if settings.market_provider == "mock" or adjust != "none"
+0409:             else research_history_rows(
+0410:                 [provisional_object], code, effective_through=as_of.date()
+0411:             )[0]
+0412:         )
+0413:         research_provisional_bar = {
+0414:             **provisional_bar, "open": research_provisional.open, "high": research_provisional.high,
+0415:             "low": research_provisional.low, "close": research_provisional.close,
+0416:             "volume": research_provisional.volume, "amount": research_provisional.amount,
+0417:         }
+0418:         provisional_day = provisional_bar["date"][:10]
+0419:         same_day_index = next((i for i, bar in enumerate(rows) if bar["date"][:10] == provisional_day), None)
+0420:         if same_day_index is not None and as_of.date().isoformat() == provisional_day and as_of.time() >= time(15, 15):
+0421:             provisional_status = {**provisional_status, "status": "settled_daily_preferred", "used_for_derived_values": False, "reason": "settled_daily_bar_preferred"}
+0422:         elif same_day_index is None:
+0423:             rows.append(provisional_bar)
+0424:             research_rows.append(research_provisional_bar)
+0425:             research_objects.append(research_provisional)
+0426:         else:
+0427:             rows[same_day_index] = provisional_bar
+0428:             research_rows[same_day_index] = research_provisional_bar
+0429:             research_objects[same_day_index] = research_provisional
+0430:     if any(any(number(row[key]) is None for key in ("open", "high", "low", "close")) or row["low"] > min(row["open"], row["close"]) or row["high"] < max(row["open"], row["close"]) for row in rows):
+0431:         return {"ts_code": code, "interval": interval, "available": False, "bars": [], "reason": "invalid_ohlc", "as_of": iso(as_of), "computed_at": iso(datetime.now(SHANGHAI)), "actionable": False}
+0432:     legacy_units = settings.market_provider != "mock" and any(row["source"] in LEGACY_SOURCES + UNVERIFIED_UNIT_SOURCES for row in rows)
+0433:     if legacy_units:
+0434:         rows = [{**row, "volume": None, "amount": None} for row in rows]
+0435:         research_rows = [{**row, "volume": None, "amount": None} for row in research_rows]
+0436:     continuity_issue = price_history_issue(research_objects) if research_objects else None
+0437:     if continuity_issue:
+0438:         research_series = [{**row, "indicators": {}, "history_issue": continuity_issue} for row in research_rows]
+0439:     else:
+0440:         computed = cached_indicator_series(research_rows, strategy["indicator"])
+0441:         research_series = [{**row, "indicators": computed[index].get("indicators", {}), "history_issue": None}
+0442:                            for index, row in enumerate(research_rows)]
+0443:     price_basis_changed = any(
+0444:         number(raw.get(key)) is not None and number(research.get(key)) is not None
+0445:         and abs(float(raw[key]) - float(research[key])) > 1e-12
+0446:         for raw, research in zip(rows, research_rows, strict=True) for key in ("open", "high", "low", "close")
+0447:     )
+0448:     raw_overlay_allowed = not price_basis_changed and continuity_issue is None and len(rows) == len(research_rows)
+0449:     series = [
+0450:         {**row, "indicators": research_series[index]["indicators"] if raw_overlay_allowed else {},
+0451:          "history_issue": continuity_issue}
+0452:         for index, row in enumerate(rows)
+0453:     ]
+0454:     now = as_of.astimezone(SHANGHAI)
+0455:     for row in series:
+0456:         row["is_partial"] = str(row["date"])[:10] == now.date().isoformat() and now.time() < time(15, 15)
+0457:     for row in research_series:
+0458:         row["is_partial"] = str(row["date"])[:10] == now.date().isoformat() and now.time() < time(15, 15)
+0459:     basis_descriptor = build_research_price_basis(
+0460:         code,
+0461:         adjust,
+0462:         effective_through=as_of.date(),
+0463:         consider_corporate_actions=settings.market_provider != "mock",
+0464:     )
+0465:     research_price_basis = str(basis_descriptor["basis"])
+0466:     research_price_basis_id = str(basis_descriptor["price_basis_id"])
+0467:     basis_events = list(basis_descriptor.get("effective_evidence_ids", []))
+0468:     quality_hashes = {item.trade_date.isoformat(): item.quality_hash for item in stored}
+0469:     input_rows = []
+0470:     for item in rows:
+0471:         input_row = {key: item.get(key) for key in ("date", "open", "high", "low", "close", "volume", "amount", "source")}
+0472:         input_row["quality_hash"] = None if item.get("is_provisional") else quality_hashes.get(item["date"][:10])
+0473:         if item.get("is_provisional") and provisional is not None:
+0474:             input_row["provisional_id"] = provisional.id
+0475:         input_rows.append(input_row)
+0476:     input_hash = stable_hash({"ts_code": code, "adjust": adjust, "rows": input_rows})
+0477:     series_id = stable_hash({"base_input_hash": input_hash, "interval": interval,
+0478:                              "research_price_basis_id": research_price_basis_id,
+0479:                              "indicator_version": strategy["indicator_version"],
+0480:                              "chart_contract_version": "chart-read-v1.2.0"})
+0481:     snapshot = db.scalar(select(IndicatorSnapshot).where(IndicatorSnapshot.instrument_id == inst.id).order_by(IndicatorSnapshot.as_of_date.desc(), IndicatorSnapshot.generated_at.desc(), IndicatorSnapshot.id.desc()).limit(1))
+0482:     matches = None
+0483:     if snapshot and research_series and iso(snapshot.as_of_date) == research_series[-1]["date"]:
+0484:         values = snapshot.values_json or {}
+0485:         comparable = [key for key in CORE_FIELDS if number(values.get(key)) is not None and research_series[-1]["indicators"].get(key) is not None]
+0486:         matches = all(abs(float(values[key]) - research_series[-1]["indicators"][key]) <= (0.011 if key.startswith(("kdj", "rsi")) else 0.00011) for key in comparable) if comparable else None
+0487:     mock = settings.market_provider == "mock" or any("mock" in str(row["source"]).lower() for row in rows)
+0488:     sr_snapshot = SupportResistanceService(settings).latest(db, inst.id)
+0489:     sr = sr_snapshot
+0490:     structure_status = {"qualified": False, "reason": "snapshot_missing_requires_task", "boxes": [], "actionable": False, "interval": "1d"}
+0491:     if sr_snapshot is not None:
+0492:         structure_status = dict(sr_snapshot.get("structures") or structure_status)
+0493:         structure_status["boxes"] = [dict(box) for box in structure_status.get("boxes", [])]
+0494:         snapshot_day = sr_snapshot.get("source_as_of_date")
+0495:         if continuity_issue:
+0496:             structure_status.update(qualified=False, reason="history_qualification_blocked", boxes=[])
+0497:         elif snapshot_day and snapshot_day > as_of.date().isoformat():
+0498:             structure_status.update(qualified=False, reason="snapshot_after_as_of", boxes=[])
+0499:         elif structure_status.get("price_basis_id") != research_price_basis_id:
+0500:             structure_status.update(qualified=False, reason="price_basis_mismatch", boxes=[])

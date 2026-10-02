@@ -1,0 +1,100 @@
+0001: """Bounded, provider-free workspace reads. Never fetch the network in a GET.
+0002: 
+0003: The old bootstrap hydrates histories and performs several queries per ETF. This
+0004: read model instead uses one persisted board plus batched latest-row projections.
+0005: Private holdings are joined per request and never enter a shared response cache.
+0006: """
+0007: from __future__ import annotations
+0008: 
+0009: import json
+0010: from datetime import UTC, datetime, time
+0011: from pathlib import Path
+0012: from zoneinfo import ZoneInfo
+0013: 
+0014: import pandas as pd
+0015: from sqlalchemy import case, func, or_, select
+0016: from sqlalchemy.orm import Session
+0017: 
+0018: from app.core.config import Settings
+0019: from app.models import (
+0020:     DailyBar,
+0021:     DecisionBoardProvisionalInput,
+0022:     DecisionBoardSnapshot,
+0023:     ForecastSnapshot,
+0024:     Holding,
+0025:     IndicatorSnapshot,
+0026:     Instrument,
+0027:     MarketBar,
+0028:     QuoteSnapshot,
+0029:     ReportArtifact,
+0030:     SectorSnapshot,
+0031:     UserWatchlistEntry,
+0032: )
+0033: from app.services.decision_board_service import DecisionBoardService
+0034: from app.services.factor_analysis_service import DEFAULT_FACTORS
+0035: from app.services.support_resistance_service import SupportResistanceService
+0036: from app.utils.hashing import stable_hash
+0037: from app.workspace.catalog_search import matching_reason, search_terms
+0038: from app.workspace.chart import CORE_FIELDS, cached_indicator_series, number
+0039: from app.workspace.config import workspace_settings
+0040: 
+0041: SHANGHAI = ZoneInfo("Asia/Shanghai")
+0042: 
+0043: _SEARCH_ALIASES = {
+0044:     # Cross-border products are not consistently labeled with the word
+0045:     # "跨境"; keep the category search bounded to the synchronized catalog.
+0046:     "跨境": ("跨境", "港股", "恒生", "纳斯达克", "标普", "海外", "美国", "原油"),
+0047: }
+0048: 
+0049: 
+0050: def iso(value):
+0051:     return value.isoformat() if value is not None else None
+0052: 
+0053: 
+0054: def market_time(value):
+0055:     if value is None:
+0056:         return None
+0057:     if isinstance(value, str):
+0058:         try:
+0059:             value = datetime.fromisoformat(value)
+0060:         except ValueError:
+0061:             return None
+0062:     return value if value.tzinfo else value.replace(tzinfo=SHANGHAI)
+0063: 
+0064: 
+0065: def latest_rows(db: Session, model, ids: list[int], *ordering, partitions=None) -> dict:
+0066:     if not ids:
+0067:         return {}
+0068:     partition = partitions or [model.instrument_id]
+0069:     ranked = select(model.id, func.row_number().over(partition_by=partition, order_by=[*ordering, model.id.desc()]).label("rn")).where(model.instrument_id.in_(ids)).subquery()
+0070:     rows = db.scalars(select(model).join(ranked, model.id == ranked.c.id).where(ranked.c.rn == 1)).all()
+0071:     if partitions:
+0072:         return {(row.instrument_id, row.horizon): row for row in rows}
+0073:     return {row.instrument_id: row for row in rows}
+0074: 
+0075: 
+0076: def quote_view(quote, settings: Settings, *, as_of: datetime | None = None) -> dict:
+0077:     if quote is None:
+0078:         return {"price": None, "status": "missing", "source_time": None, "source": None, "actionable": False}
+0079:     mock = settings.market_provider == "mock" or "mock" in str(quote.source).lower()
+0080:     observed = market_time(quote.quote_time)
+0081:     reference = market_time(as_of or datetime.now(UTC))
+0082:     age = (reference.astimezone(UTC) - observed.astimezone(UTC)).total_seconds() if observed else None
+0083:     state = "mock" if mock else "unverified" if not quote.timestamp_verified else "degraded" if quote.degraded_reason else "stale" if age is None or age < 0 or age > 600 else "observed"
+0084:     price = number(quote.price)
+0085:     if isinstance(quote.price, bool) or price is None or price <= 0:
+0086:         price, state = None, "invalid"
+0087:     source_time_missing = str(quote.degraded_reason or "").startswith("source_timestamp_missing")
+0088:     return {
+0089:         "price": price, "change_ratio": number(quote.pct_change / 100) if quote.pct_change is not None else None,
+0090:         "status": state, "source_time": None if source_time_missing else iso(observed), "fetched_at": iso(quote.fetched_at),
+0091:         "source": quote.source, "timestamp_verified": bool(quote.timestamp_verified),
+0092:         "is_realtime": bool(quote.is_realtime and state == "observed"), "is_mock": mock,
+0093:         "actionable": False,
+0094:     }
+0095: 
+0096: 
+0097: def _decision_delta(db: Session, current: dict | None) -> dict:
+0098:     if not current or not current.get("snapshot_id"):
+0099:         return {"status": "unavailable", "reason_code": "decision_not_generated"}
+0100:     snapshots = list(db.scalars(select(DecisionBoardSnapshot).order_by(

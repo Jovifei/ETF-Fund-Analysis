@@ -1,0 +1,100 @@
+0101:         DecisionBoardSnapshot.generated_at.desc(), DecisionBoardSnapshot.id.desc()
+0102:     ).limit(20)))
+0103:     current_index = next((i for i, item in enumerate(snapshots) if item.snapshot_id == current["snapshot_id"]), None)
+0104:     if current_index is None or current_index + 1 >= len(snapshots):
+0105:         return {"status": "unavailable", "reason_code": "no_previous_snapshot"}
+0106:     previous = snapshots[current_index + 1]
+0107:     previous_row = next((item for item in (previous.payload_json or {}).get("rows", [])
+0108:                          if item.get("ts_code") == current.get("ts_code")), None)
+0109:     if previous_row is None:
+0110:         return {"status": "unavailable", "reason_code": "instrument_absent_from_previous_snapshot",
+0111:                 "previous_snapshot_id": previous.snapshot_id}
+0112:     return {
+0113:         "status": "available", "previous_snapshot_id": previous.snapshot_id,
+0114:         "previous_grade": previous_row.get("grade"), "current_grade": current.get("grade"),
+0115:         "grade_changed": previous_row.get("grade") != current.get("grade"),
+0116:         "previous_data_status": previous_row.get("data_status"), "current_data_status": current.get("data_status"),
+0117:         "data_status_changed": previous_row.get("data_status") != current.get("data_status"),
+0118:     }
+0119: 
+0120: 
+0121: def search_instruments(db: Session, settings: Settings, q: str, limit: int, user_id: int | None, *, offset: int = 0, sort: str = "relevance", min_scale: float = 0, include_unknown: bool = True) -> dict:
+0122:     q = q.strip()
+0123:     query = select(Instrument).where(Instrument.kind.in_(("ETF", "LOF")))
+0124:     terms, match_context = search_terms(q)
+0125:     if q:
+0126:         query = query.where(or_(*[condition for term in terms for condition in (
+0127:             Instrument.ts_code.contains(term.upper(), autoescape=True),
+0128:             Instrument.name.contains(term, autoescape=True),
+0129:             Instrument.theme_l1.contains(term, autoescape=True),
+0130:             Instrument.theme_l2.contains(term, autoescape=True),
+0131:             Instrument.benchmark.contains(term, autoescape=True),
+0132:             Instrument.metadata_json["index_name"].as_string().contains(term, autoescape=True),
+0133:         )]))
+0134:     scale = Instrument.metadata_json["market_cap_cny"].as_float()
+0135:     turnover = Instrument.metadata_json["turnover_cny"].as_float()
+0136:     if min_scale > 0:
+0137:         query = query.where(or_(scale >= min_scale, scale.is_(None)) if include_unknown else scale >= min_scale)
+0138:     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+0139:     priority = [case((Instrument.ts_code == q.upper(), 0), (Instrument.symbol == q, 1), else_=2)]
+0140:     if sort == "scale":
+0141:         priority += [scale.desc().nulls_last()]
+0142:     elif sort == "turnover":
+0143:         priority += [turnover.desc().nulls_last()]
+0144:     query = query.order_by(*priority, Instrument.ts_code).offset(offset).limit(limit)
+0145:     instruments = list(db.scalars(query))
+0146:     ids = [row.id for row in instruments]
+0147:     quotes = latest_rows(db, QuoteSnapshot, ids, QuoteSnapshot.quote_time.desc())
+0148:     watched = set(db.scalars(select(UserWatchlistEntry.instrument_id).where(UserWatchlistEntry.user_id == user_id, UserWatchlistEntry.instrument_id.in_(ids)))) if ids else set()
+0149:     held = set(db.scalars(select(Holding.instrument_id).where(Holding.user_id == user_id, Holding.instrument_id.in_(ids)))) if ids else set()
+0150:     return {
+0151:         "scope": "synced_catalog", "match_context": match_context, "provider_called": False, "total": total, "offset": offset, "limit": limit, "has_more": offset + len(instruments) < total,
+0152:         "items": [{"ts_code": row.ts_code, "name": row.name, "kind": row.kind, "theme": row.theme_l1, "theme_detail": row.theme_l2, "enabled": row.enabled, "quote": quote_view(quotes.get(row.id), settings), "match_reason": matching_reason(row, terms), "market_cap_cny": (row.metadata_json or {}).get("market_cap_cny"), "turnover_cny": (row.metadata_json or {}).get("turnover_cny"), "metadata_as_of": (row.metadata_json or {}).get("catalog_as_of"), "watched": row.id in watched, "held": row.id in held} for row in instruments],
+0153:         "note": "仅搜索已同步证券目录。新增目录/历史数据由独立任务处理，不阻塞搜索。",
+0154:     }
+0155: 
+0156: 
+0157: def compact_row(row: dict) -> dict:
+0158:     keys = ("ts_code", "name", "kind", "theme_l1", "theme_l2", "grade", "grade_reason", "freshness", "data_status", "return_1d", "return_5d", "returns", "volume", "ma", "macd", "kdj", "rsi", "td", "sector", "chan", "indicator", "indicator_as_of", "provisional", "quote", "forecasts", "research_only", "entry_exit_ref", "theme_relative_strength", "support_resistance")
+0159:     result = {key: row.get(key) for key in keys}
+0160:     history = row.get("history") or []
+0161:     result["price"] = number(history[-1].get("close")) if history else number((row.get("support_resistance") or {}).get("current_price"))
+0162:     result["price_basis"] = "decision_snapshot"
+0163:     result["actionable"] = False
+0164:     return result
+0165: 
+0166: 
+0167: def overview(db: Session, settings: Settings, horizon: int = 1, offset: int = 0, limit: int = 100, theme: str | None = None) -> dict:
+0168:     payload = DecisionBoardService(settings).read_latest(db, horizon=horizon) or {}
+0169:     rows = payload.get("rows") or []
+0170:     if theme:
+0171:         rows = [row for row in rows if theme in (row.get("theme_l1"), row.get("theme_l2"))]
+0172:     return {
+0173:         "snapshot_id": payload.get("snapshot_id"), "generated_at": payload.get("generated_at"),
+0174:         "next_refresh_at": payload.get("next_refresh_at"), "counts": payload.get("counts", {}),
+0175:         "freshness_at_capture": payload.get("freshness", "missing"), "horizons": [1, 3, 5, 10],
+0176:         "rows": [compact_row(row) for row in rows[offset:offset + limit]],
+0177:         "total": len(rows), "offset": offset, "limit": limit,
+0178:         "themes": sorted({str(row.get("theme_l1")) for row in payload.get("rows", []) if row.get("theme_l1")}),
+0179:         "scope": "tracked_etf_universe_not_all_astocks", "actionable": False, "provider_called": False,
+0180:         "contains_mock": settings.market_provider == "mock" or any("mock" in str(row.get("data_status", "")).lower() or "mock" in str((row.get("quote") or {}).get("source", "")).lower() for row in rows),
+0181:     }
+0182: 
+0183: 
+0184: def holdings_view(db: Session, settings: Settings, user_id: int | None) -> dict:
+0185:     pairs = db.execute(select(Holding, Instrument).join(Instrument, Holding.instrument_id == Instrument.id).where(Holding.user_id == user_id).order_by(Holding.id).limit(500)).all()
+0186:     quotes = latest_rows(db, QuoteSnapshot, [inst.id for _, inst in pairs], QuoteSnapshot.quote_time.desc())
+0187:     board = DecisionBoardService(settings).read_latest(db) or {}
+0188:     decisions = {row["ts_code"]: row for row in board.get("rows", [])}
+0189:     items = []
+0190:     for holding, inst in pairs:
+0191:         quote = quote_view(quotes.get(inst.id), settings)
+0192:         price = quote["price"]
+0193:         shares, cost = float(holding.shares), float(holding.cost_price)
+0194:         market_value = shares * price if price is not None else None
+0195:         decision = decisions.get(inst.ts_code) or {}
+0196:         items.append({
+0197:             "ts_code": inst.ts_code, "name": inst.name, "kind": inst.kind, "theme": inst.theme_l1,
+0198:             "shares": shares, "cost_price": cost, "quote": quote,
+0199:             "market_value": round(market_value, 2) if market_value is not None else None,
+0200:             "pnl": round(market_value - shares * cost, 2) if market_value is not None else None,

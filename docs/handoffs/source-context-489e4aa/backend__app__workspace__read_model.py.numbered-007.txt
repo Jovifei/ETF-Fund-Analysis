@@ -1,0 +1,6 @@
+0601:     boards = []
+0602:     for row in rows:
+0603:         total = row.total_count or 0
+0604:         valid_breadth = total > 0 and sum((row.up_count or 0, row.down_count or 0, row.flat_count or 0)) == total
+0605:         boards.append({"board_type": row.board_type, "sector_name": row.sector_name, "sector_pct_change": number(row.pct_change), "source": row.source, "source_as_of": iso(row.trade_date), "fetched_at": iso(row.fetched_at), "is_mock": settings.market_provider == "mock" or "mock" in row.source.lower(), "breadth": {"trade_date": iso(row.trade_date), "available": valid_breadth, "up": row.up_count if valid_breadth else None, "down": row.down_count if valid_breadth else None, "flat": row.flat_count if valid_breadth else None, "total": total if valid_breadth else None}})
+0606:     return {"boards": boards, "scope": "persisted_sector_snapshots", "pct_change_unit": "percentage_points", "source_as_of": max((iso(row.trade_date) for row in rows), default=None), "freshness": "read_source_dates_not_live" if rows else "missing", "actionable": False}
