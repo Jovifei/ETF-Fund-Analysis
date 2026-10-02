@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import math
+import urllib.request
 from datetime import date, datetime, timedelta
 from typing import Any
-import urllib.request
 from zoneinfo import ZoneInfo
 
 from app.core.config import Settings, get_settings
@@ -17,15 +16,38 @@ from app.market_context.contracts import (
     VerificationStatus,
 )
 from app.providers.base import MarketProvider, ProviderError
+from app.providers.bounded_sdk import BoundedSDK, first
 from app.providers.types import BarRecord, InstrumentRecord, NewsRecord, QuoteRecord, SectorRecord
 from app.utils.numbers import finite_or_none
-from app.providers.bounded_sdk import BoundedSDK, first
+
+SPOT_FLOW_CONTRACT = "etf-spot-flow-v1"
 
 logger = logging.getLogger(__name__)
 
 SINA_PRICE_ONLY_SOURCE = "akshare:sina:v101"
 SINA_VOLUME_SOURCE = "akshare:sina:v102"
 SINA_UNIT_TOLERANCE = 0.10
+
+
+def _spot_flow(row: dict[str, Any]) -> dict[str, Any]:
+    """Map Eastmoney ETF spot flow fields without recomputing missing ones.
+
+    ``基金折价率`` is stored as published percent. Price and IOPV are not used
+    to invent a premium, and the sign is not flipped.
+    """
+
+    fields = {
+        "iopv": finite_or_none(first(row, "IOPV实时估值", "IOPV")),
+        "latest_shares": finite_or_none(first(row, "最新份额")),
+        "main_net_inflow": finite_or_none(first(row, "主力净流入-净额", "主力净流入")),
+        "super_large_net_inflow": finite_or_none(first(row, "超大单净流入-净额", "超大单净流入")),
+        "large_net_inflow": finite_or_none(first(row, "大单净流入-净额", "大单净流入")),
+        "medium_net_inflow": finite_or_none(first(row, "中单净流入-净额", "中单净流入")),
+        "small_net_inflow": finite_or_none(first(row, "小单净流入-净额", "小单净流入")),
+        "premium_rate": finite_or_none(first(row, "基金折价率", "折溢价率", "折溢价", "溢价率")),
+    }
+    fields["flow_contract"] = SPOT_FLOW_CONTRACT if any(value is not None for value in fields.values()) else None
+    return fields
 
 
 class AKShareProvider(MarketProvider):
@@ -284,8 +306,8 @@ class AKShareProvider(MarketProvider):
                     pct_change=pct,
                     volume=(finite_or_none(row.get("成交量")) * 100 if finite_or_none(row.get("成交量")) is not None else None),
                     amount=finite_or_none(row.get("成交额")),
-                    premium_rate=finite_or_none(first(row, "基金折价率", "溢价率")),
                     source="akshare:em:v101",
+                    **_spot_flow(row),
                     is_realtime=False,
                     degraded_reason="public_quote_not_qualified" if source_time else "source_timestamp_missing_observed_at_fetch",
                 )
@@ -293,6 +315,11 @@ class AKShareProvider(MarketProvider):
         if not result:
             raise ProviderError("AKShare spot returned no matching rows; " + "; ".join(errors))
         return result
+
+    def fetch_share_scales(self, codes: list[str], start_date: date, end_date: date):
+        from app.providers.share_scale import fetch_share_scales
+
+        return fetch_share_scales(self.ak, codes, start_date, end_date)
 
     # 板块数据源优先级：东财（含平盘家数）→ 同花顺（无平盘家数，total 按 up+down 计）。
     # 两者都走 AKShare 公开函数，不在业务层硬编码网页接口。

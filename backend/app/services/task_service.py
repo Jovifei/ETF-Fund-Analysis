@@ -205,6 +205,7 @@ class TaskService:
             "certify_units",
             "refresh_minute_bars",
             "refresh_quotes",
+            "refresh_share_scales",
             "refresh_indicators",
             "refresh_forecasts",
             "refresh_news",
@@ -327,6 +328,15 @@ class TaskService:
         if task_name == "refresh_quotes":
             self._ensure_instruments(db, run_id)
             return self.market.refresh_quotes(db, codes=kwargs.get("codes"), run_id=run_id)
+        if task_name == "refresh_share_scales":
+            from app.services.share_scale_service import ShareScaleService
+            self._ensure_instruments(db, run_id)
+            return ShareScaleService(self.provider, self.settings).refresh(
+                db,
+                codes=kwargs.get("codes"),
+                lookback_days=kwargs.get("lookback_days"),
+                run_id=run_id,
+            )
         if task_name == "refresh_indicators":
             return self.indicators.refresh_all(db, run_id=run_id)
         if task_name == "refresh_forecasts":

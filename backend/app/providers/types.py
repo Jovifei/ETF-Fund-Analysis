@@ -12,6 +12,7 @@ __all__ = [
     "QuoteRecord",
     "NewsRecord",
     "SectorRecord",
+    "ShareScaleRecord",
     "MarketContextItem",
     "MarketContextObservation",
 ]
@@ -75,6 +76,29 @@ class QuoteRecord:
     source: str = "unknown"
     is_realtime: bool = False
     degraded_reason: str | None = None
+    iopv: float | None = None
+    latest_shares: float | None = None
+    main_net_inflow: float | None = None
+    super_large_net_inflow: float | None = None
+    large_net_inflow: float | None = None
+    medium_net_inflow: float | None = None
+    small_net_inflow: float | None = None
+    flow_contract: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class ShareScaleRecord:
+    """Exchange-published fund shares. Unit is 份 as returned by the AKShare helper."""
+
+    ts_code: str
+    trade_date: date
+    shares: float
+    source: str
+    exchange: str
+    name: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

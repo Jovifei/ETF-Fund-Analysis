@@ -332,6 +332,14 @@ class MarketService:
                     volume=item.volume,
                     amount=item.amount,
                     premium_rate=item.premium_rate,
+                    iopv=getattr(item, "iopv", None),
+                    latest_shares=getattr(item, "latest_shares", None),
+                    main_net_inflow=getattr(item, "main_net_inflow", None),
+                    super_large_net_inflow=getattr(item, "super_large_net_inflow", None),
+                    large_net_inflow=getattr(item, "large_net_inflow", None),
+                    medium_net_inflow=getattr(item, "medium_net_inflow", None),
+                    small_net_inflow=getattr(item, "small_net_inflow", None),
+                    flow_contract=getattr(item, "flow_contract", None),
                     source=item.source,
                     is_realtime=effective_realtime,
                     degraded_reason=effective_degraded_reason,
@@ -389,6 +397,27 @@ class MarketService:
                 raise ProviderError("quote_amount_invalid")
             if any(v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)) for v in (item.pct_change, item.premium_rate)):
                 raise ProviderError("quote_ratio_invalid")
+            for name, nonnegative, positive in (
+                ("iopv", False, True),
+                ("latest_shares", True, False),
+                ("main_net_inflow", False, False),
+                ("super_large_net_inflow", False, False),
+                ("large_net_inflow", False, False),
+                ("medium_net_inflow", False, False),
+                ("small_net_inflow", False, False),
+            ):
+                value = getattr(item, name, None)
+                if value is None:
+                    continue
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                    raise ProviderError("quote_flow_invalid")
+                if nonnegative and value < 0:
+                    raise ProviderError("quote_flow_invalid")
+                if positive and value <= 0:
+                    raise ProviderError("quote_flow_invalid")
+            contract = getattr(item, "flow_contract", None)
+            if contract is not None and (not isinstance(contract, str) or not 1 <= len(contract) <= 32):
+                raise ProviderError("quote_flow_invalid")
             if not isinstance(item.source, str) or not 1 <= len(item.source) <= 32:
                 raise ProviderError("quote_source_invalid")
             if item.ts_code in seen and seen[item.ts_code].to_dict() != item.to_dict():
