@@ -4,24 +4,28 @@ import type { ChartBar, ChartData, PriceBox, SupportLevel } from './types'
 import { levelPrice } from './format'
 import { serverStudies, studyAvailable, volumeAvailable } from './chartStudies'
 let registered = false
+const STUDY_GROUPS = ['PIVOT', 'MA', 'BOLL', 'ATR', 'FIB', 'DERIVED', 'MACD', 'KDJ', 'RSI', 'CHAN']
 export function projectBars(bars: ChartBar[]): KLineData[] {
   return bars.map(bar => ({ ...bar, timestamp: Date.parse(bar.date.length === 10 ? `${bar.date}T15:00:00+08:00` : bar.date), volume: bar.volume ?? undefined, turnover: bar.amount ?? undefined }))
 }
 export function groupsForLevel(level: SupportLevel): string[] {
+  const supplied = Array.isArray(level.groups) ? level.groups.map(String) : []
+  const preferred = supplied.filter((group, index) => STUDY_GROUPS.includes(group) && supplied.indexOf(group) === index)
+  if (preferred.length) return preferred
   const methods = (Array.isArray(level.methods) ? level.methods : []).map(String).join(' ')
-  if (level.category === 'price_structure') return ['PIVOT']
-  if (level.category === 'dynamic_reference') return /BOLL|布林/i.test(methods) ? ['BOLL'] : ['MA']
-  if (level.category === 'volatility_reference') return ['ATR']
-  if (level.category === 'price_reference' || level.category === 'mixed_reference') {
-    return ['DERIVED', ...(/Fibonacci/i.test(methods) ? ['FIB'] : []), ...(/缠论/.test(methods) ? ['CHAN'] : [])]
-  }
+  const category = String(level.category ?? '')
   const groups: string[] = []
-  if (/^MA\d|均线/i.test(methods)) groups.push('MA')
-  if (/BOLL|布林/i.test(methods)) groups.push('BOLL')
-  if (/^ATR|ATR[+-]/i.test(methods)) groups.push('ATR')
-  if (/Fibonacci/i.test(methods)) groups.push('FIB')
-  if (/缠论/.test(methods)) groups.push('CHAN')
-  if (/pivot|分形|TD9|趋势线|trendline/i.test(methods)) groups.push('PIVOT')
+  const push = (group: string) => { if (!groups.includes(group)) groups.push(group) }
+  if (category === 'price_structure' || /pivot|分形|TD9|趋势线|trendline|区间|成交/i.test(methods)) push('PIVOT')
+  if (/^MA\d|均线/i.test(methods) || (category === 'dynamic_reference' && !/BOLL|布林/i.test(methods))) push('MA')
+  if (/BOLL|布林/i.test(methods)) push('BOLL')
+  if (category === 'volatility_reference' || /ATR/i.test(methods)) push('ATR')
+  if (/Fibonacci/i.test(methods)) push('FIB')
+  if (/MACD/.test(methods)) push('MACD')
+  if (/KDJ/.test(methods)) push('KDJ')
+  if (/RSI/.test(methods)) push('RSI')
+  if (/缠论/.test(methods)) push('CHAN')
+  if (category === 'price_reference' || category === 'mixed_reference') push('DERIVED')
   return groups.length ? groups : ['PIVOT']
 }
 const definitions = serverStudies.map(def=>({name:'SERVER_'+def.key,fields:[...def.fields],title:def.key+' · 服务端',height:def.height}))
@@ -118,12 +122,43 @@ export class ChartAdapter {
         const latest = active.at(-1) ?? boxes.at(-1)
         if (latest) this.box(latest, sourceDate)
         const candidate = structures?.candidate
+        let drewCandidate = false
         if (candidate && typeof candidate.lower === 'number' && typeof candidate.upper === 'number' && typeof candidate.origin_at === 'string') {
+          drewCandidate = true
           this.box({ ...candidate, kind: 'daily_box', structure_id: String(candidate.structure_id ?? 'candidate'), lower: candidate.lower, upper: candidate.upper, mid: typeof candidate.mid === 'number' ? candidate.mid : (candidate.lower + candidate.upper) / 2, origin_at: candidate.origin_at, confirmed_at: null, state: 'candidate', source_ids: [], touch_count: 0, upper_touch_count: 0, lower_touch_count: 0, volume_confirmation_available: false } as PriceBox, sourceDate)
         }
+        const live = structures?.live_prior_range
+        if (!latest && !drewCandidate && live && typeof live.lower === 'number' && typeof live.upper === 'number' && typeof live.origin_at === 'string' && live.lower < live.upper) {
+          this.box({ kind: 'daily_box', structure_id: 'live-prior-high-low', lower: live.lower, upper: live.upper, mid: (live.lower + live.upper) / 2, origin_at: live.origin_at, confirmed_at: null, state: 'candidate', source_ids: [], touch_count: 0, upper_touch_count: 0, lower_touch_count: 0, volume_confirmation_available: false }, live.valid_until ?? sourceDate, '前高前低')
+        }
       }
+      if (selected.includes('CHAN')) this.chan(data.studies?.chan_structure ?? data.support_resistance?.chan_structure)
   }
-  private box(box: PriceBox, sourceDate?: string | null) {
+  private chan(raw: unknown) {
+    if (!raw || typeof raw !== 'object') return
+    const structure = raw as { bi?: Array<Record<string, unknown>>; segments?: Array<Record<string, unknown>>; zhongshu?: Array<Record<string, unknown>> }
+    for (const stroke of structure.bi ?? []) this.stroke(stroke, '#b388ff', 1)
+    for (const stroke of structure.segments ?? []) this.stroke(stroke, '#ef9b61', 2)
+    for (const zone of structure.zhongshu ?? []) this.chanZone(zone)
+  }
+  private stroke(item: Record<string, unknown>, color: string, size: number) {
+    const start = this.timestamp(item.start_date), end = this.timestamp(item.end_date)
+    const startPrice = Number(item.start_price), endPrice = Number(item.end_price)
+    if (!start || !end || start === end || !Number.isFinite(startPrice) || !Number.isFinite(endPrice)) return
+    this.chart.createOverlay({ name: 'segment', groupId: 'server_research_studies', lock: true, points: [{ timestamp: start, value: startPrice }, { timestamp: end, value: endPrice }], styles: { line: { color, size, style: 'solid' } } } as OverlayCreate)
+  }
+  private chanZone(zone: Record<string, unknown>) {
+    const lower = Number(zone.zd), upper = Number(zone.zg)
+    const origin = typeof zone.start_date === 'string' ? zone.start_date : ''
+    const until = typeof zone.end_date === 'string' ? zone.end_date : ''
+    if (!origin || !until || !Number.isFinite(lower) || !Number.isFinite(upper) || lower >= upper) return
+    this.box({ kind: 'daily_box', structure_id: `chan-${String(zone.source ?? 'bi')}`, lower, upper, mid: (lower + upper) / 2, origin_at: origin, confirmed_at: origin, valid_until: until, state: 'confirmed', source_ids: [], touch_count: 0, upper_touch_count: 0, lower_touch_count: 0, volume_confirmation_available: false }, until, zone.source === 'segment' ? '段中枢' : '笔中枢', { color: '#b388ff', fill: '#b388ff18' })
+  }
+  private timestamp(day: unknown) {
+    if (typeof day !== 'string' || !day) return undefined
+    return projectBars(this.data.bars.filter(bar => bar.date.slice(0, 10) === day.slice(0, 10)).slice(0, 1))[0]?.timestamp
+  }
+  private box(box: PriceBox, sourceDate?: string | null, label?: string, palette?: { color: string; fill: string }) {
     const bars = this.data.bars
     if (!bars.length || !Number.isFinite(box.lower) || !Number.isFinite(box.upper) || box.lower >= box.upper) return
     const visibleStart = bars[0].date.slice(0, 10)
@@ -135,18 +170,19 @@ export class ChartAdapter {
     const start = timestamp(startDate), end = timestamp(endDate)
     if (!start || !end || start > end) return
     const terminal = ['failed_breakout', 'invalidated', 'expired'].includes(box.state)
-    const color = terminal ? '#71818e' : box.state === 'breakout_confirmed' ? '#ef9b61' : '#d8b776'
-    const add = (from: number, to: number, dashed: boolean, label: string) => {
+    const color = palette?.color ?? (terminal ? '#71818e' : box.state === 'breakout_confirmed' ? '#ef9b61' : '#d8b776')
+    const fill = palette?.fill ?? (terminal ? '#71818e10' : '#d8b77612')
+    const add = (from: number, to: number, dashed: boolean, text: string) => {
       if (to <= from) return
       this.chart.createOverlay({ name: 'researchBox', groupId: 'server_research_studies', lock: true,
         points: [{ timestamp: from, value: box.upper }, { timestamp: to, value: box.lower }],
-        extendData: { color, fill: terminal ? '#71818e10' : '#d8b77612', dashed, label } })
+        extendData: { color, fill, dashed, label: text } })
     }
     const confirmedDay = box.confirmed_at?.slice(0, 10)
     const confirmed = confirmedDay ? (confirmedDay < visibleStart ? start : timestamp(confirmedDay)) : undefined
-    if (confirmed && confirmed > start) add(start, confirmed, true, '候选箱体')
-    if (confirmed && end >= confirmed) add(confirmed, end, box.state === 'breakout_attempt', '日线箱体')
-    else if (!box.confirmed_at) add(start, end, true, '候选箱体')
+    if (confirmed && confirmed > start) add(start, confirmed, true, label ?? '候选箱体')
+    if (confirmed && end >= confirmed) add(confirmed, end, box.state === 'breakout_attempt', label ?? '日线箱体')
+    else if (!box.confirmed_at) add(start, end, true, label ?? '候选箱体')
   }
   private zone(level: SupportLevel, timestamp: number) {
     const price = levelPrice(level)

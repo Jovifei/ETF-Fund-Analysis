@@ -42,6 +42,8 @@ MACD、KDJ、RSI 本身没有价格单位。本工程不会把振荡器数值直
 
 正式缠论结论应使用固定版本 CZSC 建立黄金样本并做第二实现对账。
 
+图表「缠论笔段中枢」图层另有 `chan-structure-simplified-v1`：在当前周期 OHLC 上做包含、分型、笔、线段和笔中枢，供研究叠加。它不是 `chanlun` 包，也不是完整 CZSC；`actionable` 与 `qualified` 保持 false。可选 `chanlun` 仍只在稳定化摘要里计数量，不提供这层坐标。快照缺失时的日线「前高前低」同样只是当前图表 OHLC 现算区间，不是已审计箱体。
+
 ## ETF 成交成本边界
 
 `volume_profile_approx` 反映成交量在历史价格区间的近似分布，不代表股票意义上的真实股东筹码。

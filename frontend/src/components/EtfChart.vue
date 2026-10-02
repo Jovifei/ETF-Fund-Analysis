@@ -12,14 +12,14 @@ const priceBasis=ref<'raw'|'research'>('raw')
 const basisTransition=computed(()=>props.data.basis_transition===true&&!!props.data.research_bars?.length)
 const displayData=computed<ChartData>(()=>{
  if(priceBasis.value==='research'&&props.data.research_bars)return {...props.data,bars:props.data.research_bars,support_resistance:props.data.research_support_resistance??null,price_structures:props.data.research_price_structures,sr_overlay_allowed:props.data.research_sr_overlay_allowed??false,cost_overlay_allowed:props.data.research_cost_overlay_allowed??false}
- if(props.data.raw_overlay_allowed===false)return {...props.data,bars:props.data.bars.map(bar=>({...bar,indicators:{}})),support_resistance:null,price_structures:{qualified:false,reason:'price_basis_mismatch',interval:props.data.interval,actionable:false,boxes:[]},sr_overlay_allowed:false}
+ if(props.data.raw_overlay_allowed===false)return {...props.data,bars:props.data.bars.map(bar=>({...bar,indicators:{}})),studies:props.data.studies?{...props.data.studies,chan_structure:undefined}:undefined,support_resistance:null,price_structures:{qualified:false,reason:'price_basis_mismatch',interval:props.data.interval,actionable:false,boxes:[]},sr_overlay_allowed:false}
  return props.data
 })
 const data=displayData
 const periods=computed(()=>[...['1d','1w','1mo'],...(props.allowMinutes?['30m','60m']:[])])
 const periodNames:Record<string,string>={'1d':'日 K','1w':'周 K','1mo':'月 K','30m':'30 分钟','60m':'小时 K'}
 const groups=['BOX','PIVOT','MA','BOLL','ATR','FIB','DERIVED','MACD','KDJ','RSI','CHAN']
-const names:Record<string,string>={BOX:'日线箱体',PIVOT:'结构支撑压力',MA:'均线参考',BOLL:'布林带参考',ATR:'波幅参考',FIB:'斐波那契',DERIVED:'其他派生价位',MACD:'MACD',KDJ:'KDJ',RSI:'RSI',CHAN:'重叠区近似'}
+const names:Record<string,string>={BOX:'日线箱体',PIVOT:'结构支撑压力',MA:'均线参考',BOLL:'布林带参考',ATR:'波幅参考',FIB:'斐波那契',DERIVED:'其他派生价位',MACD:'MACD',KDJ:'KDJ',RSI:'RSI',CHAN:'缠论笔段中枢'}
 const selected=ref(['BOX','PIVOT'])
 const indicatorPanel=ref<HTMLDetailsElement|null>(null), indicators=ref(['MA','MACD','KDJ','RSI']), showVolume=ref(true)
 const menuPosition=ref<Record<string,string>>({})
@@ -40,11 +40,7 @@ function outside(event:PointerEvent){if(indicatorPanel.value?.open&&!indicatorPa
 const levels=computed(()=>{
  if(!displayData.value.sr_overlay_allowed)return []
  const current=displayData.value.bars.at(-1)?.close??0
- const all=[...(displayData.value.support_resistance?.levels??[])].filter(x=>levelPrice(x)!=null)
- const structural=all.filter(x=>x.category==='price_structure'&&selected.value.includes('PIVOT'))
- const eligible=all.filter(x=>x.category!=='price_structure'&&groupsForLevel(x).some(g=>selected.value.includes(g)))
- const near=(side:'support'|'resistance')=>structural.filter(x=>side==='support'?levelPrice(x)! <= current:levelPrice(x)! > current).sort((a,b)=>Math.abs(levelPrice(a)!-current)-Math.abs(levelPrice(b)!-current)).slice(0,2)
- return [...near('support'),...near('resistance'),...eligible.filter(x=>x.category!=='price_structure').sort((a,b)=>Math.abs(levelPrice(a)!-current)-Math.abs(levelPrice(b)!-current))].slice(0,12)
+ return [...(displayData.value.support_resistance?.levels??[])].filter(x=>levelPrice(x)!=null&&groupsForLevel(x).some(g=>selected.value.includes(g))).sort((a,b)=>Math.abs(levelPrice(a)!-current)-Math.abs(levelPrice(b)!-current)).slice(0,12)
 })
 const structureReason:Record<string,string>={snapshot_missing_requires_task:'尚无结构快照，需由受审计刷新任务生成。',history_qualification_blocked:'历史价格口径或连续性未通过检查。',snapshot_after_as_of:'快照晚于当前图表读取时点，已隐藏。',price_basis_mismatch:'价格口径不匹配，结构线已隐藏。',trading_day_gap:'存在未解释的交易日缺口。',calendar_unavailable:'交易日历不可用。',atr_unavailable:'有效历史不足以计算 ATR。',history_too_short:'已结算日线不足。',no_confirmed_pivots:'没有已确认的价格拐点。',insufficient_independent_touches:'独立触碰不足，未形成箱体。',box_width_out_of_range:'区间宽度不符合当前研究条件。',box_duration_too_short:'持续时间不足。',box_inside_ratio_too_low:'区间内收盘比例不足。',box_trend_drift_too_high:'区间趋势位移过大。',interval_unsupported:'本批仅支持日线结构。'}
 const structureText=computed(()=>{
@@ -52,7 +48,20 @@ const structureText=computed(()=>{
  if(displayData.value.interval!=='1d')return '本批仅支持日线结构。'
  if(value?.boxes?.length)return `已计算至 ${value.source_as_of_date??'—'}；状态：${value.boxes[0].state}。`
  if(value?.candidate)return `结构候选尚未确认：${structureReason[String(value.candidate.reason)]??String(value.candidate.reason??'条件未满足')}`
- return structureReason[value?.reason??'snapshot_missing_requires_task']??`结构不可用：${value?.reason??'unknown'}`
+ const live=value?.live_prior_range
+ if(live&&typeof live.lower==='number'&&typeof live.upper==='number')return `未使用已确认箱体。最近 ${live.window} 根日线前高 ${num(live.upper,3)}、前低 ${num(live.lower,3)}。这是现算研究区间，不是已审计箱体。`
+ const reason=structureReason[value?.reason??'snapshot_missing_requires_task']??`结构不可用：${value?.reason??'unknown'}`
+ if(value&&Object.prototype.hasOwnProperty.call(value,'live_prior_range'))return `${reason} 可见日线不足或价格无效，前高前低也无法绘制。`
+ return reason
+})
+const chanNote=computed(()=>{
+ const raw=(displayData.value.studies?.chan_structure ?? displayData.value.support_resistance?.chan_structure) as Record<string,unknown>|undefined
+ if(!raw||typeof raw!=='object')return '当前图表没有缠论结构。'
+ if(raw.available===false)return String(raw.disclaimer||raw.note||'缠论结构不可用。')
+ const count=(key:string)=>Array.isArray(raw[key])?raw[key].length:0
+ const bi=count('bi'),duan=count('segments'),zs=count('zhongshu')
+ if(!bi&&!duan&&!zs)return '简化缠论未形成笔、段或中枢。'
+ return `简化缠论 · 笔 ${bi} · 段 ${duan} · 中枢 ${zs}。不是完整 CZSC，不含背驰和买卖点。`
 })
 const displayedBox=computed(()=>{
  const boxes=displayData.value.price_structures?.boxes??[]
@@ -94,7 +103,7 @@ onBeforeUnmount(()=>{++mountRevision;adapter?.destroy();adapter=null;document.re
  <div v-if="levels.length" class="chart-legend" aria-label="当前支撑压力快照价位"><span v-for="(l,i) in levels" :key="i" :title="Array.isArray(l.methods)?l.methods.join('、'):''" :class="String(l.kind).includes('support')?'bear':'bull'">{{String(l.kind).includes('support')?'支撑':'压力'}} {{num(levelPrice(l),3)}}</span></div>
  <details v-if="levels.length" class="zone-notes" data-testid="chart-level-evidence"><summary>查看支撑压力价位依据（{{levels.length}}）</summary><p class="small-note">窄图保留原价格线，长说明移到这里，避免遮挡蜡烛；结构价位只计独立价格触碰。</p><ul><li v-for="(l,i) in levels" :key="i">{{String(l.kind).includes('support')?'支撑':'压力'}} {{num(levelPrice(l),3)}} · {{Array.isArray(l.methods)?l.methods.join(' / '):'价格研究'}}{{l.category==='price_structure'?` · ${l.touch_count} 次独立触碰`:''}}</li></ul></details>
  <section class="zone-notes" data-testid="chart-box-evidence" aria-label="日线箱体证据"><strong>箱体研究 · {{periodNames[data.interval]??data.interval}}</strong><p role="status">{{structureText}}</p><ul v-if="displayedBox"><li>{{boxState[displayedBox.state]??displayedBox.state}} · {{displayedBox.origin_at}} 至 {{displayedBox.valid_until??data.price_structures?.source_as_of_date??'—'}}；上沿 {{num(displayedBox.upper,3)}}（{{displayedBox.upper_touch_count}} 次）、下沿 {{num(displayedBox.lower,3)}}（{{displayedBox.lower_touch_count}} 次）；{{displayedBox.volume_confirmation_available?'量能字段可用':'量能确认不可用'}}。确认日 {{displayedBox.confirmed_at??'未确认'}}。</li></ul><ul v-else-if="candidateBox"><li>候选未确认 · {{candidateBox.origin_at}} 至 {{candidateBox.as_of_date??'—'}}；上沿 {{num(candidateBox.upper,3)}}（{{candidateBox.upper_touch_count??'—'}} 次）、下沿 {{num(candidateBox.lower,3)}}（{{candidateBox.lower_touch_count??'—'}} 次）。</li></ul><p v-if="displayedBox?.intraday_state" role="status" data-testid="chart-box-intraday-attempt">盘中{{intradaySide[displayedBox.intraday_state.side]??'边界'}}越界尝试 · {{displayedBox.intraday_state.observed_at??'时间待核实'}}；这是临时观察，不改变已结算箱体状态。</p><p v-if="data.price_structures?.read_as_of" class="small-note">输入截止 {{data.price_structures.source_as_of_date??'—'}} · 页面读取 {{data.price_structures.read_as_of}}</p></section>
- <p v-if="basisTransition&&priceBasis==='raw'" class="small-note" role="status">原始行情按来源数值显示；与拆分调整研究序列价格口径不同，未能映射的指标及支撑压力已隐藏。</p><p v-else-if="priceBasis==='research'" class="small-note" role="status">当前显示拆分调整研究价格；该序列只用于价格连续性研究，不代表总收益。</p><p class="small-note">{{periodNames[data.interval]??data.interval}}的价格研究参考；MACD/KDJ/RSI只确认历史价格拐点，不将指标数值换成价格。重叠区是缠论近似，不是完整笔、线段和中枢。打开全部不表示更多独立证据。</p><div class="chart-bottom"><span>滚轮缩放 · 拖拽平移 · 双击复位</span><span>{{priceBasis==='research'?data.research_price_basis:data.display_price_basis??(data.adjust==='none'?'未复权':data.adjust)}} · {{data.indicator_version}}</span></div>
+ <p v-if="basisTransition&&priceBasis==='raw'" class="small-note" role="status">原始行情按来源数值显示；与拆分调整研究序列价格口径不同，未能映射的指标及支撑压力已隐藏。</p><p v-else-if="priceBasis==='research'" class="small-note" role="status">当前显示拆分调整研究价格；该序列只用于价格连续性研究，不代表总收益。</p><p v-if="selected.includes('CHAN')" class="small-note" role="status" data-testid="chart-chan-note">{{chanNote}}</p><p class="small-note">{{periodNames[data.interval]??data.interval}}的价格研究参考；MACD/KDJ/RSI只确认历史价格拐点，不将指标数值换成价格。缠论勾选绘制简化笔、线段和中枢，不是完整 CZSC。水平价位中的重叠区仍是近似。打开全部不表示更多独立证据。</p><div class="chart-bottom"><span>滚轮缩放 · 拖拽平移 · 双击复位</span><span>{{priceBasis==='research'?data.research_price_basis:data.display_price_basis??(data.adjust==='none'?'未复权':data.adjust)}} · {{data.indicator_version}}</span></div>
  </section></template>
 <style scoped>.zone-notes{padding:10px 8px;overflow-wrap:anywhere}.zone-notes summary{cursor:pointer;min-height:40px}.zone-notes li{margin:8px 0;font-size:13px;line-height:1.7}.chart-workspace{background:var(--surface,#12181e)}.study-controls{display:flex;gap:12px;flex-wrap:wrap;padding:12px 4px;align-items:center}.study-controls label{display:flex;align-items:center;gap:5px;font-size:13px}.study-controls input{width:auto}.expanded-chart,.chart-workspace:fullscreen{position:fixed;inset:0;z-index:2000;padding:18px;overflow:auto}.expanded-chart .chart,.chart-workspace:fullscreen .chart{height:calc(100dvh - 270px);min-height:360px}.chart-top{flex-wrap:wrap;gap:12px}.chart-legend{font-size:13px;line-height:1.8}.small-note{padding:8px;font-size:13px}.chart-actions{position:relative}.indicator-picker{position:relative}.indicator-picker>summary{list-style:none;border:1px solid var(--border);border-radius:6px;padding:9px 12px;cursor:pointer;color:var(--accent);min-height:36px;display:flex;align-items:center;gap:9px}.indicator-picker>summary span{font-size:11px;background:#13353f;padding:1px 5px;border-radius:4px}.indicator-menu{position:absolute;right:0;top:calc(100% + 9px);width:330px;max-width:calc(100vw - 48px);max-height:min(620px,70dvh);overflow:auto;z-index:60;background:#131e29;border:1px solid #344656;border-radius:10px;padding:16px;box-shadow:0 18px 44px #0009}.indicator-menu header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px}.indicator-menu p{font-size:12px;color:var(--muted);margin:10px 0}.indicator-menu hr{border:0;border-top:1px solid #30414f;margin:16px 0}.applied-indicators{display:flex;gap:7px;flex-wrap:wrap}.indicator-chip{border:1px solid #31586d;color:#81cdf1;background:#192e3e;border-radius:6px;padding:7px 10px}.indicator-option{display:flex;gap:12px;align-items:flex-start;min-height:58px;padding:10px 5px;border-radius:6px}.indicator-option:hover{background:#203242}.indicator-option input{width:16px;height:16px;flex:none;margin:3px 0}.indicator-option b{font-size:13px;font-weight:500}.indicator-option small{display:block;font-size:11px;line-height:1.7;margin-top:4px}.study-caption{color:var(--muted);font-size:12px;font-weight:400;margin:0 6px}.study-controls{border-block:1px solid var(--border);padding:12px 18px}.chart-top{background:#0e151f}.chart-legend strong{color:var(--text)}@media(max-width:600px){.chart-actions{width:100%}.indicator-picker{position:relative}.indicator-menu{left:0;right:auto;width:min(330px,100%);max-width:100%}.chart-actions>.button,.indicator-picker>summary{min-height:44px}.indicator-option{min-height:62px}.chart-top{padding:12px}.study-controls{padding:10px 12px;gap:9px}}
 </style>
