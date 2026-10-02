@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "roadmap_version": "2026-10-02-v2",
-  "updated_at": "2026-10-02T16:27:55+08:00",
+  "updated_at": "2026-10-02T17:06:56+08:00",
   "current_stage": "S8-F0优先 / S3-S4接收并行",
   "current_iteration": 71,
   "planning_source": "同一远端ChatGPT v2方向修订（只读核验摘要）及本地现场元数据核验；无新增源码独立审核",
@@ -14,7 +14,7 @@
   "actionable": false,
   "runtime_activated": false,
   "auto_trading": false,
-  "next_task": "优先S8-F0分钟量额数据可行性；并行核对63c426a发布收据、v109刷新和S3/S4持久化路线，依据结果选择最小OOS研究或价格研究产品边界",
+  "next_task": "先对账外部F0结论和owner决定；证据不足继续S8-F0，有限并行S2/WU1降级可读化与S3-S4/WU2当前部署接收",
   "blockers": [
     "5m/15m真实量额、单位/时间/PIT及成本可行性未解决：先做S8-F0，不再排在所有UX之后",
     "63c426a已部署；完整发布收据、f0迁移回滚兼容、图层合同和私有功能独立接收待核对",
@@ -2017,6 +2017,11 @@
       "date": "2026-10-02",
       "iteration": 71,
       "description": "按Jovi授权提交main并整合2个有效文档分支；17条已吸收/替代历史仅归并记录；收拢当前入口、归档旧交付清单、清理可再生缓存。产品资格与部署不变。 验证：后端唯一覆盖1402通过/23条件跳过，前端71通过；2个受访问保护的合成目录保留，主线收尾不改变生产部署。"
+    },
+    {
+      "date": "2026-10-02",
+      "iteration": 71,
+      "description": "审核并直接修改Qoder下一阶段原计划，映射WU0/WU1/WU2，纠正未证实前提及映射/版本/发布要求；仅计划审核，未实施产品代码或数据调查。"
     }
   ],
   "incoming_candidate": {

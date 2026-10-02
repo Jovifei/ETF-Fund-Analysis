@@ -1566,3 +1566,11 @@ Remote iteration 69 returned `M3B_B_DECISION=PASS`, `M3B_C_IMPLEMENTATION_GO=tru
 - [x] 更新主路线/台账/进度板/维护规则及S8-F0有界计划。
 - [ ] S8-F0实际数据调查（本轮仅计划，尚未执行）。
 - [ ] 当前已上线图层/份额的独立接收，结构合同和新迁移发布证据核对。
+
+# Qoder下一阶段计划审核 — 2026-10-02
+
+- [x] 对照长期路线v2、当前STATUS/HANDOFF、实际读模型和类型核对原计划。
+- [x] 纠正未证实F0前提、原因推断、九模块计数、Chart/Detail版本归属和只读不部署假设。
+- [x] 保留原文备份并直接修改Qoder原文件，回读章节验证通过。
+
+Review：新计划WU0先对账、WU1归S2、WU2并行当前S3/S4接收；产品实现、数据探测和发布未执行。原文件C:/Users/Admin/.qoder/plans/peaceful-islet-marten.md；审核收据.local/plan-reviews/20261002-qoder-next-stage/review.json。
