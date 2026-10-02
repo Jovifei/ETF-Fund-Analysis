@@ -2,11 +2,11 @@
 
 > 本文件由 scripts/update_project_progress.py 从 PROJECT_PROGRESS.json 生成。修改台账后重新生成，勿直接修改本文件。
 
-更新：2026-10-03T01:26:38+08:00 · iteration 71 · 当前 S8-F0证据调查 / S2私有验收待完成
+更新：2026-10-03T02:12:44+08:00 · iteration 71 · 当前 S8-F0证据调查 / S2私有验收待完成
 
 [总阶段路线图](PROJECT_MASTER_ROADMAP.md) · [图形进度板](PROJECT_PROGRESS.html) · [维护规则](PROJECT_PROGRESS_MAINTENANCE.md)
 
-**当前下一步：** 保存精确b799087三项CI通过证据；实际F0授权访问、许可与时间合同另核；保持不部署和真实资格UNKNOWN
+**当前下一步：** 发布已审核WU2缠论时间坐标修复并核验精确提交CI与浏览器回归；实际F0访问、许可和时间合同另核；不部署、不晋升真实资格
 
 全项目验收分母尚未冻结；以下显示阶段状态和证据闭环，不能推算全项目完成百分比。
 
@@ -16,7 +16,7 @@
 | S1 数据生命周期与及时性 | 已有实现；最终历史证据待核对 | 待冻结 / 待证据映射 | 待核对 | 待核对 | 待核对 | 待核对 | 待核对 |
 | S2 详情与研究解释 | 已有实现；完整验收待核对 | 待冻结 / 待证据映射 | 待核对 | 待核对 | 待核对 | 待核对 | 待核对 |
 | S3 研究基座与Chan后端 | 当前63c426a已部署；增量与私有验收待独立接收 | 待冻结 / 待证据映射 | 部分PASS | 部分PASS | 部分PASS | PASS | 待核对 |
-| S4 图表与Chan用户体验 | 相关实现已上线；合同兼容与功能验收待审查 | 待冻结 / 待证据映射 | IN_PROGRESS | 待核对 | PENDING | PASS | 待核对 |
+| S4 图表与Chan用户体验 | 既有图层已上线；WU2持久化中枢坐标修复本地测试/审核通过，精确提交浏览器CI待核，未部署 | 待冻结 / 待证据映射 | IN_PROGRESS | 部分PASS | 部分PASS | PASS | 待核对 |
 | S5 消息与事件关联 | 基础/验收待核对；待正式计划 | 待冻结 / 待证据映射 | 待核对 | 待核对 | 待核对 | 待核对 | 待核对 |
 | S6 AI与本地执行产品闭环 | 研发接力已使用；产品验收待核对 | 待冻结 / 待证据映射 | 待核对 | 待核对 | 待核对 | 待核对 | 待核对 |
 | S7 持仓、组合与风险 | 基础已有；完整阶段待核对 | 待冻结 / 待证据映射 | 待核对 | 待核对 | 待核对 | 待核对 | 待核对 |
@@ -137,10 +137,10 @@
 
 | 子任务 | 内容 | 代码 | 测试 | 远端审核 | 部署 | 线上验收 |
 | --- | --- | --- | --- | --- | --- | --- |
-| S4-U01 | 证据图坐标 | TODO | TODO | PENDING | TODO | TODO |
+| S4-U01 | 证据图坐标 | 部分PASS | 部分PASS | 部分PASS | PENDING | PENDING |
 | S4-U02 | 分型标记 | TODO | TODO | PENDING | TODO | TODO |
 | S4-U03 | 笔绘制 | TODO | TODO | PENDING | TODO | TODO |
-| S4-U04 | 中枢区域 | TODO | TODO | PENDING | TODO | TODO |
+| S4-U04 | 中枢区域 | 部分PASS | 部分PASS | 部分PASS | PENDING | PENDING |
 | S4-U05 | 暂定结算区分 | TODO | TODO | PENDING | TODO | TODO |
 | S4-U06 | 修订变化解释 | TODO | TODO | PENDING | TODO | TODO |
 | S4-U07 | 口径错配阻断 | TODO | TODO | PENDING | TODO | TODO |
@@ -279,3 +279,4 @@
 - 2026-10-03 / iteration71：稳定F0独立候选完整回归最终通过：1490项收集、1479通过、11跳过、0失败/错误，exit0，1684.152秒，代码/测试hash与独立审核一致。后续合并性能候选须独立验证，不继承为精确远端CI通过；仍无真实探测、部署或资格晋升。
 - 2026-10-03 / iteration71：CI性能与F0合并候选完整回归PASS：1493收集、1482通过、11既有跳过、0失败/错误，exit0，569.823秒；相同云端F0独立候选1684.152秒。中位数完整payload等值及边界测试、单项共享数据库清理均独立审核通过；27项JS测试和静态检查PASS。35分钟限制、全部断言和后续CI门禁不变；精确提交CI待核验，不部署、不晋升真实资格。收据 docs/audits/CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md。
 - 2026-10-03 / iteration71：既有分支普通快进发布b799087（tree439b15f6），精确提交full CI37038405848、workspace37038405866、audit37038405846均SUCCESS。远端完整JUnit1493收集/1482通过/11既有跳过/0失败，651.036秒；整个CI约14分52秒。全部后续迁移、Docker构建/隔离冒烟及产物导出通过，原35分钟限制不变。镜像仅CI产物，registry digest缺失、production_deployed=false；真实资格UNKNOWN、actionable=false。证据 docs/audits/CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md。
+- 2026-10-03 / iteration71：WU2持久化缠论中枢时间坐标修复：使用来源日历日期匹配实际蜡烛，保留价格/口径/资格；29新用例、102 Vue、41时区、27旧JS和完整1495收集/1484通过/11既有跳过/0失败，独立审核PASS。完整首跑暴露既有持仓独立性测试新闻衰减跨0.01边界，已仅固定该测试的新闻评价时间，保留全部断言并加确定性边界回归。合入并保留c61e493文档闭环；云端Chromium启动EPERM，精确发布CI/浏览器回归待核验；未部署、真实资格UNKNOWN。收据 docs/audits/WU2_CHAN_CALENDAR_PROJECTION_20261003.md。

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "roadmap_version": "2026-10-02-v2",
-  "updated_at": "2026-10-03T01:26:38+08:00",
+  "updated_at": "2026-10-03T02:12:44+08:00",
   "current_stage": "S8-F0证据调查 / S2私有验收待完成",
   "current_iteration": 71,
   "planning_source": "同一远端ChatGPT v2方向修订（只读核验摘要）及本地现场元数据核验；无新增源码独立审核",
@@ -14,7 +14,7 @@
   "actionable": false,
   "runtime_activated": false,
   "auto_trading": false,
-  "next_task": "保存精确b799087三项CI通过证据；实际F0授权访问、许可与时间合同另核；保持不部署和真实资格UNKNOWN",
+  "next_task": "发布已审核WU2缠论时间坐标修复并核验精确提交CI与浏览器回归；实际F0访问、许可和时间合同另核；不部署、不晋升真实资格",
   "blockers": [
     "5m/15m真实量额、单位/时间/PIT及成本可行性未解决：先做S8-F0，不再排在所有UX之后",
     "63c426a已部署；完整发布收据、f0迁移回滚兼容、图层合同和私有功能独立接收待核对",
@@ -748,13 +748,13 @@
       "id": "S4",
       "name": "图表与Chan用户体验",
       "legacy": "R4C M4/M5",
-      "status": "相关实现已上线；合同兼容与功能验收待审查",
+      "status": "既有图层已上线；WU2持久化中枢坐标修复本地测试/审核通过，精确提交浏览器CI待核，未部署",
       "counter_frozen": false,
       "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
       "dimensions": {
         "code": "IN_PROGRESS",
-        "tests": "待核对",
-        "review": "PENDING",
+        "tests": "部分PASS",
+        "review": "部分PASS",
         "deploy": "PASS",
         "live": "待核对"
       },
@@ -763,14 +763,17 @@
           "id": "S4-U01",
           "name": "证据图坐标",
           "dimensions": {
-            "code": "TODO",
-            "tests": "TODO",
-            "review": "PENDING",
-            "deploy": "TODO",
-            "live": "TODO"
+            "code": "部分PASS",
+            "tests": "部分PASS",
+            "review": "部分PASS",
+            "deploy": "PENDING",
+            "live": "PENDING"
           },
-          "evidence": [],
-          "na_reasons": {}
+          "evidence": [
+            "docs/audits/WU2_CHAN_CALENDAR_PROJECTION_20261003.md"
+          ],
+          "na_reasons": {},
+          "scope_note": "本收据只覆盖既有持久化Chan日历日期到实际蜡烛坐标的有界修复；不代表该验收单元全部完成或真实数据资格通过。"
         },
         {
           "id": "S4-U02",
@@ -802,14 +805,17 @@
           "id": "S4-U04",
           "name": "中枢区域",
           "dimensions": {
-            "code": "TODO",
-            "tests": "TODO",
-            "review": "PENDING",
-            "deploy": "TODO",
-            "live": "TODO"
+            "code": "部分PASS",
+            "tests": "部分PASS",
+            "review": "部分PASS",
+            "deploy": "PENDING",
+            "live": "PENDING"
           },
-          "evidence": [],
-          "na_reasons": {}
+          "evidence": [
+            "docs/audits/WU2_CHAN_CALENDAR_PROJECTION_20261003.md"
+          ],
+          "na_reasons": {},
+          "scope_note": "本收据只覆盖既有持久化Chan日历日期到实际蜡烛坐标的有界修复；不代表该验收单元全部完成或真实数据资格通过。"
         },
         {
           "id": "S4-U05",
@@ -2077,6 +2083,11 @@
       "date": "2026-10-03",
       "iteration": 71,
       "description": "既有分支普通快进发布b799087（tree439b15f6），精确提交full CI37038405848、workspace37038405866、audit37038405846均SUCCESS。远端完整JUnit1493收集/1482通过/11既有跳过/0失败，651.036秒；整个CI约14分52秒。全部后续迁移、Docker构建/隔离冒烟及产物导出通过，原35分钟限制不变。镜像仅CI产物，registry digest缺失、production_deployed=false；真实资格UNKNOWN、actionable=false。证据 docs/audits/CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md。"
+    },
+    {
+      "date": "2026-10-03",
+      "iteration": 71,
+      "description": "WU2持久化缠论中枢时间坐标修复：使用来源日历日期匹配实际蜡烛，保留价格/口径/资格；29新用例、102 Vue、41时区、27旧JS和完整1495收集/1484通过/11既有跳过/0失败，独立审核PASS。完整首跑暴露既有持仓独立性测试新闻衰减跨0.01边界，已仅固定该测试的新闻评价时间，保留全部断言并加确定性边界回归。合入并保留c61e493文档闭环；云端Chromium启动EPERM，精确发布CI/浏览器回归待核验；未部署、真实资格UNKNOWN。收据 docs/audits/WU2_CHAN_CALENDAR_PROJECTION_20261003.md。"
     }
   ],
   "incoming_candidate": {
@@ -2177,5 +2188,31 @@
     "remote_junit_sha256": "1a24633d9f52ac34f28bb6af7bfd97c74b8255a19c5dc419d60662e224989eda",
     "image_artifact_id": 11242795241,
     "production_registry_published": false
+  },
+  "wu2_chan_projection_current_batch": {
+    "code_baseline_sha": "b7990877cac4f79ef7e2530ed0f94b55b943f533",
+    "preserved_docs_parent_sha": "c61e4935ae3cc5ce62e29ba9ce09f3ec27f48e76",
+    "runtime_file": "frontend/src/lib/chartAdapter.ts",
+    "runtime_sha256": "d1cbf6da048422e6f362984d212ad61a8887c41353d01861744aeaa9f49bb8ae",
+    "scope": [
+      "S4-U01_BOUNDED_COORDINATE_REPAIR",
+      "S4-U04_PERSISTED_ZHONGSHU_DISPLAY"
+    ],
+    "frontend_tests": "102_PASS_19_FILES",
+    "timezone_chart_tests": "41_PASS_AMERICA_NEW_YORK",
+    "backend_tests": "1495_COLLECTED_1484_PASS_11_EXISTING_SKIP_0_FAILURES",
+    "typecheck_build": "PASS",
+    "legacy_js_tests": "27_PASS",
+    "remote_review": "INDEPENDENT_PROJECTION_AND_TEST_CLOCK_REVIEW_PASS",
+    "cloud_browser": "BLOCKED_CHROMIUM_EPERM_BEFORE_NAVIGATION",
+    "remote_ci": "EXACT_PUBLICATION_COMMIT_PENDING",
+    "deploy": "NOT_DEPLOYED",
+    "real_data": "UNKNOWN",
+    "actionable": false,
+    "evidence": "docs/audits/WU2_CHAN_CALENDAR_PROJECTION_20261003.md",
+    "backend_junit_seconds": 556.37,
+    "backend_junit_sha256": "f205768e6f58b5cd6378c77fc8a869928588a2de5e9cb5f94978c59ec1e54824",
+    "ownership_test_stability": "NEWS_EVALUATION_TIME_FIXED_TEST_ONLY_ALL_ASSERTIONS_RETAINED",
+    "ownership_test_sha256": "ebe11fb729059d81383b3f9b73d29ca10b77b03e53eeca4558849479c5fc6b7e"
   }
 }

@@ -8,6 +8,16 @@ const STUDY_GROUPS = ['PIVOT', 'MA', 'BOLL', 'ATR', 'FIB', 'DERIVED', 'MACD', 'K
 export function projectBars(bars: ChartBar[]): KLineData[] {
   return bars.map(bar => ({ ...bar, timestamp: Date.parse(bar.date.length === 10 ? `${bar.date}T15:00:00+08:00` : bar.date), volume: bar.volume ?? undefined, turnover: bar.amount ?? undefined }))
 }
+// Match the calendar date supplied by the server, never reinterpret an offset or
+// invent a candle for a missing trading day. Coordinates come from the bar itself.
+function candleDay(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:[ T](?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):?[0-5]\d)?)?$/.test(value)) return undefined
+  const day = value.slice(0, 10)
+  const [year, month, date] = day.split('-').map(Number)
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  return month >= 1 && month <= 12 && date >= 1 && date <= days[month - 1] ? day : undefined
+}
 export function groupsForLevel(level: SupportLevel): string[] {
   const supplied = Array.isArray(level.groups) ? level.groups.map(String) : []
   const preferred = supplied.filter((group, index) => STUDY_GROUPS.includes(group) && supplied.indexOf(group) === index)
@@ -177,19 +187,21 @@ export class ChartAdapter {
     this.box({ kind: 'daily_box', structure_id: `chan-${String(zone.source ?? 'bi')}`, lower, upper, mid: (lower + upper) / 2, origin_at: origin, confirmed_at: origin, valid_until: until, state: 'confirmed', source_ids: [], touch_count: 0, upper_touch_count: 0, lower_touch_count: 0, volume_confirmation_available: false }, until, label, { color: '#b388ff', fill: '#b388ff18' })
   }
   private timestamp(day: unknown) {
-    if (typeof day !== 'string' || !day) return undefined
-    return projectBars(this.data.bars.filter(bar => bar.date.slice(0, 10) === day.slice(0, 10)).slice(0, 1))[0]?.timestamp
+    const key = candleDay(day)
+    if (!key) return undefined
+    const bar = this.data.bars.find(bar => candleDay(bar.date) === key)
+    const timestamp = bar ? projectBars([bar])[0].timestamp : undefined
+    return Number.isFinite(timestamp) ? timestamp : undefined
   }
   private box(box: PriceBox, sourceDate?: string | null, label?: string, palette?: { color: string; fill: string }) {
     const bars = this.data.bars
     if (!bars.length || !Number.isFinite(box.lower) || !Number.isFinite(box.upper) || box.lower >= box.upper) return
-    const visibleStart = bars[0].date.slice(0, 10)
-    const visibleEnd = (box.valid_until ?? sourceDate ?? bars.at(-1)!.date).slice(0, 10)
-    if (visibleEnd < visibleStart) return
-    const startDate = box.origin_at < visibleStart ? visibleStart : box.origin_at
-    const endDate = visibleEnd > bars.at(-1)!.date.slice(0, 10) ? bars.at(-1)!.date.slice(0, 10) : visibleEnd
-    const timestamp = (day: string) => projectBars(bars.filter(bar => bar.date.slice(0, 10) === day).slice(0, 1))[0]?.timestamp
-    const start = timestamp(startDate), end = timestamp(endDate)
+    const visibleStart = candleDay(bars[0].date), visibleEnd = candleDay(bars.at(-1)!.date)
+    const origin = candleDay(box.origin_at), until = candleDay(box.valid_until ?? sourceDate ?? bars.at(-1)!.date)
+    if (!visibleStart || !visibleEnd || !origin || !until || until < visibleStart) return
+    const startDate = origin < visibleStart ? visibleStart : origin
+    const endDate = until > visibleEnd ? visibleEnd : until
+    const start = this.timestamp(startDate), end = this.timestamp(endDate)
     if (!start || !end || start > end) return
     const terminal = ['failed_breakout', 'invalidated', 'expired'].includes(box.state)
     const color = palette?.color ?? (terminal ? '#71818e' : box.state === 'breakout_confirmed' ? '#ef9b61' : '#d8b776')
@@ -200,8 +212,8 @@ export class ChartAdapter {
         points: [{ timestamp: from, value: box.upper }, { timestamp: to, value: box.lower }],
         extendData: { color, fill, dashed, label: text } })
     }
-    const confirmedDay = box.confirmed_at?.slice(0, 10)
-    const confirmed = confirmedDay ? (confirmedDay < visibleStart ? start : timestamp(confirmedDay)) : undefined
+    const confirmedDay = candleDay(box.confirmed_at)
+    const confirmed = confirmedDay ? (confirmedDay < startDate ? start : confirmedDay > endDate ? end : this.timestamp(confirmedDay)) : undefined
     if (confirmed && confirmed > start) add(start, confirmed, true, label ?? '候选箱体')
     if (confirmed && end >= confirmed) add(confirmed, end, box.state === 'breakout_attempt', label ?? '日线箱体')
     else if (!box.confirmed_at) add(start, end, true, label ?? '候选箱体')

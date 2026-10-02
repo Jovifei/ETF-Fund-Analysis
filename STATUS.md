@@ -1,3 +1,7 @@
+## WU2缠论中枢坐标修复 — 2026-10-03 02:12 上海
+
+已修复持久化完整时间戳无法匹配日线蜡烛、导致中枢消失的问题；仅匹配来源日历日期到真实蜡烛，缺失/无效端点跳过，不重算价格或晋升资格。102项Vue、41项时区回归、27项旧JS、完整1495收集/1484通过/11既有跳过/0失败，独立审核PASS。既有持仓独立性测试的新闻时间衰减偶发误差已作测试内隔离，保留全部断言。精确提交CI和真实浏览器回归待核；云端Chromium启动受限，不声称截图验收。未部署、actionable=false。见[本轮收据](docs/audits/WU2_CHAN_CALENDAR_PROJECTION_20261003.md)。
+
 ## 精确提交CI全部通过 — 2026-10-03 01:26 上海
 
 既有分支已普通快进至`b7990877cac4f79ef7e2530ed0f94b55b943f533`，源码tree`439b15f6eddf2c2dc0d5c0daba604105a3e6a5a0`。[完整CI](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37038405848)、[workspace-ci](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37038405866)与[audit-platforms](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37038405846)均SUCCESS。GitHub完整回归1493收集/1482通过/11既有跳过/0失败，651.036秒；整个CI约14分52秒。迁移、Docker构建/隔离冒烟、镜像导出/审计产物均通过，35分钟限制与全部门禁未放宽。镜像仅CI产物，未发布registry/未部署；真实资格仍UNKNOWN、actionable=false。收据见[CI证据](docs/audits/CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md#exact-commit-remote-ci-closure)。

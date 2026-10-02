@@ -1,4 +1,7 @@
 """Chart overlays prefer a verified persisted Chan read and label the fallback."""
+import json
+from pathlib import Path
+
 from app.main import app
 from app.workspace.chan_chart_overlay import annotate_chart_chan, project_persisted_chan
 from fastapi.testclient import TestClient
@@ -118,3 +121,15 @@ def test_chart_route_attaches_non_actionable_chan_observation(bootstrapped):
     assert observation["reason_code"] == "snapshot_missing"
     assert payload["studies"]["chan_structure"]["algorithm"] == "chan-structure-simplified-v1"
     assert payload["studies"]["chan_structure"]["actionable"] is False
+
+
+def test_frontend_fixture_matches_persisted_backend_projection():
+    fixture = json.loads((Path(__file__).parent / "fixtures" / "chan_chart_projection.json").read_text(encoding="utf-8"))
+    chart = fixture["chart"]
+
+    assert chart["chan_observation"] == project_persisted_chan(
+        fixture["evidence"], chart["research_price_basis_id"]
+    )
+    assert chart["chan_observation"]["zhongshu"][0]["start_date"] == "2026-09-01 15:00:00"
+    assert chart["actionable"] is False
+    assert chart["qualified"] is False

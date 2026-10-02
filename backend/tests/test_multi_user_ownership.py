@@ -4,6 +4,7 @@ import io
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import quote
 from uuid import uuid4
 
@@ -373,13 +374,19 @@ def test_member_bootstrap_hides_global_operational_details_but_admin_can_read_th
 
 
 def test_shared_signal_refresh_is_independent_of_every_users_holdings(
-    db_session, two_users, bootstrapped
+    db_session, two_users, bootstrapped, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Shared snapshots are pure market outputs, not a cross-user portfolio cache."""
     from app.services.holding_service import HoldingService
     from app.services.signal_v05_service import SignalV05Service
 
     service = SignalV05Service(Settings(_env_file=None, market_provider="mock"))
+    # Evaluate the same news evidence while changing only users' holdings.
+    # Its time decay can cross a 0.01 rounding edge between refreshes. Keep
+    # snapshot creation times real so their unique keys remain distinct.
+    market_time = datetime.now(service.settings.timezone)
+    score_news = service._news_theme_score
+    monkeypatch.setattr(service, "_news_theme_score", lambda db, instrument, now: score_news(db, instrument, market_time))
     service.refresh_all(db_session)
     first = {
         row.instrument_id: (row.score, row.state, row.target_weight, row.first_step_target_weight, row.input_hash, row.evidence_json)
@@ -399,6 +406,29 @@ def test_shared_signal_refresh_is_independent_of_every_users_holdings(
         instrument_id: (row.score, row.state, row.target_weight, row.first_step_target_weight, row.input_hash, row.evidence_json)
         for instrument_id, row in latest.items()
     } == first
+
+
+def test_news_theme_evidence_can_cross_a_rounding_boundary_without_holdings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An ownership comparison must not accidentally compare different news ages."""
+    from app.services.signal_v05_service import SignalV05Service
+
+    service = SignalV05Service(Settings(_env_file=None, market_provider="mock"))
+    market_time = datetime(2026, 9, 30, 15, 0, tzinfo=service.settings.timezone)
+    news = SimpleNamespace(
+        published_at=market_time - timedelta(hours=32, minutes=4, seconds=35),
+        affected_themes_json=["clock-boundary"], impact_score=1,
+        title="Synthetic clock rounding boundary",
+    )
+    instrument = SimpleNamespace(theme_l1="clock-boundary", theme_l2="")
+    db = SimpleNamespace(scalars=lambda _: SimpleNamespace(all=lambda: [news]))
+
+    assert service._news_theme_score(db, instrument, market_time) == (73.31, [news.title])
+    assert service._news_theme_score(db, instrument, market_time + timedelta(seconds=10)) == (73.30, [news.title])
+    score_news = service._news_theme_score
+    monkeypatch.setattr(service, "_news_theme_score", lambda db, instrument, now: score_news(db, instrument, market_time))
+    assert service._news_theme_score(db, instrument, market_time) == service._news_theme_score(
+        db, instrument, market_time + timedelta(seconds=10)
+    ) == (73.31, [news.title])
 
 
 def test_owner_migration_declares_per_user_holding_uniqueness_and_backfill() -> None:

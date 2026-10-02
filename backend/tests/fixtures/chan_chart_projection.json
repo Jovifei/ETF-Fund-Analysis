@@ -1,0 +1,161 @@
+{
+  "evidence": {
+    "available": true,
+    "reason_code": null,
+    "source": "persisted_r4c_observed_revision",
+    "price_basis_id": "basis-research",
+    "engine_id": "czsc",
+    "engine_version": "1.0.1",
+    "dialect_id": "r4c-observed-revision-v1",
+    "observation_id": "obs-1",
+    "settlement_status": "settled",
+    "view_semantics": "latest_persisted_observed_revision_not_historical_pit",
+    "counts": {
+      "fx": 2,
+      "bi": 2,
+      "zs": 1
+    },
+    "structures": [
+      {
+        "kind": "bi",
+        "direction": "Direction.Up",
+        "source_start": "2026-09-01 15:00:00",
+        "source_end": "2026-09-03 15:00:00",
+        "geometry": {
+          "high": 3.0,
+          "low": 1.0
+        }
+      },
+      {
+        "kind": "bi",
+        "direction": "向下",
+        "source_start": "2026-09-03 15:00:00",
+        "source_end": "2026-09-05 15:00:00",
+        "geometry": {
+          "high": 3.0,
+          "low": 1.5
+        }
+      },
+      {
+        "kind": "bi",
+        "direction": null,
+        "source_start": "2026-09-05 15:00:00",
+        "source_end": "2026-09-08 15:00:00",
+        "geometry": {
+          "high": 2.0,
+          "low": 1.2
+        }
+      },
+      {
+        "kind": "zs",
+        "source_start": "2026-09-01 15:00:00",
+        "source_end": "2026-09-08 15:00:00",
+        "geometry": {
+          "zg": 2.8,
+          "zd": 1.6
+        }
+      },
+      {
+        "kind": "fx",
+        "source_start": "2026-09-01 15:00:00",
+        "source_end": "2026-09-01 15:00:00",
+        "geometry": {
+          "high": 3.0,
+          "low": 2.4
+        }
+      }
+    ],
+    "actionable": false
+  },
+  "chart": {
+    "ts_code": "512480.SH",
+    "interval": "1d",
+    "available": true,
+    "actionable": false,
+    "qualified": false,
+    "research_price_basis_id": "basis-research",
+    "bars": [
+      {
+        "date": "2026-09-01",
+        "open": 2,
+        "high": 3,
+        "low": 1,
+        "close": 2.5,
+        "volume": null,
+        "amount": null,
+        "indicators": {}
+      },
+      {
+        "date": "2026-09-03",
+        "open": 2,
+        "high": 3,
+        "low": 1,
+        "close": 2.5,
+        "volume": null,
+        "amount": null,
+        "indicators": {}
+      },
+      {
+        "date": "2026-09-08",
+        "open": 2,
+        "high": 3,
+        "low": 1,
+        "close": 2.5,
+        "volume": null,
+        "amount": null,
+        "indicators": {}
+      }
+    ],
+    "chan_observation": {
+      "available": true,
+      "drawable": true,
+      "fallback_allowed": false,
+      "qualified": false,
+      "actionable": false,
+      "source": "persisted_r4c_observed_revision",
+      "reason_code": null,
+      "price_basis_id": "basis-research",
+      "engine_id": "czsc",
+      "engine_version": "1.0.1",
+      "dialect_id": "r4c-observed-revision-v1",
+      "counts": {
+        "fx": 2,
+        "bi": 2,
+        "zs": 1
+      },
+      "bi": [
+        {
+          "start_date": "2026-09-01 15:00:00",
+          "end_date": "2026-09-03 15:00:00",
+          "start_price": 1.0,
+          "end_price": 3.0,
+          "direction": "Direction.Up",
+          "source": "persisted"
+        },
+        {
+          "start_date": "2026-09-03 15:00:00",
+          "end_date": "2026-09-05 15:00:00",
+          "start_price": 3.0,
+          "end_price": 1.5,
+          "direction": "向下",
+          "source": "persisted"
+        }
+      ],
+      "segments": [],
+      "zhongshu": [
+        {
+          "start_date": "2026-09-01 15:00:00",
+          "end_date": "2026-09-08 15:00:00",
+          "zd": 1.6,
+          "zg": 2.8,
+          "source": "persisted"
+        }
+      ],
+      "undrawable_bi": 1,
+      "disclaimer": "已保存缠论观测（CZSC 笔与中枢）。不是线段，不含背驰和买卖点。",
+      "observation_id": "obs-1",
+      "settlement_status": "settled",
+      "view_semantics": "latest_persisted_observed_revision_not_historical_pit"
+    }
+  }
+}
