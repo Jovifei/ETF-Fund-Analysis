@@ -41,7 +41,9 @@ python scripts/update_project_progress.py --check
 
 ## 工作区和Git同步
 
-Jovi查看入口位于 `E:\project\ETF-Fund-Analysis\docs`。当前阶段提交在项目内 `.local\etf-r4c-m3bc` / `codex/r4c-m3bc-relocated`；同步只包含本契约明确的路线图/台账/生成器/任务记录，不把Owner main既有脏修改或执行目录旧计划改动混入。
+Jovi查看入口位于 `E:\project\ETF-Fund-Analysis\docs`。原阶段工作区 `.local\etf-r4c-m3bc` 已有独立文档提交，GitHub原审核分支同时收到外部代码推进；本轮总规划在项目内 `.local\etf-project-roadmap` / `codex/project-master-roadmap-20261002` 交付，以远端候选e0fcb17为基线。同步只包含本契约明确的路线图/台账/生成器/任务记录，不把Owner main既有脏修改或执行目录旧计划改动混入。
+
+2026-10-02接收线索：原远端分支有图表研究层、简化结构/prior-range及ETF流量/份额Provider/schema新代码，尚未独立审查/验证。后续先记录并核对这些候选的路线和证据，不把旧聊天M4未开工推成“仓库没有实现”，也不把提交存在推成测试或线上PASS。任何候选部署另走正式门禁。
 
 后续接力在执行分支更新台账、生成视图和提交后，将这组文档复制到根目录docs供Jovi查看；不得只更新隔离目录却留下根目录旧进度。每轮先核对现有文件是否被人修改，有分歧先讨论再同步，禁止无条件覆盖人工修改。
 

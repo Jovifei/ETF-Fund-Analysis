@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "roadmap_version": "2026-10-02-v1",
-  "updated_at": "2026-10-02T14:07:22+08:00",
+  "updated_at": "2026-10-02T14:15:38+08:00",
   "current_stage": "S3",
   "current_iteration": 71,
   "planning_source": "既有远端ChatGPT总体规划+口径修订；本轮文件连接不可用",
@@ -14,10 +14,11 @@
   "actionable": false,
   "runtime_activated": false,
   "auto_trading": false,
-  "next_task": "正常登录后，同次私有GET立即前后计数验证 → R12最终收据 → 远端审核 → S4正式计划",
+  "next_task": "正常登录后同次私有GET立即前后计数 → R12远端审核 → e0fcb17候选独立接收/合同路线分类 → S4正式计划",
   "blockers": [
     "R9私有验收等待正常登录；R10和R12随其闭环",
-    "固定规划文件连接启动超时；当前路线图依据既有远端聊天，文件复核待恢复"
+    "固定规划文件连接启动超时；当前路线图依据既有远端聊天，文件复核待恢复",
+    "GitHub新增e0fcb17图层/流量份额候选；测试、路线独立审查与上线待验证，不等于部署3a13575"
   ],
   "release_gates": [
     {
@@ -747,15 +748,15 @@
       "id": "S4",
       "name": "图表与Chan用户体验",
       "legacy": "R4C M4/M5",
-      "status": "下一产品阶段；实施未放行",
+      "status": "外部候选已提交；本聊天接收及路线审查待完成",
       "counter_frozen": false,
       "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
       "dimensions": {
-        "code": "TODO",
-        "tests": "TODO",
+        "code": "IN_PROGRESS",
+        "tests": "待核对",
         "review": "PENDING",
-        "deploy": "TODO",
-        "live": "TODO"
+        "deploy": "PENDING",
+        "live": "PENDING"
       },
       "units": [
         {
@@ -1982,6 +1983,20 @@
       "date": "2026-10-02",
       "iteration": 71,
       "description": "远端制定S0–S9路线图并接受撤销17/20、演练与线上分列、R10同次GET八项计数等修订；形成总规划和自动生成进度机制。"
+    },
+    {
+      "date": "2026-10-02",
+      "iteration": 71,
+      "description": "推送发现外部代码推进e0fcb17；保留远端改动，基于该候选创建独立总规划分支，S4改为候选实现待审查。 远端确认候选不等于接受，先完成发布再按S4或S1/S3/S8合同分类审核。"
     }
-  ]
+  ],
+  "incoming_candidate": {
+    "sha": "e0fcb17c272b214c704c8882271c9b90ffde0ce9",
+    "branch": "codex/r4c-m3bc-relocated",
+    "scope": "外部Cursor图表/Chan/prior-range及ETF流量份额Provider/schema候选",
+    "tests": "待核对",
+    "review": "PENDING",
+    "deploy": "未验证",
+    "docs_branch": "codex/project-master-roadmap-20261002"
+  }
 }

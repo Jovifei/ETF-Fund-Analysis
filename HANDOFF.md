@@ -1,5 +1,7 @@
 # 当前接手入口：iteration71 已部署，私有验收与远端最终审核待完成（2026-10-02）
 
+总规划交付分支 `codex/project-master-roadmap-20261002` / `.local/etf-project-roadmap`，基于最新远端候选e0fcb17；后者新增代码尚未独立接收审核/部署。下一顺序：iteration71闭环→候选接收与合同路线分类→正式S4/M4计划，避免重复实现或把合入当PASS。
+
 总阶段路线采用 `docs/PROJECT_MASTER_ROADMAP.md` S0–S9，进度源为 `docs/PROJECT_PROGRESS.json`，生成器 `scripts/update_project_progress.py`。每次实质实现/测试/审查/部署/验收/阻塞变化更新并检查，提交后同步根docs；禁止首稿17/20误计。2026-10-02总规划与计数修订已远端回复，但文件连接启动超时仍待恢复；保持既有发布验收门禁。
 
 优先读 [production receipt](docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md)、[R5–R7 rehearsal](docs/audits/R4C_RELEASE_R5_REHEARSAL_20261002.md) 和本聊天 C2C c2c_a1d7 checkpoint。代码3a13575已部署，镜像配置547533c5、Alembic h9c0d1e2f3a4，平台检查通过；运行时仍禁用，真实数据 UNKNOWN。新备份与旧镜像保留，IMAGE_ONLY 回滚已演练。

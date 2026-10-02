@@ -1,5 +1,7 @@
 # 当前状态：R4C M3B-C 已部署，待正常登录后的私有线上验收（2026-10-02）
 
+最新GitHub开发候选e0fcb17含外部图层/Chan/ETF流量份额代码，尚未独立接受或验证上线。此工作区 `codex/project-master-roadmap-20261002` 仅交付总规划和进度文档；候选基线不等于部署3a13575，详见总路线图当前版本。
+
 全项目入口：[总阶段路线图](docs/PROJECT_MASTER_ROADMAP.md)、[进度总览](docs/PROJECT_PROGRESS.md)。远端已规划S0–S9并修订进度口径；阶段分母待逐项证据映射，iteration71固定发布清单9/13PASS。每次实质状态变化必须按 `docs/PROJECT_PROGRESS_MAINTENANCE.md` 更新台账、生成视图并同步项目根docs。本轮文件连接启动超时，规划采用已有远端聊天；不把历史doctor绿色当当前连接事实。
 
 远端 iteration71 已通过 R1–R7 并放行受控 R8。代码 `3a13575f58ae6f8aad0face1a8e42391d2356518` / tree `70c5ea87fc84ed027202c8df0622f5e44f717a9e` 已于上海时间01:36切换上线。三服务使用镜像配置 digest `547533c5...`；API/worker健康、scheduler运行，Alembic `h9c0d1e2f3a4`，公开健康、页面/静态、匿名私有401均通过。新备份与 IMAGE_ONLY 回滚验证通过并保留。发布收据见 [production receipt](docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md)。
