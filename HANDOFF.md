@@ -1,3 +1,23 @@
+# 当前接手入口：main tip 已含 R4C + 图表图层 + flow_share（2026-10-02）
+
+先读本页、[STATUS.md](STATUS.md)、[docs/README.md](docs/README.md)。工程 tip：`63c426aa9954d950d397c56ad0ece6273da6f19d` / Alembic head `f0e1d2c3b4a5`。
+
+## 本轮文档对齐的事实
+
+1. **基线分支**：`main`（PR #41 已把 `codex/r4c-m3bc-relocated` 与其上的 chart/flow 功能合并进来）。隔离分支 `codex/r4c-m3bc-relocated` 仍是历史集成路径，不再是「最新未并入 tip」。
+2. **缠论**：持久化读模型画 **笔 + 中枢**（CZSC observed-revision）；图表缺快照时才用简化结构（可含段）；`chan_zone_approx` ≠ 缠论读模型。
+3. **flow_share**：研究并列字段，合同 `etf-flow-share-v1`；见 `backend/app/services/flow_share_research.py` 与 [DATA_ACCESS_V101](docs/DATA_ACCESS_V101.md)。
+4. **14:30/14:45 decision digests**：按外部 Bot 例程理解；不要在仓内 scheduler/文档里写成已实现的自动 digest 管道。
+
+## 下一步（工程，非本 docs PR 范围）
+
+- 若生产仍停在仅 `h9c0d1e2f3a4` 的 R4C 切片，合并 #39/#40 后的发布需单独备份/迁移到 `f0e1d2c3b4a5`、回滚与 live-smoke 门禁。
+- 私有 Chan GET / R10 计数验收、真实数据资格、M4 页面深化仍按既有远端门禁，未在本 docs 变更中授权。
+
+保护边界不变：不读凭据、不改生产库、不绕过 Provider、不把研究字段写成可下单。
+
+---
+
 # 当前接手入口：iteration71 已部署，私有验收与远端最终审核待完成（2026-10-02）
 
 优先读 [production receipt](docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md)、[R5–R7 rehearsal](docs/audits/R4C_RELEASE_R5_REHEARSAL_20261002.md) 和本聊天 C2C c2c_a1d7 checkpoint。代码3a13575已部署，镜像配置547533c5、Alembic h9c0d1e2f3a4，平台检查通过；运行时仍禁用，真实数据 UNKNOWN。新备份与旧镜像保留，IMAGE_ONLY 回滚已演练。

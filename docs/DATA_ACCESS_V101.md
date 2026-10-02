@@ -103,6 +103,11 @@ Tushare 主链现价失败时直接尝试下一现价源，不对每一只 ETF �
 
 本次远端探测只证明 AKShare Sina 价格日线与新闻可读；两只样本的成交量缺失，目录和公开 quote unavailable。Tushare Token 的存在不等于权限，本次目录、日线、现价和新闻均未通过。由于没有完整量价资格，系统不会用 0 填成交量、Mock 或模型推断来生成新的操作级信号。配置与回滚细节见 [部署收据](DEPLOYMENT_RECEIPT_V101_20260907.md) 和 [生产覆盖文件](../deploy/compose.production.v101.yml)。
 
+
+## 当前仓库迁移 head（2026-10-02 文档对齐）
+
+Git `main` tip 上 Alembic **唯一 head** 为 `f0e1d2c3b4a5`（`f0e1d2c3b4a5_etf_flow_share_scales`，父修订 `h9c0d1e2f3a4`）。下文个别历史段落仍可能写着当年交付时的 `d40609090002` 或「本版 head 未变」——那些只描述当时收据，**升级现网/本机库时以 `alembic heads` / 本段为准**，并先离线备份。
+
 ## 免费加仓/减仓研究字段（etf-flow-share-v1）
 
 公开路径只读 AKShare，不启用 FTShare，也不在生产配置里用 Mock 补这些字段。

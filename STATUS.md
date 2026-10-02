@@ -1,3 +1,22 @@
+# 当前状态：main 已集成 R4C + 图表研究图层 + ETF 资金流/份额字段（2026-10-02）
+
+本地/远端 `main` tip 为 `63c426aa9954d950d397c56ad0ece6273da6f19d`（`63c426a`），来自 [PR #41](https://github.com/Jovifei/ETF-Fund-Analysis/pull/41)：把 `codex/r4c-m3bc-relocated`（含已合并的 [#39 图表研究图层/缠论叠加](https://github.com/Jovifei/ETF-Fund-Analysis/pull/39) 与 [#40 免费 ETF 资金流/份额](https://github.com/Jovifei/ETF-Fund-Analysis/pull/40)）并入 `main`。仓库当前 Alembic **唯一 head** 为 `f0e1d2c3b4a5`（`etf_share_scales` + 现货 flow 字段；父修订为 R4C 观测发布 `h9c0d1e2f3a4`）。
+
+## 代码侧已落地（以 main tip 为准，不发明未合并能力）
+
+| 能力 | 状态 | 边界 |
+|---|---|---|
+| R4C Chan 持久化 / 只读读模型 | 已在 main：观测流、worker 发布、私有 D/W/M GET、Kline 兼容投影 | 运行时引擎仍可配置为禁用；`as_of`/历史 PIT 读模型未提供；`actionable=false` |
+| 图表研究图层 + 缠论叠加 | 详情图可勾选 BOX/PIVOT/MA/BOLL/ATR/FIB/DERIVED/MACD/KDJ/RSI/CHAN | 优先绘制已保存 CZSC **笔与中枢**；缺快照才退回 `chan-structure-simplified-v1`（含简化笔/段/中枢）；校验失败不退回。两者都不是完整缠论（无背驰/买卖点）。`chan_zone_approx` 仍是支撑压力里的区间重叠近似，不是笔/段/中枢读模型 |
+| 免费 ETF 资金流 / 份额差 | 决策板与 `/api/signals/grade` 行内 `flow_share`（合同 `etf-flow-share-v1`） | 东财现货资金流/IOPV/折溢价 + 沪深份额日差研究展示；**不改分级**、`actionable` 恒 false；Mock 路径阻断 |
+| 日线 14:30 / 14:45 「决策 digests」 | **不是本仓库调度器内置产物** | 若使用，属于外部 Bot/例程；仓内合同仍是 [盘中刷新节奏](docs/INTRADAY_REFRESH_CADENCE.md) 的决策快照槽位（14:30、14:40 等），勿把 Bot digest 写成 in-repo scheduler 功能 |
+
+真实数据资格仍为 **UNKNOWN**，`actionable=false`，无自动交易。生产镜像/私有 Chan 线上验收是否已切到含 #39/#40 的 tip，以部署收据与现场健康检查为准，不由本页文档合并单独证明。
+
+权威入口：[HANDOFF.md](HANDOFF.md) · [docs/README.md](docs/README.md) · [R4C 生产收据](docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md) · [支撑/缠论语义](docs/SUPPORT_RESISTANCE_SEMANTICS.md) · [数据接入/flow 字段](docs/DATA_ACCESS_V101.md)。
+
+---
+
 # 当前状态：R4C M3B-C 已部署，待正常登录后的私有线上验收（2026-10-02）
 
 远端 iteration71 已通过 R1–R7 并放行受控 R8。代码 `3a13575f58ae6f8aad0face1a8e42391d2356518` / tree `70c5ea87fc84ed027202c8df0622f5e44f717a9e` 已于上海时间01:36切换上线。三服务使用镜像配置 digest `547533c5...`；API/worker健康、scheduler运行，Alembic `h9c0d1e2f3a4`，公开健康、页面/静态、匿名私有401均通过。新备份与 IMAGE_ONLY 回滚验证通过并保留。发布收据见 [production receipt](docs/audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md)。

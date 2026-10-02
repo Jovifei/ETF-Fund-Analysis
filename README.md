@@ -1,16 +1,21 @@
-> **v1.0.1 数据接入交付：** 以已发布 v1.0.0 提交 `9a0ca181` 为基线，新增后端接入修复与保留的 ETF 指标总表。先读 [START_HERE.md](START_HERE.md)；应用分支已推送、生产已按独立 override 部署，但未发布 GitHub v1.0.1 标签或 Release。
+> **当前 main（2026-10-02）**：tip `63c426a` 已含 R4C 持久化缠论读模型、详情图研究图层/缠论叠加（PR #39）、免费 ETF 资金流与份额差研究字段（PR #40，Alembic `f0e1d2c3b4a5`）。先读 [START_HERE.md](START_HERE.md)、[STATUS.md](STATUS.md)、[HANDOFF.md](HANDOFF.md)。真实数据资格仍为 UNKNOWN；无自动交易。
 
-> **2026-09-06 P0–P4 完整源码交付更新**：当前工作站 rc.2 已包含 Vue UI、统一图表、持仓与研究桥接。先读 [START_HERE.md](START_HERE.md) 和 [当前验收](docs/DELIVERY_P0_P4.md)。下面保留原 main README 作为基础工程说明；不是本轮新增功能的完整清单，也不代表本包已部署生产。
+> **历史说明**：下方仍保留工程基础介绍。早期 “v1.0.1 / 0.7.0” 横幅不代表当前 tip 版本身份；以 STATUS 与 Git SHA 为准。
 
 # 中国 ETF / LOF 私有决策看板
 
 一个面向中国场内 ETF/LOF 的个人私有研究系统。它把行情、日线、技术指标、主题新闻、持仓和多期限预测整理成可审计的信号看板，并按北京时间自动刷新。
 
-当前版本：`0.7.0`
+当前文档对齐 Git tip：`63c426a`（发行展示号可能仍是历史 health/APP_VERSION，不以显示号替代 SHA）。
 
 > 本项目不连接券商、不自动下单，也不构成投资建议。技术指标、仓位约束和信号状态由确定性程序计算；分析模型只能生成带来源的文本审阅候选，不能计算指标、预测、仓位或交易动作。预测基线保持 `not_calibrated`，在完成真实数据的 walk-forward 验证前，不应作为确定性收益判断。
 
 ## 已实现
+
+- **R4C**：CZSC observed-revision 持久化观测 + 只读 latest Chan 读模型（私有 D/W/M）；图表优先画已保存**笔/中枢**，缺快照才用简化结构；`chan_zone_approx` 仍是支撑压力近似。
+- **研究图层**：详情 K 线可勾选箱体、结构支撑压力、均线/布林/ATR/斐波那契/派生价位、MACD/KDJ/RSI 与缠论图层；图层开关不改变服务端公式。
+- **flow_share（`etf-flow-share-v1`）**：东财现货资金流、IOPV、折溢价与沪深份额日差，挂在决策板/信号分级旁作研究展示，不改分级、不可下单。
+- **14:30/14:45 decision digests**：若使用，属外部 Bot 例程；仓内调度合同见 `docs/INTRADAY_REFRESH_CADENCE.md`。
 
 - 完整档使用 Tushare 主源、AKShare 备用；免费档使用 AKShare 主源，若配置了 Tushare Token 则作为第二候选，生产环境禁止静默回退到 Mock。
 - ETF/LOF 自选池、日线、盘中快照、数据源审计和退化标记；技术指标、预测基线、事件驱动轮动回测和信号状态机。

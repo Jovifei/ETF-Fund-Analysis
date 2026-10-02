@@ -270,3 +270,13 @@ v0.8.0 已有生产同步/迁移/健康记录，但后续每次部署仍需重�
 5. UI legacy 壳拆分和 Decision/14:30 真正组件复用。
 
 详细顺序见 `ROADMAP_TO_FINAL.md`。
+
+---
+
+## 2026-10-02 源码 tip 增量（叠加在上文 v0.8 架构之上）
+
+- PostgreSQL 现含 Chan 观测发布表（迁移 `h9c0d1e2f3a4`）与 `etf_share_scales` / quote flow 字段（`f0e1d2c3b4a5`）。
+- 详情图研究图层由前端勾选、服务端提供几何；缠论图层消费 **最新已保存观测**，不在图表请求里现场跑 CZSC。
+- `flow_share` 挂在决策快照行与 signal grade 旁；与 canonical current action 解耦。
+- 外部 Bot 的 14:30/14:45 digest 不是本图中的 Scheduler 合同。
+
