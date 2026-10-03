@@ -2,11 +2,11 @@
 
 > 本文件由 scripts/update_project_progress.py 从 PROJECT_PROGRESS.json 生成。修改台账后重新生成，勿直接修改本文件。
 
-更新：2026-10-02T17:06:56+08:00 · iteration 71 · 当前 S8-F0优先 / S3-S4接收并行
+更新：2026-10-03T12:23:00+08:00 · iteration 71 · 当前 S8-F0证据调查 / S2私有验收待完成
 
 [总阶段路线图](PROJECT_MASTER_ROADMAP.md) · [图形进度板](PROJECT_PROGRESS.html) · [维护规则](PROJECT_PROGRESS_MAINTENANCE.md)
 
-**当前下一步：** 先对账外部F0结论和owner决定；证据不足继续S8-F0，有限并行S2/WU1降级可读化与S3-S4/WU2当前部署接收
+**当前下一步：** S4-U05恢复候选新全量回归和独立审核均通过；普通快进发布并核验精确新提交全部CI及三项新增浏览器用例；不部署
 
 全项目验收分母尚未冻结；以下显示阶段状态和证据闭环，不能推算全项目完成百分比。
 
@@ -16,7 +16,7 @@
 | S1 数据生命周期与及时性 | 已有实现；最终历史证据待核对 | 待冻结 / 待证据映射 | 待核对 | 待核对 | 待核对 | 待核对 | 待核对 |
 | S2 详情与研究解释 | 已有实现；完整验收待核对 | 待冻结 / 待证据映射 | 待核对 | 待核对 | 待核对 | 待核对 | 待核对 |
 | S3 研究基座与Chan后端 | 当前63c426a已部署；增量与私有验收待独立接收 | 待冻结 / 待证据映射 | 部分PASS | 部分PASS | 部分PASS | PASS | 待核对 |
-| S4 图表与Chan用户体验 | 相关实现已上线；合同兼容与功能验收待审查 | 待冻结 / 待证据映射 | IN_PROGRESS | 待核对 | PENDING | PASS | 待核对 |
+| S4 图表与Chan用户体验 | WU2坐标/打包修复587b136精确CI闭环；S4-U05新全量回归及独立审核通过，待新提交CI/浏览器；未部署本批 | 待冻结 / 待证据映射 | IN_PROGRESS | 部分PASS | 部分PASS | PASS | 待核对 |
 | S5 消息与事件关联 | 基础/验收待核对；待正式计划 | 待冻结 / 待证据映射 | 待核对 | 待核对 | 待核对 | 待核对 | 待核对 |
 | S6 AI与本地执行产品闭环 | 研发接力已使用；产品验收待核对 | 待冻结 / 待证据映射 | 待核对 | 待核对 | 待核对 | 待核对 | 待核对 |
 | S7 持仓、组合与风险 | 基础已有；完整阶段待核对 | 待冻结 / 待证据映射 | 待核对 | 待核对 | 待核对 | 待核对 | 待核对 |
@@ -45,7 +45,7 @@
 
 ## 版本与卡点
 
-- 已部署代码：`63c426aa9954d950d397c56ad0ece6273da6f19d`；tree `30906b8b325a68c456d222abc7f48c3c354c793f`。
+- 已部署代码：`abae131770713465c6d65d29c1513fc88b8dc40d`；tree `7fa29922e716dfdca87ad908fe19aac1c57d2301`。
 - 历史发布证据基线：`70e2a0dd7b8a577aa0521c8f8b592613ea51fe3b`。最新总览文档提交查询：`git log -1 -- docs/PROJECT_MASTER_ROADMAP.md docs/PROJECT_PROGRESS.json`。
 - Alembic：`f0e1d2c3b4a5`。
 - 真实数据：UNKNOWN；actionable=false；运行时激活=false；自动交易=false。
@@ -53,8 +53,8 @@
 - 63c426a已部署；完整发布收据、f0迁移回滚兼容、图层合同和私有功能独立接收待核对
 - 远端文件连接启动超时：方向/合同审查待恢复或以明确范围摘要讨论，不冻结全部已授权低风险工程
 
-- 当前身份核验：[DEPLOYED_PENDING_INDEPENDENT_ACCEPTANCE](docs/audits/CURRENT_PRODUCTION_IDENTITY_20261002.md)；仅元数据核验，不替代完整发布验收。
-- 镜像：`sha256:b07f9ca23150db6567170d3a041afb0abf65d571fbd45ce44266585ee62366b5`；决策板 `decision-read-v109-flow-share` / `2026-10-02T13:29:31.364035+08:00`。
+- 当前身份核验：[DEPLOYED_PENDING_AUTHENTICATED_LIVE_ACCEPTANCE](docs/audits/S2_AVAILABILITY_RELEASE_20261002.md)；仅元数据核验，不替代完整发布验收。
+- 镜像：`sha256:38c2c13c109798cf780cbee7637d78f243c31c80a1d8efcca7974fd1d5a22dbd`；决策板 `decision-read-v109-flow-share` / `2026-10-02T13:29:31.364035+08:00`。
 
 ## 阶段候选任务与五维状态
 
@@ -137,11 +137,11 @@
 
 | 子任务 | 内容 | 代码 | 测试 | 远端审核 | 部署 | 线上验收 |
 | --- | --- | --- | --- | --- | --- | --- |
-| S4-U01 | 证据图坐标 | TODO | TODO | PENDING | TODO | TODO |
+| S4-U01 | 证据图坐标 | 部分PASS | 部分PASS | 部分PASS | PENDING | PENDING |
 | S4-U02 | 分型标记 | TODO | TODO | PENDING | TODO | TODO |
 | S4-U03 | 笔绘制 | TODO | TODO | PENDING | TODO | TODO |
-| S4-U04 | 中枢区域 | TODO | TODO | PENDING | TODO | TODO |
-| S4-U05 | 暂定结算区分 | TODO | TODO | PENDING | TODO | TODO |
+| S4-U04 | 中枢区域 | 部分PASS | 部分PASS | 部分PASS | PENDING | PENDING |
+| S4-U05 | 暂定结算区分 | 部分PASS | 部分PASS | 部分PASS | PENDING | PENDING |
 | S4-U06 | 修订变化解释 | TODO | TODO | PENDING | TODO | TODO |
 | S4-U07 | 口径错配阻断 | TODO | TODO | PENDING | TODO | TODO |
 | S4-U08 | 支撑压力Chan层级 | TODO | TODO | PENDING | TODO | TODO |
@@ -268,3 +268,18 @@
 - 2026-10-02 / iteration71：根据Jovi转交两位AI评价修订v2：现场确认63c426a/f0/v109，旧9/13降历史；S8-F0前置，当前部署接收并行，按风险分级减少逐步骤等待。
 - 2026-10-02 / iteration71：按Jovi授权提交main并整合2个有效文档分支；17条已吸收/替代历史仅归并记录；收拢当前入口、归档旧交付清单、清理可再生缓存。产品资格与部署不变。 验证：后端唯一覆盖1402通过/23条件跳过，前端71通过；2个受访问保护的合成目录保留，主线收尾不改变生产部署。
 - 2026-10-02 / iteration71：审核并直接修改Qoder下一阶段原计划，映射WU0/WU1/WU2，纠正未证实前提及映射/版本/发布要求；仅计划审核，未实施产品代码或数据调查。
+- 2026-10-02 / iteration71：Jovi授权本地补齐WU1，abae131已推送并远端代码审核通过；聚焦后端12/前端73/typecheck/build通过；窄屏模拟E2E通过，完整后端回归仍在跑。非实体手机/部署验收。
+- 2026-10-02 / iteration71：WU1完整pytest退出0（1432项收集，含条件跳过，不臆测通过总数），前端73项/类型构建/窄屏E2E通过；候选镜像构建中，未部署。
+- 2026-10-02 / iteration71：S2三服务image-only发布，API/worker健康，schema f0不变，匿名边界401通过；私有真实功能及手机验收待完成。备份/旧镜像回滚点保留。
+- 2026-10-02 / iteration71：S8-F0远端计划/矩阵首批已接收；本地2项无网络能力边界测试PASS，证实Tushare Adapter未启用5m/15m，属于实现缺口非上游无能力。远端矩阵5e109416已接收；真实数据/许可/PIT结论UNKNOWN。只读磁盘盘点完成，无删除。
+- 2026-10-02 / iteration71：远端fixture验证器修复已接收，本地NaN timeout补修后19项聚焦测试PASS，收据8c45a5d已回传远端审核；官方文档级能力已证，实际授权样本/许可/PIT待核。F0无生产部署。
+- 2026-10-02 / iteration71：云端复现前端高危依赖门禁失败；brace-expansion仅锁文件2.1.4→2.1.7，高危审计门禁exit 0（0 high/critical；仍2 moderate、1 low），typecheck、73项Vue测试及构建PASS。完整远端CI待精确新提交核验，不改变部署/阶段验收/真实数据资格；收据 docs/audits/FRONTEND_DEPENDENCY_GATE_20261002.md。Windows本地hub与根docs同步待本地环境。
+- 2026-10-02 / iteration71：F0离线编排补齐固定双ETF/原生5m15m、截止2026-09-30前20个XSHG交易日、每源≤20请求/每次≤10秒、预算与拒绝/超时/结构失败停止及脱敏收据；58项聚焦测试和静态检查PASS，独立代码审核及独立58项复跑PASS，完整回归/精确提交CI待完成。真实探测、许可/PIT和可行性仍UNKNOWN，不部署；收据 docs/audits/S8_F0_OFFLINE_ORCHESTRATION_20261002.md。 官方端点/权限/服务协议复核：历史分钟通用个人参考价2000元/年，ETF具体权益与本项目存储/PIT许可未证；未采购或访问真实数据。
+- 2026-10-03 / iteration71：67d1a64精确CI：workspace-ci37029499191与audit-platforms37029499188成功，完整ci37029499272在35分钟限制取消（pytest29%，无JUnit），不得标完整通过。F0初轮1486项仅2个环境缺依赖失败，补云端venv的AKShare/socksio后60项复跑PASS；稳定最终1490项完整回归重跑中，未发布新代码。
+- 2026-10-03 / iteration71：稳定F0独立候选完整回归最终通过：1490项收集、1479通过、11跳过、0失败/错误，exit0，1684.152秒，代码/测试hash与独立审核一致。后续合并性能候选须独立验证，不继承为精确远端CI通过；仍无真实探测、部署或资格晋升。
+- 2026-10-03 / iteration71：CI性能与F0合并候选完整回归PASS：1493收集、1482通过、11既有跳过、0失败/错误，exit0，569.823秒；相同云端F0独立候选1684.152秒。中位数完整payload等值及边界测试、单项共享数据库清理均独立审核通过；27项JS测试和静态检查PASS。35分钟限制、全部断言和后续CI门禁不变；精确提交CI待核验，不部署、不晋升真实资格。收据 docs/audits/CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md。
+- 2026-10-03 / iteration71：既有分支普通快进发布b799087（tree439b15f6），精确提交full CI37038405848、workspace37038405866、audit37038405846均SUCCESS。远端完整JUnit1493收集/1482通过/11既有跳过/0失败，651.036秒；整个CI约14分52秒。全部后续迁移、Docker构建/隔离冒烟及产物导出通过，原35分钟限制不变。镜像仅CI产物，registry digest缺失、production_deployed=false；真实资格UNKNOWN、actionable=false。证据 docs/audits/CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md。
+- 2026-10-03 / iteration71：WU2持久化缠论中枢时间坐标修复：使用来源日历日期匹配实际蜡烛，保留价格/口径/资格；29新用例、102 Vue、41时区、27旧JS和完整1495收集/1484通过/11既有跳过/0失败，独立审核PASS。完整首跑暴露既有持仓独立性测试新闻衰减跨0.01边界，已仅固定该测试的新闻评价时间，保留全部断言并加确定性边界回归。合入并保留c61e493文档闭环；云端Chromium启动EPERM，精确发布CI/浏览器回归待核验；未部署、真实资格UNKNOWN。收据 docs/audits/WU2_CHAN_CALENDAR_PROJECTION_20261003.md。
+- 2026-10-03 / iteration71：3eb0451精确workspace/audit成功：102 Vue、28 Chromium烟测（新增中枢回归4.3秒）、5登录、18响应式通过，下载校验并检查桌面/390px/关闭图层截图。完整CI后端1495收集/1484通过/11跳过/0失败，967.754秒；但Docker前端仅复制frontend目录导致共享fixture跨目录导入TS2307，整体CI失败且后续镜像门禁未运行。已移动同字节fixture至frontend/tests/fixtures并更新三处消费者，前端独立上下文类型/构建、102 Vue和5后端合同复核通过；新提交CI待核，不部署。
+- 2026-10-03 / iteration71：前序587b136三项CI均SUCCESS，审计ZIP/JUnit/清单恢复后重新校验：1495收集/1484通过/11既有跳过/0失败，968.342秒；迁移/Docker/PG镜像冒烟/导出通过。旧3eb0451 Docker失败和截图证据独立保留，无生产部署。
+- 2026-10-03 / iteration71：S4-U05旧工作区缺失后恢复七个同字节运行时/测试文件，重建文档；重新复现13失败并重跑116 Vue、55时区、11聚焦后端、27旧JS及typecheck/build。全量新回归进行中，独立复核及精确新提交CI待完成；不沿用旧全量结果作新验收。 首次全量1488通过/11跳过/2环境失败；仅补齐HTTPX SOCKS支持，代理和源码不变，11相关用例通过；最终全量1501收集/1490通过/11既有跳过/0失败，554.135秒。 恢复候选全部15文件独立审核PASS；11跳过项身份与前序CI一致。

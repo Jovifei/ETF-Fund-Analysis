@@ -72,3 +72,5 @@ Choose isolated execution directories beneath the authorized project writable ro
 - Jovi要求远端同时规划、审核和主要实现，通过GitHub交接；不能继续把远端限定为仅下发任务。
 - 角色授权不等于工具能力：核对真实GitHub写入/云执行能力与提交证据，不伪造远端已实现或90%完成。
 
+
+- Jovi authorized local completion when remote repeatedly failed integration. Perform concrete implementation and verification; do not keep asking remote for the same unfulfilled action or claim its narrative is a source change.

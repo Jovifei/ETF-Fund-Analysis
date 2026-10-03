@@ -1,3 +1,62 @@
+## S4-U05恢复候选 — 2026-10-03
+
+- [x] 七个运行时/测试文件逐项Git blob匹配旧审核清单；缺失文档重建。
+- [x] 新环境先复现13失败/1通过，再通过116 Vue、55时区、11聚焦后端、27旧JS及类型/构建。
+- [x] 环境补齐SOCKS后新全量1501收集/1490通过/11既有跳过/0失败；前端独立上下文实际类型/构建通过。
+- [x] 全部15文件独立审核PASS，终态JUnit和11跳过项身份独立核验。
+- [ ] 普通快进既有分支，验证精确新提交全部CI及三项新增浏览器用例。
+- [ ] Windows hub/根docs同步、正常登录/实体手机验收待对应环境；不部署。
+
+收据：docs/audits/S4_U05_CHAN_SETTLEMENT_DISPLAY_20261003.md。旧结果不替代本次新验证；资格UNKNOWN、actionable=false。
+
+## WU2持久化缠论日期坐标 — 2026-10-03
+
+- [x] 用前后端共享fixture复现完整时间戳中枢消失，补29项边界回归。
+- [x] 保持来源日历日期、实际蜡烛坐标、既有价格和资格边界；独立审核通过。
+- [x] 102 Vue、41时区、27旧JS、类型/构建/静态检查通过。
+- [x] 完整首跑识别既有测试新闻衰减时钟误差；测试内固定新闻评价时间并保留全部断言，23项模块和确定性边界回归通过，独立审核通过。
+- [x] 最终完整回归1495收集/1484通过/11既有跳过/0失败；保留c61e493并行文档闭环。
+- [x] 普通快进发布3eb0451；精确workspace/audit与实际Chromium中枢绘制/重复开关/窄视口回归通过。
+- [x] 完整CI后端通过后发现Docker前端fixture跨目录路径失败；复现并移动同字节fixture，独立前端上下文类型/构建和聚焦合同通过。
+- [x] 587b136三项CI全部成功，完整回归/镜像后续门禁通过；原3eb0451 Docker失败保留历史。
+- [ ] Windows hub/根docs同步、真实登录/手机/生产验收仍待相应环境；本批不部署。
+
+Receipt: docs/audits/WU2_CHAN_CALENDAR_PROJECTION_20261003.md。此有界修复不代表S3/S4整体完成，真实数据UNKNOWN、actionable=false。
+
+## CI性能与F0合并候选 — 2026-10-03
+
+- [x] 复现67d1a64的35分钟完整CI取消，定位小数组NumPy中位数CPU热点。
+- [x] 中位数返回值/完整payload等值回归及独立审核通过，无窗口/阈值/资格变更。
+- [x] 旧基线复现单项测试未来快照/指标删除泄漏；保留全部断言并在finally回滚，独立审核通过。
+- [x] 合并候选完整回归1493收集、1482通过、11既有跳过、0失败，569.823秒；27项JS测试及静态门禁通过。
+- [x] 普通快进发布b799087至既有分支；精确full/workspace/audit三项CI全部PASS，迁移和镜像构建/隔离冒烟/导出均通过；无生产部署。
+- [ ] Windows项目hub与根docs同步待本地环境；真实F0访问/许可/PIT仍UNKNOWN。
+
+Review: docs/audits/CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md；F0独立1490项收据与合并候选1493项分别保留。
+
+# F0 offline orchestration — 2026-10-02
+
+- [x] Read the frozen F0 plan and add failing runner tests before implementation.
+- [x] Freeze the ETF pair, native intervals and verified XSHG 20-session window before 2026-09-30.
+- [x] Enforce request budget, cooperative async timeout, source failure stops and sanitized deterministic receipts.
+- [x] Pass 58 focused runner/parser/production-boundary tests plus scoped Ruff, compile, JS syntax and secret scan.
+- [x] Obtain independent code review, with matching file hashes and independent focused rerun.
+- [x] Finish stable F0-only full backend regression: 1,490 collected, 1,479 passed, 11 skipped, zero failures/errors.
+- [x] Independently validate the combined candidate and verify all three Actions workflows at exact code commit b799087; a later documentation-only head is checked separately.
+- [ ] Verify specifically authorized real access and license/storage/time contracts before any real probe.
+
+Receipt: `docs/audits/S8_F0_OFFLINE_ORCHESTRATION_20261002.md`. Offline fixtures only; no deployment, runtime enablement or qualification promotion.
+
+# Frontend dependency gate repair — 2026-10-02
+
+- [x] Reproduce the high-severity npm audit failure at `f9001f5`.
+- [x] Update only brace-expansion `2.1.4` → `2.1.7` in the lockfile; preserve the manifest and Vitest major version.
+- [x] Run the high-severity audit gate, typecheck, 73 Vue tests, production build, Python compile, browser JS syntax/27 tests, and secret scan in cloud.
+- [x] Verify the complete Actions suite on successor combined commit b799087; retain the historical 67d1a64 timeout as a failed baseline.
+- [ ] Synchronize the Windows project-hub report and local root docs when the authorized local environment is available.
+
+Receipt: `docs/audits/FRONTEND_DEPENDENCY_GATE_20261002.md`. Remaining audit findings: 2 moderate and 1 low. No production deployment or acceptance promotion.
+
 # Iteration 71 release relay — 2026-10-02
 
 - [x] Remote exact-SHA M3B-C code review PASS at `3a13575f58ae6f8aad0face1a8e42391d2356518`.
@@ -1581,6 +1640,14 @@ Review：新计划WU0先对账、WU1归S2、WU2并行当前S3/S4接收；产品�
 - [ ] 在既有远端聊天核实实际GitHub写入/执行能力并发起阶段实施。
 - [ ] 接收真实分支/SHA/交接，独立工作区运行测试/编译/手机网页验收后修复回传。
 
+
+## S2 local completion authorized by Jovi — 2026-10-02
+- [x] Integrate detail availability helper, independent version and nine modules.
+- [x] Mount detail matrix; safe localized statuses and independent horizon reasons.
+- [x] Preserve history/basis guards and UNKNOWN/actionable=false.
+- [x] Backend focused/API 12 passed; frontend 73 passed; typecheck/build/compileall/node syntax passed.
+- [ ] Full backend pytest regression (running); remote review; mobile web and release gates.
+Review: isolated project-local checkout; owner main and production unchanged. Earlier remote apply scripts/patches are not used.
 
 ## 2026-10-03 接力与远端规划
 - [x] 读取契约、旧会话、Obsidian和当前Git候选。

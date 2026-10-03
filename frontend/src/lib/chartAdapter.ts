@@ -8,6 +8,16 @@ const STUDY_GROUPS = ['PIVOT', 'MA', 'BOLL', 'ATR', 'FIB', 'DERIVED', 'MACD', 'K
 export function projectBars(bars: ChartBar[]): KLineData[] {
   return bars.map(bar => ({ ...bar, timestamp: Date.parse(bar.date.length === 10 ? `${bar.date}T15:00:00+08:00` : bar.date), volume: bar.volume ?? undefined, turnover: bar.amount ?? undefined }))
 }
+// Match the calendar date supplied by the server, never reinterpret an offset or
+// invent a candle for a missing trading day. Coordinates come from the bar itself.
+function candleDay(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:[ T](?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):?[0-5]\d)?)?$/.test(value)) return undefined
+  const day = value.slice(0, 10)
+  const [year, month, date] = day.split('-').map(Number)
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  return month >= 1 && month <= 12 && date >= 1 && date <= days[month - 1] ? day : undefined
+}
 export function groupsForLevel(level: SupportLevel): string[] {
   const supplied = Array.isArray(level.groups) ? level.groups.map(String) : []
   const preferred = supplied.filter((group, index) => STUDY_GROUPS.includes(group) && supplied.indexOf(group) === index)
@@ -28,6 +38,13 @@ export function groupsForLevel(level: SupportLevel): string[] {
   if (category === 'price_reference' || category === 'mixed_reference') push('DERIVED')
   return groups.length ? groups : ['PIVOT']
 }
+type ChanSettlement = { label: string; dashed: boolean }
+// This describes the accepted observation input, never engine/structure confirmation.
+function chanSettlement(status: unknown): ChanSettlement {
+  if (status === 'settled') return { label: '输入已结算', dashed: false }
+  if (status === 'temporary') return { label: '输入暂定', dashed: true }
+  return { label: '输入结算状态未知', dashed: true }
+}
 export function chanOverlay(data: Pick<ChartData, 'chan_observation' | 'studies' | 'support_resistance'>): { mode: 'persisted' | 'simplified' | 'blocked' | 'absent'; geometry: ChanObservation | Record<string, unknown> | null; note: string } {
   const observation = data.chan_observation
   if (observation?.drawable) {
@@ -35,7 +52,8 @@ export function chanOverlay(data: Pick<ChartData, 'chan_observation' | 'studies'
     const bi = Array.isArray(observation.bi) ? observation.bi.length : 0
     const zs = Array.isArray(observation.zhongshu) ? observation.zhongshu.length : 0
     const skipped = observation.undrawable_bi ? ` ${observation.undrawable_bi} 笔因方向不明未绘制。` : ''
-    return { mode: 'persisted', geometry: observation, note: `已保存缠论 · 分型 ${fx} · 笔 ${bi} · 中枢 ${zs}。来自持久化 CZSC 观测，不含线段、背驰和买卖点。${skipped}` }
+    const settlement = chanSettlement(observation.settlement_status)
+    return { mode: 'persisted', geometry: observation, note: `已保存缠论 · 分型 ${fx} · 笔 ${bi} · 中枢 ${zs}。${settlement.label}（${settlement.dashed ? '虚线' : '实线'}）。结算状态仅描述本次观测输入，引擎确认未知。来自持久化 CZSC 观测，不含线段、背驰和买卖点。${skipped}` }
   }
   if (observation && observation.fallback_allowed === false) {
     return { mode: 'blocked', geometry: null, note: observation.disclaimer || '已保存缠论读模型未通过校验，不改用简化结构代替。' }
@@ -63,7 +81,7 @@ function register() {
   } })
   registerOverlay({ name: 'researchBox', totalStep: 2, needDefaultPointFigure: false, needDefaultXAxisFigure: false, needDefaultYAxisFigure: false, createPointFigures: ({ coordinates, bounding, overlay }) => {
     if (coordinates.length < 2) return []
-    const extra = overlay.extendData as { color: string; fill: string; label: string; dashed: boolean }
+    const extra = overlay.extendData as { color: string; fill: string; label: string; dashed: boolean; outline?: boolean }
     const left = Math.max(0, Math.min(coordinates[0].x, coordinates[1].x))
     const right = Math.min(bounding.width, Math.max(coordinates[0].x, coordinates[1].x))
     const top = Math.min(coordinates[0].y, coordinates[1].y)
@@ -71,9 +89,9 @@ function register() {
     if (right <= left || bottom <= top) return []
     const style = extra.dashed ? 'dashed' : 'solid'
     return [
-      { type: 'rect', attrs: { x: left, y: top, width: right - left, height: bottom - top }, styles: { color: extra.fill, borderColor: extra.color, borderSize: 1 } },
-      { type: 'line', attrs: { coordinates: [{ x: left, y: top }, { x: right, y: top }] }, styles: { color: extra.color, size: 1, style, dashedValue: [5, 3] } },
-      { type: 'line', attrs: { coordinates: [{ x: left, y: bottom }, { x: right, y: bottom }] }, styles: { color: extra.color, size: 1, style, dashedValue: [5, 3] } },
+      { type: 'rect', attrs: { x: left, y: top, width: right - left, height: bottom - top }, styles: { color: extra.fill, borderColor: extra.color, borderSize: 1, ...(extra.outline ? { style: 'stroke_fill', borderStyle: style, borderDashedValue: [5, 3] } : {}) } },
+      ...(!extra.outline ? [{ type: 'line', attrs: { coordinates: [{ x: left, y: top }, { x: right, y: top }] }, styles: { color: extra.color, size: 1, style, dashedValue: [5, 3] } },
+      { type: 'line', attrs: { coordinates: [{ x: left, y: bottom }, { x: right, y: bottom }] }, styles: { color: extra.color, size: 1, style, dashedValue: [5, 3] } }] : []),
       ...(right - left >= 150 ? [{ type: 'text', attrs: { x: left + 5, y: top + 15, text: extra.label, align: 'left', baseline: 'bottom' }, styles: { color: extra.color, size: 11, backgroundColor: 'transparent', borderSize: 0 } }] : []),
     ]
   } })
@@ -153,55 +171,71 @@ export class ChartAdapter {
           this.box({ kind: 'daily_box', structure_id: 'live-prior-high-low', lower: live.lower, upper: live.upper, mid: (live.lower + live.upper) / 2, origin_at: live.origin_at, confirmed_at: null, state: 'candidate', source_ids: [], touch_count: 0, upper_touch_count: 0, lower_touch_count: 0, volume_confirmation_available: false }, live.valid_until ?? sourceDate, '前高前低')
         }
       }
-      if (selected.includes('CHAN')) this.chan(chanOverlay(data).geometry)
+      if (selected.includes('CHAN')) {
+        const view = chanOverlay(data)
+        this.chan(view.geometry, view.mode === 'persisted' ? chanSettlement(data.chan_observation?.settlement_status) : undefined)
+      }
   }
-  private chan(raw: unknown) {
+  private chan(raw: unknown, settlement?: ChanSettlement) {
     if (!raw || typeof raw !== 'object') return
     const structure = raw as { bi?: Array<Record<string, unknown>>; segments?: Array<Record<string, unknown>>; zhongshu?: Array<Record<string, unknown>> }
-    for (const stroke of structure.bi ?? []) this.stroke(stroke, '#b388ff', 1)
-    for (const stroke of structure.segments ?? []) this.stroke(stroke, '#ef9b61', 2)
-    for (const zone of structure.zhongshu ?? []) this.chanZone(zone)
+    for (const stroke of structure.bi ?? []) this.stroke(stroke, '#b388ff', 1, settlement?.dashed)
+    for (const stroke of structure.segments ?? []) this.stroke(stroke, '#ef9b61', 2, settlement?.dashed)
+    for (const zone of structure.zhongshu ?? []) this.chanZone(zone, settlement)
   }
-  private stroke(item: Record<string, unknown>, color: string, size: number) {
+  private stroke(item: Record<string, unknown>, color: string, size: number, dashed = false) {
     const start = this.timestamp(item.start_date), end = this.timestamp(item.end_date)
     const startPrice = Number(item.start_price), endPrice = Number(item.end_price)
     if (!start || !end || start === end || !Number.isFinite(startPrice) || !Number.isFinite(endPrice)) return
-    this.chart.createOverlay({ name: 'segment', groupId: 'server_research_studies', lock: true, points: [{ timestamp: start, value: startPrice }, { timestamp: end, value: endPrice }], styles: { line: { color, size, style: 'solid' } } } as OverlayCreate)
+    this.chart.createOverlay({ name: 'segment', groupId: 'server_research_studies', lock: true, points: [{ timestamp: start, value: startPrice }, { timestamp: end, value: endPrice }], styles: { line: { color, size, style: dashed ? 'dashed' : 'solid', dashedValue: [5, 3] } } } as OverlayCreate)
   }
-  private chanZone(zone: Record<string, unknown>) {
+  private chanZone(zone: Record<string, unknown>, settlement?: ChanSettlement) {
     const lower = Number(zone.zd), upper = Number(zone.zg)
     const origin = typeof zone.start_date === 'string' ? zone.start_date : ''
     const until = typeof zone.end_date === 'string' ? zone.end_date : ''
     if (!origin || !until || !Number.isFinite(lower) || !Number.isFinite(upper) || lower >= upper) return
-    const label = zone.source === 'segment' ? '段中枢' : zone.source === 'persisted' ? '已保存中枢' : '笔中枢'
-    this.box({ kind: 'daily_box', structure_id: `chan-${String(zone.source ?? 'bi')}`, lower, upper, mid: (lower + upper) / 2, origin_at: origin, confirmed_at: origin, valid_until: until, state: 'confirmed', source_ids: [], touch_count: 0, upper_touch_count: 0, lower_touch_count: 0, volume_confirmation_available: false }, until, label, { color: '#b388ff', fill: '#b388ff18' })
+    const range = this.boundedRange(origin, until)
+    if (!range || range.end <= range.start) return
+    const label = settlement ? `已保存中枢 · ${settlement.label}` : zone.source === 'segment' ? '段中枢' : '笔中枢'
+    this.chart.createOverlay({ name: 'researchBox', groupId: 'server_research_studies', lock: true,
+      points: [{ timestamp: range.start, value: upper }, { timestamp: range.end, value: lower }],
+      extendData: { color: '#b388ff', fill: '#b388ff18', dashed: settlement?.dashed ?? false, label, outline: !!settlement } })
   }
   private timestamp(day: unknown) {
-    if (typeof day !== 'string' || !day) return undefined
-    return projectBars(this.data.bars.filter(bar => bar.date.slice(0, 10) === day.slice(0, 10)).slice(0, 1))[0]?.timestamp
+    const key = candleDay(day)
+    if (!key) return undefined
+    const bar = this.data.bars.find(bar => candleDay(bar.date) === key)
+    const timestamp = bar ? projectBars([bar])[0].timestamp : undefined
+    return Number.isFinite(timestamp) ? timestamp : undefined
   }
-  private box(box: PriceBox, sourceDate?: string | null, label?: string, palette?: { color: string; fill: string }) {
+  private boundedRange(originAt: unknown, untilAt: unknown) {
     const bars = this.data.bars
-    if (!bars.length || !Number.isFinite(box.lower) || !Number.isFinite(box.upper) || box.lower >= box.upper) return
-    const visibleStart = bars[0].date.slice(0, 10)
-    const visibleEnd = (box.valid_until ?? sourceDate ?? bars.at(-1)!.date).slice(0, 10)
-    if (visibleEnd < visibleStart) return
-    const startDate = box.origin_at < visibleStart ? visibleStart : box.origin_at
-    const endDate = visibleEnd > bars.at(-1)!.date.slice(0, 10) ? bars.at(-1)!.date.slice(0, 10) : visibleEnd
-    const timestamp = (day: string) => projectBars(bars.filter(bar => bar.date.slice(0, 10) === day).slice(0, 1))[0]?.timestamp
-    const start = timestamp(startDate), end = timestamp(endDate)
-    if (!start || !end || start > end) return
+    if (!bars.length) return undefined
+    const visibleStart = candleDay(bars[0].date), visibleEnd = candleDay(bars.at(-1)!.date)
+    const origin = candleDay(originAt), until = candleDay(untilAt)
+    if (!visibleStart || !visibleEnd || !origin || !until || until < visibleStart) return undefined
+    const startDate = origin < visibleStart ? visibleStart : origin
+    const endDate = until > visibleEnd ? visibleEnd : until
+    const start = this.timestamp(startDate), end = this.timestamp(endDate)
+    if (!start || !end || start > end) return undefined
+    return { startDate, endDate, start, end }
+  }
+  private box(box: PriceBox, sourceDate?: string | null, label?: string) {
+    if (!Number.isFinite(box.lower) || !Number.isFinite(box.upper) || box.lower >= box.upper) return
+    const range = this.boundedRange(box.origin_at, box.valid_until ?? sourceDate ?? this.data.bars.at(-1)?.date)
+    if (!range) return
+    const { startDate, endDate, start, end } = range
     const terminal = ['failed_breakout', 'invalidated', 'expired'].includes(box.state)
-    const color = palette?.color ?? (terminal ? '#71818e' : box.state === 'breakout_confirmed' ? '#ef9b61' : '#d8b776')
-    const fill = palette?.fill ?? (terminal ? '#71818e10' : '#d8b77612')
+    const color = terminal ? '#71818e' : box.state === 'breakout_confirmed' ? '#ef9b61' : '#d8b776'
+    const fill = terminal ? '#71818e10' : '#d8b77612'
     const add = (from: number, to: number, dashed: boolean, text: string) => {
       if (to <= from) return
       this.chart.createOverlay({ name: 'researchBox', groupId: 'server_research_studies', lock: true,
         points: [{ timestamp: from, value: box.upper }, { timestamp: to, value: box.lower }],
         extendData: { color, fill, dashed, label: text } })
     }
-    const confirmedDay = box.confirmed_at?.slice(0, 10)
-    const confirmed = confirmedDay ? (confirmedDay < visibleStart ? start : timestamp(confirmedDay)) : undefined
+    const confirmedDay = candleDay(box.confirmed_at)
+    const confirmed = confirmedDay ? (confirmedDay < startDate ? start : confirmedDay > endDate ? end : this.timestamp(confirmedDay)) : undefined
     if (confirmed && confirmed > start) add(start, confirmed, true, label ?? '候选箱体')
     if (confirmed && end >= confirmed) add(confirmed, end, box.state === 'breakout_attempt', label ?? '日线箱体')
     else if (!box.confirmed_at) add(start, end, true, label ?? '候选箱体')

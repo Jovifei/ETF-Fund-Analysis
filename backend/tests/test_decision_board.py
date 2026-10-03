@@ -648,18 +648,23 @@ def test_read_latest_and_api_rematerialize_selected_horizon_forecast_key(db_sess
 
 
 def test_snapshot_marks_old_verified_quote_stale_and_keeps_anomaly_visible(db_session, bootstrapped) -> None:
-    indicator = db_session.scalar(select(IndicatorSnapshot).limit(1))
-    quote = db_session.scalar(select(QuoteSnapshot).where(QuoteSnapshot.instrument_id == indicator.instrument_id).limit(1))
-    quote.timestamp_verified, quote.is_realtime = True, True
-    generated = (quote.fetched_at or quote.quote_time) + timedelta(minutes=9)
-    payload = DecisionBoardService().refresh(db_session, generated_at=generated).payload
-    row = next(item for item in payload["rows"] if item["instrument_id"] == indicator.instrument_id)
-    assert row["freshness"] == "stale"
-    assert row["data_status"] == "quote_stale_at_snapshot_generation"
-    db_session.delete(indicator)
-    db_session.flush()
-    payload = DecisionBoardService().refresh(db_session, generated_at=generated).payload
-    assert next(row for row in payload["groups"]["数据异常"] if row["instrument_id"] == indicator.instrument_id)["grade"] == "数据异常"
+    # This case creates a future-dated snapshot and removes an indicator.
+    # Restore both even on assertion failure; later tests share this database.
+    try:
+        indicator = db_session.scalar(select(IndicatorSnapshot).limit(1))
+        quote = db_session.scalar(select(QuoteSnapshot).where(QuoteSnapshot.instrument_id == indicator.instrument_id).limit(1))
+        quote.timestamp_verified, quote.is_realtime = True, True
+        generated = (quote.fetched_at or quote.quote_time) + timedelta(minutes=9)
+        payload = DecisionBoardService().refresh(db_session, generated_at=generated).payload
+        row = next(item for item in payload["rows"] if item["instrument_id"] == indicator.instrument_id)
+        assert row["freshness"] == "stale"
+        assert row["data_status"] == "quote_stale_at_snapshot_generation"
+        db_session.delete(indicator)
+        db_session.flush()
+        payload = DecisionBoardService().refresh(db_session, generated_at=generated).payload
+        assert next(row for row in payload["groups"]["数据异常"] if row["instrument_id"] == indicator.instrument_id)["grade"] == "数据异常"
+    finally:
+        db_session.rollback()
 
 
 def test_snapshot_marks_same_day_future_verified_quote_stale_and_non_actionable(db_session, bootstrapped) -> None:

@@ -135,7 +135,7 @@ describe('ChartAdapter has no independent indicator formulas', () => {
     expect(strokes).toHaveLength(1)
     expect(strokes[0].points.map((point: any) => point.value)).toEqual([1, 3])
     expect(zones).toHaveLength(1)
-    expect(zones[0].extendData.label).toBe('已保存中枢')
+    expect(zones[0].extendData.label).toBe('已保存中枢 · 输入结算状态未知')
     adapter.destroy()
     const blocked = chanOverlay({ chan_observation: { available: false, drawable: false, fallback_allowed: false, disclaimer: '已保存缠论读模型未通过校验，不改用简化结构代替。' }, studies: { chan_structure: { bi: [{ start_date: '2026-09-01', end_date: '2026-09-03', start_price: 1, end_price: 3 }] } } })
     expect(blocked.mode).toBe('blocked')

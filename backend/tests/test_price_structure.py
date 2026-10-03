@@ -268,3 +268,78 @@ def test_unbroken_box_expires_after_sixty_settled_bars():
     confirmed = frame.index[frame["trade_date"].astype(str) == box["confirmed_at"]][0]
     expired = frame.index[frame["trade_date"].astype(str) == box["valid_until"]][0]
     assert expired - confirmed == 60
+
+
+def test_scalar_medians_preserve_complete_structure_payloads_without_numpy_dispatch(monkeypatch):
+    """Tiny pivot clusters must not repeatedly construct NumPy arrays.
+
+    Compare every returned field with the previous NumPy calculation, including
+    identities and lifecycle events, before rejecting that costly dispatch.
+    """
+    import random
+
+    import app.utils.price_structure as price_structure
+    import numpy as np
+
+    frames = [_boundary_box_bars(143), _box_bars(200)]
+    frames[1].loc[120, ["open", "low", "close", "high"]] = [107.0, 106.8, 107.0, 107.2]
+    frames[1].loc[121, ["open", "low", "close", "high"]] = [108.0, 107.8, 108.0, 108.2]
+    frames[1].loc[122, ["open", "low", "close", "high"]] = [103.0, 102.8, 103.0, 103.2]
+    frames[1].loc[[130, 150, 170, 190], "high"] = 106.0
+    frames[1].loc[[140, 160, 180], "low"] = 100.0
+    noisy = _box_bars(250)
+    rng = random.Random(42)
+    closes = [100.0 + rng.uniform(-2.0, 2.0) for _ in range(len(noisy))]
+    noisy["open"] = noisy["close"] = closes
+    noisy["high"] = [value + rng.uniform(0.1, 2.0) for value in closes]
+    noisy["low"] = [value - rng.uniform(0.1, 2.0) for value in closes]
+    frames.append(noisy)
+
+    cases = [(frames[0], {}), (frames[1], {"candidate_window": 200}), (frames[2], {})]
+    kwargs = {"instrument": "510300.SH", "price_basis_id": "scalar-median-parity"}
+    with monkeypatch.context() as legacy:
+        legacy.setattr(price_structure, "median", np.median, raising=False)
+        expected = [build_price_structures(frame, config=config, **kwargs) for frame, config in cases]
+
+    def numpy_dispatch_forbidden(*args, **kwargs):
+        raise AssertionError("pivot-cluster medians must not allocate NumPy arrays")
+
+    monkeypatch.setattr(np, "median", numpy_dispatch_forbidden)
+    actual = [build_price_structures(frame, config=config, **kwargs) for frame, config in cases]
+    assert actual == expected
+
+
+def test_scalar_median_matches_numpy_for_finite_positive_odd_even_and_boundary_clusters():
+    import sys
+
+    import app.utils.price_structure as price_structure
+    import numpy as np
+
+    samples = [
+        [1.0], [1.0, 2.0], [3.0, 1.0, 2.0], [4.0, 1.0, 3.0, 2.0],
+        [1.0, 1.0, 2.0, 2.0], [1.0, 1.0, 1.0],
+        [5e-324, 1e-323], [5e-324, 5e-324, 1e-323],
+        [sys.float_info.min, 1.0, sys.float_info.max],
+        [sys.float_info.max, sys.float_info.max],
+        [1.0, float(np.nextafter(1.0, 2.0))],
+    ]
+    with np.errstate(over="ignore"):
+        for values in samples:
+            assert price_structure.median(values) == float(np.median(values))
+
+
+def test_nonfinite_and_nonpositive_prices_are_rejected_before_scalar_medians(monkeypatch):
+    import app.utils.price_structure as price_structure
+
+    def median_forbidden(*args, **kwargs):
+        raise AssertionError("invalid prices must be rejected before pivot clustering")
+
+    monkeypatch.setattr(price_structure, "median", median_forbidden)
+    for value in (float("nan"), float("inf"), float("-inf"), 0.0, -0.0, -1.0):
+        frame = _bars()
+        frame.loc[10, "close"] = value
+        result = build_price_structures(frame, instrument="510300.SH", price_basis_id="invalid-price")
+        assert result["qualified"] is False
+        assert result["reason"] == "invalid_ohlc"
+        assert result["pivots"] == []
+        assert result["boxes"] == []
