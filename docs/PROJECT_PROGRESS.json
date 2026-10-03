@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "roadmap_version": "2026-10-02-v2",
-  "updated_at": "2026-10-03T19:01:39+08:00",
-  "current_stage": "S8-F0证据调查 / WU2流量份额合同接收 / S2私有验收待完成",
+  "updated_at": "2026-10-04T00:30:19+08:00",
+  "current_stage": "S8-F0证据调查 / S4-U06修订证据卡 / S2私有验收待完成",
   "current_iteration": 71,
   "planning_source": "同一远端ChatGPT v2方向修订（只读核验摘要）及本地现场元数据核验；无新增源码独立审核",
   "deployed_code_sha": "abae131770713465c6d65d29c1513fc88b8dc40d",
@@ -14,7 +14,7 @@
   "actionable": false,
   "runtime_activated": false,
   "auto_trading": false,
-  "next_task": "WU2流量份额v2/v110：91聚焦、1565全量通过/11既有跳过、116前端及完整17文件独立审核通过；普通快进既有分支并核验精确CI；不部署、不重写v109",
+  "next_task": "S4-U06：1577全量通过/11既有跳过、139 Vue及完整21文件独立审核通过；普通快进既有分支并核验精确CI/3项新增浏览器截图，不部署",
   "blockers": [
     "5m/15m真实量额、单位/时间/PIT及成本可行性未解决：先做S8-F0，不再排在所有UX之后",
     "63c426a已部署；完整发布收据、f0迁移回滚兼容、图层合同和私有功能独立接收待核对",
@@ -748,7 +748,7 @@
       "id": "S4",
       "name": "图表与Chan用户体验",
       "legacy": "R4C M4/M5",
-      "status": "WU2坐标/打包587b136及S4-U05输入结算显示422c5c4精确CI闭环；未部署本批，完整S4/私有验收仍待完成",
+      "status": "WU2 v110精确CI闭环；S4-U06修订证据卡本地全量与完整21文件审核通过，精确提交浏览器CI待发布后完成，未部署",
       "counter_frozen": false,
       "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
       "dimensions": {
@@ -837,14 +837,17 @@
           "id": "S4-U06",
           "name": "修订变化解释",
           "dimensions": {
-            "code": "TODO",
-            "tests": "TODO",
-            "review": "PENDING",
-            "deploy": "TODO",
-            "live": "TODO"
+            "code": "部分PASS",
+            "tests": "部分PASS",
+            "review": "部分PASS",
+            "deploy": "PENDING",
+            "live": "PENDING"
           },
-          "evidence": [],
-          "na_reasons": {}
+          "evidence": [
+            "docs/audits/S4_U06_CHAN_REVISION_EVIDENCE_20261003.md"
+          ],
+          "na_reasons": {},
+          "scope_note": "仅当前已验证观测的修订变化证据与折叠卡；ABSENT不等于失效，确认/PIT未知；本地浏览器启动EPERM，完整/托管证据待完成，不代表M4全部验收。"
         },
         {
           "id": "S4-U07",
@@ -2116,6 +2119,16 @@
       "date": "2026-10-03",
       "iteration": 71,
       "description": "WU2独立接收发现flow/share未核源合同即标单位、缺时间证据及旧delta覆盖新总量。冻结v2/v110有界读取合同，保留v109原记录并明确旧投影；91聚焦回归和非flow完整row黄金对比、116前端及类型/构建通过；全量及独立审核中，精确提交CI待完成。不改策略/资格，不调用Provider、不部署。 首次全量1568收集/1557通过/11跳过/0失败，554.312秒；其后独立审核修复naive新快照时间和极端时间边界，最终冻结版全量重跑，首轮不作为最终验收。 最终冻结代码完整回归1576收集/1565通过/11既有跳过/0失败，551.366秒；运行时/测试独立审核PASS，时区及极端时间检查通过，完整17文件终态收据复核PASS，精确提交CI待发布后完成。"
+    },
+    {
+      "date": "2026-10-04",
+      "iteration": 71,
+      "description": "WU2 v110已正常快进发布8c62d70，三项精确CI均SUCCESS；后端1576收集/1565通过/11既有跳过/0失败错误，520.570秒；116 Vue、31 Chromium、5认证、18响应式、PG23和Windows20通过。审计/JUnit/清单及源码归档17文件同字节核验，未部署、未发布registry。"
+    },
+    {
+      "date": "2026-10-04",
+      "iteration": 71,
+      "description": "按S4-U06/M4冻结修订证据展示范围，先复现3项后端缺失字段失败和前端组件缺失，再添加可选投影与折叠卡；22聚焦、134 Vue及实际类型/构建通过，旧几何/版本/资格不变。全量和独立审核中；本地Chromium启动EPERM，3新增浏览器断言/截图未执行，待精确CI。 独立审核发现并纠正把UNCHANGED与修订ID相等关联的显示假设，补真实持久化前后观测不同ID夹具；最终139 Vue与1588收集/1577通过/11既有跳过/0失败错误（589.294秒）通过，12运行时/测试/夹具哈希稳定，完整21文件终态独立复核通过。"
     }
   ],
   "incoming_candidate": {
@@ -2322,7 +2335,7 @@
     "frontend": "116_PASS_TYPECHECK_BUILD_PASS",
     "backend_full": "FINAL_1576_COLLECTED_1565_PASS_11_EXISTING_SKIP_0_FAILURES",
     "independent_review": "FINAL_17_FILE_REVIEW_PASS",
-    "hosted_ci": "PENDING_PUBLICATION",
+    "hosted_ci": "EXACT_COMMIT_ALL_THREE_SUCCESS",
     "deploy": "NOT_DEPLOYED",
     "real_data": "UNKNOWN",
     "actionable": false,
@@ -2337,6 +2350,49 @@
     "backend_seconds": 551.366,
     "backend_junit_sha256": "8cce0c47c9745454d06820498f766f12f9891f6dde22814f736e8c4da3c73093",
     "skip_identities": "MATCH_EXACT_422C5C4_PREDECESSOR",
+    "static_checks": "RUFF_COMPILE_JS_SYNTAX_27_JS_SECRET_SCAN_DIFF_CHECK_PASS",
+    "code_sha": "8c62d70f4ecccc1c9819be36cad09a1f7da6a826",
+    "code_tree": "3ca3364758445338b0cdf7924ecb545afe66e5f6",
+    "hosted_ci_runs": {
+      "ci": 37133218581,
+      "workspace_ci": 37133218609,
+      "audit_platforms": 37133218580
+    },
+    "hosted_backend": "1576_COLLECTED_1565_PASS_11_EXISTING_SKIP_0_FAILURES_0_ERRORS",
+    "hosted_backend_seconds": 520.57,
+    "hosted_junit_sha256": "d473896b2a5ee79303bb0fed22117a20361b3f29b9f7ac022e2187df4eb3bfe4",
+    "hosted_browser": "31_SMOKE_5_AUTH_18_RESPONSIVE_PASS_SYNTHETIC",
+    "hosted_source_archive": "ALL_17_REVIEWED_FILES_EXACT_MATCH",
+    "production_deployed": false
+  },
+  "s4_u06_revision_evidence_current_batch": {
+    "baseline_sha": "8c62d70f4ecccc1c9819be36cad09a1f7da6a826",
+    "scope": "OPTIONAL_VERIFIED_REVISION_PROJECTION_AND_COLLAPSED_CARD",
+    "plan": "tasks/plans/2026-10-03-s4-u06-chan-revision-evidence.md",
+    "evidence": "docs/audits/S4_U06_CHAN_REVISION_EVIDENCE_20261003.md",
+    "focused_backend": "47_PASS_1_EXISTING_PG_SKIP",
+    "frontend": "139_PASS_TYPECHECK_BUILD_PASS",
+    "backend_full": "FINAL_1588_COLLECTED_1577_PASS_11_EXISTING_SKIP_0_FAILURES_0_ERRORS",
+    "review": "FINAL_21_FILE_REVIEW_PASS",
+    "local_browser": "NOT_RUN_CHROMIUM_LAUNCH_EPERM_THREE_FAILED_BEFORE_ASSERTIONS",
+    "hosted_ci": "PENDING_PUBLICATION",
+    "geometry": "EXACT_OLD_PROJECTION_AND_OVERLAY_PARITY",
+    "read_model_version": "UNCHANGED_V110",
+    "chart_version": "UNCHANGED_V1_2_0",
+    "production_deployed": false,
+    "real_data": "UNKNOWN",
+    "actionable": false,
+    "independent_focused_backend": "48_PASS_1_EXISTING_PG_SKIP_INCLUDING_CHART_ROUTE",
+    "first_backend_full": "PRELIMINARY_1587_COLLECTED_1576_PASS_11_EXISTING_SKIP_0_FAILURES",
+    "first_backend_seconds": 615.767,
+    "first_backend_junit_sha256": "da1fc2bce89291381faeca526f383910b3389096d3b04db2d9f8712a25a07890",
+    "independent_adversarial": "576_GEOMETRY_PARITY_COMBINATIONS_AND_SIX_NAMESPACE_STREAMS_PASS",
+    "unchanged_revision_semantics": "VERIFIED_STATUS_NOT_ID_EQUALITY_REAL_PERSISTED_FIXTURE",
+    "backend_seconds": 589.294,
+    "backend_junit_sha256": "64ea3143a4a71301f505aa22dcdcae3a8b2b50b987e2109999eb5aba83cfd413",
+    "frozen_source_files": 12,
+    "skip_identities": "MATCH_EXACT_8C62D70_HOSTED_PREDECESSOR",
+    "timezone": "20_UI_CASES_PASS_SHANGHAI_AND_NEW_YORK",
     "static_checks": "RUFF_COMPILE_JS_SYNTAX_27_JS_SECRET_SCAN_DIFF_CHECK_PASS"
   }
 }

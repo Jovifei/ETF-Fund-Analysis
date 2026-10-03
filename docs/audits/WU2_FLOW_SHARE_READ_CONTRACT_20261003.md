@@ -120,3 +120,57 @@ Final runtime SHA-256 values, frozen before the accepted aggregate run:
 - flow_share_research.py: `883f7294080fc87cf92b005fdaaf3380413c1e8dc9e82ffa7f2e92ec7d9e3f2f`
 - decision_board_service.py: `ffccf3676c4162c452a6cb648375bb037e324a04f1be0552199d1cad6b6df63b`
 - signal_grade_service.py: `11de4871c98b4a4c18036223d135eadffb26b111f23d144d92372f6d548757ae`
+
+## WU2 flow/share exact-commit CI closure — 2026-10-03 15:40 UTC
+
+The existing branch `codex/remote-stage-s8f0-s2-20261002` advanced normally to
+`8c62d70f4ecccc1c9819be36cad09a1f7da6a826`, with parent
+`422c5c403d7336d1f7f01307bb99d5b8f2e6f25e` and exact reviewed tree
+`3ca3364758445338b0cdf7924ecb545afe66e5f6`. After the cloud workspace was
+replaced, the preserved private archive was restored and all 56 checksums,
+17 changed-file identities, and exact patch replay were verified before
+publication. No runtime/test bytes were reconstructed or changed.
+
+All three push workflows for this exact commit finished successfully:
+
+- [Full CI](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37133218581):
+  **1576 collected / 1565 passed / 11 existing skips / 0 failures / 0 errors**,
+  520.570 seconds. The 11 skipped case identities match the final accepted
+  local run and the 422c5c4 hosted predecessor. JUnit SHA-256:
+  `d473896b2a5ee79303bb0fed22117a20361b3f29b9f7ac022e2187df4eb3bfe4`.
+- [Workspace CI](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37133218609):
+  283 backend contracts passed, one expected Windows-NTFS skip; actual
+  TypeScript check, 116 Vue tests in 20 files, frontend production build,
+  31 Chromium smoke cases, 5 authenticated journeys and 18 responsive
+  cases passed. Source archive embeds the exact commit and all 17 files
+  match the reviewed SHA-256, Git blobs, sizes and Git modes.
+- [Platform audit](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37133218580):
+  PostgreSQL 23/23 and Windows bridge 20/20 passed, no skipped/failed/error
+  cases; migration graph check found no new upgrade operations.
+
+Python compilation, browser JavaScript syntax/tests, committed-secret scan,
+clean database migration, shell/Compose validation, production-image build,
+isolated PostgreSQL image smoke, inventory and image export all passed.
+Workspace audit retains 2 moderate and 1 low npm findings; no high or
+critical findings were reported by its unchanged security gate.
+
+Downloaded audit ZIP SHA-256 is
+`76bb95b3e49893b32c5a3c0099e945e118bf91a2e03329ffddd95e5903367897`;
+downloaded workspace ZIP SHA-256 is
+`f3681c45b312c31d3384c45410878cd00389a6e9e1b5b1625544c34dfda1eaad`.
+Both match GitHub artifact digests. Inventory SHA-256 is
+`fbd63ae78cc1f4edf0b4d7d2fbd8160125c301453333655778a8f3d2d49f0240`;
+it names the exact source/tree, clean tracked state and zero untracked
+application files. Local smoke-tested image ID is
+`sha256:3a0e831acabee3ef704ba4cf5b7f6865862b8896d41c1cbd7ca6b16e7944db34`.
+The large image artifact is metadata-verified only, not downloaded.
+
+This closes publication and exact-commit CI for the bounded read-contract
+repair. It does not change the documented v109 immutable-storage/legacy-read
+behavior, automatically rebuild snapshots, or activate v110 in production.
+Browser acceptance uses synthetic data. Real-data/units/PIT qualification
+remains UNKNOWN, predictions are not calibrated, and actionable remains false.
+No provider credentials, purchase, deployment, registry publication or main
+merge occurred. Inventory correctly remains incomplete solely because a
+published registry-image digest is absent. Verification counts are not
+investment-eligibility evidence.

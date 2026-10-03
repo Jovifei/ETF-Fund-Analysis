@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, timedelta
 from importlib import import_module
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -147,6 +149,29 @@ def test_read_latest_missing_head_is_bounded_snapshot_missing(read_runtime):
     assert "structures" not in result
     assert "payload_json" not in result
     assert "bars" not in result
+
+
+def test_chart_revision_projection_preserves_unchanged_geometry_with_distinct_observation_bound_ids(read_runtime):
+    from app.services.chan_read_service import read_latest
+    from app.workspace.chan_chart_overlay import project_persisted_chan
+
+    prior = _make_observation(count=12, revision="card-fixture-prior")
+    current = _make_observation(count=13, revision="card-fixture-current")
+    assert prior.structures[0].geometry == current.structures[0].geometry
+    assert prior.structures[0].revision_id != current.structures[0].revision_id
+    _publish(read_runtime.engine, prior)
+    _publish(read_runtime.engine, current)
+    with Session(read_runtime.engine) as db:
+        read = read_latest(db, read_runtime.code, "D")
+        projection = project_persisted_chan(read, "basis-raw-v1")
+    transition = projection["revision_evidence"]["transitions"][0]
+    assert transition == read["transitions"][0]
+    assert transition["status"] == "OBSERVED_UNCHANGED"
+    assert transition["revision_id"] == current.structures[0].revision_id
+    assert transition["prior_revision_id"] == prior.structures[0].revision_id
+    assert transition["reappearance"] is False
+    fixture = Path(__file__).resolve().parents[2] / "frontend/tests/fixtures/chan_unchanged_projection.json"
+    assert projection == json.loads(fixture.read_text())
 
 
 def test_read_latest_returns_verified_bounded_persisted_structures(read_runtime):

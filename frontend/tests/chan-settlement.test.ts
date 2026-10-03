@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import fixture from './fixtures/chan_chart_projection.json'
+import revision from './fixtures/chan_revision_evidence.json'
 import type { ChartData } from '../src/lib/types'
 
 const mocked = vi.hoisted(() => ({ definitions: [] as any[], live: [] as any[], chart: { setPriceVolumePrecision: vi.fn(), applyNewData: vi.fn(), createIndicator: vi.fn(), createOverlay: vi.fn(), subscribeAction: vi.fn(), unsubscribeAction: vi.fn(), setBarSpace: vi.fn(), scrollToRealTime: vi.fn(), resize: vi.fn(), removeIndicator: vi.fn(), removeOverlay: vi.fn() } }))
@@ -26,6 +27,59 @@ const zones = () => mocked.live.filter(overlay => overlay.name === 'researchBox'
 const strokes = () => mocked.live.filter(overlay => overlay.name === 'segment')
 
 describe('persisted Chan observation input settlement', () => {
+  it('clears expanded revision evidence on observation replacement and layer hiding', async () => {
+    const chart = data('settled')
+    chart.chan_observation!.revision_evidence = structuredClone(revision)
+    const wrapper = mount(EtfChart, { props: { data: chart } })
+    await flushPromises()
+    const toggle = wrapper.get('.study-controls').findAll('label').find(item => item.text() === '缠论笔段中枢')!.get('input')
+    await toggle.setValue(true)
+    const first = wrapper.get('[data-testid="chan-evidence-card"]').element as HTMLDetailsElement
+    first.open = true
+    await wrapper.get('[data-testid="chan-evidence-more"]').trigger('click')
+    expect(wrapper.findAll('[data-testid="chan-transition"]')).toHaveLength(6)
+    const replacement = structuredClone(chart)
+    replacement.chan_observation!.observation_id = 'obs-next'
+    replacement.chan_observation!.revision_evidence!.input_hash = 'next-input'
+    await wrapper.setProps({ data: replacement })
+    await flushPromises()
+    const next = wrapper.get('[data-testid="chan-evidence-card"]').element as HTMLDetailsElement
+    expect(next).not.toBe(first)
+    expect(next.open).toBe(false)
+    expect(wrapper.findAll('[data-testid="chan-transition"]')).toHaveLength(5)
+    expect(wrapper.get('[data-testid="chan-evidence-card"]').text()).toContain('next-input')
+    expect(zones()).toHaveLength(1)
+    await toggle.setValue(false)
+    expect(wrapper.find('[data-testid="chan-evidence-card"]').exists()).toBe(false)
+    expect(mocked.live).toHaveLength(0)
+    wrapper.unmount()
+  })
+
+  it('drops stale revision IDs on legacy/removal and resets for symbol or interval replacement', async () => {
+    const chart = data('settled')
+    chart.chan_observation!.revision_evidence = structuredClone(revision)
+    const wrapper = mount(EtfChart, { props: { data: chart } })
+    await flushPromises()
+    const toggle = wrapper.get('.study-controls').findAll('label').find(item => item.text() === '缠论笔段中枢')!.get('input')
+    await toggle.setValue(true)
+    const legacy = structuredClone(chart)
+    delete legacy.chan_observation!.revision_evidence
+    await wrapper.setProps({ data: legacy })
+    expect(wrapper.get('[data-testid="chan-evidence-card"]').text()).toContain('当前响应未提供修订变化记录')
+    expect(wrapper.text()).not.toContain('revision-absent')
+    await wrapper.setProps({ data: { ...legacy, chan_observation: null } })
+    expect(wrapper.find('[data-testid="chan-evidence-card"]').exists()).toBe(false)
+    for (const replacement of [{ ...chart, ts_code: '510300.SH' }, { ...chart, ts_code: '510300.SH', interval: '1mo' }]) {
+      await wrapper.setProps({ data: replacement })
+      const card = wrapper.get('[data-testid="chan-evidence-card"]').element as HTMLDetailsElement
+      expect(card.open).toBe(false)
+      expect(wrapper.findAll('[data-testid="chan-evidence-card"]')).toHaveLength(1)
+      card.open = true
+    }
+    await wrapper.setProps({ data: { ...chart, raw_overlay_allowed: false } })
+    expect(wrapper.find('[data-testid="chan-evidence-card"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
   it.each([
     ['1d', 'settled', '输入已结算', false],
     ['1w', 'settled', '输入已结算', false],

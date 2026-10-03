@@ -1,0 +1,41 @@
+{
+  "available": true,
+  "drawable": true,
+  "fallback_allowed": false,
+  "qualified": false,
+  "actionable": false,
+  "source": "persisted_r4c_observed_revision",
+  "reason_code": null,
+  "price_basis_id": "basis-raw-v1",
+  "engine_id": "czsc",
+  "engine_version": "1.0.1",
+  "dialect_id": "r4c-observed-revision-v1",
+  "counts": {
+    "fx": 1,
+    "bi": 0,
+    "zs": 0
+  },
+  "bi": [],
+  "segments": [],
+  "zhongshu": [],
+  "undrawable_bi": 0,
+  "disclaimer": "已保存缠论观测（CZSC 笔与中枢）。不是线段，不含背驰和买卖点。",
+  "observation_id": "c6eb832e505687c8de4a93ba2fdc816695caacfd2455540c44b51c1366219e06",
+  "settlement_status": "settled",
+  "view_semantics": "latest_persisted_observed_revision_not_historical_pit",
+  "revision_evidence": {
+    "sequence_number": 2,
+    "cutoff_at": "2026-01-13 00:00:00.000000",
+    "input_revision_id": "card-fixture-current",
+    "input_hash": "72350eeca4363b034ea3b2dcd4b0cc63f3fa35b2a3412ed084d485e88cd3cef0",
+    "transitions": [
+      {
+        "structure_key": "ce20898dd4cd8759670cb8d09d738122bafe07875f99d68772961ab32e583b3c",
+        "revision_id": "e39265c07c9d69c23ea754bb5dffdb853db33d5639ee28fb61705f4dbf4ee251",
+        "prior_revision_id": "18d1845910e1f8ed1394efc40897b097eb1582a378d5bae25b2a962951784f0e",
+        "status": "OBSERVED_UNCHANGED",
+        "reappearance": false
+      }
+    ]
+  }
+}
