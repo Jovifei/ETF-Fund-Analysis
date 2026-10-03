@@ -1,4 +1,5 @@
 """Selection, legacy projection and full non-flow golden parity."""
+import asyncio
 import json
 import socket
 from copy import deepcopy
@@ -23,7 +24,18 @@ NEW_VERSION = "decision-read-v110-flow-share-provenance"
 
 
 @pytest.fixture
-def runtime(monkeypatch):
+def client_loop():
+    # Windows creates the event loop's wakeup socket before the no-network guard.
+    loop = asyncio.new_event_loop()
+    try:
+        yield loop
+    finally:
+        if not loop.is_closed():
+            loop.close()
+
+
+@pytest.fixture
+def runtime(monkeypatch, client_loop):
     def no_network(*args, **kwargs):
         raise AssertionError("Provider/network access is forbidden in this contract")
     monkeypatch.setattr(socket.socket, "connect", no_network)
@@ -208,7 +220,7 @@ def test_old_or_mixed_saved_contracts_are_blocked_without_rewriting(runtime, mon
         event.remove(db.bind, "before_cursor_execute", sql)
 
 
-def test_current_saved_flow_passes_through_on_snapshot_and_http_reads(runtime):
+def test_current_saved_flow_passes_through_on_snapshot_and_http_reads(runtime, client_loop):
     from app.core.config import get_settings
     from app.db.session import get_db
     from app.main import app
@@ -221,15 +233,17 @@ def test_current_saved_flow_passes_through_on_snapshot_and_http_reads(runtime):
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_settings] = lambda: settings
     try:
-        client = TestClient(app)
-        for endpoint in ("/api/decision-board", "/api/decision-board/510390.SH"):
-            response = client.get(endpoint, params={"snapshot_id": "saved-flow", "horizon": 5})
-            assert response.status_code == 200
-            assert response.headers["cache-control"] == "private, no-store"
-            value = response.json()
-            row = value["rows"][0] if "rows" in value else value
-            assert row["flow_share"]["main_net_inflow"] == 42
-            assert row["forecast"]["expected_return"] == .05
+        with TestClient(app, backend_options={"loop_factory": lambda: client_loop}) as client:
+            with pytest.raises(AssertionError, match="Provider/network access is forbidden"):
+                socket.create_connection(("127.0.0.1", 1), timeout=0.01)
+            for endpoint in ("/api/decision-board", "/api/decision-board/510390.SH"):
+                response = client.get(endpoint, params={"snapshot_id": "saved-flow", "horizon": 5})
+                assert response.status_code == 200
+                assert response.headers["cache-control"] == "private, no-store"
+                value = response.json()
+                row = value["rows"][0] if "rows" in value else value
+                assert row["flow_share"]["main_net_inflow"] == 42
+                assert row["forecast"]["expected_return"] == .05
         assert db.scalar(select(DecisionBoardSnapshot)).payload_json == payload
     finally:
         app.dependency_overrides.pop(get_db, None)
