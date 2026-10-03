@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "roadmap_version": "2026-10-02-v2",
-  "updated_at": "2026-10-03T02:38:38+08:00",
+  "updated_at": "2026-10-03T12:23:00+08:00",
   "current_stage": "S8-F0证据调查 / S2私有验收待完成",
   "current_iteration": 71,
   "planning_source": "同一远端ChatGPT v2方向修订（只读核验摘要）及本地现场元数据核验；无新增源码独立审核",
@@ -14,7 +14,7 @@
   "actionable": false,
   "runtime_activated": false,
   "auto_trading": false,
-  "next_task": "发布共享fixture构建上下文修复并核验新提交完整CI；3eb0451真实浏览器/后端回归已通过，Docker构建失败历史保留；不部署",
+  "next_task": "S4-U05恢复候选新全量回归和独立审核均通过；普通快进发布并核验精确新提交全部CI及三项新增浏览器用例；不部署",
   "blockers": [
     "5m/15m真实量额、单位/时间/PIT及成本可行性未解决：先做S8-F0，不再排在所有UX之后",
     "63c426a已部署；完整发布收据、f0迁移回滚兼容、图层合同和私有功能独立接收待核对",
@@ -748,7 +748,7 @@
       "id": "S4",
       "name": "图表与Chan用户体验",
       "legacy": "R4C M4/M5",
-      "status": "WU2坐标修复已通过真实Chromium回归；首提交Docker构建发现fixture路径问题，最小修复复核后待精确CI，未部署",
+      "status": "WU2坐标/打包修复587b136精确CI闭环；S4-U05新全量回归及独立审核通过，待新提交CI/浏览器；未部署本批",
       "counter_frozen": false,
       "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
       "dimensions": {
@@ -821,14 +821,17 @@
           "id": "S4-U05",
           "name": "暂定结算区分",
           "dimensions": {
-            "code": "TODO",
-            "tests": "TODO",
-            "review": "PENDING",
-            "deploy": "TODO",
-            "live": "TODO"
+            "code": "部分PASS",
+            "tests": "部分PASS",
+            "review": "部分PASS",
+            "deploy": "PENDING",
+            "live": "PENDING"
           },
-          "evidence": [],
-          "na_reasons": {}
+          "evidence": [
+            "docs/audits/S4_U05_CHAN_SETTLEMENT_DISPLAY_20261003.md"
+          ],
+          "na_reasons": {},
+          "scope_note": "仅观测输入级结算显示；不表示结构引擎确认或S4整体完成。恢复候选使用新环境重跑证据。"
         },
         {
           "id": "S4-U06",
@@ -2093,6 +2096,16 @@
       "date": "2026-10-03",
       "iteration": 71,
       "description": "3eb0451精确workspace/audit成功：102 Vue、28 Chromium烟测（新增中枢回归4.3秒）、5登录、18响应式通过，下载校验并检查桌面/390px/关闭图层截图。完整CI后端1495收集/1484通过/11跳过/0失败，967.754秒；但Docker前端仅复制frontend目录导致共享fixture跨目录导入TS2307，整体CI失败且后续镜像门禁未运行。已移动同字节fixture至frontend/tests/fixtures并更新三处消费者，前端独立上下文类型/构建、102 Vue和5后端合同复核通过；新提交CI待核，不部署。"
+    },
+    {
+      "date": "2026-10-03",
+      "iteration": 71,
+      "description": "前序587b136三项CI均SUCCESS，审计ZIP/JUnit/清单恢复后重新校验：1495收集/1484通过/11既有跳过/0失败，968.342秒；迁移/Docker/PG镜像冒烟/导出通过。旧3eb0451 Docker失败和截图证据独立保留，无生产部署。"
+    },
+    {
+      "date": "2026-10-03",
+      "iteration": 71,
+      "description": "S4-U05旧工作区缺失后恢复七个同字节运行时/测试文件，重建文档；重新复现13失败并重跑116 Vue、55时区、11聚焦后端、27旧JS及typecheck/build。全量新回归进行中，独立复核及精确新提交CI待完成；不沿用旧全量结果作新验收。 首次全量1488通过/11跳过/2环境失败；仅补齐HTTPX SOCKS支持，代理和源码不变，11相关用例通过；最终全量1501收集/1490通过/11既有跳过/0失败，554.135秒。 恢复候选全部15文件独立审核PASS；11跳过项身份与前序CI一致。"
     }
   ],
   "incoming_candidate": {
@@ -2210,7 +2223,7 @@
     "legacy_js_tests": "27_PASS",
     "remote_review": "INDEPENDENT_PROJECTION_AND_TEST_CLOCK_REVIEW_PASS",
     "cloud_browser": "BLOCKED_CHROMIUM_EPERM_BEFORE_NAVIGATION",
-    "remote_ci": "FIRST_HEAD_BACKEND_BROWSER_AUDIT_PASS_DOCKER_FAILED_CORRECTED_HEAD_PENDING",
+    "remote_ci": "ALL_THREE_CORRECTED_HEAD_WORKFLOWS_PASS",
     "deploy": "NOT_DEPLOYED",
     "real_data": "UNKNOWN",
     "actionable": false,
@@ -2219,19 +2232,57 @@
     "backend_junit_sha256": "f205768e6f58b5cd6378c77fc8a869928588a2de5e9cb5f94978c59ec1e54824",
     "ownership_test_stability": "NEWS_EVALUATION_TIME_FIXED_TEST_ONLY_ALL_ASSERTIONS_RETAINED",
     "ownership_test_sha256": "ebe11fb729059d81383b3f9b73d29ca10b77b03e53eeca4558849479c5fc6b7e",
-    "code_sha": "3eb04515e4f96cd8bcb3df39e29ab5fca885addb",
+    "code_sha": "587b13611ed4e37e8cf20200c80ac67d4611ed00",
     "hosted_browser": "28_SMOKE_5_AUTH_18_RESPONSIVE_PASS_NEW_CHAN_CASE_PASS",
-    "hosted_screenshots": "DESKTOP_390PX_DISABLED_ZONE_VERIFIED_SYNTHETIC_ONLY",
+    "hosted_screenshots": "CORRECTED_HEAD_TEST_LOGS_VERIFIED_IMAGES_NOT_REINSPECTED",
     "remote_ci_runs": {
+      "full": 37049326501,
+      "workspace": 37049326743,
+      "audit": 37049326639
+    },
+    "remote_junit_sha256": "fee430693f24ecc41e42bdea5dbc5cd64543afce2d0a4d58db3e1a78eefa407d",
+    "remote_backend_seconds": 968.342,
+    "fixture_path": "frontend/tests/fixtures/chan_chart_projection.json",
+    "packaging_correction": "UNCHANGED_SHARED_FIXTURE_MOVED_INTO_FRONTEND_BUILD_CONTEXT",
+    "frontend_only_typecheck_build": "RED_REPRODUCED_THEN_PASS",
+    "corrected_head_ci": "SUCCESS",
+    "initial_code_sha": "3eb04515e4f96cd8bcb3df39e29ab5fca885addb",
+    "source_tree": "1856fee055dd17da81054325d4039a036ff0c6f3",
+    "first_head_remote_ci": "FIRST_HEAD_BACKEND_BROWSER_AUDIT_PASS_DOCKER_FAILED_CORRECTED_HEAD_PENDING",
+    "first_head_remote_ci_runs": {
       "full": 37046437887,
       "workspace": 37046437828,
       "audit": 37046437916
     },
-    "remote_junit_sha256": "c617b058e8844f93aaf70ad4af77a2f9787d198bfc8737b5bee6a602bca20b51",
-    "remote_backend_seconds": 967.754,
-    "fixture_path": "frontend/tests/fixtures/chan_chart_projection.json",
-    "packaging_correction": "UNCHANGED_SHARED_FIXTURE_MOVED_INTO_FRONTEND_BUILD_CONTEXT",
-    "frontend_only_typecheck_build": "RED_REPRODUCED_THEN_PASS",
-    "corrected_head_ci": "PENDING"
+    "first_head_remote_junit_sha256": "c617b058e8844f93aaf70ad4af77a2f9787d198bfc8737b5bee6a602bca20b51",
+    "first_head_remote_backend_seconds": 967.754,
+    "first_head_hosted_screenshots": "DESKTOP_390PX_DISABLED_ZONE_VERIFIED_SYNTHETIC_ONLY"
+  },
+  "s4_u05_settlement_current_batch": {
+    "baseline_sha": "587b13611ed4e37e8cf20200c80ac67d4611ed00",
+    "scope": "OBSERVATION_INPUT_SETTLEMENT_DISPLAY_ONLY",
+    "recovery": "SEVEN_RUNTIME_TEST_FILES_EXACT_PRIOR_BLOBS_DOCS_RECONSTRUCTED",
+    "frontend_tests": "FRESH_116_PASS_20_FILES",
+    "timezone_chart_tests": "FRESH_55_PASS_EACH_SHANGHAI_NEW_YORK_HONOLULU",
+    "backend_focused": "FRESH_11_PASS",
+    "backend_full": "FRESH_1501_COLLECTED_1490_PASS_11_EXISTING_SKIP_0_FAILURES",
+    "typecheck_build": "FRESH_PASS",
+    "frontend_only_packaging": "FRESH_TYPECHECK_BUILD_PASS",
+    "legacy_js_tests": "FRESH_27_PASS",
+    "remote_review": "INDEPENDENT_FRESH_SOURCE_AND_FULL_RECEIPT_REVIEW_PASS",
+    "cloud_browser": "FRESH_CHROMIUM_EPERM_BEFORE_NAVIGATION",
+    "hosted_browser": "THREE_NEW_CASES_DISCOVERED_NOT_RUN",
+    "remote_ci": "PENDING_PUBLICATION",
+    "deploy": "NOT_DEPLOYED",
+    "engine_confirmation": "unknown",
+    "real_data": "UNKNOWN",
+    "actionable": false,
+    "evidence": "docs/audits/S4_U05_CHAN_SETTLEMENT_DISPLAY_20261003.md",
+    "first_fresh_backend": "1501_COLLECTED_1488_PASS_11_SKIP_2_ENVIRONMENT_FAILURES",
+    "first_fresh_junit_sha256": "bd9f05638c2082b862c3ab3105e73482ff1353300c3c3f76f3747c0b5647fcbb",
+    "environment_repair": "VENV_ONLY_HTTPX_SOCKS_EXTRA_NO_PROXY_OR_SOURCE_CHANGE",
+    "provider_recheck": "11_PASS",
+    "backend_junit_seconds": 554.135,
+    "backend_junit_sha256": "9d47b6cb133c75502de538c0e7c4fafd3e19c54f74a1cfc508dd589570bb110e"
   }
 }

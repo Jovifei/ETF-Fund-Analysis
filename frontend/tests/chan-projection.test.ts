@@ -30,7 +30,7 @@ describe('persisted backend Chan timestamp projection', () => {
       { timestamp: projectBars([chart.bars[0]])[0].timestamp, value: 2.8 },
       { timestamp: projectBars([chart.bars[2]])[0].timestamp, value: 1.6 },
     ])
-    expect(zones[0].extendData).toMatchObject({ label: '已保存中枢', dashed: false })
+    expect(zones[0].extendData).toMatchObject({ label: '已保存中枢 · 输入已结算', dashed: false })
     expect(overlays.filter(item => item.name === 'segment')).toHaveLength(1)
     expect(chart).toEqual(before)
     expect(chart.chan_observation).toMatchObject({ qualified: false, actionable: false, fallback_allowed: false })

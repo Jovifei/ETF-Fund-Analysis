@@ -200,3 +200,27 @@ Corrected packaging SHA-256s:
 - `frontend/tests/chan-projection.test.ts`: `4dbdbfd09b45413ece28ccaef6cf985e85577dc02e0efcec0823f2170b67799d`
 - `frontend/e2e/chan-projection.spec.ts`: `e3062b8b8f85e03f7c42dddd406afa82d849af64a2ed504bee33f2bbda60e788`
 - `backend/tests/test_chan_chart_overlay.py`: `56e47a32ddbe493e86d4a6090f1afb80429adeccf411d3f8fb0c8628ca544b5a`
+
+## Corrected exact-head CI closure — 2026-10-03 03:06 Shanghai
+
+The fixture correction at `587b13611ed4e37e8cf20200c80ac67d4611ed00`, tree
+`1856fee055dd17da81054325d4039a036ff0c6f3`, has three successful workflows:
+
+- [Full CI 37049326501](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37049326501), completed 2026-10-02 19:03:50 UTC, including migration, Docker build, PostgreSQL image smoke, inventory and image export
+- [Workspace CI 37049326743](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37049326743): 102 Vue tests, 28 Chromium smoke tests, five authenticated journeys and 18 responsive cases
+- [Platform audit 37049326639](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37049326639): PostgreSQL and Windows bridge/ACL contracts
+
+The retained full-CI audit ZIP was rehashed during the recovery on 2026-10-03:
+`636351ec80f38c242001a88b9805125feec3d543a11ce0ac2a1c3cd77b9094b1`.
+Its JUnit was parsed again: **1495 collected / 1484 passed / 11 existing skips /
+0 failures / 0 errors**, 968.342 seconds, JUnit SHA-256
+`fee430693f24ecc41e42bdea5dbc5cd64543afce2d0a4d58db3e1a78eefa407d`.
+The inventory again matches the exact SHA/tree, clean tracked worktree,
+`production_deployed=false` and `registry_image_digest=null`.
+
+The original 3eb0451 Docker failure remains historical FAILED. Its inspected
+screenshots are not relabeled as images from 587b136. The corrected-head browser
+results are supported by its completed workflow/log evidence; those screenshots
+were not reinspected during recovery. Images remain CI artifacts, not registry
+or production releases. These checks do not replace the separate S4-U05 new-head
+checks or full S3/S4, real-market, private-user or physical-phone acceptance.

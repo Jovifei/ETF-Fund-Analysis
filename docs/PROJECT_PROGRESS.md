@@ -2,11 +2,11 @@
 
 > 本文件由 scripts/update_project_progress.py 从 PROJECT_PROGRESS.json 生成。修改台账后重新生成，勿直接修改本文件。
 
-更新：2026-10-03T02:38:38+08:00 · iteration 71 · 当前 S8-F0证据调查 / S2私有验收待完成
+更新：2026-10-03T12:23:00+08:00 · iteration 71 · 当前 S8-F0证据调查 / S2私有验收待完成
 
 [总阶段路线图](PROJECT_MASTER_ROADMAP.md) · [图形进度板](PROJECT_PROGRESS.html) · [维护规则](PROJECT_PROGRESS_MAINTENANCE.md)
 
-**当前下一步：** 发布共享fixture构建上下文修复并核验新提交完整CI；3eb0451真实浏览器/后端回归已通过，Docker构建失败历史保留；不部署
+**当前下一步：** S4-U05恢复候选新全量回归和独立审核均通过；普通快进发布并核验精确新提交全部CI及三项新增浏览器用例；不部署
 
 全项目验收分母尚未冻结；以下显示阶段状态和证据闭环，不能推算全项目完成百分比。
 
@@ -16,7 +16,7 @@
 | S1 数据生命周期与及时性 | 已有实现；最终历史证据待核对 | 待冻结 / 待证据映射 | 待核对 | 待核对 | 待核对 | 待核对 | 待核对 |
 | S2 详情与研究解释 | 已有实现；完整验收待核对 | 待冻结 / 待证据映射 | 待核对 | 待核对 | 待核对 | 待核对 | 待核对 |
 | S3 研究基座与Chan后端 | 当前63c426a已部署；增量与私有验收待独立接收 | 待冻结 / 待证据映射 | 部分PASS | 部分PASS | 部分PASS | PASS | 待核对 |
-| S4 图表与Chan用户体验 | WU2坐标修复已通过真实Chromium回归；首提交Docker构建发现fixture路径问题，最小修复复核后待精确CI，未部署 | 待冻结 / 待证据映射 | IN_PROGRESS | 部分PASS | 部分PASS | PASS | 待核对 |
+| S4 图表与Chan用户体验 | WU2坐标/打包修复587b136精确CI闭环；S4-U05新全量回归及独立审核通过，待新提交CI/浏览器；未部署本批 | 待冻结 / 待证据映射 | IN_PROGRESS | 部分PASS | 部分PASS | PASS | 待核对 |
 | S5 消息与事件关联 | 基础/验收待核对；待正式计划 | 待冻结 / 待证据映射 | 待核对 | 待核对 | 待核对 | 待核对 | 待核对 |
 | S6 AI与本地执行产品闭环 | 研发接力已使用；产品验收待核对 | 待冻结 / 待证据映射 | 待核对 | 待核对 | 待核对 | 待核对 | 待核对 |
 | S7 持仓、组合与风险 | 基础已有；完整阶段待核对 | 待冻结 / 待证据映射 | 待核对 | 待核对 | 待核对 | 待核对 | 待核对 |
@@ -141,7 +141,7 @@
 | S4-U02 | 分型标记 | TODO | TODO | PENDING | TODO | TODO |
 | S4-U03 | 笔绘制 | TODO | TODO | PENDING | TODO | TODO |
 | S4-U04 | 中枢区域 | 部分PASS | 部分PASS | 部分PASS | PENDING | PENDING |
-| S4-U05 | 暂定结算区分 | TODO | TODO | PENDING | TODO | TODO |
+| S4-U05 | 暂定结算区分 | 部分PASS | 部分PASS | 部分PASS | PENDING | PENDING |
 | S4-U06 | 修订变化解释 | TODO | TODO | PENDING | TODO | TODO |
 | S4-U07 | 口径错配阻断 | TODO | TODO | PENDING | TODO | TODO |
 | S4-U08 | 支撑压力Chan层级 | TODO | TODO | PENDING | TODO | TODO |
@@ -281,3 +281,5 @@
 - 2026-10-03 / iteration71：既有分支普通快进发布b799087（tree439b15f6），精确提交full CI37038405848、workspace37038405866、audit37038405846均SUCCESS。远端完整JUnit1493收集/1482通过/11既有跳过/0失败，651.036秒；整个CI约14分52秒。全部后续迁移、Docker构建/隔离冒烟及产物导出通过，原35分钟限制不变。镜像仅CI产物，registry digest缺失、production_deployed=false；真实资格UNKNOWN、actionable=false。证据 docs/audits/CI_PRICE_STRUCTURE_PERFORMANCE_20261003.md。
 - 2026-10-03 / iteration71：WU2持久化缠论中枢时间坐标修复：使用来源日历日期匹配实际蜡烛，保留价格/口径/资格；29新用例、102 Vue、41时区、27旧JS和完整1495收集/1484通过/11既有跳过/0失败，独立审核PASS。完整首跑暴露既有持仓独立性测试新闻衰减跨0.01边界，已仅固定该测试的新闻评价时间，保留全部断言并加确定性边界回归。合入并保留c61e493文档闭环；云端Chromium启动EPERM，精确发布CI/浏览器回归待核验；未部署、真实资格UNKNOWN。收据 docs/audits/WU2_CHAN_CALENDAR_PROJECTION_20261003.md。
 - 2026-10-03 / iteration71：3eb0451精确workspace/audit成功：102 Vue、28 Chromium烟测（新增中枢回归4.3秒）、5登录、18响应式通过，下载校验并检查桌面/390px/关闭图层截图。完整CI后端1495收集/1484通过/11跳过/0失败，967.754秒；但Docker前端仅复制frontend目录导致共享fixture跨目录导入TS2307，整体CI失败且后续镜像门禁未运行。已移动同字节fixture至frontend/tests/fixtures并更新三处消费者，前端独立上下文类型/构建、102 Vue和5后端合同复核通过；新提交CI待核，不部署。
+- 2026-10-03 / iteration71：前序587b136三项CI均SUCCESS，审计ZIP/JUnit/清单恢复后重新校验：1495收集/1484通过/11既有跳过/0失败，968.342秒；迁移/Docker/PG镜像冒烟/导出通过。旧3eb0451 Docker失败和截图证据独立保留，无生产部署。
+- 2026-10-03 / iteration71：S4-U05旧工作区缺失后恢复七个同字节运行时/测试文件，重建文档；重新复现13失败并重跑116 Vue、55时区、11聚焦后端、27旧JS及typecheck/build。全量新回归进行中，独立复核及精确新提交CI待完成；不沿用旧全量结果作新验收。 首次全量1488通过/11跳过/2环境失败；仅补齐HTTPX SOCKS支持，代理和源码不变，11相关用例通过；最终全量1501收集/1490通过/11既有跳过/0失败，554.135秒。 恢复候选全部15文件独立审核PASS；11跳过项身份与前序CI一致。

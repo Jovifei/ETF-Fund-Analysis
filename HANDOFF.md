@@ -1,3 +1,15 @@
+## S4-U05候选恢复与重新验证 — 2026-10-03 12:23 上海
+
+旧工作区缺失，已从存留前端上下文/内容哈希恢复全部七个同字节源码和测试文件，文档重新建立。重新复现13失败后，当前环境116 Vue、55时区、11聚焦后端、27旧JS、实际类型/构建通过；首次全量发现环境缺少SOCKS库，补齐后新全量1501收集/1490通过/11既有跳过/0失败（554.135秒）；全部15文件独立复核通过，发布后精确CI待完成。当前Chromium启动仍EPERM，未部署。下面03:05条目为原候选的历史证据，不替代本次重跑。见[恢复收据](docs/audits/S4_U05_CHAN_SETTLEMENT_DISPLAY_20261003.md)。
+
+## S4-U05输入暂定/结算显示 — 2026-10-03 03:05 上海
+
+持久化Chan观测新增输入级状态显示：结算实线、暂定/未知虚线，移除绘图伪造确认时间，明确引擎确认未知。先复现13失败，116 Vue、11聚焦后端合同、27旧JS、实际类型/构建及前端独立上下文通过；独立审核与全量1501收集/1490通过/11既有跳过/0失败均通过。3项新增浏览器用例待精确CI，本地Chromium启动EPERM。前序587b136三项CI已终态成功，候选准备按普通快进发布；未部署、actionable=false。见[显示合同收据](docs/audits/S4_U05_CHAN_SETTLEMENT_DISPLAY_20261003.md)。
+
+## 前序Chan修复精确CI闭环 — 2026-10-03 03:06 上海
+
+587b136的完整CI、workspace-ci和audit-platforms均SUCCESS；后端1495收集/1484通过/11既有跳过/0失败，迁移、Docker构建、PG镜像冒烟、清单和镜像导出通过。102 Vue、28真实Chromium烟测、5登录及18响应式通过。审计产物/JUnit与精确SHA/tree已校验；3eb0451旧Docker失败保留。镜像仅CI产物，未部署。见[修复后闭环](docs/audits/WU2_CHAN_CALENDAR_PROJECTION_20261003.md#corrected-exact-head-ci-closure--2026-10-03-0306-shanghai)。
+
 ## WU2真实浏览器通过与构建修复 — 2026-10-03 02:38 上海
 
 精确3eb0451的28项Chromium烟测（含新增中枢）、5项登录、18项响应式及平台审计通过，桌面/390px/关闭图层截图已校验。完整后端1484通过/11跳过，但Docker前端构建缺少跨目录测试fixture而失败，后续镜像门禁未运行。已将同一fixture移到前端构建上下文内，独立前端类型/构建、102 Vue和5项后端合同通过；修复后的精确CI仍待核验。未部署、actionable=false。见[证据与修复](docs/audits/WU2_CHAN_CALENDAR_PROJECTION_20261003.md#first-exact-head-hosted-evidence-and-packaging-correction)。

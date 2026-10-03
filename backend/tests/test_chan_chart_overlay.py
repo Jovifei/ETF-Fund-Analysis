@@ -1,5 +1,8 @@
 """Chart overlays prefer a verified persisted Chan read and label the fallback."""
 import json
+from copy import deepcopy
+
+import pytest
 from pathlib import Path
 
 from app.main import app
@@ -134,3 +137,29 @@ def test_frontend_fixture_matches_persisted_backend_projection():
     assert chart["chan_observation"]["zhongshu"][0]["start_date"] == "2026-09-01 15:00:00"
     assert chart["actionable"] is False
     assert chart["qualified"] is False
+
+
+@pytest.mark.parametrize("status", ["settled", "temporary", "unknown", None, "SETTLED"])
+def test_settlement_status_is_forwarded_without_changing_geometry_or_qualification(status):
+    evidence = _evidence()
+    baseline = project_persisted_chan(evidence, "basis-research")
+    evidence["settlement_status"] = status
+    before = deepcopy(evidence)
+    projected = project_persisted_chan(evidence, "basis-research")
+
+    assert projected == {**baseline, "settlement_status": status}
+    assert evidence == before
+    assert projected["actionable"] is False
+    assert projected["qualified"] is False
+    assert "confirmed_at" not in projected
+    assert all("confirmed_at" not in item for item in projected["zhongshu"])
+
+
+def test_missing_settlement_status_is_not_inferred_as_settled():
+    evidence = _evidence()
+    evidence.pop("settlement_status")
+    projected = project_persisted_chan(evidence, "basis-research")
+
+    assert projected["settlement_status"] is None
+    assert projected["drawable"] is True
+    assert projected["actionable"] is False
