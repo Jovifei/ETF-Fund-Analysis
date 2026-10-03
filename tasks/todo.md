@@ -1672,3 +1672,9 @@ Review: 产物内部绑定PENDING；正常私有/真实手机NOT_RUN；实际数
 - [ ] 保留接力文档，整合main并推送，核精确CI。
 - [ ] 备份/回滚/精确镜像部署，手机验收路径待Jovi确认。
 Review: 新代码修改/修复已获本轮任务授权，分支不确定或冲突问题询问Jovi。
+
+- [x] 按Jovi确认保留旧S2分支，双方任务文档合并，main ef287c0已推送。
+- [x] 本地完整1501/1478PASS/23SKIPPED/0FAIL，Vue116、Chromium5及静态构建PASS。
+- [x] 精确main三CI success，CI镜像归档SHA/tree/schema校验，新备份gzip/SHA通过。
+- [ ] 等Jovi构建缓存清理选择（835.4MiB新层大于818MiB余量），然后部署并实体手机验收。
+Review: 业务源码无额外修改；生产未切换，资格UNKNOWN/actionable=false。
