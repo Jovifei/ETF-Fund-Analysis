@@ -6,6 +6,7 @@ Does not mutate production signal thresholds, holdings, or orders.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -13,7 +14,12 @@ from sqlalchemy.orm import Session
 
 from app.core.config import PROJECT_ROOT, Settings, get_settings
 from app.models import EtfShareScale, ForecastSnapshot, IndicatorSnapshot, Instrument, QuoteSnapshot
-from app.services.flow_share_research import FLOW_CONTRACT, build_flow_share_view
+from app.services.flow_share_research import (
+    FLOW_CONTRACT,
+    SHANGHAI,
+    build_flow_share_view,
+    latest_share_scales,
+)
 from app.services.kline_stabilization_service import KlineStabilizationService
 from app.utils.indicator_state import (
     classify_kdj,
@@ -248,14 +254,16 @@ class SignalGradeService:
             "board_type": None,
         }
 
-    def build(self, db: Session) -> dict[str, Any]:
+    def build(self, db: Session, *, as_of: datetime | None = None) -> dict[str, Any]:
+        reference = as_of or datetime.now(self.settings.timezone)
+        reference = reference.astimezone(SHANGHAI) if reference.tzinfo else reference.replace(tzinfo=SHANGHAI)
         instruments = db.scalars(
             select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code)
         ).all()
         latest_indicators = self._latest_indicators(db)
         previous_indicators = self._previous_indicators(db, latest_indicators)
         latest_quotes = self._latest_quotes(db)
-        latest_scales = self._latest_share_scales(db)
+        latest_scales = self._latest_share_scales(db, as_of=reference)
         latest_forecasts = self._latest_horizon_forecasts(db, 1)
 
         classified: list[dict[str, Any]] = []
@@ -263,7 +271,7 @@ class SignalGradeService:
             indicator = latest_indicators.get(instrument.id)
             values = dict(indicator.values_json) if indicator and indicator.values_json else {}
             quote = latest_quotes.get(instrument.id)
-            flow_share = build_flow_share_view(quote, latest_scales.get(instrument.id))
+            flow_share = build_flow_share_view(quote, latest_scales.get(instrument.id), as_of=reference)
             pct = quote_percent_points_to_ratio(quote.pct_change) if quote else _f(values, "return_1d")
             previous = previous_indicators.get(instrument.id)
             row = classify_row(values, pct_change=pct, previous=previous, cfg=self.config)
@@ -348,20 +356,8 @@ class SignalGradeService:
         return latest
 
     @staticmethod
-    def _latest_share_scales(db: Session) -> dict[int, EtfShareScale]:
-        rows = db.scalars(
-            select(EtfShareScale).order_by(
-                EtfShareScale.instrument_id,
-                EtfShareScale.trade_date.desc(),
-                EtfShareScale.id.desc(),
-            )
-        ).all()
-        latest: dict[int, EtfShareScale] = {}
-        for row in rows:
-            current = latest.get(row.instrument_id)
-            if current is None or (current.share_delta is None and row.share_delta is not None):
-                latest[row.instrument_id] = row
-        return latest
+    def _latest_share_scales(db: Session, *, as_of: datetime) -> dict[int, EtfShareScale]:
+        return latest_share_scales(db, as_of=as_of)
 
     @staticmethod
     def _latest_horizon_forecasts(db: Session, horizon: int) -> dict[int, ForecastSnapshot]:

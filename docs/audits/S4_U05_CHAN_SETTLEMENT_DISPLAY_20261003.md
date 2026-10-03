@@ -1,6 +1,6 @@
 # S4-U05 Chan observation-input settlement display
 
-Recovery date: 2026-10-03 Asia/Shanghai. Published baseline remains
+Recovery date: 2026-10-03 Asia/Shanghai. The recovery baseline was
 `587b13611ed4e37e8cf20200c80ac67d4611ed00` on
 `codex/remote-stage-s8f0-s2-20261002`.
 
@@ -90,7 +90,8 @@ The reviewer independently reran typecheck, 116 Vue tests, the 55 chart cases in
 three timezones, 11 focused backend tests, parsed the final JUnit, and verified
 that all 11 skipped testcase identities match the retained 587b136 CI. No blocking
 findings; exact new-head hosted browser/CI remain separate gates.
-Exact new-head hosted CI/browser execution: **PENDING PUBLICATION**.
+At recovery validation, exact new-head hosted CI/browser execution was pending
+publication. It is now closed by the exact-head hosted receipt below.
 
 A fresh Chromium launch check in this replacement environment again fails before
 navigation with `socket() failed: Operation not permitted (1)`. This is current
@@ -114,3 +115,54 @@ login, migration, runtime activation or qualification promotion is authorized by
 this display batch. Real data remains UNKNOWN; predictions remain not calibrated.
 Windows hub/root-doc synchronization is pending its local environment; no success
 is claimed for that separate operation.
+
+## S4-U05 exact-head hosted closure — 2026-10-03 17:59 Shanghai
+
+The reviewed 15-file candidate was published by ordinary fast-forward on the
+existing branch `codex/remote-stage-s8f0-s2-20261002`:
+commit `422c5c403d7336d1f7f01307bb99d5b8f2e6f25e`,
+tree `9b37aae610ffbbc12f7a6146195bebead57f60c2`,
+parent `587b13611ed4e37e8cf20200c80ac67d4611ed00`.
+The remote ref and archived source identity were reverified. All 15 changed
+source-archive blobs match the reviewed commit.
+
+- [Full CI](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37113897750):
+  SUCCESS at 2026-10-03 09:57:05 UTC. Downloaded JUnit: 1501 collected,
+  1490 passed, 11 existing skips, zero failures/errors, 700.910 seconds.
+  Skip identities match the fresh local candidate run.
+- [Workspace CI](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37113897752):
+  SUCCESS. Backend contracts 283 passed / 1 skip; actual Vue typecheck,
+  116 Vue tests and production build passed. Chromium 31 smoke cases,
+  5 authenticated journeys and 18 responsive cases passed.
+  All three new settlement cases passed canvas dash, status wording,
+  repeated overlay cleanup and desktop/390px assertions.
+- [Platform audit](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37113897764):
+  SUCCESS for disposable PostgreSQL concurrency/migrations and Windows bridge/NTFS.
+
+Downloaded workspace ZIP digest:
+`e755c1a839c9765bfc4d4dc73c6f5cc3f7d53c80449cacd9ff4b6aa85b34b6ee`.
+Desktop and 390px screenshots for temporary/settled/unknown inputs were inspected:
+dashed/solid/dashed boundaries and explicit unknown engine-confirmation wording
+are visible. Temporary hidden-overlay screenshot was also inspected; all three
+hidden-overlay canvas assertions passed. This is synthetic-fixture evidence,
+not production data or live-account acceptance.
+
+Downloaded full audit ZIP digest:
+`5902a2e09777d69d3bd94078071331896fd17d6743ea4c1b9d7b3c9e18de370b`.
+JUnit SHA-256:
+`739ad754b32e16fa6e884d61cb27a90ac0ecdb64a17a288e1ab729ce1f32b2b2`.
+Inventory SHA-256:
+`fbc31c2f6fa373e55204355af0e91839bdefb9749dc46869954027ed943a4b74`.
+
+Migration/static/secret/Compose checks, image build, isolated PostgreSQL image
+smoke, source/image inventory and CI image export all passed. Inventory binds the
+exact commit/tree, with clean tracked worktree and zero untracked application
+files. It correctly records `production_deployed=false`,
+`registry_image_digest=null`, `data_qualification=not_asserted`.
+`release_inventory_complete=false` because the image is an isolated CI artifact:
+the sole missing item is `published_image_digest_missing`. The large image
+archive's metadata was checked but the image ZIP was not downloaded or deployed.
+
+This closes the bounded S4-U05 implementation and hosted regression gates.
+It does not complete full S4, live private acceptance, production deployment or
+data qualification. Engine confirmation remains unknown and actionable remains false.
