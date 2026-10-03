@@ -267,7 +267,7 @@ def test_grade_keeps_technical_label_and_refuses_actionable_flow(db_session):
     db_session.flush()
     when = datetime(2026, 9, 2, 14, 0, tzinfo=SHANGHAI)
     db_session.add(QuoteSnapshot(
-        instrument_id=instrument.id, quote_time=when, price=2.4, pct_change=2.0, premium_rate=-0.5,
+        instrument_id=instrument.id, quote_time=when, fetched_at=when, price=2.4, pct_change=2.0, premium_rate=-0.5,
         iopv=2.41, latest_shares=1000, main_net_inflow=20, super_large_net_inflow=5,
         large_net_inflow=15, medium_net_inflow=-3, small_net_inflow=-17,
         flow_contract=SPOT_FLOW_CONTRACT, source="akshare:em:v101", is_realtime=False,
@@ -314,7 +314,7 @@ def test_grade_keeps_technical_label_and_refuses_actionable_flow(db_session):
 
 def test_mock_grade_does_not_present_demo_premium_as_flow(db_session, bootstrapped):
     payload = SignalGradeService().build(db_session)
-    assert payload["flow_share_contract"] == "etf-flow-share-v1"
+    assert payload["flow_share_contract"] == "etf-flow-share-v2"
     blocked = [row for row in payload["rows"] if row["flow_share"]["status"] == "mock_blocked"]
     assert blocked
     assert all(row["quote_is_mock"] for row in payload["rows"])
@@ -326,7 +326,7 @@ def test_decision_board_surfaces_flow_without_actionable(db_session, bootstrappe
     instrument = db_session.query(Instrument).filter(Instrument.ts_code == "510300.SH").one()
     when = datetime.now(SHANGHAI) + timedelta(days=1)
     db_session.add(QuoteSnapshot(
-        instrument_id=instrument.id, quote_time=when, price=4.2, pct_change=0.2, premium_rate=0.15,
+        instrument_id=instrument.id, quote_time=when, fetched_at=when, price=4.2, pct_change=0.2, premium_rate=0.15,
         iopv=4.19, latest_shares=8_000_000, main_net_inflow=42, super_large_net_inflow=20,
         large_net_inflow=22, medium_net_inflow=-10, small_net_inflow=-32,
         flow_contract=SPOT_FLOW_CONTRACT, source="akshare:em:v101", is_realtime=False,
@@ -382,7 +382,8 @@ def test_missing_share_endpoint_is_unavailable():
 
 
 def test_mock_quote_view_does_not_keep_a_synthetic_premium():
-    view = build_flow_share_view(SimpleNamespace(source="mock", premium_rate=1.2, iopv=1), None)
+    view = build_flow_share_view(SimpleNamespace(source="mock", premium_rate=1.2, iopv=1), None,
+                                 as_of=datetime(2026, 9, 2, 14, 0, tzinfo=SHANGHAI))
     assert view["status"] == "mock_blocked"
     assert view["premium_rate"] is None
     assert view["actionable"] is False

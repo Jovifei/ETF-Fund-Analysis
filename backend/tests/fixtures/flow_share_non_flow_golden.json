@@ -1,0 +1,395 @@
+{
+  "as_of": "2026-09-02T14:00:00+08:00",
+  "baseline_commit": "422c5c403d7336d1f7f01307bb99d5b8f2e6f25e",
+  "fixture": "Synthetic existing test_etf_flow_share technical sample, real-source identifiers, no history or forecast rows",
+  "rows": {
+    "decision_board_row": {
+      "actionable": false,
+      "chan": {
+        "detail": "重叠区近似，不是完整 Chan/CZSC",
+        "label": "缠论近似",
+        "status": "missing",
+        "zone": null
+      },
+      "data_status": "historical_price_only",
+      "display_sort_key": [
+        5,
+        1
+      ],
+      "entry_exit_ref": {
+        "actionable": false,
+        "basis": "clustered_price_zones_not_oscillator_conversion",
+        "current_price": null,
+        "position": "unknown",
+        "research_only": true,
+        "resistance_zone": null,
+        "support_zone": null
+      },
+      "forecast": {
+        "as_of_date": null,
+        "calibration_status": "not_calibrated",
+        "confidence": null,
+        "config_hash": null,
+        "disclaimer": "FORECAST · 非实际结果",
+        "expected_return": null,
+        "feature_basis": "unavailable",
+        "feature_schema_version": null,
+        "input_hash": null,
+        "intraday_provisional_used": false,
+        "model_version": null,
+        "p_up": null,
+        "q10": null,
+        "q50": null,
+        "q90": null,
+        "return_semantics": {
+          "no_unit_guessing": true,
+          "unit": "decimal_ratio"
+        },
+        "source": "unavailable"
+      },
+      "forecast_scenario": [],
+      "forecasts": {
+        "1": {
+          "as_of_date": null,
+          "calibration_status": "not_calibrated",
+          "confidence": null,
+          "config_hash": null,
+          "disclaimer": "FORECAST · 非实际结果",
+          "expected_return": null,
+          "feature_basis": "unavailable",
+          "feature_schema_version": null,
+          "input_hash": null,
+          "intraday_provisional_used": false,
+          "model_version": null,
+          "p_up": null,
+          "q10": null,
+          "q50": null,
+          "q90": null,
+          "return_semantics": {
+            "no_unit_guessing": true,
+            "unit": "decimal_ratio"
+          },
+          "source": "unavailable"
+        },
+        "10": {
+          "as_of_date": null,
+          "calibration_status": "not_calibrated",
+          "confidence": null,
+          "config_hash": null,
+          "disclaimer": "FORECAST · 非实际结果",
+          "expected_return": null,
+          "feature_basis": "unavailable",
+          "feature_schema_version": null,
+          "input_hash": null,
+          "intraday_provisional_used": false,
+          "model_version": null,
+          "p_up": null,
+          "q10": null,
+          "q50": null,
+          "q90": null,
+          "return_semantics": {
+            "no_unit_guessing": true,
+            "unit": "decimal_ratio"
+          },
+          "source": "unavailable"
+        },
+        "3": {
+          "as_of_date": null,
+          "calibration_status": "not_calibrated",
+          "confidence": null,
+          "config_hash": null,
+          "disclaimer": "FORECAST · 非实际结果",
+          "expected_return": null,
+          "feature_basis": "unavailable",
+          "feature_schema_version": null,
+          "input_hash": null,
+          "intraday_provisional_used": false,
+          "model_version": null,
+          "p_up": null,
+          "q10": null,
+          "q50": null,
+          "q90": null,
+          "return_semantics": {
+            "no_unit_guessing": true,
+            "unit": "decimal_ratio"
+          },
+          "source": "unavailable"
+        },
+        "5": {
+          "as_of_date": null,
+          "calibration_status": "not_calibrated",
+          "confidence": null,
+          "config_hash": null,
+          "disclaimer": "FORECAST · 非实际结果",
+          "expected_return": null,
+          "feature_basis": "unavailable",
+          "feature_schema_version": null,
+          "input_hash": null,
+          "intraday_provisional_used": false,
+          "model_version": null,
+          "p_up": null,
+          "q10": null,
+          "q50": null,
+          "q90": null,
+          "return_semantics": {
+            "no_unit_guessing": true,
+            "unit": "decimal_ratio"
+          },
+          "source": "unavailable"
+        }
+      },
+      "freshness": "stale",
+      "grade": "数据异常",
+      "grade_reason": "历史价格展示；完整量价/指标资格尚未通过，不生成当前动作",
+      "history": [],
+      "indicator": {
+        "as_of_date": null,
+        "chan_basis": "approximation only; no full Chan/CZSC",
+        "data_quality": null,
+        "display_basis": "historical_price_only",
+        "td_basis": "TD9 setup only; TD13 not implemented",
+        "td_label": "—",
+        "version": null
+      },
+      "indicator_comparison": {
+        "as_of_date": null,
+        "basis": "adjacent_historical_bars_display_only",
+        "previous_as_of_date": null,
+        "values": {
+          "kdj_j": {
+            "current": null,
+            "previous": null
+          },
+          "ma20": {
+            "current": null,
+            "previous": null
+          },
+          "macd_dif": {
+            "current": null,
+            "previous": null
+          },
+          "rsi14": {
+            "current": null,
+            "previous": null
+          },
+          "td_buy_setup": {
+            "current": null,
+            "previous": null
+          },
+          "td_sell_setup": {
+            "current": null,
+            "previous": null
+          },
+          "volume_ratio": {
+            "current": null,
+            "previous": null
+          }
+        }
+      },
+      "instrument_id": 1,
+      "kdj": {
+        "d": null,
+        "j": null,
+        "k": null,
+        "kind": "unknown",
+        "label": "KDJ不足",
+        "note": ""
+      },
+      "kind": "ETF",
+      "ma": {
+        "arrows": [],
+        "kind": "unknown",
+        "label": "均线不足",
+        "values_text": ""
+      },
+      "macd": {
+        "dea": null,
+        "dif": null,
+        "kind": "unknown",
+        "label": "MACD不足"
+      },
+      "name": "流量样本",
+      "provisional": {
+        "reason": "history_missing",
+        "status": "blocked_history_contract",
+        "used_for_derived_values": false
+      },
+      "quote": {
+        "actionable": false,
+        "is_mock": false,
+        "is_realtime": false,
+        "source": "akshare:em:v101",
+        "source_time": "2026-09-02T14:00:00",
+        "status": "stale",
+        "timestamp_verified": false
+      },
+      "research_only": true,
+      "return_1d": 0.02,
+      "return_5d": null,
+      "return_semantics": {
+        "indicator_source_unit": "decimal_ratio",
+        "no_unit_guessing": true,
+        "quote_source_unit": "percentage_points",
+        "unit": "decimal_ratio"
+      },
+      "returns": {
+        "as_of_date": "2026-09-02",
+        "basis": "dated_quote_observation",
+        "no_unit_guessing": true,
+        "previous_as_of_date": null,
+        "previous_confirmed_return": null,
+        "previous_day_delta": null,
+        "target_trade_date": "2026-09-02",
+        "today": 0.02,
+        "unit": "decimal_ratio",
+        "week_1": null
+      },
+      "rsi": {
+        "label": "RSI不足",
+        "value": null
+      },
+      "sector": {
+        "board_type": null,
+        "down": null,
+        "label": "未验证 / 不可用",
+        "note": "无对应行业/概念板块数据",
+        "sector_name": null,
+        "up": null
+      },
+      "snapshot_issues": {
+        "forecasts": {},
+        "indicator": [
+          "indicator_version_mismatch",
+          "indicator_schema_mismatch",
+          "indicator_config_mismatch",
+          "indicator_date_mismatch"
+        ]
+      },
+      "sort_keys": {
+        "chan": 3,
+        "display_only": true,
+        "forecast": null,
+        "forecast_confidence": null,
+        "grade_health": 51,
+        "kdj": 5,
+        "ma": 34,
+        "macd": 6,
+        "rsi": 3,
+        "td": 0,
+        "volume": 41000000000
+      },
+      "support_resistance": {},
+      "td": {
+        "kind": "none",
+        "label": "—"
+      },
+      "theme_l1": null,
+      "theme_l2": null,
+      "theme_relative_strength": {
+        "actionable": false,
+        "basis": "confirmed_5d_return_inside_theme_not_a_second_grade",
+        "label": "主题相对强弱不足",
+        "peer_count": 0,
+        "rank": null,
+        "research_only": true,
+        "return_5d": null,
+        "theme_l1": null
+      },
+      "ts_code": "510390.SH",
+      "volume": {
+        "kind": "unknown",
+        "label": "量能未知",
+        "ratio": null
+      }
+    },
+    "signal_grade_row": {
+      "actionable": false,
+      "forecast": {
+        "calibration_status": "not_calibrated",
+        "confidence": null,
+        "disclaimer": "FORECAST · 非实际结果",
+        "expected_return": null
+      },
+      "grade": "可加仓",
+      "grade_reason": "J < 90 · 上涨放量 · MA多头排列",
+      "kdj": {
+        "d": 50.0,
+        "death": false,
+        "j": 70.0,
+        "k": 55.0,
+        "kind": "healthy",
+        "label": "健康",
+        "note": "趋势可观察 · 非指令"
+      },
+      "ma": {
+        "arrow_basis": "close_vs_ma",
+        "arrows": [
+          {
+            "dir": "up",
+            "window": "M5"
+          },
+          {
+            "dir": "up",
+            "window": "M10"
+          },
+          {
+            "dir": "up",
+            "window": "M20"
+          },
+          {
+            "dir": "up",
+            "window": "M30"
+          }
+        ],
+        "kind": "bull",
+        "label": "多头排列",
+        "values_text": "MA5=2.40 MA20=2.22"
+      },
+      "macd": {
+        "dea": 0.01,
+        "dif": 0.02,
+        "kind": "bull_cont",
+        "label": "多头延续"
+      },
+      "name": "流量样本",
+      "pct_change": 0.02,
+      "quote_is_mock": false,
+      "research_only": true,
+      "return_1d": 0.02,
+      "return_5d": 0.03,
+      "rsi": {
+        "label": "正常偏强 · 趋势中段",
+        "value": 55.0
+      },
+      "sector": {
+        "board_type": null,
+        "down": null,
+        "label": "未验证 / 不可用",
+        "note": "无对应行业/概念板块数据",
+        "sector_name": null,
+        "up": null
+      },
+      "td": {
+        "kind": "none",
+        "label": "—"
+      },
+      "theme_l1": null,
+      "theme_l2": null,
+      "ts_code": "510390.SH",
+      "volume": {
+        "kind": "expand",
+        "label": "放量",
+        "ratio": 1.5
+      },
+      "vs_yesterday": "up"
+    }
+  },
+  "schema": "flow-share-non-flow-golden-v1",
+  "scope": "Exact complete service rows with only flow_share removed; envelope metadata not captured",
+  "setup_script_sha256": "88ab3252cc2f6c94dc5123c68086cedc7ac3f37c9a87945ef4fce35543bda91a",
+  "source_sha256": {
+    "backend/app/services/decision_board_service.py": "47922d79fcc7007428aed34dd410894453ca81c3003ae4ee544f51b1633b35c8",
+    "backend/app/services/flow_share_research.py": "5293429bf840263ca050b19665e0be768140bdb3c362a399118d52f959c6da85",
+    "backend/app/services/signal_grade_service.py": "5c8c24977754e51dac7be7a54e06a9946439fa8c8baa325a0f0277d78d634b3f"
+  }
+}

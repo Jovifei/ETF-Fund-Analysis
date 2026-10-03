@@ -31,7 +31,13 @@ from app.models import (
     QuoteSnapshot,
     TaskRun,
 )
-from app.services.flow_share_research import FLOW_CONTRACT, build_flow_share_view
+from app.services.flow_share_research import (
+    FLOW_CONTRACT,
+    blocked_flow_share_view,
+    build_flow_share_view,
+    latest_share_scales,
+    saved_flow_share_valid,
+)
 from app.services.signal_grade_service import GRADE_ORDER, SignalGradeService, classify_row
 from app.services.support_resistance_service import SupportResistanceService
 from app.services.trading_calendar_service import TradingCalendarService
@@ -39,7 +45,7 @@ from app.utils.indicators_v05 import calculate_indicators
 from app.utils.numbers import finite_or_none
 from app.utils.support_resistance import build_support_resistance
 
-READ_MODEL_VERSION = "decision-read-v109-flow-share"
+READ_MODEL_VERSION = "decision-read-v110-flow-share-provenance"
 HORIZONS = (1, 3, 5, 10)
 # Must match docs/INTRADAY_REFRESH_CADENCE.md and refresh_policy windows.
 # Lunch 11:31–12:59 is intentionally absent.  14:50–15:00 is every 2 minutes.
@@ -261,6 +267,7 @@ class DecisionBoardService:
 
     def refresh(self, db: Session, *, generated_at: datetime | None = None, demo: bool = False) -> SnapshotBuild:
         generated_at = generated_at or datetime.now(self.settings.timezone)
+        generated_at = generated_at.astimezone(SHANGHAI) if generated_at.tzinfo else generated_at.replace(tzinfo=SHANGHAI)
         if not demo:
             # 统一刷新支撑压力快照（250 根 + 真实成交额口径），payload 构建全部读快照。
             instruments = db.scalars(
@@ -313,6 +320,20 @@ class DecisionBoardService:
                            grade_reason="旧快照与当前读取合同不一致，请通过任务重算。", actionable=False,
                            forecasts={}, forecast_scenario=[])
             payload = self._select_horizon(payload, horizon)
+        payload["flow_share_projection_contract"] = FLOW_CONTRACT
+        for row in payload.get("rows", []):
+            flow = row.get("flow_share")
+            flow_compatible = (payload.get("flow_share_contract") == FLOW_CONTRACT
+                               and isinstance(flow, dict) and flow.get("contract") == FLOW_CONTRACT)
+            flow_valid = flow_compatible and saved_flow_share_valid(
+                flow, generated_at=snapshot.generated_at, payload_generated_at=payload.get("generated_at"),
+            )
+            if not compatible or not flow_valid:
+                row["flow_share"] = blocked_flow_share_view(
+                    flow, board_version=payload.get("read_model_version"),
+                    reason="legacy_snapshot_requires_rebuild" if not compatible else
+                    "flow_contract_unverified" if not flow_compatible else "saved_flow_contract_invalid",
+                )
         return payload
 
     def read_instrument(self, db: Session, ts_code: str, *, horizon: int = 1, snapshot_id: str | None = None) -> dict | None:
@@ -365,7 +386,8 @@ class DecisionBoardService:
             db.flush()
 
     def _build_payload(self, db: Session, generated_at: datetime) -> dict:
-        grade_payload = SignalGradeService(self.settings).build(db)
+        generated_at = generated_at.astimezone(SHANGHAI) if generated_at.tzinfo else generated_at.replace(tzinfo=SHANGHAI)
+        grade_payload = SignalGradeService(self.settings).build(db, as_of=generated_at)
         grades = {row["ts_code"]: row for row in grade_payload["rows"]}
         instruments = db.scalars(
             select(Instrument)
@@ -684,7 +706,9 @@ class DecisionBoardService:
                 "status": "mock" if quote_is_mock else ("missing" if quote is None else freshness),
                 "actionable": False,
             },
-            "flow_share": build_flow_share_view(quote, self._latest_share_scale(db, instrument.id)),
+            "flow_share": build_flow_share_view(
+                quote, self._latest_share_scale(db, instrument.id, as_of=generated_market), as_of=generated_market,
+            ),
             "provisional": provisional_status,
             "history": history,
             "forecast_scenario": scenario,
@@ -694,16 +718,8 @@ class DecisionBoardService:
         }
 
     @staticmethod
-    def _latest_share_scale(db: Session, instrument_id: int) -> EtfShareScale | None:
-        rows = db.scalars(
-            select(EtfShareScale)
-            .where(EtfShareScale.instrument_id == instrument_id)
-            .order_by(EtfShareScale.trade_date.desc(), EtfShareScale.id.desc())
-        ).all()
-        if not rows:
-            return None
-        with_delta = next((row for row in rows if row.share_delta is not None), None)
-        return with_delta or rows[0]
+    def _latest_share_scale(db: Session, instrument_id: int, *, as_of: datetime) -> EtfShareScale | None:
+        return latest_share_scales(db, as_of=as_of, instrument_ids=[instrument_id]).get(instrument_id)
 
     @staticmethod
     def _status(indicator, quote, generated_at: datetime) -> tuple[str, str]:

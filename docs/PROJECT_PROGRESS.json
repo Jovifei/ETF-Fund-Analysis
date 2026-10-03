@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "roadmap_version": "2026-10-02-v2",
-  "updated_at": "2026-10-03T12:23:00+08:00",
-  "current_stage": "S8-F0证据调查 / S2私有验收待完成",
+  "updated_at": "2026-10-03T19:01:39+08:00",
+  "current_stage": "S8-F0证据调查 / WU2流量份额合同接收 / S2私有验收待完成",
   "current_iteration": 71,
   "planning_source": "同一远端ChatGPT v2方向修订（只读核验摘要）及本地现场元数据核验；无新增源码独立审核",
   "deployed_code_sha": "abae131770713465c6d65d29c1513fc88b8dc40d",
@@ -14,11 +14,11 @@
   "actionable": false,
   "runtime_activated": false,
   "auto_trading": false,
-  "next_task": "S4-U05恢复候选新全量回归和独立审核均通过；普通快进发布并核验精确新提交全部CI及三项新增浏览器用例；不部署",
+  "next_task": "WU2流量份额v2/v110：91聚焦、1565全量通过/11既有跳过、116前端及完整17文件独立审核通过；普通快进既有分支并核验精确CI；不部署、不重写v109",
   "blockers": [
     "5m/15m真实量额、单位/时间/PIT及成本可行性未解决：先做S8-F0，不再排在所有UX之后",
     "63c426a已部署；完整发布收据、f0迁移回滚兼容、图层合同和私有功能独立接收待核对",
-    "远端文件连接启动超时：方向/合同审查待恢复或以明确范围摘要讨论，不冻结全部已授权低风险工程"
+    "历史记录：远端文件连接曾启动超时；该连接当前状态未复核，既有GitHub实施/审核正常推进，不冻结已授权低风险工程"
   ],
   "release_gates": [
     {
@@ -748,7 +748,7 @@
       "id": "S4",
       "name": "图表与Chan用户体验",
       "legacy": "R4C M4/M5",
-      "status": "WU2坐标/打包修复587b136精确CI闭环；S4-U05新全量回归及独立审核通过，待新提交CI/浏览器；未部署本批",
+      "status": "WU2坐标/打包587b136及S4-U05输入结算显示422c5c4精确CI闭环；未部署本批，完整S4/私有验收仍待完成",
       "counter_frozen": false,
       "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
       "dimensions": {
@@ -831,7 +831,7 @@
             "docs/audits/S4_U05_CHAN_SETTLEMENT_DISPLAY_20261003.md"
           ],
           "na_reasons": {},
-          "scope_note": "仅观测输入级结算显示；不表示结构引擎确认或S4整体完成。恢复候选使用新环境重跑证据。"
+          "scope_note": "仅观测输入级结算显示；不表示结构引擎确认或S4整体完成。恢复候选使用新环境重跑证据。 422c5c4全部CI与三项新增真实Chromium合成用例通过；不替代生产/真实数据验收。"
         },
         {
           "id": "S4-U06",
@@ -2106,6 +2106,16 @@
       "date": "2026-10-03",
       "iteration": 71,
       "description": "S4-U05旧工作区缺失后恢复七个同字节运行时/测试文件，重建文档；重新复现13失败并重跑116 Vue、55时区、11聚焦后端、27旧JS及typecheck/build。全量新回归进行中，独立复核及精确新提交CI待完成；不沿用旧全量结果作新验收。 首次全量1488通过/11跳过/2环境失败；仅补齐HTTPX SOCKS支持，代理和源码不变，11相关用例通过；最终全量1501收集/1490通过/11既有跳过/0失败，554.135秒。 恢复候选全部15文件独立审核PASS；11跳过项身份与前序CI一致。"
+    },
+    {
+      "date": "2026-10-03",
+      "iteration": 71,
+      "description": "S4-U05按既有分支普通快进发布422c5c4，三项精确CI均SUCCESS；1501收集/1490通过/11既有跳过/0失败，700.910秒。116 Vue、31 Chromium（含3新增结算）、5认证、18响应式和平台审计通过，ZIP/JUnit/源码清单及桌面390px截图校验；镜像仅CI产物，无部署/registry发布。"
+    },
+    {
+      "date": "2026-10-03",
+      "iteration": 71,
+      "description": "WU2独立接收发现flow/share未核源合同即标单位、缺时间证据及旧delta覆盖新总量。冻结v2/v110有界读取合同，保留v109原记录并明确旧投影；91聚焦回归和非flow完整row黄金对比、116前端及类型/构建通过；全量及独立审核中，精确提交CI待完成。不改策略/资格，不调用Provider、不部署。 首次全量1568收集/1557通过/11跳过/0失败，554.312秒；其后独立审核修复naive新快照时间和极端时间边界，最终冻结版全量重跑，首轮不作为最终验收。 最终冻结代码完整回归1576收集/1565通过/11既有跳过/0失败，551.366秒；运行时/测试独立审核PASS，时区及极端时间检查通过，完整17文件终态收据复核PASS，精确提交CI待发布后完成。"
     }
   ],
   "incoming_candidate": {
@@ -2271,8 +2281,8 @@
     "legacy_js_tests": "FRESH_27_PASS",
     "remote_review": "INDEPENDENT_FRESH_SOURCE_AND_FULL_RECEIPT_REVIEW_PASS",
     "cloud_browser": "FRESH_CHROMIUM_EPERM_BEFORE_NAVIGATION",
-    "hosted_browser": "THREE_NEW_CASES_DISCOVERED_NOT_RUN",
-    "remote_ci": "PENDING_PUBLICATION",
+    "hosted_browser": "31_SMOKE_5_AUTH_18_RESPONSIVE_PASS_INCLUDING_3_NEW_SETTLEMENT_CASES",
+    "remote_ci": "ALL_3_EXACT_HEAD_SUCCESS",
     "deploy": "NOT_DEPLOYED",
     "engine_confirmation": "unknown",
     "real_data": "UNKNOWN",
@@ -2283,6 +2293,50 @@
     "environment_repair": "VENV_ONLY_HTTPX_SOCKS_EXTRA_NO_PROXY_OR_SOURCE_CHANGE",
     "provider_recheck": "11_PASS",
     "backend_junit_seconds": 554.135,
-    "backend_junit_sha256": "9d47b6cb133c75502de538c0e7c4fafd3e19c54f74a1cfc508dd589570bb110e"
+    "backend_junit_sha256": "9d47b6cb133c75502de538c0e7c4fafd3e19c54f74a1cfc508dd589570bb110e",
+    "code_sha": "422c5c403d7336d1f7f01307bb99d5b8f2e6f25e",
+    "source_tree": "9b37aae610ffbbc12f7a6146195bebead57f60c2",
+    "hosted_screenshots": "ALL_3_STATUSES_DESKTOP_390PX_AND_TEMPORARY_HIDDEN_INSPECTED_SYNTHETIC_ONLY",
+    "remote_ci_runs": {
+      "full": 37113897750,
+      "workspace": 37113897752,
+      "audit": 37113897764
+    },
+    "remote_backend": "1501_COLLECTED_1490_PASS_11_EXISTING_SKIP_0_FAILURES",
+    "remote_backend_seconds": 700.91,
+    "remote_junit_sha256": "739ad754b32e16fa6e884d61cb27a90ac0ecdb64a17a288e1ab729ce1f32b2b2",
+    "remote_audit_zip_sha256": "5902a2e09777d69d3bd94078071331896fd17d6743ea4c1b9d7b3c9e18de370b",
+    "remote_workspace_zip_sha256": "e755c1a839c9765bfc4d4dc73c6f5cc3f7d53c80449cacd9ff4b6aa85b34b6ee",
+    "ci_image": "BUILT_SMOKED_EXPORTED_NOT_DEPLOYED_NOT_PUBLISHED"
+  },
+  "wu2_flow_share_provenance_current_batch": {
+    "baseline_sha": "422c5c403d7336d1f7f01307bb99d5b8f2e6f25e",
+    "scope": "VERSIONED_FLOW_SHARE_PROVENANCE_AND_CUTOFF_READ_CONTRACT",
+    "plan": "tasks/plans/2026-10-03-wu2-flow-share-read-contract.md",
+    "evidence": "docs/audits/WU2_FLOW_SHARE_READ_CONTRACT_20261003.md",
+    "candidate_read_model_version": "decision-read-v110-flow-share-provenance",
+    "candidate_flow_contract": "etf-flow-share-v2",
+    "stored_v109": "PRESERVED_NO_AUTOMATIC_REBUILD",
+    "focused_tests": "91_PASS",
+    "golden_non_flow_rows": "EXACT_PRE_CHANGE_PARITY",
+    "frontend": "116_PASS_TYPECHECK_BUILD_PASS",
+    "backend_full": "FINAL_1576_COLLECTED_1565_PASS_11_EXISTING_SKIP_0_FAILURES",
+    "independent_review": "FINAL_17_FILE_REVIEW_PASS",
+    "hosted_ci": "PENDING_PUBLICATION",
+    "deploy": "NOT_DEPLOYED",
+    "real_data": "UNKNOWN",
+    "actionable": false,
+    "timezone": "UTC_SHANGHAI_LOS_ANGELES_IDENTICAL_INDEPENDENT_PROBES",
+    "first_backend_full": "PROVISIONAL_1568_COLLECTED_1557_PASS_11_SKIP_0_FAILURES_PRE_FINAL_EDGE_FIXES",
+    "first_backend_seconds": 554.312,
+    "first_backend_sha256": "a5a47e2873d910df0449e4c41823a47c5042915f89d4d6d2cb1e42036c500f92",
+    "boundary_tests": "110_EXTREME_TIMESTAMP_AND_10_INVALID_STATE_ABUSE_PASS",
+    "second_backend_full": "PROVISIONAL_1572_COLLECTED_1561_PASS_11_SKIP_0_FAILURES_PRE_UTC_BOUNDARY_FIX",
+    "second_backend_sha256": "9b9fc67a06353216ccf20f5aae33e8918d08045f48eabd5ef05f2ec6a4fa4b38",
+    "second_backend_seconds": 555.034,
+    "backend_seconds": 551.366,
+    "backend_junit_sha256": "8cce0c47c9745454d06820498f766f12f9891f6dde22814f736e8c4da3c73093",
+    "skip_identities": "MATCH_EXACT_422C5C4_PREDECESSOR",
+    "static_checks": "RUFF_COMPILE_JS_SYNTAX_27_JS_SECRET_SCAN_DIFF_CHECK_PASS"
   }
 }
