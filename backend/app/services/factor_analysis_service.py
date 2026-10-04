@@ -447,13 +447,18 @@ class FactorAnalysisService:
             }
             return panel
         panel = add_cross_sectional_features(pd.concat(frames, ignore_index=True))
-        panel.attrs["research_input_contract"] = {
+        research_input_contract = {
             "policy": "canonical_research_history_v1",
             "basis_by_instrument": basis_by_instrument,
             "excluded": exclusions,
         }
+        panel.attrs["research_input_contract"] = research_input_contract
         benchmark_code = str(self.strategy["signal"].get("regime_benchmark", "510300.SH"))
         panel = add_oss_research_factor_diagnostics(panel, benchmark_code)
+        # groupby/apply/concat/merge operations are not an evidence store;
+        # reattach the explicit contract after enrichment instead of relying on
+        # pandas attrs propagation details.
+        panel.attrs["research_input_contract"] = research_input_contract
         for horizon in aligned_research_horizons(self.strategy):
             grouped = panel.groupby("ts_code", observed=True)
             panel[f"forward_return_{horizon}"] = (

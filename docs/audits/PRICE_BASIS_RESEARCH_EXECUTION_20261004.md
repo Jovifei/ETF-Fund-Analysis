@@ -84,3 +84,8 @@ Local acceptance should run the new price-basis contract tests plus:
 Exact hosted full/workspace/platform CI remains mandatory before any future release recommendation.
 
 Qualification stays `UNKNOWN`; backtests and factor diagnostics remain research-only and non-actionable.
+
+
+## Panel metadata preservation
+
+The factor panel passes through groupby/apply/concat/merge enrichment before targets are added. Pandas attrs are not used as an implicit persistence mechanism: the canonical research-input contract is now explicitly reattached after OSS factor enrichment. Tests inspect the final returned panel, not an intermediate frame.
