@@ -22,15 +22,26 @@ from sqlalchemy.orm import Session
 from app.core.config import PROJECT_ROOT, Settings, get_settings
 from app.models import DailyBar, Instrument, SupportResistanceSnapshot, SupportResistanceSnapshotRevision
 from app.utils.hashing import stable_hash
+from app.utils.indicators import calculate_indicators
 from app.utils.price_structure import ALGORITHM_VERSION, build_price_structures
 from app.utils.support_resistance import build_support_resistance
 
 logger = logging.getLogger(__name__)
 
-METHOD_VERSION = "support-resistance-v4-structure"
+METHOD_VERSION = "support-resistance-v5-rich-indicators"
 DEFAULT_WINDOW = 250
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 DAILY_SETTLEMENT = time(15, 15)
+
+def _with_canonical_indicators(frame: pd.DataFrame, indicator_config: dict[str, Any]) -> pd.DataFrame:
+    """Enrich the frozen SR price frame without changing source/basis semantics."""
+    if frame.empty or frame.attrs.get("history_issue"):
+        return frame
+    attrs = dict(frame.attrs)
+    enriched = calculate_indicators(frame, indicator_config).frame
+    enriched.attrs.update(attrs)
+    return enriched
+
 
 _EMPTY_PAYLOAD: dict[str, Any] = {
     "qualified": False,
@@ -157,7 +168,9 @@ class SupportResistanceService:
         frame.attrs["price_basis"] = basis
         frame.attrs["instrument"] = instrument.ts_code if instrument else str(instrument_id)
         frame.attrs["contains_mock"] = any("mock" in str(row.source).lower() for row in rows)
-        return frame
+        strategy = self.settings.load_strategy()
+        frame.attrs["indicator_version"] = strategy["indicator_version"]
+        return _with_canonical_indicators(frame, strategy["indicator"])
 
     # -------------------------------------------------------------- 计算/落库
 
@@ -273,7 +286,7 @@ class SupportResistanceService:
         volume_ready = bool(bars and frame["volume"].notna().all())
         amount_ready = bool(bars and frame["amount"].notna().all())
         payload.update(method_version=METHOD_VERSION, config_hash=self.config_hash,
-            input_hash=frame.attrs.get("input_hash"), actionable=False,
+            input_hash=frame.attrs.get("input_hash"), indicator_version=frame.attrs.get("indicator_version"), actionable=False,
             qualification="mock" if frame.attrs.get("contains_mock") else "blocked" if issue
                           else "price_only_research" if not volume_ready else "research_only",
             input_availability={"volume": volume_ready, "amount": amount_ready, "estimated_amount": False},

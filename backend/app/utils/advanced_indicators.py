@@ -3,6 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from app.utils.rsi_contract import project_rsi
+
 
 def wilder(series: pd.Series, window: int) -> pd.Series:
     return series.ewm(alpha=1 / window, adjust=False, min_periods=window).mean()
@@ -14,15 +16,7 @@ def true_range(high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
 
 
 def rsi(series: pd.Series, window: int) -> pd.Series:
-    delta = series.diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    avg_gain = wilder(gain, window)
-    avg_loss = wilder(loss, window)
-    rs = avg_gain / avg_loss.replace(0, np.nan)
-    out = 100 - (100 / (1 + rs))
-    both_zero = (avg_gain == 0) & (avg_loss == 0)
-    return out.mask(avg_loss == 0, 100.0).mask(avg_gain == 0, 0.0).mask(both_zero, 50.0).fillna(50.0)
+    return project_rsi(series, window)
 
 
 def adx_dmi(high: pd.Series, low: pd.Series, close: pd.Series, window: int = 14) -> tuple[pd.Series, pd.Series, pd.Series]:

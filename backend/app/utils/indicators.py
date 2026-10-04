@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from app.utils.numbers import clamp
+from app.utils.rsi_contract import project_rsi
 
 
 @dataclass(slots=True)
@@ -21,14 +22,7 @@ class IndicatorResult:
 
 
 def _rsi(series: pd.Series, window: int) -> pd.Series:
-    delta = series.diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    avg_gain = gain.ewm(alpha=1 / window, adjust=False, min_periods=window).mean()
-    avg_loss = loss.ewm(alpha=1 / window, adjust=False, min_periods=window).mean()
-    rs = avg_gain / avg_loss.replace(0, np.nan)
-    result = 100 - (100 / (1 + rs))
-    return result.fillna(50.0)
+    return project_rsi(series, window)
 
 
 def _kdj(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 9, initial: float = 50.0) -> tuple[pd.Series, pd.Series, pd.Series]:

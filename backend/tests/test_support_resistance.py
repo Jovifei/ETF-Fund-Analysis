@@ -5,6 +5,7 @@ import pandas as pd
 
 from app.core.config import get_settings
 from app.utils.feature_store import build_feature_frame
+from app.services.support_resistance_service import _with_canonical_indicators
 from app.utils.support_resistance import build_support_resistance
 
 
@@ -101,3 +102,35 @@ def test_support_resistance_method_version_fits_existing_database_column():
     max_length = SupportResistanceSnapshot.__table__.c.method_version.type.length
 
     assert len(METHOD_VERSION) <= max_length
+
+
+def test_persisted_sr_input_is_enriched_with_same_canonical_indicator_frame():
+    rows = 280
+    x = np.arange(rows, dtype=float)
+    close = 1.2 + x * 0.0012 + np.sin(x / 8.0) * 0.055
+    raw = pd.DataFrame({
+        "trade_date": pd.bdate_range("2025-01-02", periods=rows).date,
+        "open": close,
+        "high": close + 0.018,
+        "low": close - 0.018,
+        "close": close,
+        "volume": np.where(x == rows - 1, np.nan, 1_000_000.0),
+        "amount": np.where(x == rows - 1, np.nan, close * 1_000_000.0),
+    })
+    raw.attrs.update(history_issue=None, input_hash="frozen-input", price_basis_id="basis-test")
+    cfg = get_settings().load_strategy()["indicator"]
+    enriched = _with_canonical_indicators(raw, cfg)
+
+    assert enriched.attrs["input_hash"] == "frozen-input"
+    assert enriched.attrs["price_basis_id"] == "basis-test"
+    assert pd.isna(enriched.iloc[-1]["volume"])
+    assert pd.isna(enriched.iloc[-1]["amount"])
+    assert {"ma5", "ma10", "ma20", "ma30", "ma60", "boll_upper", "boll_lower",
+            "macd_dif", "macd_dea", "macd_hist", "kdj_j", "rsi14",
+            "td_buy_setup", "td_sell_setup"}.issubset(enriched.columns)
+
+    raw_methods = {m for level in build_support_resistance(raw)["levels"] for m in level["methods"]}
+    rich_methods = {m for level in build_support_resistance(enriched)["levels"] for m in level["methods"]}
+    assert not any(method.startswith("MA") for method in raw_methods)
+    assert {"MA5", "MA10", "MA20", "MA30", "MA60"}.issubset(rich_methods)
+    assert {"布林上轨", "布林下轨"}.issubset(rich_methods)

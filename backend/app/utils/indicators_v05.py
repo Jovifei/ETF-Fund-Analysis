@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from app.utils.advanced_indicators import adx_dmi, cci, cmf, mfi, obv, rsi, rsrs, williams_r
+from app.utils.advanced_indicators import adx_dmi, cci, cmf, mfi, obv, rsrs, williams_r
 from app.utils.indicators import IndicatorResult, calculate_indicators as calculate_base
 from app.utils.numbers import clamp
 from app.utils.structure_indicators import add_structure_features, volume_profile
@@ -28,7 +28,6 @@ def calculate_indicators(frame: pd.DataFrame, config: dict[str, Any]) -> Indicat
     high = pd.to_numeric(df["high"], errors="coerce")
     low = pd.to_numeric(df["low"], errors="coerce")
     volume = pd.to_numeric(df["volume"], errors="coerce")
-    df["rsi14"] = rsi(close, 14)
     df["return_120d"] = close.pct_change(120)
     trend_cfg = config.get("trend_strength", {})
     window = int(trend_cfg.get("adx_window", 14))
