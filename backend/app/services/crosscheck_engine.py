@@ -24,6 +24,7 @@ from app.models import DailyBar, Instrument, ReportArtifact
 from app.providers.corporate_action_contract import official_corporate_actions
 from app.providers.data_contract import row_units_verified
 from app.utils.hashing import stable_hash
+from app.utils.universe_contract import UNIVERSE_CONTRACT_VERSION, parse_listing_date
 
 
 @dataclass
@@ -59,6 +60,15 @@ def _frame_input_hash(frame: pd.DataFrame) -> str:
     return stable_hash(records)
 
 
+def _filter_bars_from_primary_listing(
+    bars: list[DailyBar], code: str, universe_contract: dict[str, Any]
+) -> list[DailyBar]:
+    listing = parse_listing_date((universe_contract.get("listing_dates") or {}).get(code))
+    if listing is None:
+        return list(bars)
+    return [bar for bar in bars if bar.trade_date >= listing]
+
+
 class CrosscheckEngine:
     """独立第二引擎：读取主引擎报告，逐日重放，输出对账结果。"""
 
@@ -91,6 +101,9 @@ class CrosscheckEngine:
         quantity_contract = data_contract.get("quantity_contract")
         if quantity_contract not in {"mock_passthrough", "documented_endpoint_units_only"}:
             return {"status": "skipped", "reason": "primary_quantity_contract_missing"}
+        universe_contract = data_contract.get("universe_contract")
+        if not isinstance(universe_contract, dict) or universe_contract.get("version") != UNIVERSE_CONTRACT_VERSION:
+            return {"status": "skipped", "reason": "primary_universe_contract_missing"}
         config = report.get("configuration")
         if not isinstance(config, dict):
             return {"status": "skipped", "reason": "primary_configuration_missing"}
@@ -125,6 +138,7 @@ class CrosscheckEngine:
                 .where(DailyBar.instrument_id == inst.id, DailyBar.adjust == "none")
                 .order_by(DailyBar.trade_date)
             ).all()
+            bars = _filter_bars_from_primary_listing(list(bars), code, universe_contract)
             if bars:
                 df = pd.DataFrame([{
                     "date": str(b.trade_date),
@@ -397,6 +411,7 @@ class CrosscheckEngine:
             "actionable": False,
             "primary_content_hash": artifact.content_hash,
             "primary_backtest_version": report.get("backtest_version"),
+            "primary_universe_contract_hash": stable_hash(universe_contract),
             "configuration": {
                 "lot_size": lot_size,
                 "commission_rate": commission_rate,
@@ -435,6 +450,7 @@ def crosscheck_main(db: Session, settings: Settings | None = None) -> dict[str, 
             "filename": filename,
             "status": result["status"],
             "primary_run_id": result.get("primary_run_id"),
+            "primary_universe_contract_hash": result.get("primary_universe_contract_hash"),
         },
     ))
     db.flush()

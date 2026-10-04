@@ -40,6 +40,7 @@ def test_crosscheck_read_primary_and_verdict(bootstrapped, db_session):
     assert result["slippage"]["primary_total"] >= 0
     assert result["slippage"]["crosscheck_total"] >= 0
     assert result["primary_content_hash"]
+    assert len(result["primary_universe_contract_hash"]) == 64
     assert result["actionable"] is False
 
 

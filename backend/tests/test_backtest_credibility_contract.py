@@ -94,8 +94,9 @@ def test_backtest_loader_preserves_unknown_quantity_instead_of_zero(db_session):
             source="fixture", adjust="none", quality_hash=f"{marker}-{idx}",
         ))
     db_session.flush()
-    _, frames, exclusions = RotationBacktestService()._load_frames(db_session)
+    _, frames, exclusions, universe = RotationBacktestService()._load_frames(db_session)
     assert code not in {item["ts_code"] for item in exclusions}
+    assert universe["survivorship_bias_controlled"] is False
     assert pd.isna(frames[code].iloc[-1]["volume"])
     assert pd.isna(frames[code].iloc[-1]["amount"])
     db_session.rollback()

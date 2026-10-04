@@ -121,6 +121,9 @@ class GlobalModelResearchService:
             panel = FactorAnalysisService(self.settings)._panel(db)
             if panel.empty:
                 raise ValueError("global model research requires historical ETF panel")
+            universe_contract = panel.attrs.get("universe_contract")
+            if not isinstance(universe_contract, dict) or not universe_contract.get("version"):
+                raise ValueError("global model research requires explicit universe contract")
             dates = sorted(panel["trade_date"].dropna().unique())
             if len(dates) < 240:
                 raise ValueError("global model research requires at least 240 distinct trading dates")
@@ -163,6 +166,8 @@ class GlobalModelResearchService:
                     panel.attrs.get("research_input_contract", {})
                 ),
                 "panel_research_input_contract": panel.attrs.get("research_input_contract", {}),
+                "panel_universe_contract_hash": stable_hash(panel.attrs.get("universe_contract", {})),
+                "panel_universe_contract": panel.attrs.get("universe_contract", {}),
                 "git_commit_sha": current_git_commit(),
                 "evidence_contract": {
                     "source": self.settings.market_provider,
@@ -311,6 +316,7 @@ class GlobalModelResearchService:
                     "status": payload["status"],
                     "research_version": payload.get("research_version"),
                     "panel_research_input_contract_hash": payload.get("panel_research_input_contract_hash"),
+                    "panel_universe_contract_hash": payload.get("panel_universe_contract_hash"),
                 },
             )
         )

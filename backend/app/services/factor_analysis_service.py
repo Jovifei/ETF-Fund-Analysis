@@ -18,6 +18,10 @@ from app.services.event_service import emit_event
 from app.utils.feature_store import add_cross_sectional_features, build_feature_frame
 from app.utils.hashing import stable_hash
 from app.utils.horizons import aligned_research_horizons
+from app.utils.universe_contract import (
+    current_enabled_universe_contract,
+    filter_rows_from_listing,
+)
 
 OSS_RESEARCH_FACTORS = (
     "linear_slope_20",
@@ -388,6 +392,7 @@ class FactorAnalysisService:
         instruments = db.scalars(
             query.order_by(Instrument.ts_code)
         ).all()
+        universe_contract = current_enabled_universe_contract(instruments)
         frames: list[pd.DataFrame] = []
         basis_by_instrument: dict[str, dict[str, object]] = {}
         exclusions: list[dict[str, str]] = []
@@ -399,7 +404,8 @@ class FactorAnalysisService:
                 .where(DailyBar.instrument_id == instrument.id)
                 .order_by(DailyBar.trade_date, DailyBar.adjust)
             ).all()
-            selection = canonical_research_history(rows, instrument.ts_code)
+            listed_rows, listing_evidence = filter_rows_from_listing(rows, instrument)
+            selection = canonical_research_history(listed_rows, instrument.ts_code)
             if not selection.allowed or len(selection.rows) < 160:
                 exclusions.append({
                     "ts_code": instrument.ts_code,
@@ -437,6 +443,7 @@ class FactorAnalysisService:
                 "price_basis": selection.price_basis,
                 "source_adjustment": selection.source_adjustment,
                 "corporate_action_adjusted": selection.corporate_action_adjusted,
+                **listing_evidence,
             }
         if not frames:
             panel = pd.DataFrame()
@@ -445,6 +452,7 @@ class FactorAnalysisService:
                 "basis_by_instrument": basis_by_instrument,
                 "excluded": exclusions,
             }
+            panel.attrs["universe_contract"] = universe_contract
             return panel
         panel = add_cross_sectional_features(pd.concat(frames, ignore_index=True))
         research_input_contract = {
@@ -453,12 +461,14 @@ class FactorAnalysisService:
             "excluded": exclusions,
         }
         panel.attrs["research_input_contract"] = research_input_contract
+        panel.attrs["universe_contract"] = universe_contract
         benchmark_code = str(self.strategy["signal"].get("regime_benchmark", "510300.SH"))
         panel = add_oss_research_factor_diagnostics(panel, benchmark_code)
         # groupby/apply/concat/merge operations are not an evidence store;
         # reattach the explicit contract after enrichment instead of relying on
         # pandas attrs propagation details.
         panel.attrs["research_input_contract"] = research_input_contract
+        panel.attrs["universe_contract"] = universe_contract
         for horizon in aligned_research_horizons(self.strategy):
             grouped = panel.groupby("ts_code", observed=True)
             panel[f"forward_return_{horizon}"] = (
@@ -529,6 +539,7 @@ class FactorAnalysisService:
                 "first_date": str(panel["trade_date"].min()),
                 "last_date": str(panel["trade_date"].max()),
                 "research_input_contract": panel.attrs.get("research_input_contract", {}),
+                "universe_contract": panel.attrs.get("universe_contract", {}),
             },
             "metrics": metrics,
             "top_absolute_rank_ic": ranked[:30],
@@ -567,6 +578,7 @@ class FactorAnalysisService:
                     "instrument_count": int(panel["ts_code"].nunique()),
                     "analysis_version": self.strategy.get("factor_analysis", {}).get("version"),
                     "research_input_contract_hash": stable_hash(panel.attrs.get("research_input_contract", {})),
+                    "universe_contract_hash": stable_hash(panel.attrs.get("universe_contract", {})),
                 },
             )
         )

@@ -29,6 +29,12 @@ def test_rotation_backtest_is_next_open_and_audited(bootstrapped, db_session):
     assert payload["data"]["execution_price_basis"] == "raw_unadjusted_no_corporate_action_position_events_v1"
     assert payload["data"]["input_hash_policy"] == "single_raw_basis_daily_rows_v2"
     assert isinstance(payload["data"]["excluded_instruments"], list)
+    universe = payload["data"]["universe_contract"]
+    assert universe["version"] == "research-universe-v1-current-enabled"
+    assert universe["current_enabled_only"] is True
+    assert universe["historical_membership_available"] is False
+    assert universe["survivorship_bias_controlled"] is False
+    assert universe["qualification"] == "UNKNOWN"
     assert payload["data"]["input_hashes"]
     assert all(len(value) == 64 for value in payload["data"]["input_hashes"].values())
     assert all(item["feature_date_max"] == item["as_of_close"] for item in payload["decisions"])

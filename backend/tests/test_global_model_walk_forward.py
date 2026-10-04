@@ -56,6 +56,13 @@ def test_global_model_research_uses_purged_expanding_walk_forward(
         "basis_by_instrument": {},
         "excluded": [],
     }
+    panel.attrs["universe_contract"] = {
+        "version": "research-universe-v1-current-enabled",
+        "selection": "synthetic-current-enabled",
+        "survivorship_bias_controlled": False,
+        "historical_membership_available": False,
+        "qualification": "UNKNOWN",
+    }
     monkeypatch.setattr(FactorAnalysisService, "_panel", lambda self, db: panel)
 
     service = GlobalModelResearchService()
@@ -86,6 +93,8 @@ def test_global_model_research_uses_purged_expanding_walk_forward(
     assert payload["evidence_contract"]["qualification"] == "UNKNOWN"
     assert payload["panel_research_input_contract"]["policy"] == "synthetic-test-price-basis"
     assert len(payload["panel_research_input_contract_hash"]) == 64
+    assert payload["panel_universe_contract"]["survivorship_bias_controlled"] is False
+    assert len(payload["panel_universe_contract_hash"]) == 64
 
     for horizon in DEFAULT_RESEARCH_HORIZONS:
         item = payload["horizons"][str(horizon)]
@@ -120,6 +129,18 @@ def test_sparse_instrument_uses_actual_label_end_not_global_calendar_distance(
     db_session, monkeypatch, tmp_path
 ):
     panel = _synthetic_panel()
+    panel.attrs["research_input_contract"] = {
+        "policy": "synthetic-test-price-basis",
+        "basis_by_instrument": {},
+        "excluded": [],
+    }
+    panel.attrs["universe_contract"] = {
+        "version": "research-universe-v1-current-enabled",
+        "selection": "synthetic-current-enabled",
+        "survivorship_bias_controlled": False,
+        "historical_membership_available": False,
+        "qualification": "UNKNOWN",
+    }
     dates = sorted(panel["trade_date"].unique())
     first_test = dates[-80:]
     missing = set(dates[175:180])

@@ -18,6 +18,10 @@ from app.providers.corporate_action_contract import official_corporate_actions
 from app.providers.data_contract import price_history_issue, row_units_verified
 from app.services.event_service import emit_event
 from app.utils.hashing import stable_hash
+from app.utils.universe_contract import (
+    current_enabled_universe_contract,
+    filter_rows_from_listing,
+)
 
 
 @dataclass(slots=True)
@@ -83,22 +87,28 @@ class RotationBacktestService:
 
     def _load_frames(
         self, db: Session
-    ) -> tuple[dict[str, Instrument], dict[str, pd.DataFrame], list[dict[str, str]]]:
+    ) -> tuple[dict[str, Instrument], dict[str, pd.DataFrame], list[dict[str, object]], dict[str, object]]:
         instruments = db.scalars(
             select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code)
         ).all()
         instrument_map = {item.ts_code: item for item in instruments}
+        universe_contract = current_enabled_universe_contract(instruments)
         frames: dict[str, pd.DataFrame] = {}
-        exclusions: list[dict[str, str]] = []
+        exclusions: list[dict[str, object]] = []
         for instrument in instruments:
             rows = db.scalars(
                 select(DailyBar)
                 .where(DailyBar.instrument_id == instrument.id)
                 .order_by(DailyBar.trade_date, DailyBar.adjust)
             ).all()
-            issue = self._execution_history_issue(list(rows), instrument.ts_code)
+            listed_rows, listing_evidence = filter_rows_from_listing(rows, instrument)
+            issue = self._execution_history_issue(listed_rows, instrument.ts_code)
             if issue:
-                exclusions.append({"ts_code": instrument.ts_code, "reason": issue})
+                exclusions.append({
+                    "ts_code": instrument.ts_code,
+                    "reason": issue,
+                    **listing_evidence,
+                })
                 continue
             frame = pd.DataFrame(
                 [
@@ -124,11 +134,11 @@ class RotationBacktestService:
                         "source": row.source,
                         "fetched_at": row.fetched_at,
                     }
-                    for row in rows
+                    for row in listed_rows
                 ]
             ).set_index("trade_date").sort_index()
             frames[instrument.ts_code] = frame
-        return instrument_map, frames, exclusions
+        return instrument_map, frames, exclusions, universe_contract
 
     def _feature_table(self, frames: dict[str, pd.DataFrame], as_of: date) -> pd.DataFrame:
         records: list[dict] = []
@@ -446,7 +456,7 @@ class RotationBacktestService:
 
     def run(self, db: Session, run_id: str | None = None) -> dict:
         run_id = run_id or uuid4().hex
-        instrument_map, frames, load_exclusions = self._load_frames(db)
+        instrument_map, frames, load_exclusions, universe_contract = self._load_frames(db)
         benchmark_code = str(self.config.get("benchmark", self.strategy["signal"]["regime_benchmark"]))
         benchmark = frames.get(benchmark_code)
         if benchmark is None or benchmark.empty:
@@ -582,6 +592,11 @@ class RotationBacktestService:
                 "sources": sources,
                 "instrument_count": len(frames),
                 "execution_price_basis": "raw_unadjusted_no_corporate_action_position_events_v1",
+                "universe_contract": {
+                    **universe_contract,
+                    "execution_included_codes": sorted(frames),
+                    "execution_excluded_count": len(load_exclusions),
+                },
                 "quantity_contract": (
                     "mock_passthrough"
                     if self.settings.market_provider == "mock"
@@ -630,6 +645,7 @@ class RotationBacktestService:
                     "filename": filename,
                     "strategy_version": self.strategy["version"],
                     "backtest_version": self.strategy.get("backtest_version"),
+                    "universe_contract_hash": stable_hash(payload["data"]["universe_contract"]),
                     "metrics": metrics,
                     "contains_mock": payload["data"]["contains_mock"],
                 },
