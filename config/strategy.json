@@ -213,7 +213,7 @@
     "max_per_theme": 1,
     "single_fund_target_cap": 0.25
   },
-  "backtest_version": "rotation-v0.5.1",
+  "backtest_version": "rotation-v0.5.2-validity-crosscheck",
   "feature_schema_version": "feature-store-v0.7.6-maturity-mask",
   "strategy_engine": {
     "version": "strategy-family-v0.5.3-maturity-mask",

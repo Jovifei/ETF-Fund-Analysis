@@ -21,31 +21,56 @@ class RotationBacktestV05Service(RotationBacktestService):
 
     @staticmethod
     def _latest_flow_structure(history: pd.DataFrame) -> dict[str, float]:
-        close = history["close"].astype(float)
-        high = history["high"].astype(float)
-        low = history["low"].astype(float)
-        volume = history["volume"].astype(float).fillna(0.0)
-        amount = history["amount"].astype(float).fillna(0.0)
-        cmf20 = float(cmf(high, low, close, volume, 20).iloc[-1])
-        mfi14 = float(mfi(high, low, close, volume, 14).iloc[-1])
-        volume_ma20 = float(volume.tail(20).mean())
-        amount_ma20 = float(amount.tail(20).mean())
-        volume_ratio = float(volume.iloc[-1] / volume_ma20) if volume_ma20 > 0 else 0.0
-        amount_ratio = float(amount.iloc[-1] / amount_ma20) if amount_ma20 > 0 else volume_ratio
+        close = pd.to_numeric(history["close"], errors="coerce").astype(float)
+        high = pd.to_numeric(history["high"], errors="coerce").astype(float)
+        low = pd.to_numeric(history["low"], errors="coerce").astype(float)
+        volume = pd.to_numeric(history["volume"], errors="coerce").astype(float)
+        amount = pd.to_numeric(history["amount"], errors="coerce").astype(float)
+
+        recent20_volume = volume.tail(20)
+        volume20_valid = len(recent20_volume) == 20 and np.isfinite(recent20_volume.to_numpy()).all()
+        recent20_amount = amount.tail(20)
+        amount20_valid = len(recent20_amount) == 20 and np.isfinite(recent20_amount.to_numpy()).all()
+
+        cmf20 = float(cmf(high, low, close, volume, 20).iloc[-1]) if volume20_valid else np.nan
+        mfi14 = float(mfi(high, low, close, volume, 14).iloc[-1]) if volume20_valid else np.nan
+        volume_ma20 = float(recent20_volume.mean()) if volume20_valid else np.nan
+        amount_ma20 = float(recent20_amount.mean()) if amount20_valid else np.nan
+        volume_ratio = (
+            float(volume.iloc[-1] / volume_ma20)
+            if volume20_valid and volume_ma20 > 0
+            else np.nan
+        )
+        amount_ratio = (
+            float(amount.iloc[-1] / amount_ma20)
+            if amount20_valid and amount_ma20 > 0
+            else np.nan
+        )
+
         prior_high20 = float(high.iloc[-21:-1].max()) if len(high) >= 21 else float(high.iloc[:-1].max())
         prior_low20 = float(low.iloc[-21:-1].min()) if len(low) >= 21 else float(low.iloc[:-1].min())
         prior_high55 = float(high.iloc[-56:-1].max()) if len(high) >= 56 else prior_high20
         spread20 = max(1e-12, prior_high20 - prior_low20)
         box_position = float((close.iloc[-1] - prior_low20) / spread20)
-        box_range = float(spread20 / prior_low20) if prior_low20 > 0 else 0.0
-        breakout20 = float(close.iloc[-1] / prior_high20 - 1) if prior_high20 > 0 else -1.0
-        breakout55 = float(close.iloc[-1] / prior_high55 - 1) if prior_high55 > 0 else -1.0
-        vwap_den = float(volume.tail(20).sum())
+        box_range = float(spread20 / prior_low20) if prior_low20 > 0 else np.nan
+        breakout20 = float(close.iloc[-1] / prior_high20 - 1) if prior_high20 > 0 else np.nan
+        breakout55 = float(close.iloc[-1] / prior_high55 - 1) if prior_high55 > 0 else np.nan
+
         typical = (high + low + close) / 3
-        vwap20 = float((typical * volume).tail(20).sum() / vwap_den) if vwap_den > 0 else float(close.iloc[-1])
-        vwap_distance = float(close.iloc[-1] / vwap20 - 1) if vwap20 > 0 else 0.0
-        pullback = 0.0
-        if len(history) >= 45:
+        vwap_den = float(recent20_volume.sum()) if volume20_valid else np.nan
+        vwap20 = (
+            float((typical.tail(20) * recent20_volume).sum() / vwap_den)
+            if volume20_valid and vwap_den > 0
+            else np.nan
+        )
+        vwap_distance = (
+            float(close.iloc[-1] / vwap20 - 1) if np.isfinite(vwap20) and vwap20 > 0 else np.nan
+        )
+
+        pullback = np.nan
+        recent45_volume = volume.tail(45)
+        if len(history) >= 45 and len(recent45_volume) == 45 and np.isfinite(recent45_volume.to_numpy()).all():
+            pullback = 0.0
             rolling_high = high.shift(1).rolling(20).max()
             rolling_volume = volume.rolling(20).mean()
             ignition = close.pct_change().ge(0.02) & close.ge(rolling_high * 0.98) & volume.ge(rolling_volume * 1.35)
@@ -93,9 +118,14 @@ class RotationBacktestV05Service(RotationBacktestService):
         defaults = {"return_5":.10,"return_20":.20,"return_60":.15,"trend_20":.10,"low_volatility":.10,"volume_flow":.12,"breakout":.10,"rsrs":.06,"structure":.04,"pullback":.03}
         defaults.update({k: float(v) for k,v in (self.config.get("factor_weights") or {}).items() if k in defaults})
         cols = {"return_5":"rank_return_5","return_20":"rank_return_20","return_60":"rank_return_60","trend_20":"rank_trend_20","low_volatility":"rank_low_volatility","volume_flow":"rank_volume_flow","breakout":"rank_breakout","rsrs":"rank_rsrs","structure":"rank_structure","pullback":"rank_pullback"}
-        total = sum(max(0.0, defaults[k]) for k in cols) or 1.0
-        table["score"] = sum(table[c]*max(0.0, defaults[k]) for k,c in cols.items())/total
-        table["absolute_momentum"] = table["return_20"]*.50 + table["return_60"]*.30 + table["trend_20"]*.15 + table["cmf20"]*.05
+        active = [(k, c, max(0.0, defaults[k])) for k, c in cols.items() if max(0.0, defaults[k]) > 0]
+        total = sum(weight for _, _, weight in active) or 1.0
+        table["score"] = sum(table[column] * weight for _, column, weight in active) / total
+        # Absolute momentum remains price-only. Volume flow already has an
+        # explicit factor weight and must not become a hidden gate in ablations.
+        table["absolute_momentum"] = (
+            table["return_20"] * .55 + table["return_60"] * .30 + table["trend_20"] * .15
+        )
         return table.sort_values("score", ascending=False)
 
     def _regime(self, benchmark: pd.DataFrame, as_of: date) -> tuple[str, float, dict]:
@@ -131,10 +161,10 @@ class RotationBacktestV05Service(RotationBacktestService):
         baseline = results["momentum_baseline"]
         comparison = {name:{"metrics":metrics,"delta_total_return":round(float(metrics.get("total_return") or 0)-float(baseline.get("total_return") or 0),6),"delta_sharpe":round(float(metrics.get("sharpe_ratio") or 0)-float(baseline.get("sharpe_ratio") or 0),4),"delta_max_drawdown":round(float(metrics.get("max_drawdown") or 0)-float(baseline.get("max_drawdown") or 0),6)} for name,metrics in results.items()}
         now = datetime.now(self.settings.timezone)
-        payload = {"run_id":run_id,"generated_at":now.isoformat(),"report_type":"strategy_ablation","strategy_version":self.strategy["version"],"research_status":"ablation_only_not_strategy_promotion","baseline":"momentum_baseline","variants":variants,"comparison":comparison,"component_reports":files,"audit":{"same_execution_engine":True,"decision_at":"close_t","execution_at":"open_t_plus_1","costs_included":True,"only_factor_weights_changed":True}}
+        payload = {"run_id":run_id,"generated_at":now.isoformat(),"report_type":"strategy_ablation","strategy_version":self.strategy["version"],"backtest_version":self.strategy.get("backtest_version"),"research_status":"ablation_only_not_strategy_promotion","baseline":"momentum_baseline","variants":variants,"comparison":comparison,"component_reports":files,"audit":{"same_execution_engine":True,"decision_at":"close_t","execution_at":"open_t_plus_1","costs_included":True,"only_factor_weights_changed":True,"point_in_time_revision_qualified":False}}
         content_hash = stable_hash(payload); self.settings.reports_dir.mkdir(parents=True, exist_ok=True)
         filename = f"strategy_ablation_{now:%Y%m%d_%H%M%S}_{content_hash[:10]}.json"; path = self.settings.reports_dir/filename
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        db.add(ReportArtifact(report_type="strategy_ablation", as_of_time=now, file_path=str(path), content_hash=content_hash, metadata_json={"run_id":run_id,"filename":filename,"strategy_version":self.strategy["version"],"comparison":comparison}))
+        db.add(ReportArtifact(report_type="strategy_ablation", as_of_time=now, file_path=str(path), content_hash=content_hash, metadata_json={"run_id":run_id,"filename":filename,"strategy_version":self.strategy["version"],"backtest_version":self.strategy.get("backtest_version"),"comparison":comparison}))
         db.flush(); emit_event(db, "backtest.ablation.completed", {"run_id":run_id,"filename":filename})
         return {"run_id":run_id,"filename":filename,"path":str(path),"url":f"/api/reports/{filename}","content_hash":content_hash,"comparison":comparison,"component_reports":files}
