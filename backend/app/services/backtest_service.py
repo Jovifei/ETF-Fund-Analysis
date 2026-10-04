@@ -41,7 +41,9 @@ class RotationBacktestService:
 
     @staticmethod
     def _percentile_rank(values: pd.Series) -> pd.Series:
-        return values.rank(method="average", pct=True).fillna(0.0)
+        # Missing factor evidence is not the bottom percentile. Preserve NaN so
+        # strategies that positively weight the factor can fail closed.
+        return values.rank(method="average", pct=True)
 
     def _load_frames(self, db: Session) -> tuple[dict[str, Instrument], dict[str, pd.DataFrame]]:
         instruments = db.scalars(
@@ -67,8 +69,8 @@ class RotationBacktestService:
                         "high": float(row.high),
                         "low": float(row.low),
                         "close": float(row.close),
-                        "volume": float(row.volume or 0.0),
-                        "amount": float(row.amount or 0.0),
+                        "volume": float(row.volume) if row.volume is not None and math.isfinite(float(row.volume)) else np.nan,
+                        "amount": float(row.amount) if row.amount is not None and math.isfinite(float(row.amount)) else np.nan,
                         "source": row.source,
                         "fetched_at": row.fetched_at,
                     }
@@ -426,6 +428,10 @@ class RotationBacktestService:
             daily_jump = frame["close"].pct_change().abs()
             if bool((daily_jump > float(self.config.get("extreme_return_warning", 0.20))).any()):
                 quality_warnings.append(f"{code}: 存在绝对日涨跌超过阈值，需核验复权/拆分口径")
+            if "volume" in frame and frame["volume"].isna().any():
+                quality_warnings.append(f"{code}: 成交量存在未知值；量流因子不得以0代替")
+            if "amount" in frame and frame["amount"].isna().any():
+                quality_warnings.append(f"{code}: 成交额存在未知值；金额因子不得以成交量代替")
 
         last_decision_index: int | None = None
         for day_index, trade_date in enumerate(calendar):
@@ -522,7 +528,9 @@ class RotationBacktestService:
             "generated_at": now.isoformat(),
             "report_type": "rotation_backtest",
             "strategy_version": self.strategy["version"],
+            "backtest_version": self.strategy.get("backtest_version"),
             "research_status": "unsealed_research_baseline",
+            "qualification": "UNKNOWN",
             "promotion_policy": "manual review; requires real-data WFO and independent event-driven comparison",
             "data": {
                 "sources": sources,
@@ -531,7 +539,7 @@ class RotationBacktestService:
                 "end_date": equity_records[-1]["date"],
                 "benchmark": benchmark_code,
                 "quality_warnings": sorted(set(quality_warnings)),
-                "contains_mock": any(source == "mock" for source in sources),
+                "contains_mock": any("mock" in str(source).lower() for source in sources),
             },
             "configuration": self.config,
             "metrics": metrics,
@@ -543,7 +551,12 @@ class RotationBacktestService:
                 "execution_at": "open_t_plus_1",
                 "lot_constraint": int(self.config.get("lot_size", 100)),
                 "costs_included": True,
-                "future_data_in_features": False,
+                "commission_rate": float(self.config.get("commission_rate", 0.0002)),
+                "minimum_commission": float(self.config.get("minimum_commission", 5.0)),
+                "slippage_rate": float(self.config.get("slippage_rate", 0.0005)),
+                "future_trade_dates_in_features": False,
+                "point_in_time_revision_qualified": False,
+                "pit_note": "daily-bar revision/publication PIT is not proven by this backtest",
             },
         }
         content_hash = stable_hash(payload)
@@ -561,6 +574,7 @@ class RotationBacktestService:
                     "run_id": run_id,
                     "filename": filename,
                     "strategy_version": self.strategy["version"],
+                    "backtest_version": self.strategy.get("backtest_version"),
                     "metrics": metrics,
                     "contains_mock": payload["data"]["contains_mock"],
                 },

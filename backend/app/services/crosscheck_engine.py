@@ -51,7 +51,7 @@ class CrosscheckEngine:
         artifact = db.scalars(
             select(ReportArtifact)
             .where(ReportArtifact.report_type == "rotation_backtest")
-            .order_by(ReportArtifact.as_of_time.desc())
+            .order_by(ReportArtifact.id.desc())
             .limit(1)
         ).first()
         if artifact is None:
@@ -61,19 +61,30 @@ class CrosscheckEngine:
         except (OSError, ValueError) as exc:
             return {"status": "skipped", "reason": f"report unreadable: {type(exc).__name__}"}
 
+        if stable_hash(report) != artifact.content_hash:
+            return {"status": "skipped", "reason": "primary_report_content_hash_mismatch"}
+
         decisions = report.get("decisions", [])
         trades_primary = report.get("trades", [])
         equity_primary = report.get("equity_curve", [])
-        config = report.get("configuration", self.strategy.get("backtest", {}))
+        config = report.get("configuration")
+        if not isinstance(config, dict):
+            return {"status": "skipped", "reason": "primary_configuration_missing"}
 
         if not decisions or not equity_primary:
             return {"status": "skipped", "reason": "empty decisions or equity curve"}
 
-        # 2. 加载所有相关标的的日线数据
-        ts_codes = list({
-            d.get("ts_code") or sel.get("ts_code")
+        # 2. 加载所有相关标的的日线数据。Decision.selection 是审计详情字典，
+        # 不是持仓列表；真实交易标的来自 target_weights 和已执行 trades。
+        ts_codes = sorted({
+            str(code)
             for d in decisions
-            for sel in (d.get("selection", [d]) if isinstance(d.get("selection"), list) else [d])
+            for code in (d.get("target_weights") or {}).keys()
+            if code
+        } | {
+            str(item.get("ts_code"))
+            for item in trades_primary
+            if item.get("ts_code")
         })
         benchmark_code = config.get("benchmark", "510300.SH")
         all_codes = list(set(ts_codes + [benchmark_code]))
@@ -110,91 +121,173 @@ class CrosscheckEngine:
             if exec_date:
                 decision_map[exec_date] = d
 
-        # 4. 确定性重放
+        # 4. 确定性重放。执行口径独立实现，但必须与主引擎的
+        # close_t decision -> open_t+1 execution / close_t+1 valuation 一致。
         initial_cash = float(config.get("initial_cash", 1_000_000))
-        lot_size = int(config.get("lot_size", 100))
+        lot_size = max(1, int(config.get("lot_size", 100)))
         commission_rate = float(config.get("commission_rate", 0.0002))
         min_commission = float(config.get("minimum_commission", 5.0))
         slippage_rate = float(config.get("slippage_rate", 0.0005))
 
-        equity_start = equity_primary[0]["date"]
-        equity_end = equity_primary[-1]["date"]
-        all_dates = sorted({
-            d for code, df in bar_frames.items() for d in df.index
-            if equity_start <= d <= equity_end
-        })
-
+        all_dates = [str(item["date"]) for item in equity_primary]
         cash = initial_cash
         positions: dict[str, _Position] = {}
-        crosscheck_equity = []
-        crosscheck_trades = []
+        crosscheck_equity: list[dict[str, Any]] = []
+        crosscheck_trades: list[dict[str, Any]] = []
+
+        def latest_close(code: str, day: str, *, before: bool = False) -> float | None:
+            frame = bar_frames.get(code)
+            if frame is None or frame.empty:
+                return None
+            history = frame.loc[frame.index < day if before else frame.index <= day, "close"]
+            if history.empty:
+                return None
+            value = float(history.iloc[-1])
+            return value if math.isfinite(value) and value > 0 else None
 
         for day in all_dates:
-            # 市值 = 持仓 * 当日收盘价
-            market_value = 0.0
+            open_prices: dict[str, float] = {}
+            for code, frame in bar_frames.items():
+                if day not in frame.index:
+                    continue
+                value = float(frame.at[day, "open"])
+                if math.isfinite(value) and value > 0:
+                    open_prices[code] = value
+
+            open_value = 0.0
             for code, pos in positions.items():
-                price = bar_frames.get(code, pd.DataFrame()).at[day, "close"] if day in bar_frames.get(code, pd.DataFrame()).index else pos.avg_cost
-                market_value += pos.shares * price
-            total_equity = cash + market_value
+                raw_open = open_prices.get(code)
+                value = raw_open if raw_open is not None else latest_close(code, day, before=True)
+                if value is not None:
+                    open_value += pos.shares * value
+            equity_at_open = cash + open_value
 
-            # 调仓日：执行决策
             if day in decision_map:
-                d = decision_map[day]
-                target_weights = d.get("target_weights", {})
-                for code, target_w in target_weights.items():
-                    if code not in bar_frames or day not in bar_frames[code].index:
-                        continue
-                    open_price = float(bar_frames[code].at[day, "open"])
-                    exec_price = open_price * (1 + slippage_rate)
-                    current_pos = positions.get(code, _Position(code))
-                    target_value = total_equity * target_w
-                    target_shares = (target_value / exec_price // lot_size) * lot_size
-                    delta_shares = target_shares - current_pos.shares
+                target_weights = {
+                    str(code): float(weight)
+                    for code, weight in (decision_map[day].get("target_weights") or {}).items()
+                }
 
-                    if abs(delta_shares) < lot_size:
+                # Sell first, including positions removed from the target portfolio.
+                for code in sorted(list(positions)):
+                    pos = positions[code]
+                    raw_open = open_prices.get(code)
+                    if raw_open is None or pos.shares <= 0:
                         continue
-
-                    gross = abs(delta_shares * exec_price)
+                    target_value = equity_at_open * target_weights.get(code, 0.0)
+                    current_value = pos.shares * raw_open
+                    excess = max(0.0, current_value - target_value)
+                    sell_shares = int(excess // (raw_open * lot_size)) * lot_size
+                    if code not in target_weights:
+                        sell_shares = int(pos.shares)
+                    sell_shares = min(int(pos.shares), sell_shares)
+                    if sell_shares <= 0:
+                        continue
+                    exec_price = raw_open * (1.0 - slippage_rate)
+                    gross = exec_price * sell_shares
                     commission = max(gross * commission_rate, min_commission)
-                    side = "buy" if delta_shares > 0 else "sell"
-                    cost = gross + commission
-                    if side == "buy" and cost > cash:
-                        continue
-                    if side == "sell":
-                        cash += gross - commission
-                    else:
-                        cash -= cost
-                    current_pos.shares = target_shares
-                    current_pos.avg_cost = exec_price
-                    positions[code] = current_pos
+                    slippage_cost = (raw_open - exec_price) * sell_shares
+                    cash += gross - commission
+                    pos.shares -= sell_shares
+                    if pos.shares <= 0:
+                        del positions[code]
                     crosscheck_trades.append({
-                        "date": day,
-                        "ts_code": code,
-                        "side": side,
-                        "shares": abs(delta_shares),
-                        "price": round(exec_price, 4),
-                        "gross": round(gross, 2),
-                        "commission": round(commission, 2),
+                        "date": day, "ts_code": code, "side": "sell",
+                        "shares": sell_shares, "price": round(exec_price, 6),
+                        "gross": round(gross, 2), "commission": round(commission, 2),
+                        "slippage_cost": round(slippage_cost, 6),
                     })
 
+                # Then buy toward the same open-equity target weights.
+                for code, target_w in sorted(target_weights.items(), key=lambda item: item[1], reverse=True):
+                    raw_open = open_prices.get(code)
+                    if raw_open is None:
+                        continue
+                    pos = positions.get(code, _Position(code))
+                    target_value = equity_at_open * target_w
+                    current_value = pos.shares * raw_open
+                    missing = max(0.0, target_value - current_value)
+                    exec_price = raw_open * (1.0 + slippage_rate)
+                    buy_shares = int(missing // (exec_price * lot_size)) * lot_size
+                    while buy_shares > 0:
+                        gross = exec_price * buy_shares
+                        commission = max(gross * commission_rate, min_commission)
+                        if gross + commission <= cash:
+                            break
+                        buy_shares -= lot_size
+                    if buy_shares <= 0:
+                        continue
+                    gross = exec_price * buy_shares
+                    commission = max(gross * commission_rate, min_commission)
+                    slippage_cost = (exec_price - raw_open) * buy_shares
+                    old_cost = pos.avg_cost * pos.shares
+                    cash -= gross + commission
+                    pos.avg_cost = (old_cost + gross + commission) / (pos.shares + buy_shares)
+                    pos.shares += buy_shares
+                    positions[code] = pos
+                    crosscheck_trades.append({
+                        "date": day, "ts_code": code, "side": "buy",
+                        "shares": buy_shares, "price": round(exec_price, 6),
+                        "gross": round(gross, 2), "commission": round(commission, 2),
+                        "slippage_cost": round(slippage_cost, 6),
+                    })
+
+            # Revalue the POST-trade portfolio at the execution day's close.
+            market_value = 0.0
+            for code, pos in positions.items():
+                price = latest_close(code, day)
+                if price is None:
+                    price = pos.avg_cost
+                market_value += pos.shares * price
             crosscheck_equity.append({"date": day, "equity": round(cash + market_value, 2)})
 
         # 5. 对账指标
         if not crosscheck_equity:
             return {"status": "skipped", "reason": "crosscheck produced no equity"}
 
-        final_eq = crosscheck_equity[-1]["equity"]
-        primary_final = equity_primary[-1]["equity"]
+        primary_by_date = {str(item["date"]): float(item["equity"]) for item in equity_primary}
+        curve_diffs = []
+        for item in crosscheck_equity:
+            primary_value = primary_by_date.get(item["date"])
+            if primary_value is None or primary_value <= 0:
+                continue
+            curve_diffs.append(abs(float(item["equity"]) - primary_value) / primary_value)
+
+        final_eq = float(crosscheck_equity[-1]["equity"])
+        primary_final = float(equity_primary[-1]["equity"])
         equity_diff_pct = abs(final_eq - primary_final) / primary_final if primary_final else 1.0
+        max_curve_diff_pct = max(curve_diffs, default=1.0)
 
         trades_count_match = len(crosscheck_trades) == len(trades_primary)
-        total_commission_cc = sum(t["commission"] for t in crosscheck_trades)
-        total_commission_primary = sum(t.get("commission", 0) for t in trades_primary)
+        total_commission_cc = sum(float(t["commission"]) for t in crosscheck_trades)
+        total_commission_primary = sum(float(t.get("commission", 0)) for t in trades_primary)
+        total_slippage_cc = sum(float(t.get("slippage_cost", 0)) for t in crosscheck_trades)
+
+        total_slippage_primary = 0.0
+        for trade in trades_primary:
+            price = float(trade.get("price") or 0.0)
+            shares = float(trade.get("shares") or 0.0)
+            if price <= 0 or shares <= 0 or slippage_rate <= 0:
+                continue
+            if trade.get("side") == "buy":
+                raw_open = price / (1.0 + slippage_rate)
+                total_slippage_primary += (price - raw_open) * shares
+            elif trade.get("side") == "sell":
+                raw_open = price / (1.0 - slippage_rate)
+                total_slippage_primary += (raw_open - price) * shares
 
         checks = {
             "final_equity_within_threshold": bool(equity_diff_pct <= EQUITY_THRESHOLD),
+            "equity_curve_within_threshold": bool(max_curve_diff_pct <= EQUITY_THRESHOLD),
             "trade_count_match": bool(trades_count_match),
-            "commission_within_tolerance": bool(abs(total_commission_cc - total_commission_primary) <= COMMISSION_TOLERANCE * len(trades_primary) + 1.0),
+            "commission_within_tolerance": bool(
+                abs(total_commission_cc - total_commission_primary)
+                <= COMMISSION_TOLERANCE * len(trades_primary) + 1.0
+            ),
+            "slippage_within_tolerance": bool(
+                abs(total_slippage_cc - total_slippage_primary)
+                <= SLIPPAGE_TOLERANCE * len(trades_primary) + 1.0
+            ),
         }
         all_pass = all(checks.values())
 
@@ -207,6 +300,7 @@ class CrosscheckEngine:
                 "primary_final": round(primary_final, 2),
                 "crosscheck_final": round(final_eq, 2),
                 "difference_pct": round(equity_diff_pct * 100, 4),
+                "max_curve_difference_pct": round(max_curve_diff_pct * 100, 4),
                 "threshold_pct": EQUITY_THRESHOLD * 100,
             },
             "trades": {
@@ -218,6 +312,14 @@ class CrosscheckEngine:
                 "primary_total": round(total_commission_primary, 2),
                 "crosscheck_total": round(total_commission_cc, 2),
             },
+            "slippage": {
+                "primary_total": round(total_slippage_primary, 2),
+                "crosscheck_total": round(total_slippage_cc, 2),
+            },
+            "qualification": "mock_or_synthetic" if bool((report.get("data") or {}).get("contains_mock")) else "not_qualified",
+            "actionable": False,
+            "primary_content_hash": artifact.content_hash,
+            "primary_backtest_version": report.get("backtest_version"),
             "configuration": {
                 "lot_size": lot_size,
                 "commission_rate": commission_rate,

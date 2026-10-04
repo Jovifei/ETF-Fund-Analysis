@@ -26,7 +26,7 @@ def test_crosscheck_read_primary_and_verdict(bootstrapped, db_session):
     # Now: run the crosscheck
     result = crosscheck_main(db_session)
     db_session.commit()
-    assert result["status"] in ("pass", "fail"), f"unexpected status: {result['status']}"
+    assert result["status"] == "pass", result
     assert "primary_run_id" in result
     assert "equity" in result
     assert "trades" in result
@@ -35,6 +35,12 @@ def test_crosscheck_read_primary_and_verdict(bootstrapped, db_session):
     # In mock environment, we expect pass (deterministic replay)
     assert result["equity"]["primary_final"] > 0
     assert result["equity"]["crosscheck_final"] > 0
+    assert all(result["checks"].values()), result["checks"]
+    assert result["equity"]["max_curve_difference_pct"] <= result["equity"]["threshold_pct"]
+    assert result["slippage"]["primary_total"] >= 0
+    assert result["slippage"]["crosscheck_total"] >= 0
+    assert result["primary_content_hash"]
+    assert result["actionable"] is False
 
 
 def test_crosscheck_mock_flagged(bootstrapped, db_session):
@@ -42,4 +48,6 @@ def test_crosscheck_mock_flagged(bootstrapped, db_session):
     RotationBacktestService().run(db_session, run_id="test-crosscheck-mock")
     db_session.commit()
     result = crosscheck_main(db_session)
-    assert result["status"] != "skipped"
+    assert result["status"] == "pass"
+    assert result["qualification"] == "mock_or_synthetic"
+    assert result["actionable"] is False
