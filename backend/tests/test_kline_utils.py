@@ -33,6 +33,8 @@ def test_td_setup_top_nine_label():
     assert snapshot["label"].startswith("TD")
     assert snapshot["sub_label"] == "下跌变盘"
     assert snapshot["desc"] == "上涨衰竭"
+    assert snapshot["scope"] == "setup_only_not_full_td_sequential"
+    assert snapshot["actionable"] is False
 
 
 def test_td_setup_bottom_nine_label():
@@ -44,6 +46,8 @@ def test_td_setup_bottom_nine_label():
     assert snapshot["label"].startswith("TD")
     assert snapshot["sub_label"] == "上涨变盘"
     assert snapshot["desc"] == "下跌衰竭"
+    assert snapshot["scope"] == "setup_only_not_full_td_sequential"
+    assert snapshot["actionable"] is False
 
 
 def test_td_setup_no_sequence():

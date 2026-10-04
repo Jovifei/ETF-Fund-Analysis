@@ -280,10 +280,10 @@ def td_state_view(values: dict[str, Any]) -> dict[str, Any]:
     direction = "sell" if state["kind"] == "sell" else "buy"
     if state["kind"] == "sell":
         sub = "上涨衰竭" if countdown >= 9 else ""
-        desc = "下跌变盘节奏参考" if countdown >= 9 else "卖出 setup 计数"
+        desc = "上涨衰竭 setup 参考 · 非交易信号" if countdown >= 9 else "卖出 setup 计数"
     else:
         sub = "下跌衰竭" if countdown >= 9 else ""
-        desc = "上涨变盘节奏参考" if countdown >= 9 else "买入 setup 计数"
+        desc = "下跌衰竭 setup 参考 · 非交易信号" if countdown >= 9 else "买入 setup 计数"
     return {
         "label": state["label"],
         "direction": direction,
