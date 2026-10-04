@@ -57,3 +57,14 @@ Remote correction:
 - new Chromium coverage exercises Detail, Overview index, global-search-to-Detail and Legacy entrypoints and records the first real chart canvas/pane height before and after enlargement, including 390x844 and 320px Detail viewports.
 
 Remote tests remain NOT_RUN by design; local Codex owns exact-SHA execution.
+
+
+## Iteration 77 algorithm hardening
+
+Local receipt `16495ed` reported 116 PASS / 2 FAIL on source `67f0e25`: the full synthetic panel produced 474 rather than 480 OOS rows because the test windows were built from global dates that still included feature rows whose forward labels had not matured; the default-run-id test also inherited a previously persisted validation report and therefore exercised duplicate rather than the intended no-report skip path.
+
+The correction does not weaken either assertion:
+- each horizon now builds its four OOS windows from that horizon's dates with actually matured labels, then still enforces the per-sample `label_end_date < test boundary` rule; the complete six-instrument fixture therefore has 480 evaluated rows while sparse instruments remain individually purged;
+- no-report UUID behavior is tested with an isolated empty repository stub, while the existing create/idempotence path separately retains duplicate coverage.
+
+Calibration governance is tightened beyond the local failures. Aggregate means can no longer hide a bad formal horizon: each configured horizon has its own instrument/sample/metric gate. Probability-style metrics must be finite and within [0,1]. Empty horizons fail. Obvious mock/fixture/demo/test/synthetic source labels and malformed lineage digests fail. Most importantly, holdout/PIT eligibility is code-controlled: the current `forecast-validation-v0.8-research-only` contract is explicitly non-qualifying and the eligible-contract allowlist is empty. A JSON report cannot promote itself by setting holdout/PIT/calibration flags to true. Qualification therefore remains UNKNOWN and calibration remains blocked.

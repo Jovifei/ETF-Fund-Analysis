@@ -20,6 +20,9 @@ from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS
 from app.utils.reproducibility import current_git_commit
 
 
+VALIDATION_CONTRACT_VERSION = "forecast-validation-v0.8-research-only"
+
+
 def _safe_mean(values: list[float]) -> float | None:
     selected = [float(value) for value in values if math.isfinite(float(value))]
     return round(float(np.mean(selected)), 6) if selected else None
@@ -218,6 +221,7 @@ class ForecastValidationService:
         payload = {
             "run_id": run_id,
             "generated_at": now.isoformat(),
+            "validation_contract_version": VALIDATION_CONTRACT_VERSION,
             "model_version": self.strategy["forecast_version"],
             "feature_schema_version": self.strategy.get("feature_schema_version"),
             "config_hash": stable_hash(self.strategy),
@@ -230,6 +234,9 @@ class ForecastValidationService:
                 "independent_holdout": False,
                 "pit_qualified": False,
                 "qualification": "UNKNOWN",
+                "calibration_eligible": False,
+                "holdout_contract": "rolling_origin_research_not_independent_holdout",
+                "pit_contract": "not_verified",
             },
             "method": "rolling-origin similarity endpoint-and-path forecast audit",
             "promotion_policy": "manual review required; this task never changes calibration_status",
@@ -262,6 +269,8 @@ class ForecastValidationService:
                     "run_id": run_id,
                     "filename": filename,
                     "model_version": self.strategy["forecast_version"],
+                    "validation_contract_version": VALIDATION_CONTRACT_VERSION,
+                    "calibration_eligible": False,
                     "instrument_count": len(results),
                 },
             )
