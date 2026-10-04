@@ -47,7 +47,11 @@ function toggleSupportResistance(){
   ? selected.value.filter(item=>!supportResistanceGroups.has(item))
   : [...new Set([...selected.value,...defaultSupportResistanceGroups])]
 }
-function openCompactChart(){if(!expanded.value)void toggleExpanded()}
+function focusChartInsideDialog(){if(expanded.value)host.value?.focus({preventScroll:true})}
+function openCompactChart(){
+ if(expanded.value){focusChartInsideDialog();return}
+ void toggleExpanded()
+}
 const levels=computed(()=>{
  if(!displayData.value.sr_overlay_allowed)return []
  const current=displayData.value.bars.at(-1)?.close??0
@@ -120,9 +124,12 @@ function key(event:KeyboardEvent){
  if(!expanded.value||event.key!=='Tab'||!root.value)return
  const focusable=dialogFocusable()
  if(!focusable.length)return
- const first=focusable[0],last=focusable[focusable.length-1]
- if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}
- else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus()}
+ const first=focusable[0],last=focusable[focusable.length-1],active=document.activeElement
+ if(!(active instanceof Node)||!root.value.contains(active)){
+  event.preventDefault();(event.shiftKey?last:first).focus();return
+ }
+ if(event.shiftKey&&active===first){event.preventDefault();last.focus()}
+ else if(!event.shiftKey&&active===last){event.preventDefault();first.focus()}
 }
 onMounted(()=>{void mount();document.addEventListener('keydown',key);document.addEventListener('pointerdown',outside);window.addEventListener('resize',positionIndicators);window.addEventListener('scroll',positionIndicators,true);window.visualViewport?.addEventListener('resize',positionIndicators);window.visualViewport?.addEventListener('scroll',positionIndicators)})
 watch(()=>[props.data,props.cost,priceBasis.value],mount)
@@ -136,7 +143,7 @@ onBeforeUnmount(()=>{++mountRevision;adapter?.destroy();adapter=null;releaseDial
  <details><summary>显示范围</summary><div class="range-buttons"><button v-for="n in [60,100,250]" :key="n" @click="range=n;adapter?.range(n)">{{n}} 根</button></div></details><button class="button small" @click="reset" data-testid="chart-reset">复位图表</button><button ref="expandButton" class="button small" data-testid="chart-fullscreen" :aria-expanded="expanded" @click="toggleExpanded">{{expanded?'关闭大图':'放大图表'}}</button></div></div>
  <div class="study-controls" aria-label="辅助线与指标"><strong class="study-caption">研究图层</strong><label v-for="g in groups" :key="g"><input v-model="selected" type="checkbox" :value="g"/>{{names[g]}}</label><button class="button small" @click="selected=[...groups]">打开全部</button><button class="button small" @click="selected=[]">隐藏全部</button></div>
  <div class="chart-legend"><strong>{{label??data.ts_code}}</strong><span v-if="data.cost_overlay_allowed&&cost" style="color:#d8b776" data-testid="chart-cost-label">我的成本 {{num(cost,3)}}</span><span>{{cursor?.date??'—'}}</span><span>开 {{num(cursor?.open,3)}}</span><span>高 {{num(cursor?.high,3)}}</span><span>低 {{num(cursor?.low,3)}}</span><span>收 {{num(cursor?.close,3)}}</span><span v-if="cursor?.is_partial">本周期未结束</span></div>
- <div v-if="failed" class="notice error-notice">{{failed}}</div><div ref="host" class="chart" :class="{'chart-clickable':!expanded}" :role="expanded?'img':'button'" tabindex="0" :aria-label="expanded?(label??'ETF')+' K线大图，支持滚轮缩放、拖拽平移和双击复位':(label??'ETF')+' K线，点击放大；支持滚轮缩放和拖拽平移'" data-testid="etf-chart" @click="openCompactChart" @keydown.enter.prevent="openCompactChart" @keydown.space.prevent="openCompactChart" @dblclick.stop="reset"/>
+ <div v-if="failed" class="notice error-notice">{{failed}}</div><div ref="host" class="chart" :class="{'chart-clickable':!expanded}" :role="expanded?'img':'button'" tabindex="0" :aria-label="expanded?(label??'ETF')+' K线大图，支持滚轮缩放、拖拽平移和双击复位':(label??'ETF')+' K线，点击放大；支持滚轮缩放和拖拽平移'" data-testid="etf-chart" @pointerdown.capture="focusChartInsideDialog" @click="openCompactChart" @keydown.enter.prevent="openCompactChart" @keydown.space.prevent="openCompactChart" @dblclick.stop="reset"/>
  <div class="chart-legend" data-testid="chart-indicators"><span v-for="key in ['macd_dif','macd_dea','macd_hist','kdj_k','kdj_d','kdj_j','rsi14']" :key="key">{{key.toUpperCase()}} {{num(cursor?.indicators[key],key.startsWith('macd')?6:2)}}</span></div>
  <div v-if="levels.length" class="chart-legend" aria-label="当前支撑压力快照价位"><span v-for="(l,i) in levels" :key="i" :title="Array.isArray(l.methods)?l.methods.join('、'):''" :class="String(l.kind).includes('support')?'bear':'bull'">{{String(l.kind).includes('support')?'支撑':'压力'}} {{num(levelPrice(l),3)}}</span></div>
  <details v-if="levels.length" class="zone-notes" data-testid="chart-level-evidence"><summary>查看支撑压力价位依据（{{levels.length}}）</summary><p class="small-note">窄图保留原价格线，长说明移到这里，避免遮挡蜡烛；结构价位只计独立价格触碰。</p><ul><li v-for="(l,i) in levels" :key="i">{{String(l.kind).includes('support')?'支撑':'压力'}} {{num(levelPrice(l),3)}} · {{Array.isArray(l.methods)?l.methods.join(' / '):'价格研究'}}{{l.category==='price_structure'?` · ${l.touch_count} 次独立触碰`:''}}</li></ul></details>
