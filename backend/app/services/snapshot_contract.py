@@ -12,7 +12,7 @@ from typing import Any
 
 from app.utils.hashing import stable_hash
 
-SNAPSHOT_CONTRACT_VERSION = "current-snapshot-v2"
+SNAPSHOT_CONTRACT_VERSION = "current-snapshot-v3-temporal"
 SIGNAL_INPUT_CONTRACT_VERSION = "signal-snapshot-inputs-v1"
 SIGNAL_FORECAST_SCORE_WEIGHTS = {1: 0.5, 5: 0.3}
 
@@ -30,7 +30,14 @@ def signal_forecast_score_weights(strategy: dict[str, Any]) -> dict[int, float]:
     }
 
 
-def snapshot_issues(row, settings, expected_date, *, kind="indicator") -> list[str]:
+def snapshot_issues(
+    row,
+    settings,
+    expected_date,
+    *,
+    kind="indicator",
+    at: datetime | None = None,
+) -> list[str]:
     if row is None:
         return [f"{kind}_missing"]
     if kind not in {"indicator", "forecast"}:
@@ -46,12 +53,29 @@ def snapshot_issues(row, settings, expected_date, *, kind="indicator") -> list[s
         reasons.append(f"{kind}_config_mismatch")
     if expected_date is not None and getattr(row, "as_of_date", None) != expected_date:
         reasons.append(f"{kind}_date_mismatch")
+    reference = _normalize_time(at, settings) if at is not None else None
+    if reference is not None:
+        row_date = getattr(row, "as_of_date", None)
+        if row_date is not None and row_date > reference.date():
+            reasons.append(f"{kind}_from_future")
+        generated = _normalize_time(getattr(row, "generated_at", None), settings)
+        if generated is not None and generated > reference:
+            reasons.append(f"{kind}_generated_in_future")
     return reasons
 
 
-def current_snapshot(row, settings, *, kind="indicator", expected_date=None):
-    """Return the latest row only if it is compatible with the current identity."""
-    return row if not snapshot_issues(row, settings, expected_date, kind=kind) else None
+def current_snapshot(
+    row,
+    settings,
+    *,
+    kind="indicator",
+    expected_date=None,
+    at: datetime | None = None,
+):
+    """Return the latest row only if it is compatible with current identity/time."""
+    return row if not snapshot_issues(
+        row, settings, expected_date, kind=kind, at=at
+    ) else None
 
 
 def _normalize_time(value: datetime | None, settings) -> datetime | None:
@@ -123,7 +147,10 @@ def signal_issues(row, settings, *, at: datetime | None = None) -> list[str]:
             reasons.append("signal_input_hash_mismatch")
 
     reference = _normalize_time(at, settings)
+    signal_time = _normalize_time(getattr(row, "as_of_time", None), settings)
     expiry = _normalize_time(getattr(row, "expires_at", None), settings)
+    if reference is not None and signal_time is not None and signal_time > reference:
+        reasons.append("signal_from_future")
     if reference is not None and expiry is not None and expiry <= reference:
         reasons.append("signal_expired")
     return list(dict.fromkeys(reasons))
@@ -133,12 +160,40 @@ def current_signal(row, settings, *, at: datetime | None = None):
     return row if not signal_issues(row, settings, at=at) else None
 
 
-def snapshot_issue_map(rows: dict[int, Any], settings, *, kind: str) -> tuple[dict[int, Any], dict[int, list[str]]]:
+def quote_issues(row, settings, *, at: datetime | None = None) -> list[str]:
+    if row is None:
+        return ["quote_missing"]
+    reference = _normalize_time(
+        at or datetime.now(settings.timezone), settings
+    )
+    reasons: list[str] = []
+    quote_time = _normalize_time(getattr(row, "quote_time", None), settings)
+    fetched_at = _normalize_time(getattr(row, "fetched_at", None), settings)
+    if quote_time is None:
+        reasons.append("quote_time_missing")
+    elif quote_time > reference:
+        reasons.append("quote_from_future")
+    if fetched_at is not None and fetched_at > reference:
+        reasons.append("quote_fetched_in_future")
+    return reasons
+
+
+def current_quote(row, settings, *, at: datetime | None = None):
+    return row if not quote_issues(row, settings, at=at) else None
+
+
+def snapshot_issue_map(
+    rows: dict[int, Any],
+    settings,
+    *,
+    kind: str,
+    at: datetime | None = None,
+) -> tuple[dict[int, Any], dict[int, list[str]]]:
     """Filter a latest-row map without falling back to older snapshots."""
     current: dict[int, Any] = {}
     issues: dict[int, list[str]] = {}
     for ident, row in rows.items():
-        problem = snapshot_issues(row, settings, None, kind=kind)
+        problem = snapshot_issues(row, settings, None, kind=kind, at=at)
         if problem:
             issues[ident] = problem
         else:

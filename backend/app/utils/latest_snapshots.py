@@ -20,6 +20,7 @@ def latest_forecast_map(
     instrument_ids: Iterable[int] | None = None,
     *,
     settings: Any | None = None,
+    at: datetime | None = None,
 ) -> dict[int, dict[int, ForecastSnapshot]]:
     """每个 (instrument, horizon) 的最新 ForecastSnapshot。"""
     grouped = (
@@ -54,11 +55,14 @@ def latest_forecast_map(
             bucket[int(row.horizon)] = row
     if settings is not None:
         from app.services.snapshot_contract import snapshot_issues
+        reference = at or datetime.now(settings.timezone)
         filtered: dict[int, dict[int, ForecastSnapshot]] = {}
         for instrument_id, bucket in result.items():
             current = {
                 horizon: row for horizon, row in bucket.items()
-                if not snapshot_issues(row, settings, None, kind="forecast")
+                if not snapshot_issues(
+                    row, settings, None, kind="forecast", at=reference
+                )
             }
             if current:
                 filtered[instrument_id] = current
@@ -100,9 +104,10 @@ def latest_signal_map(
             result[row.instrument_id] = row
     if settings is not None:
         from app.services.snapshot_contract import signal_issues
+        reference = at or datetime.now(settings.timezone)
         return {
             instrument_id: row
             for instrument_id, row in result.items()
-            if not signal_issues(row, settings, at=at)
+            if not signal_issues(row, settings, at=reference)
         }
     return result

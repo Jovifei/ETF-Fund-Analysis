@@ -25,6 +25,7 @@ from app.services.snapshot_contract import (
     SIGNAL_INPUT_CONTRACT_VERSION,
     current_signal,
     formal_forecast_horizons,
+    quote_issues,
     signal_forecast_score_weights,
     snapshot_issues,
 )
@@ -385,7 +386,7 @@ class SignalService:
                 .order_by(QuoteSnapshot.quote_time.desc())
                 .limit(1)
             )
-            if quote:
+            if quote and not quote_issues(quote, self.settings, at=now):
                 latest_quotes[instrument.id] = quote
             indicator = db.scalar(
                 select(IndicatorSnapshot)
@@ -394,7 +395,7 @@ class SignalService:
                 .limit(1)
             )
             indicator_identity_issues = snapshot_issues(
-                indicator, self.settings, None, kind="indicator"
+                indicator, self.settings, None, kind="indicator", at=now
             )
             if indicator and not indicator_identity_issues and (
                 instrument.id not in blocked
@@ -412,7 +413,9 @@ class SignalService:
             latest_forecasts[instrument.id] = {
                 horizon: item
                 for horizon, item in latest_raw.items()
-                if not snapshot_issues(item, self.settings, None, kind="forecast")
+                if not snapshot_issues(
+                    item, self.settings, None, kind="forecast", at=now
+                )
             }
             previous = db.scalar(
                 select(SignalSnapshot)

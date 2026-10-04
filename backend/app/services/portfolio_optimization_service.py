@@ -24,6 +24,7 @@ from app.services.event_service import emit_event
 from app.services.holding_service import HoldingService
 from app.services.snapshot_contract import (
     SNAPSHOT_CONTRACT_VERSION,
+    quote_issues,
     signal_issues,
     snapshot_issues,
 )
@@ -66,14 +67,16 @@ class PortfolioOptimizationService:
             return self._empty(run_id, "no_enabled_instruments")
 
         # 读取指标/报价/信号快照
-        snapshots, indicator_issues = self._build_snapshot_frame(db, instruments)
+        reference = datetime.now(self.settings.timezone)
+        snapshots, indicator_issues = self._build_snapshot_frame(
+            db, instruments, at=reference
+        )
         if len(snapshots) < 3:
             return self._empty(run_id, "insufficient_data")
 
         # 取每个标的最新一条信号快照（与 SignalV05Service 读同样的表）
         signals_map: dict[int, Any] = {}
         signal_issue_map: dict[int, list[str]] = {}
-        reference = datetime.now(self.settings.timezone)
         for inst in instruments:
             sig = db.scalars(
                 select(SignalSnapshot)
@@ -105,7 +108,7 @@ class PortfolioOptimizationService:
             risk = vals.get("risk_score") or sn.risk_score or 0.0
             theme = inst.theme_l1 or "未分类"
             current_weight = holdings.get(inst.ts_code, {}).get("current_weight", 0.0) or 0.0
-            quote = self._latest_quote(db, inst.id)
+            quote = self._latest_quote(db, inst.id, at=reference)
             price = float(quote.price) if quote else None
             is_held = inst.ts_code in holdings
             ranked.append({
@@ -261,7 +264,7 @@ class PortfolioOptimizationService:
         }
 
     def _build_snapshot_frame(
-        self, db: Session, instruments
+        self, db: Session, instruments, *, at: datetime | None = None
     ) -> tuple[dict[int, Any], dict[int, list[str]]]:
         from app.models import IndicatorSnapshot
         frame: dict[int, Any] = {}
@@ -277,20 +280,35 @@ class PortfolioOptimizationService:
                 )
                 .limit(1)
             ).first()
-            issues = snapshot_issues(sn, self.settings, None, kind="indicator")
+            issues = snapshot_issues(
+                sn,
+                self.settings,
+                None,
+                kind="indicator",
+                at=at or datetime.now(self.settings.timezone),
+            )
             if issues:
                 issue_map[inst.id] = issues
             else:
                 frame[inst.id] = sn
         return frame, issue_map
 
-    def _latest_quote(self, db: Session, instrument_id: int):
-        return db.scalars(
+    def _latest_quote(
+        self, db: Session, instrument_id: int, *, at: datetime | None = None
+    ):
+        row = db.scalars(
             select(QuoteSnapshot)
             .where(QuoteSnapshot.instrument_id == instrument_id)
-            .order_by(QuoteSnapshot.quote_time.desc())
+            .order_by(QuoteSnapshot.quote_time.desc(), QuoteSnapshot.id.desc())
             .limit(1)
         ).first()
+        return (
+            row
+            if not quote_issues(
+                row, self.settings, at=at or datetime.now(self.settings.timezone)
+            )
+            else None
+        )
 
     def _empty(self, run_id: str, reason: str) -> dict[str, Any]:
         return {

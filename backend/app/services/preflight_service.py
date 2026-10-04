@@ -131,7 +131,9 @@ class PreflightService:
         latest_by_horizon = {
             horizon: item
             for horizon, item in latest_raw_by_horizon.items()
-            if not snapshot_issues(item, self.settings, None, kind="forecast")
+            if not snapshot_issues(
+                item, self.settings, None, kind="forecast", at=at
+            )
         }
         for horizon in [int(value) for value in self.strategy.get("forecast", {}).get("horizons", ())]:
             item = latest_by_horizon.get(horizon)

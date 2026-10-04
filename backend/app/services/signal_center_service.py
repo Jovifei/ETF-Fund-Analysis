@@ -528,5 +528,8 @@ class SignalCenterService:
             latest[snapshot.instrument_id] = snapshot
         return {
             ident: row for ident, row in latest.items()
-            if not snapshot_issues(row, self.settings, None, kind="indicator")
+            if not snapshot_issues(
+                row, self.settings, None, kind="indicator",
+                at=datetime.now(self.settings.timezone)
+            )
         }
