@@ -43,3 +43,17 @@ Local Codex should receive the exact branch tip into an isolated worktree withou
 5. persisted fractal desktop/narrow rendering and layer-off / unsupported-period disappearance.
 
 Any local failure returns to remote review as a defect on this exact SHA. Do not deploy this repair merely because source was committed.
+
+
+## Local reception round 1 and remote correction
+
+Local acceptance receipt commit `ea6f584` tested exact `7b7748921cd989c2f8128539aafa31a23e70f1c8`: 21 focused tests passed and one existing method-version length regression failed. The receipt also independently demonstrated that changing `boll_std` changed derived Bollinger values while the first repair's SR `config_hash` stayed unchanged.
+
+Remote correction:
+- shortened the distinct persisted method identity to `support-resistance-v5-indicators` (32 characters) and checks both existing persisted columns;
+- SR `config_hash` now binds support-resistance config, complete indicator config and indicator version; the payload also records indicator config/version hashes. A stale snapshot identity is rejected when either Bollinger/indicator configuration or indicator version changes;
+- compact Vue chart surfaces now open the application dialog directly by mouse or keyboard, while interactions inside the already-open dialog are ignored by the opener;
+- Legacy `chartCanvas` likewise enlarges on compact-canvas click while keeping the explicit button;
+- new Chromium coverage exercises Detail, Overview index, global-search-to-Detail and Legacy entrypoints and records the first real chart canvas/pane height before and after enlargement, including 390x844 and 320px Detail viewports.
+
+Remote tests remain NOT_RUN by design; local Codex owns exact-SHA execution.

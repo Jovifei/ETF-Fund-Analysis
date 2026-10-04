@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from copy import deepcopy
+from types import SimpleNamespace
+
 import numpy as np
 import pandas as pd
 
@@ -95,13 +98,46 @@ def test_oscillator_confirmations_add_features_but_not_independent_touches():
     assert level["touch_count"] == len(level["touch_ids"])
 
 
-def test_support_resistance_method_version_fits_existing_database_column():
-    from app.models import SupportResistanceSnapshot
+def test_support_resistance_method_version_fits_existing_database_columns():
+    from app.models import SupportResistanceSnapshot, SupportResistanceSnapshotRevision
     from app.services.support_resistance_service import METHOD_VERSION
 
-    max_length = SupportResistanceSnapshot.__table__.c.method_version.type.length
+    lengths = {
+        SupportResistanceSnapshot.__table__.c.method_version.type.length,
+        SupportResistanceSnapshotRevision.__table__.c.method_version.type.length,
+    }
+    assert len(METHOD_VERSION) <= min(lengths)
+    assert len(METHOD_VERSION) <= 32
 
-    assert len(METHOD_VERSION) <= max_length
+
+def test_support_resistance_cache_identity_binds_indicator_config_and_version():
+    from app.services.support_resistance_service import METHOD_VERSION, SupportResistanceService
+
+    class StrategySettings:
+        def __init__(self, strategy):
+            self.strategy = strategy
+
+        def load_strategy(self):
+            return deepcopy(self.strategy)
+
+    base_strategy = get_settings().load_strategy()
+    baseline = SupportResistanceService(StrategySettings(base_strategy))
+    persisted = SimpleNamespace(method_version=METHOD_VERSION, config_hash=baseline.config_hash)
+    assert baseline._snapshot_identity_matches(persisted)
+
+    boll_changed = deepcopy(base_strategy)
+    boll_changed["indicator"]["boll_std"] = float(boll_changed["indicator"]["boll_std"]) + 1.0
+    changed_config = SupportResistanceService(StrategySettings(boll_changed))
+    assert changed_config.indicator_config_hash != baseline.indicator_config_hash
+    assert changed_config.config_hash != baseline.config_hash
+    assert changed_config._snapshot_identity_matches(persisted) is False
+
+    version_changed = deepcopy(base_strategy)
+    version_changed["indicator_version"] = str(version_changed["indicator_version"]) + "-next"
+    changed_version = SupportResistanceService(StrategySettings(version_changed))
+    assert changed_version.indicator_config_hash == baseline.indicator_config_hash
+    assert changed_version.config_hash != baseline.config_hash
+    assert changed_version._snapshot_identity_matches(persisted) is False
 
 
 def test_persisted_sr_input_is_enriched_with_same_canonical_indicator_frame():
