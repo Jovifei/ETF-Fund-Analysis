@@ -265,11 +265,11 @@ class SignalGradeService:
         instruments = db.scalars(
             select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code)
         ).all()
-        latest_indicators = self._latest_indicators(db)
+        latest_indicators = self._latest_indicators(db, as_of=reference)
         previous_indicators = self._previous_indicators(db, latest_indicators)
         latest_quotes = self._latest_quotes(db, as_of=reference)
         latest_scales = self._latest_share_scales(db, as_of=reference)
-        latest_forecasts = self._latest_horizon_forecasts(db, 1)
+        latest_forecasts = self._latest_horizon_forecasts(db, 1, as_of=reference)
 
         classified: list[dict[str, Any]] = []
         for instrument in instruments:
@@ -331,7 +331,9 @@ class SignalGradeService:
             "rows": classified,
         }
 
-    def _latest_indicators(self, db: Session) -> dict[int, IndicatorSnapshot]:
+    def _latest_indicators(
+        self, db: Session, *, as_of: datetime | None = None
+    ) -> dict[int, IndicatorSnapshot]:
         rows = db.scalars(
             select(IndicatorSnapshot).order_by(
                 IndicatorSnapshot.instrument_id,
@@ -346,7 +348,7 @@ class SignalGradeService:
             ident: row for ident, row in latest.items()
             if not snapshot_issues(
                 row, self.settings, None, kind="indicator",
-                at=datetime.now(self.settings.timezone)
+                at=as_of or datetime.now(self.settings.timezone)
             )
         }
 
@@ -378,7 +380,9 @@ class SignalGradeService:
     def _latest_share_scales(db: Session, *, as_of: datetime) -> dict[int, EtfShareScale]:
         return latest_share_scales(db, as_of=as_of)
 
-    def _latest_horizon_forecasts(self, db: Session, horizon: int) -> dict[int, ForecastSnapshot]:
+    def _latest_horizon_forecasts(
+        self, db: Session, horizon: int, *, as_of: datetime | None = None
+    ) -> dict[int, ForecastSnapshot]:
         rows = db.scalars(
             select(ForecastSnapshot)
             .where(ForecastSnapshot.horizon == horizon)
@@ -395,6 +399,6 @@ class SignalGradeService:
             ident: row for ident, row in latest.items()
             if not snapshot_issues(
                 row, self.settings, None, kind="forecast",
-                at=datetime.now(self.settings.timezone)
+                at=as_of or datetime.now(self.settings.timezone)
             )
         }

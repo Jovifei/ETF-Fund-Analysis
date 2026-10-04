@@ -90,7 +90,11 @@ class PortfolioOptimizationService:
             else:
                 signals_map[inst.id] = sig
         holdings = (
-            {row["ts_code"]: row for row in HoldingService().list(db, user_id=user_id) if row.get("ts_code")}
+            {
+                row["ts_code"]: row
+                for row in HoldingService(self.settings).list(db, user_id=user_id)
+                if row.get("ts_code")
+            }
             if user_id is not None
             else {}
         )

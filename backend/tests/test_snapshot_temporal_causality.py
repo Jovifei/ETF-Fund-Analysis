@@ -136,6 +136,9 @@ def test_future_indicator_forecast_and_signal_are_not_current_evidence():
         assert inst.id not in latest_forecast_map(
             db, [inst.id], settings=settings, at=now
         )
+        assert inst.id not in SignalGradeService(settings)._latest_indicators(
+            db, as_of=now
+        )
 
         strategy = settings.load_strategy()
         snapshot_inputs = {

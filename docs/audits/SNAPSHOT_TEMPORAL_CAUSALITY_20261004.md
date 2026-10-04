@@ -81,3 +81,10 @@ This is software causality hardening only.
 `REAL_DATA_QUALIFICATION=UNKNOWN`
 `actionable=false`
 `calibration_status=not_calibrated`
+
+
+## Remote final self-review
+
+Before local handoff, read-time reference propagation was rechecked. SignalGrade accepted an explicit `as_of` for quote/share-scale selection but its indicator/forecast compatibility helpers still compared against wall-clock now. They now receive the same normalized reference, and the regression explicitly proves a future current-version indicator is unavailable at that read time.
+
+Portfolio optimization now passes its own Settings instance into HoldingService so quote-time validation uses the same timezone/provider/runtime context as the optimization report.
