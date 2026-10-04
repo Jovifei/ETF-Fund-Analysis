@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from app.services.factor_analysis_service import FactorAnalysisService
-from app.services.global_model_research_service import GlobalModelResearchService
+from app.services.global_model_research_service import GlobalModelResearchService, _frame_digest
 from app.utils.feature_store import HORIZON_FEATURES
 from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS
 
@@ -72,6 +72,13 @@ def test_global_model_research_uses_purged_expanding_walk_forward(
     assert payload["split"]["test_sessions_per_fold"] == 20
     assert payload["split"]["minimum_train_sessions"] == 150
     assert payload["configured_horizons"] == [1, 3, 5, 10]
+    assert len(payload["config_hash"]) == 64
+    assert payload["git_commit_sha"]
+    assert payload["evidence_contract"]["pit_qualified"] is False
+    assert payload["evidence_contract"]["costs_included"] is False
+    assert payload["evidence_contract"]["slippage_included"] is False
+    assert payload["evidence_contract"]["strategy_backtest"] is False
+    assert payload["evidence_contract"]["qualification"] == "UNKNOWN"
 
     for horizon in DEFAULT_RESEARCH_HORIZONS:
         item = payload["horizons"][str(horizon)]
@@ -86,6 +93,9 @@ def test_global_model_research_uses_purged_expanding_walk_forward(
         assert all(fold["purge_sessions"] == horizon for fold in folds)
         assert all(fold["label_end_guard"] == "per_sample_strict_before" for fold in folds)
         assert all(fold["train_label_end_last"] < fold["label_end_before"] for fold in folds)
+        assert all(len(fold["train_input_hash"]) == 64 and len(fold["test_input_hash"]) == 64 for fold in folds)
+        assert all(fold["train_instruments"] == fold["test_instruments"] == 6 for fold in folds)
+        assert all("ts_code" in fold["lineage_columns"] and f"label_end_date_{horizon}" in fold["lineage_columns"] for fold in folds)
         assert [fold["train_sessions"] for fold in folds] == [
             180 - 2 * horizon,
             200 - 2 * horizon,
@@ -132,3 +142,19 @@ def test_sparse_instrument_uses_actual_label_end_not_global_calendar_distance(
     for horizon in DEFAULT_RESEARCH_HORIZONS:
         for fold in payload["horizons"][str(horizon)]["folds"]:
             assert fold["train_label_end_last"] < fold["label_end_before"]
+
+
+def test_fold_digest_is_ordered_and_changes_with_consumed_values():
+    frame = pd.DataFrame({
+        "ts_code": ["A.SH", "B.SH"],
+        "trade_date": [pd.Timestamp("2026-01-05").date(), pd.Timestamp("2026-01-05").date()],
+        "label_end_date_1": [pd.Timestamp("2026-01-06").date(), pd.Timestamp("2026-01-06").date()],
+        "forward_return_1": [0.01, -0.02],
+        "feature": [1.0, 2.0],
+    })
+    columns = ["ts_code", "trade_date", "label_end_date_1", "forward_return_1", "feature"]
+    baseline = _frame_digest(frame, columns)
+    mutated = frame.copy()
+    mutated.loc[1, "forward_return_1"] = -0.03
+    assert _frame_digest(mutated, columns) != baseline
+    assert _frame_digest(frame.iloc[::-1].reset_index(drop=True), columns) != baseline

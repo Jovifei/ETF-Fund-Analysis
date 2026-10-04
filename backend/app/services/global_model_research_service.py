@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 from datetime import datetime
@@ -16,12 +17,23 @@ from app.services.factor_analysis_service import FactorAnalysisService
 from app.utils.feature_store import HORIZON_FEATURES
 from app.utils.hashing import stable_hash
 from app.utils.horizons import aligned_research_horizons
+from app.utils.reproducibility import current_git_commit
 from app.utils.time_split import purged_expanding_walk_forward_folds
 
 
 def _pinball(actual: np.ndarray, predicted: np.ndarray, quantile: float) -> float:
     error = actual - predicted
     return float(np.mean(np.maximum(quantile * error, (quantile - 1.0) * error)))
+
+
+def _frame_digest(frame: pd.DataFrame, columns: list[str]) -> str:
+    """Content-address the exact ordered rows consumed by one research fold."""
+    digest = hashlib.sha256()
+    digest.update(json.dumps(columns, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+    for row in frame[columns].itertuples(index=False, name=None):
+        digest.update(b"\n")
+        digest.update(json.dumps(row, ensure_ascii=False, default=str, separators=(",", ":")).encode("utf-8"))
+    return digest.hexdigest()
 
 
 def _metrics(
@@ -146,6 +158,17 @@ class GlobalModelResearchService:
                 },
                 "configured_horizons": list(horizons),
                 "feature_schema_version": self.strategy.get("feature_schema_version"),
+                "config_hash": stable_hash(self.strategy),
+                "git_commit_sha": current_git_commit(),
+                "evidence_contract": {
+                    "source": self.settings.market_provider,
+                    "pit_qualified": False,
+                    "costs_included": False,
+                    "slippage_included": False,
+                    "strategy_backtest": False,
+                    "qualification": "UNKNOWN",
+                    "preprocessing": "none_learned_outside_fold",
+                },
                 "production_promotion": False,
                 "horizons": {},
             }
@@ -153,7 +176,7 @@ class GlobalModelResearchService:
                 target = f"forward_return_{horizon}"
                 label_end = f"label_end_date_{horizon}"
                 features = [name for name in HORIZON_FEATURES[horizon] if name in panel.columns]
-                work = panel[["trade_date", label_end, target, *features]].replace([np.inf, -np.inf], np.nan).dropna()
+                work = panel[["ts_code", "trade_date", label_end, target, *features]].replace([np.inf, -np.inf], np.nan).dropna()
                 mature_dates = sorted(work["trade_date"].dropna().unique())
                 folds = purged_expanding_walk_forward_folds(
                     mature_dates,
@@ -178,11 +201,17 @@ class GlobalModelResearchService:
                         (work["trade_date"] >= fold.test_start)
                         & (work["trade_date"] <= fold.test_end)
                     ]
+                    lineage_columns = ["ts_code", "trade_date", label_end, target, *features]
                     fold_info = fold.model_dump()
                     fold_info.update(
                         {
                             "train_samples": len(train),
                             "test_samples": len(test),
+                            "train_instruments": int(train["ts_code"].nunique()),
+                            "test_instruments": int(test["ts_code"].nunique()),
+                            "train_input_hash": _frame_digest(train, lineage_columns),
+                            "test_input_hash": _frame_digest(test, lineage_columns),
+                            "lineage_columns": lineage_columns,
                             "train_observed_first_date": (
                                 str(train["trade_date"].min()) if not train.empty else None
                             ),

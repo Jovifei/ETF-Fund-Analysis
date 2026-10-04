@@ -27,7 +27,7 @@ def _latest_validation_payload(bootstrapped, db_session) -> dict:
     artifact = db_session.scalars(
         select(ReportArtifact)
         .where(ReportArtifact.report_type == "forecast_validation")
-        .order_by(ReportArtifact.as_of_time.desc())
+        .order_by(ReportArtifact.id.desc())
         .limit(1)
     ).first()
     assert artifact is not None
@@ -125,13 +125,13 @@ def test_calibrate_reject_blocks_approval_with_version_mismatch(bootstrapped, db
         assert "model_version" in str(exc)
 
 
-def _write_validation_artifact(db_session, tmp_path, payload):
+def _write_validation_artifact(db_session, tmp_path, payload, *, as_of_time=None):
     content_hash = stable_hash(payload)
     path = tmp_path / f"validation-{content_hash[:8]}.json"
     path.write_text(json.dumps(payload, allow_nan=True), encoding="utf-8")
     db_session.add(ReportArtifact(
         report_type="forecast_validation",
-        as_of_time=datetime.now().astimezone(),
+        as_of_time=as_of_time or datetime.now().astimezone(),
         file_path=str(path),
         content_hash=content_hash,
         metadata_json={},
@@ -292,3 +292,24 @@ def test_current_validator_contract_is_explicitly_nonqualifying_even_when_report
     assert result["summary"]["declared_pit_qualified"] is True
     assert result["summary"]["validation_contract_eligible"] is False
     assert result["gates_passed"] is False
+
+
+def test_latest_validation_selection_uses_append_identity_not_timezone_stripped_as_of(db_session, tmp_path):
+    from datetime import timedelta
+
+    svc = CalibrationService()
+    older_payload = _synthetic_validation_payload(svc, horizons=(1,), source="mock", run_id="older-future-clock")
+    newer_payload = _synthetic_validation_payload(svc, horizons=(1, 3, 5, 10), source="mock", run_id="newer-lower-clock")
+
+    # Simulate the SQLite cross-host ordering hazard seen in Linux CI:
+    # an earlier-inserted Asia/Shanghai-style wall clock sorts numerically ahead
+    # of a later-inserted UTC-style wall clock once timezone information is lost.
+    base = datetime(2026, 10, 4, 15, 0, 0)
+    _write_validation_artifact(db_session, tmp_path, older_payload, as_of_time=base + timedelta(hours=8))
+    _write_validation_artifact(db_session, tmp_path, newer_payload, as_of_time=base)
+    db_session.flush()
+
+    result = svc.create_candidate(db_session, run_id="append-order-candidate")
+    assert result["status"] == "candidate_created"
+    assert result["summary"]["horizon_contract"] == ["1", "3", "5", "10"]
+    assert result["gate_results"]["items"]["all_formal_horizons"] is True
