@@ -21,6 +21,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.models import DailyBar, Instrument, ReportArtifact
+from app.providers.corporate_action_contract import official_corporate_actions
+from app.providers.data_contract import row_units_verified
 from app.utils.hashing import stable_hash
 
 
@@ -50,6 +52,7 @@ def _frame_input_hash(frame: pd.DataFrame) -> str:
             "close": float(row["close"]),
             "volume": None if pd.isna(row.get("volume")) else float(row["volume"]),
             "amount": None if pd.isna(row.get("amount")) else float(row["amount"]),
+            "adjust": row.get("adjust"),
             "source": row.get("source"),
             "fetched_at": None if pd.isna(row.get("fetched_at")) else str(row.get("fetched_at")),
         })
@@ -84,6 +87,10 @@ class CrosscheckEngine:
         decisions = report.get("decisions", [])
         trades_primary = report.get("trades", [])
         equity_primary = report.get("equity_curve", [])
+        data_contract = report.get("data") or {}
+        quantity_contract = data_contract.get("quantity_contract")
+        if quantity_contract not in {"mock_passthrough", "documented_endpoint_units_only"}:
+            return {"status": "skipped", "reason": "primary_quantity_contract_missing"}
         config = report.get("configuration")
         if not isinstance(config, dict):
             return {"status": "skipped", "reason": "primary_configuration_missing"}
@@ -115,7 +122,7 @@ class CrosscheckEngine:
                 continue
             bars = db.scalars(
                 select(DailyBar)
-                .where(DailyBar.instrument_id == inst.id)
+                .where(DailyBar.instrument_id == inst.id, DailyBar.adjust == "none")
                 .order_by(DailyBar.trade_date)
             ).all()
             if bars:
@@ -125,8 +132,19 @@ class CrosscheckEngine:
                     "close": float(b.close),
                     "high": float(b.high),
                     "low": float(b.low),
-                    "volume": float(b.volume) if b.volume is not None and math.isfinite(float(b.volume)) else None,
-                    "amount": float(b.amount) if b.amount is not None and math.isfinite(float(b.amount)) else None,
+                    "volume": (
+                        float(b.volume)
+                        if (quantity_contract == "mock_passthrough" or row_units_verified(b))
+                        and b.volume is not None and math.isfinite(float(b.volume))
+                        else None
+                    ),
+                    "amount": (
+                        float(b.amount)
+                        if (quantity_contract == "mock_passthrough" or row_units_verified(b))
+                        and b.amount is not None and math.isfinite(float(b.amount))
+                        else None
+                    ),
+                    "adjust": b.adjust,
                     "source": b.source,
                     "fetched_at": b.fetched_at,
                 } for b in bars])
@@ -141,9 +159,25 @@ class CrosscheckEngine:
         if not bar_frames:
             return {"status": "skipped", "reason": "no bar data loaded"}
 
-        expected_hashes = (report.get("data") or {}).get("input_hashes")
+        if data_contract.get("execution_price_basis") != "raw_unadjusted_no_corporate_action_position_events_v1":
+            return {"status": "skipped", "reason": "primary_execution_price_basis_unsupported"}
+        if data_contract.get("input_hash_policy") != "single_raw_basis_daily_rows_v2":
+            return {"status": "skipped", "reason": "primary_input_hash_policy_unsupported"}
+        expected_hashes = data_contract.get("input_hashes")
         if not isinstance(expected_hashes, dict):
             return {"status": "skipped", "reason": "primary_input_hashes_missing"}
+        for code, frame in bar_frames.items():
+            if frame.empty:
+                continue
+            first, last = frame.index.min(), frame.index.max()
+            if any(str(first) <= event.ex_date.isoformat() <= str(last) for event in official_corporate_actions(code)):
+                return {
+                    "status": "fail",
+                    "reason": "primary_execution_basis_changed",
+                    "mismatched_codes": [code],
+                    "actionable": False,
+                }
+
         replay_hashes = {code: _frame_input_hash(frame) for code, frame in sorted(bar_frames.items())}
         mismatched = sorted(
             code for code in all_codes

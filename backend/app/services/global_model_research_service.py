@@ -159,6 +159,10 @@ class GlobalModelResearchService:
                 "configured_horizons": list(horizons),
                 "feature_schema_version": self.strategy.get("feature_schema_version"),
                 "config_hash": stable_hash(self.strategy),
+                "panel_research_input_contract_hash": stable_hash(
+                    panel.attrs.get("research_input_contract", {})
+                ),
+                "panel_research_input_contract": panel.attrs.get("research_input_contract", {}),
                 "git_commit_sha": current_git_commit(),
                 "evidence_contract": {
                     "source": self.settings.market_provider,
@@ -301,7 +305,13 @@ class GlobalModelResearchService:
                 as_of_time=now,
                 file_path=str(path),
                 content_hash=content_hash,
-                metadata_json={"run_id": run_id, "filename": filename, "status": payload["status"]},
+                metadata_json={
+                    "run_id": run_id,
+                    "filename": filename,
+                    "status": payload["status"],
+                    "research_version": payload.get("research_version"),
+                    "panel_research_input_contract_hash": payload.get("panel_research_input_contract_hash"),
+                },
             )
         )
         db.flush()
