@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import re
 import uuid
 from datetime import datetime
 from typing import Any
@@ -39,6 +40,11 @@ DEFAULT_GATES: dict[str, Any] = {
     "maximum_quantile_crossing_rate": 0.10,
     "maximum_touch_brier": 0.35,
 }
+
+# A validation report cannot make itself calibration-eligible by declaring
+# holdout/PIT booleans. A future validator must be independently audited and
+# explicitly allowlisted here in source before any approval can pass.
+CALIBRATION_ELIGIBLE_VALIDATION_CONTRACTS: frozenset[str] = frozenset()
 
 ALLOWED_TRANSITIONS = {
     "candidate": {"approved", "rejected"},
@@ -198,125 +204,201 @@ class CalibrationService:
         instruments = payload.get("instruments") or []
         ok_rows = [item for item in instruments if isinstance(item, dict) and item.get("status") == "ok"]
         total_samples = 0
-        directionals: list[float] = []
-        briers: list[float] = []
-        coverages: list[float] = []
-        crossings: list[float] = []
-        touch_briers: list[float] = []
-        per_horizon: dict[str, dict[str, list[float]]] = {}
-        horizons_present: set[str] = set()
-        nonfinite_metric_count = 0
+        global_values: dict[str, list[float]] = {
+            "directional_accuracy": [],
+            "brier_score": [],
+            "interval_80_coverage": [],
+            "quantile_crossing_rate": [],
+            "touch_brier": [],
+        }
+        horizon_rows: dict[str, dict[str, Any]] = {}
+        invalid_metric_count = 0
 
-        def finite_metric(value: Any) -> float | None:
-            nonlocal nonfinite_metric_count
+        def probability_metric(value: Any) -> float | None:
+            nonlocal invalid_metric_count
             if isinstance(value, bool) or not isinstance(value, (int, float)):
+                invalid_metric_count += 1
                 return None
             number = float(value)
-            if not math.isfinite(number):
-                nonfinite_metric_count += 1
+            if not math.isfinite(number) or number < 0.0 or number > 1.0:
+                invalid_metric_count += 1
                 return None
             return number
 
         for row in ok_rows:
-            for horizon, metrics in (row.get("horizons") or {}).items():
+            horizons = row.get("horizons") if isinstance(row.get("horizons"), dict) else {}
+            for horizon, metrics in horizons.items():
                 if not isinstance(metrics, dict):
+                    invalid_metric_count += 1
                     continue
-                horizons_present.add(str(horizon))
-                samples = int(metrics.get("sample_count") or 0)
-                total_samples += max(0, samples)
-                bucket = per_horizon.setdefault(str(horizon), {})
-                for key, store in (
-                    ("directional_accuracy", directionals),
-                    ("brier_score", briers),
-                    ("interval_80_coverage", coverages),
-                    ("quantile_crossing_rate", crossings),
-                ):
-                    number = finite_metric(metrics.get(key))
-                    if number is not None:
-                        store.append(number)
-                        bucket.setdefault(key, []).append(number)
-                for key in ("support_touch_brier", "resistance_touch_brier"):
-                    number = finite_metric(metrics.get(key))
-                    if number is not None:
-                        touch_briers.append(number)
+                key = str(horizon)
+                bucket = horizon_rows.setdefault(key, {
+                    "instrument_count": 0,
+                    "sample_count": 0,
+                    "invalid_metric_count": 0,
+                    "values": {
+                        "directional_accuracy": [],
+                        "brier_score": [],
+                        "interval_80_coverage": [],
+                        "quantile_crossing_rate": [],
+                        "touch_brier": [],
+                    },
+                })
+                sample_value = metrics.get("sample_count")
+                if isinstance(sample_value, bool) or not isinstance(sample_value, int) or sample_value < 0:
+                    bucket["invalid_metric_count"] += 1
+                    invalid_metric_count += 1
+                    samples = 0
+                else:
+                    samples = sample_value
+                bucket["sample_count"] += samples
+                total_samples += samples
+
+                row_valid = samples > 0
+                for metric in ("directional_accuracy", "brier_score", "interval_80_coverage", "quantile_crossing_rate"):
+                    before = invalid_metric_count
+                    number = probability_metric(metrics.get(metric))
+                    if invalid_metric_count != before:
+                        bucket["invalid_metric_count"] += 1
+                        row_valid = False
+                    elif number is not None:
+                        bucket["values"][metric].append(number)
+                        global_values[metric].append(number)
+
+                touch_values: list[float] = []
+                for metric in ("support_touch_brier", "resistance_touch_brier"):
+                    before = invalid_metric_count
+                    number = probability_metric(metrics.get(metric))
+                    if invalid_metric_count != before:
+                        bucket["invalid_metric_count"] += 1
+                        row_valid = False
+                    elif number is not None:
+                        touch_values.append(number)
+                        global_values["touch_brier"].append(number)
+                if touch_values:
+                    bucket["values"]["touch_brier"].extend(touch_values)
+                else:
+                    row_valid = False
+                if row_valid:
+                    bucket["instrument_count"] += 1
 
         def mean(values: list[float]) -> float | None:
             return round(sum(values) / len(values), 4) if values else None
 
+        per_horizon: dict[str, dict[str, Any]] = {}
+        for horizon, bucket in sorted(horizon_rows.items(), key=lambda item: int(item[0]) if item[0].isdigit() else 10**9):
+            values = bucket["values"]
+            per_horizon[horizon] = {
+                "instrument_count": bucket["instrument_count"],
+                "sample_count": bucket["sample_count"],
+                "invalid_metric_count": bucket["invalid_metric_count"],
+                "mean_directional_accuracy": mean(values["directional_accuracy"]),
+                "mean_brier_score": mean(values["brier_score"]),
+                "mean_interval_80_coverage": mean(values["interval_80_coverage"]),
+                "mean_quantile_crossing_rate": mean(values["quantile_crossing_rate"]),
+                "mean_touch_brier": mean(values["touch_brier"]),
+            }
+
         contract = payload.get("input_contract") if isinstance(payload.get("input_contract"), dict) else {}
+        validation_contract_version = str(payload.get("validation_contract_version") or "")
+        source = str(contract.get("source") or "").strip().lower()
+        lineage = str(payload.get("input_lineage_hash") or "").strip().lower()
         summary: dict[str, Any] = {
             "instrument_count": len(ok_rows),
             "total_samples": total_samples,
-            "mean_directional_accuracy": mean(directionals),
-            "mean_brier_score": mean(briers),
-            "mean_interval_80_coverage": mean(coverages),
-            "mean_quantile_crossing_rate": mean(crossings),
-            "mean_touch_brier": mean(touch_briers),
-            "per_horizon": {
-                horizon: {
-                    "mean_directional_accuracy": mean(vals.get("directional_accuracy", [])),
-                    "mean_interval_80_coverage": mean(vals.get("interval_80_coverage", [])),
-                }
-                for horizon, vals in sorted(per_horizon.items())
-            },
-            "horizons_present": sorted(horizons_present),
+            "mean_directional_accuracy": mean(global_values["directional_accuracy"]),
+            "mean_brier_score": mean(global_values["brier_score"]),
+            "mean_interval_80_coverage": mean(global_values["interval_80_coverage"]),
+            "mean_quantile_crossing_rate": mean(global_values["quantile_crossing_rate"]),
+            "mean_touch_brier": mean(global_values["touch_brier"]),
+            "per_horizon": per_horizon,
+            "horizons_present": sorted(per_horizon),
             "horizon_contract": [str(value) for value in (payload.get("horizon_contract") or [])],
-            "nonfinite_metric_count": nonfinite_metric_count,
-            "independent_holdout": contract.get("independent_holdout") is True,
-            "source": str(contract.get("source") or ""),
-            "pit_qualified": contract.get("pit_qualified") is True,
+            "invalid_metric_count": invalid_metric_count,
+            "validation_contract_version": validation_contract_version,
+            "validation_contract_eligible": validation_contract_version in CALIBRATION_ELIGIBLE_VALIDATION_CONTRACTS,
+            "declared_independent_holdout": contract.get("independent_holdout") is True,
+            "declared_pit_qualified": contract.get("pit_qualified") is True,
+            "declared_calibration_eligible": contract.get("calibration_eligible") is True,
+            "source": source,
+            "source_non_synthetic": bool(source) and not any(
+                marker in source for marker in ("mock", "fixture", "demo", "test", "synthetic")
+            ),
             "report_config_hash": str(payload.get("config_hash") or ""),
             "report_git_commit_sha": str(payload.get("git_commit_sha") or ""),
-            "input_lineage_hash": str(payload.get("input_lineage_hash") or ""),
+            "input_lineage_hash": lineage,
+            "input_lineage_digest_valid": bool(re.fullmatch(r"[0-9a-f]{64}", lineage)),
         }
         return summary
 
     def _evaluate_gates(self, summary: dict[str, Any]) -> dict[str, Any]:
-        def gate(name: str, actual: Any, minimum: float | None = None, maximum: float | None = None) -> dict:
+        def gate(actual: Any, minimum: float | None = None, maximum: float | None = None) -> bool:
             if isinstance(actual, bool) or not isinstance(actual, (int, float)) or not math.isfinite(float(actual)):
-                return {"name": name, "passed": False, "actual": actual,
-                        "threshold": f"min={minimum} max={maximum}", "reason": "metric missing or non-finite"}
+                return False
             number = float(actual)
-            passed = True
             if minimum is not None and number < minimum:
-                passed = False
+                return False
             if maximum is not None and number > maximum:
-                passed = False
-            return {"name": name, "passed": passed, "actual": number,
-                    "threshold": f"min={minimum} max={maximum}"}
+                return False
+            return True
 
         expected_horizons = {str(int(value)) for value in self.strategy["forecast"].get("horizons", (1, 3, 5, 10))}
-        actual_horizons = set(summary.get("horizons_present") or [])
+        actual_horizons = set(summary.get("per_horizon") or {})
+        horizon_count = max(1, len(expected_horizons))
+        minimum_per_horizon = max(1, math.ceil(self.gates["minimum_total_samples"] / horizon_count))
+        horizon_gates: dict[str, dict[str, Any]] = {}
+        for horizon in sorted(expected_horizons, key=int):
+            item = (summary.get("per_horizon") or {}).get(horizon) or {}
+            checks = {
+                "instrument_count": gate(item.get("instrument_count"), minimum=self.gates["minimum_instruments"]),
+                "sample_count": gate(item.get("sample_count"), minimum=minimum_per_horizon),
+                "metrics_valid": item.get("invalid_metric_count") == 0,
+                "directional_accuracy": gate(item.get("mean_directional_accuracy"),
+                                             minimum=self.gates["minimum_directional_accuracy"], maximum=1.0),
+                "brier_score": gate(item.get("mean_brier_score"), minimum=0.0,
+                                    maximum=self.gates["maximum_brier_score"]),
+                "interval_80_coverage": gate(item.get("mean_interval_80_coverage"),
+                                             minimum=self.gates["minimum_interval_80_coverage"], maximum=1.0),
+                "quantile_crossing_rate": gate(item.get("mean_quantile_crossing_rate"), minimum=0.0,
+                                               maximum=self.gates["maximum_quantile_crossing_rate"]),
+                "touch_brier": gate(item.get("mean_touch_brier"), minimum=0.0,
+                                    maximum=self.gates["maximum_touch_brier"]),
+            }
+            horizon_gates[horizon] = {"all_passed": all(checks.values()), "items": checks, "summary": item}
+
         items = {
-            "instrument_count": gate("instrument_count", summary.get("instrument_count"),
-                                     minimum=self.gates["minimum_instruments"])["passed"],
-            "total_samples": gate("total_samples", summary.get("total_samples"),
-                                  minimum=self.gates["minimum_total_samples"])["passed"],
-            "directional_accuracy": gate("mean_directional_accuracy",
-                                         summary.get("mean_directional_accuracy"),
-                                         minimum=self.gates["minimum_directional_accuracy"])["passed"],
-            "brier_score": gate("mean_brier_score", summary.get("mean_brier_score"),
-                                maximum=self.gates["maximum_brier_score"])["passed"],
-            "interval_80_coverage": gate("mean_interval_80_coverage",
-                                         summary.get("mean_interval_80_coverage"),
-                                         minimum=self.gates["minimum_interval_80_coverage"])["passed"],
-            "quantile_crossing_rate": gate("mean_quantile_crossing_rate",
-                                           summary.get("mean_quantile_crossing_rate"),
-                                           maximum=self.gates["maximum_quantile_crossing_rate"])["passed"],
-            "touch_brier": gate("mean_touch_brier", summary.get("mean_touch_brier"),
-                                maximum=self.gates["maximum_touch_brier"])["passed"],
-            "finite_metrics": summary.get("nonfinite_metric_count") == 0,
+            "instrument_count": gate(summary.get("instrument_count"), minimum=self.gates["minimum_instruments"]),
+            "total_samples": gate(summary.get("total_samples"), minimum=self.gates["minimum_total_samples"]),
+            "aggregate_directional_accuracy": gate(summary.get("mean_directional_accuracy"),
+                                                   minimum=self.gates["minimum_directional_accuracy"], maximum=1.0),
+            "aggregate_brier_score": gate(summary.get("mean_brier_score"), minimum=0.0,
+                                          maximum=self.gates["maximum_brier_score"]),
+            "aggregate_interval_80_coverage": gate(summary.get("mean_interval_80_coverage"),
+                                                   minimum=self.gates["minimum_interval_80_coverage"], maximum=1.0),
+            "aggregate_quantile_crossing_rate": gate(summary.get("mean_quantile_crossing_rate"), minimum=0.0,
+                                                     maximum=self.gates["maximum_quantile_crossing_rate"]),
+            "aggregate_touch_brier": gate(summary.get("mean_touch_brier"), minimum=0.0,
+                                          maximum=self.gates["maximum_touch_brier"]),
+            "metrics_valid": summary.get("invalid_metric_count") == 0,
             "all_formal_horizons": actual_horizons == expected_horizons
                 and set(summary.get("horizon_contract") or []) == expected_horizons,
-            "independent_holdout": summary.get("independent_holdout") is True,
-            "source_non_mock": bool(summary.get("source")) and str(summary.get("source")).lower() != "mock",
-            "pit_qualified": summary.get("pit_qualified") is True,
+            "per_horizon_gates": all(item["all_passed"] for item in horizon_gates.values()),
+            "validation_contract_eligible": summary.get("validation_contract_eligible") is True,
+            "independent_holdout_verified": (
+                summary.get("validation_contract_eligible") is True
+                and summary.get("declared_independent_holdout") is True
+            ),
+            "pit_qualified_verified": (
+                summary.get("validation_contract_eligible") is True
+                and summary.get("declared_pit_qualified") is True
+            ),
+            "source_non_synthetic": summary.get("source_non_synthetic") is True,
+            "input_lineage_digest_valid": summary.get("input_lineage_digest_valid") is True,
             "report_config_hash_present": bool(summary.get("report_config_hash")),
             "report_git_commit_present": bool(summary.get("report_git_commit_sha")),
-            "input_lineage_hash_present": bool(summary.get("input_lineage_hash")),
             "validation_content_hash_matches": summary.get("validation_content_hash_matches") is True,
         }
-        return {"all_passed": all(items.values()), "items": items}
+        return {"all_passed": all(items.values()), "items": items, "horizons": horizon_gates}
 
     def _approval_checks(self, db: Session, profile: CalibrationProfile) -> dict[str, Any]:
         artifact = db.scalars(

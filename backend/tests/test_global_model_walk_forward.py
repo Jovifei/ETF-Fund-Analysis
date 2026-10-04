@@ -76,6 +76,7 @@ def test_global_model_research_uses_purged_expanding_walk_forward(
     for horizon in DEFAULT_RESEARCH_HORIZONS:
         item = payload["horizons"][str(horizon)]
         assert item["status"] == "ok"
+        assert item["mature_label_dates"] == 260 - horizon
         assert item["fold_count"] == 4
         assert item["valid_fold_count"] == 4
         assert item["oos_samples"] == 4 * 20 * 6
@@ -86,10 +87,10 @@ def test_global_model_research_uses_purged_expanding_walk_forward(
         assert all(fold["label_end_guard"] == "per_sample_strict_before" for fold in folds)
         assert all(fold["train_label_end_last"] < fold["label_end_before"] for fold in folds)
         assert [fold["train_sessions"] for fold in folds] == [
-            180 - horizon,
-            200 - horizon,
-            220 - horizon,
-            240 - horizon,
+            180 - 2 * horizon,
+            200 - 2 * horizon,
+            220 - 2 * horizon,
+            240 - 2 * horizon,
         ]
         for previous, current in zip(folds, folds[1:]):
             assert previous["test_end"] < current["test_start"]

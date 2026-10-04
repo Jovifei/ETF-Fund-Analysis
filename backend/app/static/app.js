@@ -434,14 +434,16 @@ function decisionDetailHtml(detail) {
     <section class="reason-box"><strong>支撑 / 压力 / 缠论近似</strong><br>支撑 ${escapeHtml(decisionDetailLevel(levels?.nearest_support))} · 压力 ${escapeHtml(decisionDetailLevel(levels?.nearest_resistance))} · ${escapeHtml(decisionChanRange(chan?.zone || levels?.chan_zone_approx))}<br>支撑层级 ${escapeHtml(levelText(levels?.support_levels))}<br>压力层级 ${escapeHtml(levelText(levels?.resistance_levels))}<br>${escapeHtml(decisionCellText(chan?.label))} · ${escapeHtml(decisionCellText(chan?.detail))}</section>
     <section class="reason-box"><strong>指标与来源</strong><br>${escapeHtml(indicatorText)}<br>来源 ${escapeHtml(decisionCellText(quote?.source))} · 时间已验证 ${escapeHtml(String(Boolean(quote?.timestamp_verified)))} · 临时来源 ${escapeHtml(decisionCellText(provisional?.source))}</section>`;
 }
-function setLegacyChartExpanded(expanded) {
+function setLegacyChartExpanded(expanded, redraw = true) {
   const modal = qs('#detailOverlay .detail-modal');
   const button = qs('#chartExpandButton');
   if (!modal || !button) return;
-  modal.classList.toggle('chart-expanded', Boolean(expanded));
-  button.setAttribute('aria-pressed', expanded ? 'true' : 'false');
-  button.textContent = expanded ? '收起大图' : '放大K线';
-  if (!expanded || !state.detailCode) return;
+  const target = Boolean(expanded);
+  const changed = modal.classList.contains('chart-expanded') !== target;
+  modal.classList.toggle('chart-expanded', target);
+  button.setAttribute('aria-pressed', target ? 'true' : 'false');
+  button.textContent = target ? '收起大图' : '放大K线';
+  if (!changed || !redraw || !state.detailCode || qs('#detailOverlay')?.classList.contains('hidden')) return;
   requestAnimationFrame(() => {
     if (state.decisionUi.openDetailCode) openDecisionDetail(state.detailCode, true);
     else scheduleDetailBars(state.detailCode, 0);
@@ -833,7 +835,7 @@ function openModal(id, focusSelector = '.modal-close') {
 }
 function closeModal(id) {
   qs(`#${id}`)?.classList.add('hidden');
-  if (id === 'detailOverlay') { setLegacyChartExpanded(false); document.body?.classList.remove('legacy-chart-modal-open'); cancelDetailRequest(); state.decisionUi.openDetailCode = null; state.decisionUi.openDetailSnapshotId = null; }
+  if (id === 'detailOverlay') { setLegacyChartExpanded(false, false); document.body?.classList.remove('legacy-chart-modal-open'); cancelDetailRequest(); state.decisionUi.openDetailCode = null; state.decisionUi.openDetailSnapshotId = null; }
   if (state.modalReturnFocus && typeof state.modalReturnFocus.focus === 'function') state.modalReturnFocus.focus();
   state.modalReturnFocus = null;
 }

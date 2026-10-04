@@ -12,6 +12,7 @@ from pathlib import Path
 
 from app.models import ReportArtifact
 from app.services.calibration_service import CalibrationService
+from app.services.validation_service import VALIDATION_CONTRACT_VERSION
 from app.services.task_service import TaskService
 from app.utils.hashing import stable_hash
 from app.utils.reproducibility import current_git_commit
@@ -140,7 +141,7 @@ def _write_validation_artifact(db_session, tmp_path, payload):
 
 
 def _synthetic_validation_payload(svc, *, horizons=(1, 3, 5, 10), source="public_composite",
-                                  pit=True, holdout=True, nan_metric=False):
+                                  pit=True, holdout=True, nan_metric=False, run_id="synthetic-validation"):
     rows = []
     for instrument in range(5):
         metrics = {}
@@ -156,7 +157,8 @@ def _synthetic_validation_payload(svc, *, horizons=(1, 3, 5, 10), source="public
             }
         rows.append({"status": "ok", "horizons": metrics})
     return {
-        "run_id": "synthetic-validation",
+        "run_id": run_id,
+        "validation_contract_version": VALIDATION_CONTRACT_VERSION,
         "model_version": svc.strategy["forecast_version"],
         "feature_schema_version": svc.strategy["feature_schema_version"],
         "config_hash": stable_hash(svc.strategy),
@@ -167,14 +169,25 @@ def _synthetic_validation_payload(svc, *, horizons=(1, 3, 5, 10), source="public
             "source": source,
             "independent_holdout": holdout,
             "pit_qualified": pit,
+            "calibration_eligible": True,
             "qualification": "SYNTHETIC_TEST_ONLY",
         },
         "instruments": rows,
     }
 
 
-def test_default_run_id_no_longer_raises_name_error(db_session):
-    result = CalibrationService().create_candidate(db_session)
+def test_default_run_id_skip_is_isolated_from_shared_report_state():
+    class EmptyResult:
+        @staticmethod
+        def first():
+            return None
+
+    class EmptyDb:
+        @staticmethod
+        def scalars(_statement):
+            return EmptyResult()
+
+    result = CalibrationService().create_candidate(EmptyDb())  # type: ignore[arg-type]
     assert result["status"] == "skipped"
     assert len(result["run_id"]) == 32
 
@@ -188,22 +201,94 @@ def test_candidate_fails_closed_for_single_horizon_mock_no_holdout_and_nan(db_se
     result = svc.create_candidate(db_session, run_id="strict-negative")
     items = result["gate_results"]["items"]
     assert result["gates_passed"] is False
-    assert items["finite_metrics"] is False
+    assert items["metrics_valid"] is False
     assert items["all_formal_horizons"] is False
-    assert items["independent_holdout"] is False
-    assert items["source_non_mock"] is False
-    assert items["pit_qualified"] is False
+    assert items["validation_contract_eligible"] is False
+    assert items["independent_holdout_verified"] is False
+    assert items["source_non_synthetic"] is False
+    assert items["pit_qualified_verified"] is False
 
 
 def test_approval_reloads_and_rehashes_original_validation_artifact(db_session, tmp_path):
     svc = CalibrationService()
-    payload = _synthetic_validation_payload(svc)
+    payload = _synthetic_validation_payload(svc, run_id="tamper-fixture")
     path = _write_validation_artifact(db_session, tmp_path, payload)
-    result = svc.create_candidate(db_session, run_id="strict-positive-fixture")
-    assert result["gates_passed"] is True
+    result = svc.create_candidate(db_session, run_id="strict-tamper-fixture")
+    assert result["gates_passed"] is False
+    assert result["gate_results"]["items"]["validation_contract_eligible"] is False
     path.write_text(json.dumps({**payload, "run_id": "tampered-after-candidate"}), encoding="utf-8")
     try:
         svc.decide(db_session, result["profile_id"], "approved", approved_by="test-user")
         raise AssertionError("tampered validation artifact must not be approved")
     except ValueError as exc:
         assert "validation_content_hash_matches" in str(exc)
+
+
+def test_bad_h10_cannot_hide_inside_good_aggregate_metrics(db_session, tmp_path):
+    svc = CalibrationService()
+    payload = _synthetic_validation_payload(svc, run_id="bad-h10")
+    for row in payload["instruments"]:
+        row["horizons"]["10"]["directional_accuracy"] = 0.0
+    _write_validation_artifact(db_session, tmp_path, payload)
+    result = svc.create_candidate(db_session, run_id="bad-h10-candidate")
+    assert result["gate_results"]["horizons"]["10"]["items"]["directional_accuracy"] is False
+    assert result["gate_results"]["horizons"]["1"]["items"]["directional_accuracy"] is True
+    assert result["gate_results"]["items"]["per_horizon_gates"] is False
+    assert result["gates_passed"] is False
+
+
+def test_empty_formal_horizon_is_a_hard_failure(db_session, tmp_path):
+    svc = CalibrationService()
+    payload = _synthetic_validation_payload(svc, run_id="empty-h10")
+    for row in payload["instruments"]:
+        row["horizons"]["10"] = {"sample_count": 0}
+    _write_validation_artifact(db_session, tmp_path, payload)
+    result = svc.create_candidate(db_session, run_id="empty-h10-candidate")
+    h10 = result["gate_results"]["horizons"]["10"]
+    assert h10["items"]["sample_count"] is False
+    assert h10["items"]["metrics_valid"] is False
+    assert result["gates_passed"] is False
+
+
+def test_out_of_range_probability_metrics_fail_closed(db_session, tmp_path):
+    svc = CalibrationService()
+    payload = _synthetic_validation_payload(svc, run_id="range-invalid")
+    payload["instruments"][0]["horizons"]["1"]["directional_accuracy"] = 1.2
+    payload["instruments"][1]["horizons"]["3"]["brier_score"] = -0.1
+    payload["instruments"][2]["horizons"]["5"]["interval_80_coverage"] = 2.0
+    _write_validation_artifact(db_session, tmp_path, payload)
+    result = svc.create_candidate(db_session, run_id="range-invalid-candidate")
+    assert result["gate_results"]["items"]["metrics_valid"] is False
+    assert result["gate_results"]["items"]["per_horizon_gates"] is False
+
+
+def test_self_declared_holdout_pit_mock_fixture_and_arbitrary_lineage_cannot_qualify(db_session, tmp_path):
+    svc = CalibrationService()
+    payload = _synthetic_validation_payload(
+        svc, source="mock_fixture", pit=True, holdout=True, run_id="self-declared"
+    )
+    payload["input_lineage_hash"] = "arbitrary-lineage"
+    payload["validation_contract_version"] = "self-declared-qualified-contract"
+    _write_validation_artifact(db_session, tmp_path, payload)
+    result = svc.create_candidate(db_session, run_id="self-declared-candidate")
+    items = result["gate_results"]["items"]
+    assert items["validation_contract_eligible"] is False
+    assert items["independent_holdout_verified"] is False
+    assert items["pit_qualified_verified"] is False
+    assert items["source_non_synthetic"] is False
+    assert items["input_lineage_digest_valid"] is False
+    assert result["gates_passed"] is False
+
+
+def test_current_validator_contract_is_explicitly_nonqualifying_even_when_report_booleans_are_forged(db_session, tmp_path):
+    svc = CalibrationService()
+    payload = _synthetic_validation_payload(svc, source="public_composite", pit=True, holdout=True,
+                                            run_id="current-contract-forged-flags")
+    payload["validation_contract_version"] = VALIDATION_CONTRACT_VERSION
+    payload["input_lineage_hash"] = "b" * 64
+    _write_validation_artifact(db_session, tmp_path, payload)
+    result = svc.create_candidate(db_session, run_id="current-contract-candidate")
+    assert result["summary"]["declared_independent_holdout"] is True
+    assert result["summary"]["declared_pit_qualified"] is True
+    assert result["summary"]["validation_contract_eligible"] is False
+    assert result["gates_passed"] is False

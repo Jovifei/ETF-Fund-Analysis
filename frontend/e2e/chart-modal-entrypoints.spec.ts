@@ -12,6 +12,7 @@ async function openFromCompactChart(page: Page, chart: Locator, label: string, i
   const dialog = page.locator('.expanded-chart')
   await expect(dialog).toBeVisible()
   await expect(dialog).toHaveAttribute('role', 'dialog')
+  await expect(page.locator('body')).toHaveClass(/modal-scroll-lock/)
   const expanded = await paneHeight(chart)
   await info.attach(label + '-pane-heights', {
     body: JSON.stringify({ compact_main_pane_px: compact, expanded_main_pane_px: expanded }),
@@ -29,6 +30,20 @@ async function openFromCompactChart(page: Page, chart: Locator, label: string, i
   await chart.click({ position: { x: 160, y: 120 } })
   await expect(dialog).toBeVisible()
   await expect(page.locator('.expanded-chart')).toHaveCount(1)
+
+  const focusStates: Array<{tag:string; hiddenByCollapsedDetails:boolean; inside:boolean}> = []
+  for(let index=0;index<36;index++){
+    focusStates.push(await page.evaluate(()=>{
+      const active=document.activeElement as HTMLElement|null
+      const dialog=document.querySelector('.expanded-chart')
+      const collapsed=active?.closest('details:not([open])')
+      const summary=collapsed?.firstElementChild?.tagName==='SUMMARY'?collapsed.firstElementChild:collapsed?.querySelector('summary')
+      return {tag:active?.tagName??'',hiddenByCollapsedDetails:Boolean(collapsed&&summary!==active),inside:Boolean(active&&dialog?.contains(active))}
+    }))
+    await page.keyboard.press('Tab')
+  }
+  expect(focusStates.every(state=>state.inside&&!state.hiddenByCollapsedDetails)).toBe(true)
+  expect(focusStates.some(state=>state.tag==='SUMMARY')).toBe(true)
   return { compact, expanded }
 }
 
@@ -38,6 +53,7 @@ test('Detail compact K-line click opens one dialog and measures the real candle 
   await openFromCompactChart(page, chart, 'detail', info)
   await page.keyboard.press('Escape')
   await expect(page.locator('.expanded-chart')).toHaveCount(0)
+  await expect(page.locator('body')).not.toHaveClass(/modal-scroll-lock/)
 })
 
 for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 720 }]) {
@@ -89,4 +105,7 @@ test('Legacy detail canvas click enlarges once and measures its actual canvas', 
   expect(expanded).toBeGreaterThan(compact + 40)
   await canvas.click({ position: { x: 120, y: 100 } })
   await expect(modal).toHaveClass(/chart-expanded/)
+  await frame.locator('#chartExpandButton').click()
+  await expect(modal).not.toHaveClass(/chart-expanded/)
+  await expect.poll(async()=>Math.round((await canvas.boundingBox())!.height)).toBeLessThan(expanded-40)
 })

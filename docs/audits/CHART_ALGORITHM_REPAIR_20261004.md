@@ -57,3 +57,34 @@ Remote correction:
 - new Chromium coverage exercises Detail, Overview index, global-search-to-Detail and Legacy entrypoints and records the first real chart canvas/pane height before and after enlargement, including 390x844 and 320px Detail viewports.
 
 Remote tests remain NOT_RUN by design; local Codex owns exact-SHA execution.
+
+
+## Iteration 77 algorithm hardening
+
+Local receipt `16495ed` reported 116 PASS / 2 FAIL on source `67f0e25`: the full synthetic panel produced 474 rather than 480 OOS rows because the test windows were built from global dates that still included feature rows whose forward labels had not matured; the default-run-id test also inherited a previously persisted validation report and therefore exercised duplicate rather than the intended no-report skip path.
+
+The correction does not weaken either assertion:
+- each horizon now builds its four OOS windows from that horizon's dates with actually matured labels, then still enforces the per-sample `label_end_date < test boundary` rule; the complete six-instrument fixture therefore has 480 evaluated rows while sparse instruments remain individually purged;
+- no-report UUID behavior is tested with an isolated empty repository stub, while the existing create/idempotence path separately retains duplicate coverage.
+
+Calibration governance is tightened beyond the local failures. Aggregate means can no longer hide a bad formal horizon: each configured horizon has its own instrument/sample/metric gate. Probability-style metrics must be finite and within [0,1]. Empty horizons fail. Obvious mock/fixture/demo/test/synthetic source labels and malformed lineage digests fail. Most importantly, holdout/PIT eligibility is code-controlled: the current `forecast-validation-v0.8-research-only` contract is explicitly non-qualifying and the eligible-contract allowlist is empty. A JSON report cannot promote itself by setting holdout/PIT/calibration flags to true. Qualification therefore remains UNKNOWN and calibration remains blocked.
+
+
+## Iteration 77 chart interaction hardening
+
+Static review found four interaction defects after the first modal implementation:
+- the first-class support/resistance toggle only removed PIVOT while BOX and other SR-derived method groups could remain;
+- the custom Tab boundary omitted native `summary` controls and counted controls hidden inside collapsed `details`;
+- each chart instance independently saved/restored `body.style.overflow`, so overlapping dialogs could unlock one another;
+- Legacy collapse changed CSS geometry without redrawing the canvas at compact dimensions.
+
+The correction makes the SR action own every SR level group (BOX/PIVOT/MA/BOLL/ATR/FIB/DERIVED/MACD/KDJ/RSI) while leaving CHAN independent. Dialog focus calculation includes visible summaries and excludes collapsed-detail descendants. Body locking uses a shared token-counted `modal-scroll-lock` class so the last dialog owns unlock. Legacy expand/collapse redraws on both geometry transitions; overlay close suppresses only the pointless hidden redraw. Browser acceptance now cycles focus repeatedly, rejects hidden-focus states, requires summary participation, and verifies lock release plus compact redraw.
+
+
+## Next-stage execution: overlapping-label confidence
+
+The supplied forecast audit also showed a separate credibility issue that was not one of the three hard failures: raw nearest-neighbor count can substantially overstate independent evidence when forward label windows overlap. This stage closes that item without changing point forecasts.
+
+`similarity_forecast` now records the raw neighbor count, a conservative maximum count of non-overlapping forward-label windows, the union of future label steps and a label-step overlap ratio. The confidence sample factor uses the non-overlapping count and is capped by the former raw factor, so this change can only reduce or preserve the sample contribution to confidence. Expected return, p_up, weighted neighbors and quantiles are unchanged. A frozen regression reproduces the audit example: 60 consecutive horizon-20 neighbors cover 79 unique future steps but only three non-overlapping label windows.
+
+Because confidence semantics changed, the candidate forecast identity is advanced to `similarity-corridor-v0.7.5-overlap-aware`. Persisted older forecasts remain incompatible through the existing version contract. Calibration remains `not_calibrated`; this diagnostic is not an OOS/PIT qualification.

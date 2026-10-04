@@ -154,8 +154,9 @@ class GlobalModelResearchService:
                 label_end = f"label_end_date_{horizon}"
                 features = [name for name in HORIZON_FEATURES[horizon] if name in panel.columns]
                 work = panel[["trade_date", label_end, target, *features]].replace([np.inf, -np.inf], np.nan).dropna()
+                mature_dates = sorted(work["trade_date"].dropna().unique())
                 folds = purged_expanding_walk_forward_folds(
-                    dates,
+                    mature_dates,
                     label_horizon=horizon,
                     folds=walk_forward_folds,
                     test_sessions=walk_forward_test_sessions,
@@ -251,6 +252,7 @@ class GlobalModelResearchService:
                 payload["horizons"][str(horizon)] = {
                     "status": "ok",
                     "features": features,
+                    "mature_label_dates": len(mature_dates),
                     "fold_count": len(fold_payloads),
                     "valid_fold_count": sum(
                         1 for item in fold_payloads if item.get("status") == "ok"
