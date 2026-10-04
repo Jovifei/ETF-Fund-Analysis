@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from app.utils.advanced_indicators import adx_dmi, cmf, obv, rsrs, true_range
+from app.utils.advanced_indicators import adx_dmi, cmf, obv, obv_flow_strength, rsrs, true_range
 from app.utils.indicator_contract import INDICATOR_DEFINITION_CONTRACT_VERSION, INDICATOR_DEFINITIONS
 from app.utils.indicators import _atr, _kdj, calculate_indicators
 
@@ -27,6 +27,7 @@ def test_definition_contract_version_and_scope_are_explicit():
     assert INDICATOR_DEFINITIONS["td_setup"]["trading_signal"] is False
     assert INDICATOR_DEFINITIONS["macd"]["histogram_scale"] == 2.0
     assert INDICATOR_DEFINITIONS["obv"]["first_value"] == 0.0
+    assert INDICATOR_DEFINITIONS["obv_flow_5"]["offset_invariant"] is True
 
 
 def test_macd_histogram_uses_project_double_bar_convention():
@@ -86,3 +87,22 @@ def test_rsrs_raw_is_beta_times_r2_under_project_ols_definition():
     mask = beta.notna() & r2.notna() & raw.notna()
     np.testing.assert_allclose(raw[mask].to_numpy(float), (beta[mask] * r2[mask]).to_numpy(float), rtol=0, atol=1e-12)
     assert np.isfinite(z.to_numpy()).all()
+
+
+def test_obv_flow_strength_is_offset_independent_bounded_and_directional():
+    close = pd.Series([10, 11, 12, 13, 14, 15, 16, 17], dtype=float)
+    volume = pd.Series([100, 120, 140, 160, 180, 200, 220, 240], dtype=float)
+    flow = obv_flow_strength(close, volume, 5)
+    assert flow.iloc[:5].isna().all()
+    assert flow.iloc[-1] == 1.0
+
+    falling = obv_flow_strength(close.iloc[::-1].reset_index(drop=True), volume, 5)
+    assert falling.iloc[-1] == -1.0
+
+    base_close = pd.Series([10, 11, 10, 12, 11, 13], dtype=float)
+    base_volume = pd.Series([100, 200, 300, 400, 500, 600], dtype=float)
+    baseline = obv_flow_strength(base_close, base_volume, 5).iloc[-1]
+    prefixed_close = pd.concat([pd.Series([1000, 999, 1001], dtype=float), base_close], ignore_index=True)
+    prefixed_volume = pd.concat([pd.Series([9e9, 8e9, 7e9], dtype=float), base_volume], ignore_index=True)
+    assert obv_flow_strength(prefixed_close, prefixed_volume, 5).iloc[-1] == baseline
+    assert -1.0 <= float(baseline) <= 1.0

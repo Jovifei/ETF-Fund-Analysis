@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from app.utils.advanced_indicators import adx_dmi, cci, cmf, mfi, obv, rsrs, williams_r
+from app.utils.advanced_indicators import adx_dmi, cci, cmf, mfi, obv, obv_flow_strength, rsrs, williams_r
 from app.utils.indicators import IndicatorResult, calculate_indicators as calculate_base
 from app.utils.numbers import clamp
 from app.utils.structure_indicators import add_structure_features, volume_profile
@@ -37,7 +37,7 @@ def calculate_indicators(frame: pd.DataFrame, config: dict[str, Any]) -> Indicat
     df["wr28"] = williams_r(high, low, close, int(trend_cfg.get("wr_long_window", 28)))
     df["roc12"] = close.pct_change(int(trend_cfg.get("roc_window", 12))) * 100
     df["obv"] = obv(close, volume)
-    df["obv_slope_5"] = df["obv"].pct_change(5, fill_method=None).replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    df["obv_slope_5"] = obv_flow_strength(close, volume, 5)
     flow_cfg = config.get("money_flow", {})
     df["mfi14"] = mfi(high, low, close, volume, int(flow_cfg.get("mfi_window", 14)))
     df["cmf20"] = cmf(high, low, close, volume, int(flow_cfg.get("cmf_window", 20)))

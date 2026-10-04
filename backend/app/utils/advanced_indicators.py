@@ -52,6 +52,25 @@ def obv(close: pd.Series, volume: pd.Series) -> pd.Series:
     return pd.Series((direction * volume).cumsum(), index=close.index, dtype=float)
 
 
+def obv_flow_strength(close: pd.Series, volume: pd.Series, window: int = 5) -> pd.Series:
+    """Offset-invariant directional volume balance over a fixed recent window.
+
+    The legacy public field remains named obv_slope_5 for compatibility, but the
+    value is net signed volume / gross volume in [-1, 1], not pct_change of a
+    cumulative OBV level whose arbitrary starting offset changes the result.
+    """
+    period = int(window)
+    if period <= 0:
+        raise ValueError("OBV flow window must be positive")
+    clean_close = pd.to_numeric(close, errors="coerce").astype(float)
+    clean_volume = pd.to_numeric(volume, errors="coerce").astype(float)
+    direction = np.sign(clean_close.diff())
+    signed = direction * clean_volume
+    numerator = signed.rolling(period, min_periods=period).sum()
+    denominator = clean_volume.abs().rolling(period, min_periods=period).sum().replace(0, np.nan)
+    return (numerator / denominator).clip(-1.0, 1.0)
+
+
 def mfi(high: pd.Series, low: pd.Series, close: pd.Series, volume: pd.Series, window: int = 14) -> pd.Series:
     typical = (high + low + close) / 3
     money = typical * volume
