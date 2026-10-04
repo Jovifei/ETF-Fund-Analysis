@@ -22,6 +22,9 @@ from app.utils.universe_contract import (
     current_enabled_universe_contract,
     filter_rows_from_listing,
 )
+from app.utils.historical_classification_contract import (
+    current_metadata_classification_contract,
+)
 
 OSS_RESEARCH_FACTORS = (
     "linear_slope_20",
@@ -393,6 +396,7 @@ class FactorAnalysisService:
             query.order_by(Instrument.ts_code)
         ).all()
         universe_contract = current_enabled_universe_contract(instruments)
+        classification_contract = current_metadata_classification_contract(instruments)
         frames: list[pd.DataFrame] = []
         basis_by_instrument: dict[str, dict[str, object]] = {}
         exclusions: list[dict[str, str]] = []
@@ -453,6 +457,7 @@ class FactorAnalysisService:
                 "excluded": exclusions,
             }
             panel.attrs["universe_contract"] = universe_contract
+            panel.attrs["classification_contract"] = classification_contract
             return panel
         panel = add_cross_sectional_features(pd.concat(frames, ignore_index=True))
         research_input_contract = {
@@ -462,6 +467,7 @@ class FactorAnalysisService:
         }
         panel.attrs["research_input_contract"] = research_input_contract
         panel.attrs["universe_contract"] = universe_contract
+        panel.attrs["classification_contract"] = classification_contract
         benchmark_code = str(self.strategy["signal"].get("regime_benchmark", "510300.SH"))
         panel = add_oss_research_factor_diagnostics(panel, benchmark_code)
         # groupby/apply/concat/merge operations are not an evidence store;
@@ -469,6 +475,7 @@ class FactorAnalysisService:
         # pandas attrs propagation details.
         panel.attrs["research_input_contract"] = research_input_contract
         panel.attrs["universe_contract"] = universe_contract
+        panel.attrs["classification_contract"] = classification_contract
         for horizon in aligned_research_horizons(self.strategy):
             grouped = panel.groupby("ts_code", observed=True)
             panel[f"forward_return_{horizon}"] = (
@@ -508,6 +515,8 @@ class FactorAnalysisService:
             by_theme[str(theme)] = {
                 "instrument_count": int(subset["ts_code"].nunique()),
                 "horizon": theme_horizon,
+                "classification_basis": "current_metadata_projected_over_history",
+                "classification_point_in_time_qualified": False,
                 "metrics": [
                     factor_metric(subset, factor, theme_horizon).model_dump()
                     for factor in factors
@@ -540,6 +549,7 @@ class FactorAnalysisService:
                 "last_date": str(panel["trade_date"].max()),
                 "research_input_contract": panel.attrs.get("research_input_contract", {}),
                 "universe_contract": panel.attrs.get("universe_contract", {}),
+                "classification_contract": panel.attrs.get("classification_contract", {}),
             },
             "metrics": metrics,
             "top_absolute_rank_ic": ranked[:30],
@@ -558,6 +568,8 @@ class FactorAnalysisService:
                 "promotion_policy": "manual review plus walk-forward/holdout/ablation required",
                 "price_basis_policy": "canonical_research_history_v1",
                 "point_in_time_revision_qualified": False,
+                "theme_analysis_basis": "current_metadata_projected_over_history",
+                "theme_classification_point_in_time_qualified": False,
             },
         }
         content_hash = stable_hash(payload)
@@ -579,6 +591,9 @@ class FactorAnalysisService:
                     "analysis_version": self.strategy.get("factor_analysis", {}).get("version"),
                     "research_input_contract_hash": stable_hash(panel.attrs.get("research_input_contract", {})),
                     "universe_contract_hash": stable_hash(panel.attrs.get("universe_contract", {})),
+                    "classification_contract_hash": stable_hash(
+                        panel.attrs.get("classification_contract", {})
+                    ),
                 },
             )
         )

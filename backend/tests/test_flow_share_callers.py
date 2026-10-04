@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 from app.core.config import Settings
 from app.db.base import Base
-from app.models import DecisionBoardSnapshot, EtfShareScale
+from app.models import DecisionBoardSnapshot, EtfShareScale, IndicatorSnapshot
 from app.services.decision_board_service import DecisionBoardService
 from app.services.flow_share_research import build_flow_share_view
 from app.services.signal_grade_service import SignalGradeService
@@ -54,9 +54,24 @@ def runtime(monkeypatch, client_loop):
 
 
 def test_entire_non_flow_rows_equal_independent_pre_change_golden(runtime):
-    db, settings, _ = runtime
+    db, settings, inst = runtime
     baseline = json.loads((Path(__file__).parent / "fixtures/flow_share_non_flow_golden.json").read_text())
     live = SignalGradeService(settings).build(db, as_of=AS_OF)["rows"][0]
+
+    # The independent golden was captured before current-snapshot compatibility.
+    # Preserve the full historical Board row by explicitly restoring that legacy
+    # identity only for the Board half of this golden; the SignalGrade half above
+    # still exercises the current identity. Dedicated snapshot-contract tests
+    # cover the new current/legacy split directly.
+    legacy = db.scalar(
+        select(IndicatorSnapshot).where(IndicatorSnapshot.instrument_id == inst.id)
+    )
+    assert legacy is not None
+    legacy.version = "ind-test"
+    legacy.feature_schema_version = None
+    legacy.config_hash = None
+    db.flush()
+
     board = DecisionBoardService(settings)._build_payload(db, AS_OF)
     assert board["read_model_version"] == NEW_VERSION
     assert board["flow_share_contract"] == "etf-flow-share-v2"

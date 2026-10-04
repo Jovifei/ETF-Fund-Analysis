@@ -124,6 +124,9 @@ class GlobalModelResearchService:
             universe_contract = panel.attrs.get("universe_contract")
             if not isinstance(universe_contract, dict) or not universe_contract.get("version"):
                 raise ValueError("global model research requires explicit universe contract")
+            classification_contract = panel.attrs.get("classification_contract")
+            if not isinstance(classification_contract, dict) or not classification_contract.get("version"):
+                raise ValueError("global model research requires explicit historical classification contract")
             dates = sorted(panel["trade_date"].dropna().unique())
             if len(dates) < 240:
                 raise ValueError("global model research requires at least 240 distinct trading dates")
@@ -168,6 +171,10 @@ class GlobalModelResearchService:
                 "panel_research_input_contract": panel.attrs.get("research_input_contract", {}),
                 "panel_universe_contract_hash": stable_hash(panel.attrs.get("universe_contract", {})),
                 "panel_universe_contract": panel.attrs.get("universe_contract", {}),
+                "panel_classification_contract_hash": stable_hash(
+                    panel.attrs.get("classification_contract", {})
+                ),
+                "panel_classification_contract": panel.attrs.get("classification_contract", {}),
                 "git_commit_sha": current_git_commit(),
                 "evidence_contract": {
                     "source": self.settings.market_provider,
@@ -317,6 +324,9 @@ class GlobalModelResearchService:
                     "research_version": payload.get("research_version"),
                     "panel_research_input_contract_hash": payload.get("panel_research_input_contract_hash"),
                     "panel_universe_contract_hash": payload.get("panel_universe_contract_hash"),
+                    "panel_classification_contract_hash": payload.get(
+                        "panel_classification_contract_hash"
+                    ),
                 },
             )
         )

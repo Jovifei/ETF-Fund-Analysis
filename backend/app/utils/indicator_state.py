@@ -236,7 +236,13 @@ def macd_state_view(values: dict[str, Any], previous: dict[str, Any] | None, cfg
 def kdj_state_view(values: dict[str, Any], previous: dict[str, Any] | None, cfg: dict[str, Any]) -> dict[str, Any]:
     state = classify_kdj(values, previous, cfg)
     if state["kind"] == "unknown":
-        return {"label": state["label"], "cls": "dk-vf", "sub": "", "desc": "", "vals": ""}
+        return {
+            "label": state["label"],
+            "cls": "dk-vf",
+            "sub": state["label"],
+            "desc": "",
+            "vals": "",
+        }
     return {
         "label": f"J={state['j']:.1f}",
         "cls": KDJ_KIND_TO_CLS.get(state["kind"], "dk-tm"),

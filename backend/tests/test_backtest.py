@@ -25,6 +25,9 @@ def test_rotation_backtest_is_next_open_and_audited(bootstrapped, db_session):
     assert payload["audit"]["commission_rate"] == strategy["backtest"]["commission_rate"]
     assert payload["audit"]["minimum_commission"] == strategy["backtest"]["minimum_commission"]
     assert payload["audit"]["slippage_rate"] == strategy["backtest"]["slippage_rate"]
+    assert payload["audit"]["configured_max_per_theme"] == strategy["backtest"]["max_per_theme"]
+    assert payload["audit"]["historical_theme_constraint_applied"] is False
+    assert payload["audit"]["historical_theme_constraint_reason"] == "effective_dated_theme_history_unavailable"
     assert payload["data"]["contains_mock"] is True
     assert payload["data"]["execution_price_basis"] == "raw_unadjusted_no_corporate_action_position_events_v1"
     assert payload["data"]["input_hash_policy"] == "single_raw_basis_daily_rows_v2"
@@ -35,6 +38,9 @@ def test_rotation_backtest_is_next_open_and_audited(bootstrapped, db_session):
     assert universe["historical_membership_available"] is False
     assert universe["survivorship_bias_controlled"] is False
     assert universe["qualification"] == "UNKNOWN"
+    classification = payload["data"]["classification_contract"]
+    assert classification["theme_point_in_time_qualified"] is False
+    assert classification["historical_backtest_theme_constraint_applied"] is False
     assert payload["data"]["input_hashes"]
     assert all(len(value) == 64 for value in payload["data"]["input_hashes"].values())
     assert all(item["feature_date_max"] == item["as_of_close"] for item in payload["decisions"])
