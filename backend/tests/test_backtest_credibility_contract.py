@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.models import DailyBar, Instrument
-from app.services.backtest_service import RotationBacktestService
+from app.services.backtest_service import Position, RotationBacktestService
 from app.services.backtest_v05_service import RotationBacktestV05Service
 
 
@@ -100,4 +100,64 @@ def test_backtest_loader_preserves_unknown_quantity_instead_of_zero(db_session):
     assert classification["theme_point_in_time_qualified"] is False
     assert pd.isna(frames[code].iloc[-1]["volume"])
     assert pd.isna(frames[code].iloc[-1]["amount"])
+    assert bool(frames[code].iloc[-1]["trade_activity_observed"]) is False
+    assert bool(frames[code].iloc[0]["trade_activity_observed"]) is True
     db_session.rollback()
+
+
+def test_execute_requires_observed_trade_activity_even_with_positive_open():
+    service = RotationBacktestService()
+    day = date(2026, 1, 5)
+    blocked_frame = pd.DataFrame(
+        {
+            "open": [10.0],
+            "high": [10.2],
+            "low": [9.8],
+            "close": [10.0],
+            "volume": [0.0],
+            "amount": [0.0],
+            "trade_activity_observed": [False],
+        },
+        index=[day],
+    )
+    positions: dict[str, Position] = {}
+    cash, trades = service._execute(
+        day,
+        0,
+        {"TEST.SH": 0.5},
+        {"TEST.SH": blocked_frame},
+        positions,
+        100_000.0,
+    )
+    assert cash == 100_000.0
+    assert trades == []
+    assert positions == {}
+
+    positions = {"TEST.SH": Position(shares=100, average_cost=9.0, opened_index=0)}
+    cash, trades = service._execute(
+        day,
+        1,
+        {},
+        {"TEST.SH": blocked_frame},
+        positions,
+        10_000.0,
+    )
+    assert trades == []
+    assert positions["TEST.SH"].shares == 100
+
+    tradable = blocked_frame.copy()
+    tradable["volume"] = 1000.0
+    tradable["amount"] = 10_000.0
+    tradable["trade_activity_observed"] = True
+    positions = {}
+    cash, trades = service._execute(
+        day,
+        0,
+        {"TEST.SH": 0.5},
+        {"TEST.SH": tradable},
+        positions,
+        100_000.0,
+    )
+    assert trades and trades[0]["side"] == "buy"
+    assert positions["TEST.SH"].shares > 0
+    assert cash < 100_000.0

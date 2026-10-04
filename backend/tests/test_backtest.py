@@ -28,9 +28,18 @@ def test_rotation_backtest_is_next_open_and_audited(bootstrapped, db_session):
     assert payload["audit"]["configured_max_per_theme"] == strategy["backtest"]["max_per_theme"]
     assert payload["audit"]["historical_theme_constraint_applied"] is False
     assert payload["audit"]["historical_theme_constraint_reason"] == "effective_dated_theme_history_unavailable"
+    assert payload["audit"]["execution_requires_observed_trade_activity"] is True
+    assert payload["audit"]["participation_cap_qualified"] is False
+    assert payload["audit"]["market_impact_model_qualified"] is False
+    assert payload["audit"]["price_limit_execution_qualified"] is False
     assert payload["data"]["contains_mock"] is True
     assert payload["data"]["execution_price_basis"] == "raw_unadjusted_no_corporate_action_position_events_v1"
-    assert payload["data"]["input_hash_policy"] == "single_raw_basis_daily_rows_v2"
+    assert payload["data"]["input_hash_policy"] == "single_raw_basis_daily_rows_v3-activity"
+    tradability = payload["data"]["execution_tradability_contract"]
+    assert tradability["policy"] == "raw_positive_volume_presence_v1"
+    assert tradability["participation_cap_qualified"] is False
+    assert tradability["market_impact_model_qualified"] is False
+    assert tradability["price_limit_execution_qualified"] is False
     assert isinstance(payload["data"]["excluded_instruments"], list)
     universe = payload["data"]["universe_contract"]
     assert universe["version"] == "research-universe-v1-current-enabled"
