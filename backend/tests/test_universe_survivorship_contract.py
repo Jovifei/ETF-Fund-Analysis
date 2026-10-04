@@ -115,9 +115,11 @@ def test_factor_panel_filters_prelisting_rows_and_carries_universe_contract(db_s
     assert research["listing_date_known"] is True
     assert research["prelisting_rows_removed"] > 0
     universe = panel.attrs["universe_contract"]
+    classification = panel.attrs["classification_contract"]
     assert universe["version"] == UNIVERSE_CONTRACT_VERSION
     assert universe["listing_dates"][code] == listing.isoformat()
     assert universe["survivorship_bias_controlled"] is False
+    assert classification["theme_point_in_time_qualified"] is False
     db_session.rollback()
 
 
@@ -126,12 +128,14 @@ def test_transaction_backtest_filters_prelisting_rows_but_does_not_claim_histori
     code = _unique_code(db_session, "95")
     _seed(db_session, code=code, listing=listing, rows=60)
     settings = get_settings().model_copy(update={"market_provider": "akshare"})
-    _, frames, exclusions, universe = RotationBacktestService(settings)._load_frames(db_session)
+    _, frames, exclusions, universe, classification = RotationBacktestService(settings)._load_frames(db_session)
     assert code not in {item["ts_code"] for item in exclusions}
     assert frames[code].index.min() >= listing
     assert universe["listing_dates"][code] == listing.isoformat()
     assert universe["historical_membership_available"] is False
     assert universe["survivorship_bias_controlled"] is False
+    assert classification["theme_point_in_time_qualified"] is False
+    assert classification["historical_projection_policy"] == "diagnostic_only_current_labels_projected_over_history"
     db_session.rollback()
 
 

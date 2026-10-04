@@ -18,6 +18,9 @@ from app.providers.corporate_action_contract import official_corporate_actions
 from app.providers.data_contract import price_history_issue, row_units_verified
 from app.services.event_service import emit_event
 from app.utils.hashing import stable_hash
+from app.utils.historical_classification_contract import (
+    current_metadata_classification_contract,
+)
 from app.utils.universe_contract import (
     current_enabled_universe_contract,
     filter_rows_from_listing,
@@ -87,12 +90,19 @@ class RotationBacktestService:
 
     def _load_frames(
         self, db: Session
-    ) -> tuple[dict[str, Instrument], dict[str, pd.DataFrame], list[dict[str, object]], dict[str, object]]:
+    ) -> tuple[
+        dict[str, Instrument],
+        dict[str, pd.DataFrame],
+        list[dict[str, object]],
+        dict[str, object],
+        dict[str, object],
+    ]:
         instruments = db.scalars(
             select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code)
         ).all()
         instrument_map = {item.ts_code: item for item in instruments}
         universe_contract = current_enabled_universe_contract(instruments)
+        classification_contract = current_metadata_classification_contract(instruments)
         frames: dict[str, pd.DataFrame] = {}
         exclusions: list[dict[str, object]] = []
         for instrument in instruments:
@@ -138,7 +148,7 @@ class RotationBacktestService:
                 ]
             ).set_index("trade_date").sort_index()
             frames[instrument.ts_code] = frame
-        return instrument_map, frames, exclusions, universe_contract
+        return instrument_map, frames, exclusions, universe_contract, classification_contract
 
     def _feature_table(self, frames: dict[str, pd.DataFrame], as_of: date) -> pd.DataFrame:
         records: list[dict] = []
@@ -247,17 +257,11 @@ class RotationBacktestService:
             (features["score"] >= minimum_score)
             & (features["absolute_momentum"] > minimum_momentum)
         ].copy()
-        max_per_theme = max(1, int(self.config.get("max_per_theme", 1)))
-        selected: list[str] = []
-        theme_counts: dict[str, int] = {}
-        for code in eligible.index:
-            theme = (instruments.get(code).theme_l1 if instruments.get(code) else None) or "未分类"
-            if theme_counts.get(theme, 0) >= max_per_theme:
-                continue
-            selected.append(code)
-            theme_counts[theme] = theme_counts.get(theme, 0) + 1
-            if len(selected) >= top_n:
-                break
+        # Instrument.theme_l1 is current metadata without historical effective dates.
+        # Applying max_per_theme here would leak today's classification into past
+        # transaction selection. Keep the configured cap in report governance but
+        # do not apply it until point-in-time theme history exists.
+        selected = list(eligible.index[:top_n])
 
         min_hold_days = int(self.config.get("minimum_hold_days", 9))
         rank_delta = float(self.config.get("rank_hysteresis", 0.10))
@@ -456,7 +460,13 @@ class RotationBacktestService:
 
     def run(self, db: Session, run_id: str | None = None) -> dict:
         run_id = run_id or uuid4().hex
-        instrument_map, frames, load_exclusions, universe_contract = self._load_frames(db)
+        (
+            instrument_map,
+            frames,
+            load_exclusions,
+            universe_contract,
+            classification_contract,
+        ) = self._load_frames(db)
         benchmark_code = str(self.config.get("benchmark", self.strategy["signal"]["regime_benchmark"]))
         benchmark = frames.get(benchmark_code)
         if benchmark is None or benchmark.empty:
@@ -597,6 +607,7 @@ class RotationBacktestService:
                     "execution_included_codes": sorted(frames),
                     "execution_excluded_count": len(load_exclusions),
                 },
+                "classification_contract": classification_contract,
                 "quantity_contract": (
                     "mock_passthrough"
                     if self.settings.market_provider == "mock"
@@ -624,6 +635,9 @@ class RotationBacktestService:
                 "commission_rate": float(self.config.get("commission_rate", 0.0002)),
                 "minimum_commission": float(self.config.get("minimum_commission", 5.0)),
                 "slippage_rate": float(self.config.get("slippage_rate", 0.0005)),
+                "configured_max_per_theme": int(self.config.get("max_per_theme", 1)),
+                "historical_theme_constraint_applied": False,
+                "historical_theme_constraint_reason": "effective_dated_theme_history_unavailable",
                 "future_trade_dates_in_features": False,
                 "point_in_time_revision_qualified": False,
                 "pit_note": "daily-bar revision/publication PIT is not proven by this backtest",
@@ -646,6 +660,9 @@ class RotationBacktestService:
                     "strategy_version": self.strategy["version"],
                     "backtest_version": self.strategy.get("backtest_version"),
                     "universe_contract_hash": stable_hash(payload["data"]["universe_contract"]),
+                    "classification_contract_hash": stable_hash(
+                        payload["data"]["classification_contract"]
+                    ),
                     "metrics": metrics,
                     "contains_mock": payload["data"]["contains_mock"],
                 },

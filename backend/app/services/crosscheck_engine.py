@@ -28,6 +28,9 @@ from app.services.report_artifact_contract import (
     read_system_json_report,
 )
 from app.utils.hashing import stable_hash
+from app.utils.historical_classification_contract import (
+    HISTORICAL_CLASSIFICATION_CONTRACT_VERSION,
+)
 from app.utils.universe_contract import UNIVERSE_CONTRACT_VERSION, parse_listing_date
 
 
@@ -102,6 +105,13 @@ class CrosscheckEngine:
         universe_contract = data_contract.get("universe_contract")
         if not isinstance(universe_contract, dict) or universe_contract.get("version") != UNIVERSE_CONTRACT_VERSION:
             return {"status": "skipped", "reason": "primary_universe_contract_missing"}
+        classification_contract = data_contract.get("classification_contract")
+        if (
+            not isinstance(classification_contract, dict)
+            or classification_contract.get("version")
+            != HISTORICAL_CLASSIFICATION_CONTRACT_VERSION
+        ):
+            return {"status": "skipped", "reason": "primary_classification_contract_missing"}
         config = report.get("configuration")
         if not isinstance(config, dict):
             return {"status": "skipped", "reason": "primary_configuration_missing"}
@@ -410,6 +420,7 @@ class CrosscheckEngine:
             "primary_content_hash": artifact.content_hash,
             "primary_backtest_version": report.get("backtest_version"),
             "primary_universe_contract_hash": stable_hash(universe_contract),
+            "primary_classification_contract_hash": stable_hash(classification_contract),
             "configuration": {
                 "lot_size": lot_size,
                 "commission_rate": commission_rate,
@@ -449,6 +460,9 @@ def crosscheck_main(db: Session, settings: Settings | None = None) -> dict[str, 
             "status": result["status"],
             "primary_run_id": result.get("primary_run_id"),
             "primary_universe_contract_hash": result.get("primary_universe_contract_hash"),
+            "primary_classification_contract_hash": result.get(
+                "primary_classification_contract_hash"
+            ),
         },
     ))
     db.flush()

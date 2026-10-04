@@ -63,6 +63,13 @@ def test_global_model_research_uses_purged_expanding_walk_forward(
         "historical_membership_available": False,
         "qualification": "UNKNOWN",
     }
+    panel.attrs["classification_contract"] = {
+        "version": "historical-classification-v1-current-metadata-only",
+        "effective_dated_history_available": False,
+        "theme_point_in_time_qualified": False,
+        "historical_backtest_theme_constraint_applied": False,
+        "qualification": "UNKNOWN",
+    }
     monkeypatch.setattr(FactorAnalysisService, "_panel", lambda self, db: panel)
 
     service = GlobalModelResearchService()
@@ -95,6 +102,9 @@ def test_global_model_research_uses_purged_expanding_walk_forward(
     assert len(payload["panel_research_input_contract_hash"]) == 64
     assert payload["panel_universe_contract"]["survivorship_bias_controlled"] is False
     assert len(payload["panel_universe_contract_hash"]) == 64
+    assert payload["panel_classification_contract"]["theme_point_in_time_qualified"] is False
+    assert payload["panel_classification_contract"]["historical_backtest_theme_constraint_applied"] is False
+    assert len(payload["panel_classification_contract_hash"]) == 64
 
     for horizon in DEFAULT_RESEARCH_HORIZONS:
         item = payload["horizons"][str(horizon)]
@@ -139,6 +149,13 @@ def test_sparse_instrument_uses_actual_label_end_not_global_calendar_distance(
         "selection": "synthetic-current-enabled",
         "survivorship_bias_controlled": False,
         "historical_membership_available": False,
+        "qualification": "UNKNOWN",
+    }
+    panel.attrs["classification_contract"] = {
+        "version": "historical-classification-v1-current-metadata-only",
+        "effective_dated_history_available": False,
+        "theme_point_in_time_qualified": False,
+        "historical_backtest_theme_constraint_applied": False,
         "qualification": "UNKNOWN",
     }
     dates = sorted(panel["trade_date"].unique())
