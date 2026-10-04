@@ -9,8 +9,20 @@ from app.workspace.read_model import chart_data, instrument_detail
 from sqlalchemy import select
 
 
+def _unused_59_code(db) -> str:
+    occupied = set(
+        db.scalars(select(Instrument.ts_code).where(Instrument.ts_code.like("59%.SH"))).all()
+    )
+    code = next(
+        (f"{value:06d}.SH" for value in range(590000, 600000) if f"{value:06d}.SH" not in occupied),
+        None,
+    )
+    assert code is not None
+    return code
+
+
 def instrument(db, missing_volume=False, legacy=False):
-    code = '59' + str(int(uuid4().hex[:5], 16) % 10000).zfill(4) + '.SH'
+    code = _unused_59_code(db)
     inst = Instrument(ts_code=code, symbol=code[:6], name='history test', kind='ETF', enabled=True)
     db.add(inst)
     db.flush()
@@ -274,7 +286,7 @@ def test_detail_rejects_indicator_snapshot_generated_after_its_read_time(db_sess
 
 
 def test_empty_history_has_a_specific_chart_unavailability_reason(db_session):
-    code = '59' + str(int(uuid4().hex[:5], 16) % 10000).zfill(4) + '.SH'
+    code = _unused_59_code(db_session)
     inst = Instrument(ts_code=code, symbol=code[:6], name='empty history', kind='ETF', enabled=True)
     db_session.add(inst)
     db_session.flush()

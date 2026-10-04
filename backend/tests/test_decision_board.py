@@ -470,12 +470,23 @@ def test_detail_is_captured_in_snapshot_and_stays_immutable_after_domain_rows_ch
     assert len(detail_before["forecast_scenario"]) == 10
     assert "support_resistance" in detail_before and "chan" in detail_before
 
-    bar = db_session.scalar(select(DailyBar).where(DailyBar.instrument_id == detail_before["instrument_id"]).limit(1))
-    bar.close = 999.0
-    db_session.flush()
-    detail_after = service.read_instrument(db_session, "510300.SH", horizon=10)
-
-    assert detail_after == detail_before
+    bar = db_session.scalar(
+        select(DailyBar)
+        .where(DailyBar.instrument_id == detail_before["instrument_id"])
+        .limit(1)
+    )
+    original_close = bar.close
+    try:
+        bar.close = 999.0
+        db_session.flush()
+        detail_after = service.read_instrument(db_session, "510300.SH", horizon=10)
+        assert detail_after == detail_before
+    finally:
+        # The shared session-level bootstrap is reused by later backtest tests.
+        # Restore the domain row so this immutable-snapshot test cannot corrupt
+        # benchmark history for the rest of the suite.
+        bar.close = original_close
+        db_session.flush()
 
 
 def test_complete_unverified_provisional_is_derived_research_only_and_drives_display(db_session, bootstrapped) -> None:

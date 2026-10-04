@@ -90,3 +90,15 @@ A real historical-theme constraint would require an independently sourced effect
 `REAL_DATA_QUALIFICATION=UNKNOWN`
 `actionable=false`
 `calibration_status=not_calibrated`
+
+
+## Iteration 90 full-suite isolation reconciliation
+
+Local concentrated acceptance and exact Linux full CI exposed two fixture-isolation classes plus three fresh-process SignalCenter positives. No production future/stale/PIT gate was relaxed.
+
+- SignalCenter's synthetic helper previously did nothing when bootstrap already owned the same date/current Indicator identity. It now updates that synthetic row's values, scores, input hash and generated time, so the test's intended current evidence actually becomes the latest evidence.
+- The mixed-source SignalCenter case removes pre-existing DecisionBoard snapshots before inserting its single-row canonical board. This preserves the original assertion that one instrument uses the board while the rest use SignalGrade fallback; it does not change production source precedence.
+- The immutable DecisionBoard snapshot test temporarily mutates a 510300 DailyBar to prove saved payload immutability. It now restores the original close in `finally`, preventing that successful test from committing a corrupted benchmark into the shared suite database.
+- v103 history fixtures now select an unused 59xxxx.SH code from the database instead of choosing from a 10,000-code random namespace that can collide in long shared suites.
+
+Business gates remain unchanged: invalid benchmark history still fails the backtest, UNIQUE instrument identity remains enforced, and future/stale snapshots remain fail-closed.
