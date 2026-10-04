@@ -39,7 +39,12 @@ def _synthetic_panel() -> pd.DataFrame:
                     + 0.0001 * ((date_index + instrument_index) % 5 - 2)
                 )
             rows.append(row)
-    return pd.DataFrame(rows)
+    panel = pd.DataFrame(rows)
+    for horizon in DEFAULT_RESEARCH_HORIZONS:
+        panel[f"label_end_date_{horizon}"] = (
+            panel.groupby("ts_code", observed=True)["trade_date"].shift(-horizon)
+        )
+    return panel
 
 
 def test_global_model_research_uses_purged_expanding_walk_forward(
@@ -78,6 +83,8 @@ def test_global_model_research_uses_purged_expanding_walk_forward(
         assert [fold["fold_index"] for fold in folds] == [1, 2, 3, 4]
         assert all(fold["status"] == "ok" for fold in folds)
         assert all(fold["purge_sessions"] == horizon for fold in folds)
+        assert all(fold["label_end_guard"] == "per_sample_strict_before" for fold in folds)
+        assert all(fold["train_label_end_last"] < fold["label_end_before"] for fold in folds)
         assert [fold["train_sessions"] for fold in folds] == [
             180 - horizon,
             200 - horizon,
@@ -89,3 +96,38 @@ def test_global_model_research_uses_purged_expanding_walk_forward(
             assert previous["test_samples"] == current["test_samples"] == 120
         assert 0.0 <= item["interval_80_coverage"] <= 1.0
         assert item["interval_mean_width"] > 0
+
+
+def test_sparse_instrument_uses_actual_label_end_not_global_calendar_distance(
+    db_session, monkeypatch, tmp_path
+):
+    panel = _synthetic_panel()
+    dates = sorted(panel["trade_date"].unique())
+    first_test = dates[-80:]
+    missing = set(dates[175:180])
+    panel = panel.loc[~((panel["ts_code"] == "TEST00.SH") & panel["trade_date"].isin(missing))].copy()
+    for horizon in DEFAULT_RESEARCH_HORIZONS:
+        panel[f"label_end_date_{horizon}"] = (
+            panel.groupby("ts_code", observed=True)["trade_date"].shift(-horizon)
+        )
+    leaked_under_old_rule = panel.loc[
+        (panel["ts_code"] == "TEST00.SH")
+        & (panel["trade_date"] < dates[179])
+        & (panel["label_end_date_1"] >= first_test[0])
+    ]
+    assert not leaked_under_old_rule.empty
+
+    monkeypatch.setattr(FactorAnalysisService, "_panel", lambda self, db: panel)
+    service = GlobalModelResearchService()
+    monkeypatch.setattr(service.settings, "reports_dir", tmp_path)
+    monkeypatch.setattr(service, "_backend", lambda: "stub")
+    monkeypatch.setattr(
+        service, "_fit_predict",
+        lambda backend, train_x, train_y, test_x, quantile:
+            np.full(len(test_x), {0.10: -0.01, 0.50: 0.0, 0.90: 0.01}[quantile]),
+    )
+    result = service.run(db_session, run_id="sparse-label-end")
+    payload = json.loads((tmp_path / result["filename"]).read_text(encoding="utf-8"))
+    for horizon in DEFAULT_RESEARCH_HORIZONS:
+        for fold in payload["horizons"][str(horizon)]["folds"]:
+            assert fold["train_label_end_last"] < fold["label_end_before"]

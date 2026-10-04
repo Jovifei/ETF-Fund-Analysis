@@ -434,6 +434,20 @@ function decisionDetailHtml(detail) {
     <section class="reason-box"><strong>支撑 / 压力 / 缠论近似</strong><br>支撑 ${escapeHtml(decisionDetailLevel(levels?.nearest_support))} · 压力 ${escapeHtml(decisionDetailLevel(levels?.nearest_resistance))} · ${escapeHtml(decisionChanRange(chan?.zone || levels?.chan_zone_approx))}<br>支撑层级 ${escapeHtml(levelText(levels?.support_levels))}<br>压力层级 ${escapeHtml(levelText(levels?.resistance_levels))}<br>${escapeHtml(decisionCellText(chan?.label))} · ${escapeHtml(decisionCellText(chan?.detail))}</section>
     <section class="reason-box"><strong>指标与来源</strong><br>${escapeHtml(indicatorText)}<br>来源 ${escapeHtml(decisionCellText(quote?.source))} · 时间已验证 ${escapeHtml(String(Boolean(quote?.timestamp_verified)))} · 临时来源 ${escapeHtml(decisionCellText(provisional?.source))}</section>`;
 }
+function setLegacyChartExpanded(expanded) {
+  const modal = qs('#detailOverlay .detail-modal');
+  const button = qs('#chartExpandButton');
+  if (!modal || !button) return;
+  modal.classList.toggle('chart-expanded', Boolean(expanded));
+  button.setAttribute('aria-pressed', expanded ? 'true' : 'false');
+  button.textContent = expanded ? '收起大图' : '放大K线';
+  if (!expanded || !state.detailCode) return;
+  requestAnimationFrame(() => {
+    if (state.decisionUi.openDetailCode) openDecisionDetail(state.detailCode, true);
+    else scheduleDetailBars(state.detailCode, 0);
+  });
+}
+
 function drawDecisionSnapshotChart(history, forecastScenario) {
   const canvas = qs('#chartCanvas');
   const ctx = canvas?.getContext?.('2d');
@@ -444,7 +458,8 @@ function drawDecisionSnapshotChart(history, forecastScenario) {
   if (!data.length) { canvas.classList.add('hidden'); return; }
   canvas.classList.remove('hidden');
   const rect = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
-  const width = Math.max(360, rect.width || 720), height = 290;
+  const expanded = Boolean(canvas.closest('.chart-expanded'));
+  const width = Math.max(360, rect.width || 720), height = expanded ? Math.max(420, Math.min(680, window.innerHeight * .64)) : 290;
   canvas.width = width * dpr; canvas.height = height * dpr;
   if (typeof ctx.setTransform === 'function') ctx.setTransform(dpr, 0, 0, dpr, 0, 0); else ctx.scale?.(dpr, dpr);
   ctx.clearRect(0, 0, width, height);
@@ -812,12 +827,13 @@ function openModal(id, focusSelector = '.modal-close') {
   const overlay = qs(`#${id}`);
   state.modalReturnFocus = document.activeElement;
   overlay.classList.remove('hidden');
+  if (id === 'detailOverlay') document.body?.classList.add('legacy-chart-modal-open');
   const focusTarget = qs(focusSelector, overlay) || qs('.modal-close', overlay);
   if (focusTarget) focusTarget.focus();
 }
 function closeModal(id) {
   qs(`#${id}`)?.classList.add('hidden');
-  if (id === 'detailOverlay') { cancelDetailRequest(); state.decisionUi.openDetailCode = null; state.decisionUi.openDetailSnapshotId = null; }
+  if (id === 'detailOverlay') { setLegacyChartExpanded(false); document.body?.classList.remove('legacy-chart-modal-open'); cancelDetailRequest(); state.decisionUi.openDetailCode = null; state.decisionUi.openDetailSnapshotId = null; }
   if (state.modalReturnFocus && typeof state.modalReturnFocus.focus === 'function') state.modalReturnFocus.focus();
   state.modalReturnFocus = null;
 }
@@ -2235,11 +2251,13 @@ function sma(values, period) {
 function drawChart(bars) {
   const canvas = qs('#chartCanvas');
   const rect = canvas.getBoundingClientRect(); const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.max(600, rect.width*dpr); canvas.height = 520*dpr;
+  const expanded=Boolean(canvas.closest('.chart-expanded'));
+  const height=expanded?Math.max(520,Math.min(780,window.innerHeight*.72)):520;
+  canvas.width = Math.max(600, rect.width*dpr); canvas.height = height*dpr;
   const ctx = canvas.getContext('2d'); ctx.scale(dpr,dpr);
-  const width=canvas.width/dpr, height=canvas.height/dpr; ctx.clearRect(0,0,width,height);
+  const width=canvas.width/dpr; ctx.clearRect(0,0,width,height);
   const data=bars.slice(-140); if (!data.length) return;
-  const left=55,right=18,top=24,priceBottom=365,macdTop=400,bottom=500;
+  const left=55,right=18,top=24,bottom=height-20,priceBottom=Math.round(height*.70),macdTop=Math.round(height*.78);
   const highs=data.map(x=>Number(x.high)), lows=data.map(x=>Number(x.low)), closes=data.map(x=>Number(x.close));
   const max=Math.max(...highs), min=Math.min(...lows), range=max-min||1;
   const xStep=(width-left-right)/data.length, candle=Math.max(2,Math.min(8,xStep*.62));
@@ -2350,6 +2368,7 @@ function bindEvents() {
   const boardAdd = qs('#boardAddForm');
   if (boardAdd) boardAdd.addEventListener('submit', submitBoardFund);
   qsa('[data-close]').forEach(button=>button.addEventListener('click',()=>closeModal(button.dataset.close)));
+  qs('#chartExpandButton')?.addEventListener('click',()=>setLegacyChartExpanded(!qs('#detailOverlay .detail-modal')?.classList.contains('chart-expanded')));
   qsa('.overlay').forEach(overlay=>{
     overlay.addEventListener('click',event=>{if(event.target===overlay&&!overlay.classList.contains('auth-overlay')&&!['portfolioImportOverlay','portfolioConfirmOverlay'].includes(overlay.id))closeModal(overlay.id);});
     overlay.addEventListener('keydown', trapModalFocus);

@@ -123,6 +123,7 @@
         "bi": 2,
         "zs": 1
       },
+      "fx": [],
       "bi": [
         {
           "start_date": "2026-09-01 15:00:00",
@@ -152,7 +153,8 @@
         }
       ],
       "undrawable_bi": 1,
-      "disclaimer": "已保存缠论观测（CZSC 笔与中枢）。不是线段，不含背驰和买卖点。",
+      "undrawable_fx": 1,
+      "disclaimer": "已保存缠论观测（CZSC 分型、笔与中枢）。不是线段，不含背驰和买卖点。",
       "observation_id": "obs-1",
       "settlement_status": "settled",
       "view_semantics": "latest_persisted_observed_revision_not_historical_pit"

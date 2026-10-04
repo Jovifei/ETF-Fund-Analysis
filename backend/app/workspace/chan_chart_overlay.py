@@ -12,11 +12,13 @@ from typing import Any
 
 _UP = {"up", "向上", "direction.up", "direction.向上"}
 _DOWN = {"down", "向下", "direction.down", "direction.向下"}
+# CZSC 1.0.1 Mark str/value tokens and explicit enum representations only.
+_FRACTAL_MARKS = {"顶分型": "top", "Mark.G": "top", "底分型": "bottom", "Mark.D": "bottom"}
 _FALLBACK_REASONS = {"snapshot_missing", "unsupported_interval"}
 _MISSING = "尚无已保存缠论观测。勾选后显示简化结构 chan-structure-simplified-v1，不是完整 CZSC。"
 _BLOCKED = "已保存缠论读模型未通过校验，不改用简化结构代替。"
 _BASIS = "已保存缠论观测的价格口径与当前研究序列不一致，未绘制该观测。图上若出现笔段，只是简化结构 chan-structure-simplified-v1。"
-_DRAWN = "已保存缠论观测（CZSC 笔与中枢）。不是线段，不含背驰和买卖点。"
+_DRAWN = "已保存缠论观测（CZSC 分型、笔与中枢）。不是线段，不含背驰和买卖点。"
 
 
 def annotate_chart_chan(chart: dict[str, Any], evidence: dict[str, Any] | None) -> dict[str, Any]:
@@ -38,10 +40,12 @@ def project_persisted_chan(evidence: dict[str, Any] | None, research_price_basis
         "engine_version": None,
         "dialect_id": None,
         "counts": {"fx": 0, "bi": 0, "zs": 0},
+        "fx": [],
         "bi": [],
         "segments": [],
         "zhongshu": [],
         "undrawable_bi": 0,
+        "undrawable_fx": 0,
         "disclaimer": _MISSING,
     }
     if not isinstance(evidence, dict):
@@ -85,9 +89,11 @@ def project_persisted_chan(evidence: dict[str, Any] | None, research_price_basis
         )
         return projected
 
+    fractals: list[dict[str, Any]] = []
     strokes: list[dict[str, Any]] = []
     zones: list[dict[str, Any]] = []
     undrawable = 0
+    undrawable_fx = 0
     structures = evidence.get("structures")
     if isinstance(structures, list):
         for item in structures:
@@ -97,7 +103,23 @@ def project_persisted_chan(evidence: dict[str, Any] | None, research_price_basis
             geometry = item.get("geometry") if isinstance(item.get("geometry"), dict) else {}
             start = item.get("source_start")
             end = item.get("source_end")
-            if kind == "bi":
+            if kind == "fx":
+                mark = item.get("mark")
+                normalized_mark = _FRACTAL_MARKS.get(mark) if isinstance(mark, str) else None
+                high, low = _fractal_price(geometry.get("high")), _fractal_price(geometry.get("low"))
+                if (
+                    normalized_mark is None or high is None or low is None or low <= 0 or high < low
+                    or not isinstance(start, str) or not start.strip() or not isinstance(end, str) or start != end
+                ):
+                    undrawable_fx += 1
+                    continue
+                fractals.append({
+                    "date": start,
+                    "price": high if normalized_mark == "top" else low,
+                    "mark": normalized_mark,
+                    "source": "persisted",
+                })
+            elif kind == "bi":
                 prices = _stroke_prices(item.get("direction"), geometry.get("high"), geometry.get("low"))
                 if prices is None or not isinstance(start, str) or not isinstance(end, str):
                     undrawable += 1
@@ -121,7 +143,10 @@ def project_persisted_chan(evidence: dict[str, Any] | None, research_price_basis
                     "zg": upper,
                     "source": "persisted",
                 })
-    projected.update(drawable=True, bi=strokes, zhongshu=zones, undrawable_bi=undrawable, disclaimer=_DRAWN)
+    projected.update(
+        drawable=True, fx=fractals, bi=strokes, zhongshu=zones,
+        undrawable_bi=undrawable, undrawable_fx=undrawable_fx, disclaimer=_DRAWN,
+    )
     if isinstance(evidence.get("transitions"), list):
         projected["revision_evidence"] = _revision_evidence(evidence)
     return projected
@@ -155,6 +180,17 @@ def _finite(value: Any) -> float | None:
     try:
         number = float(value)
     except (TypeError, ValueError):
+        return None
+    return number if isfinite(number) else None
+
+
+def _fractal_price(value: Any) -> float | None:
+    """Accept finite JSON numbers only, without changing legacy bi/zs coercion."""
+    if type(value) not in (int, float):
+        return None
+    try:
+        number = float(value)
+    except OverflowError:
         return None
     return number if isfinite(number) else None
 

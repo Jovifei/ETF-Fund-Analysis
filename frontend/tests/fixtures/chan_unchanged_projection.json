@@ -15,11 +15,20 @@
     "bi": 0,
     "zs": 0
   },
+  "fx": [
+    {
+      "date": "2026-01-06 00:00:00",
+      "price": 103.0,
+      "mark": "top",
+      "source": "persisted"
+    }
+  ],
   "bi": [],
   "segments": [],
   "zhongshu": [],
   "undrawable_bi": 0,
-  "disclaimer": "已保存缠论观测（CZSC 笔与中枢）。不是线段，不含背驰和买卖点。",
+  "undrawable_fx": 0,
+  "disclaimer": "已保存缠论观测（CZSC 分型、笔与中枢）。不是线段，不含背驰和买卖点。",
   "observation_id": "c6eb832e505687c8de4a93ba2fdc816695caacfd2455540c44b51c1366219e06",
   "settlement_status": "settled",
   "view_semantics": "latest_persisted_observed_revision_not_historical_pit",

@@ -6,7 +6,7 @@ vi.mock('../src/lib/chartAdapter',()=>({
  groupsForLevel:()=>['PIVOT'],
  ChartAdapter:class {chart={resize:vi.fn()};setIndicatorSelection(){};setStudySelection(){};range(){};reset(){};destroy(){}}
 }))
-const data={ts_code:'TEST.SH',interval:'1d',available:true,adjust:'none',bars:[{date:'2026-09-01',open:1,high:2,low:1,close:2,volume:100,amount:null,indicators:{ma5:1}}]} as ChartData
+const data={ts_code:'TEST.SH',interval:'1d',available:true,adjust:'none',sr_overlay_allowed:true,bars:[{date:'2026-09-01',open:1,high:2,low:1,close:2,volume:100,amount:null,indicators:{ma5:1}}]} as ChartData
 const wrappers:ReturnType<typeof mount>[]=[]
 beforeEach(()=>{Object.defineProperty(window,'innerHeight',{configurable:true,value:600});Object.defineProperty(window,'innerWidth',{configurable:true,value:390})})
 afterEach(()=>{wrappers.forEach(w=>w.unmount());wrappers.length=0;vi.restoreAllMocks()})
@@ -24,7 +24,7 @@ describe('indicator popup viewport and Escape',()=>{
   expect(top).toBeGreaterThanOrEqual(12)
   expect(top+height).toBeLessThanOrEqual(588)
  })
- it('closes an open indicator panel before the fallback fullscreen shell',async()=>{
+ it('closes an open indicator panel before the chart dialog',async()=>{
   const w=chart();await flushPromises();await w.get('[data-testid="chart-fullscreen"]').trigger('click');await flushPromises()
   expect(w.classes()).toContain('expanded-chart')
   const panel=w.get('[data-testid="indicator-picker"]').element as HTMLDetailsElement
@@ -34,6 +34,20 @@ describe('indicator popup viewport and Escape',()=>{
   expect(w.classes()).toContain('expanded-chart')
   document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));await flushPromises()
   expect(w.classes()).not.toContain('expanded-chart')
+ })
+ it('uses an in-app modal, locks background scroll and returns focus without Fullscreen API',async()=>{
+  const w=chart();await flushPromises();const button=w.get('[data-testid="chart-fullscreen"]')
+  ;(button.element as HTMLButtonElement).focus();await button.trigger('click');await flushPromises()
+  expect(w.attributes('role')).toBe('dialog');expect(w.attributes('aria-modal')).toBe('true')
+  expect(document.body.style.overflow).toBe('hidden');expect(document.fullscreenElement).toBeFalsy()
+  await button.trigger('click');await flushPromises()
+  expect(document.body.style.overflow).toBe('');expect(document.activeElement).toBe(button.element)
+ })
+ it('keeps support resistance first-class and auxiliary panes opt-in by default',async()=>{
+  const w=chart();await flushPromises()
+  const sr=w.get('[data-testid="chart-sr-toggle"]'),volume=w.get('button[title*="成交量副图"]')
+  expect(sr.attributes('aria-pressed')).toBe('true');expect(volume.attributes('aria-pressed')).toBe('false')
+  await sr.trigger('click');expect(sr.attributes('aria-pressed')).toBe('false')
  })
 })
 
