@@ -39,9 +39,9 @@ describe('indicator popup viewport and Escape',()=>{
   const w=chart();await flushPromises();const button=w.get('[data-testid="chart-fullscreen"]')
   ;(button.element as HTMLButtonElement).focus();await button.trigger('click');await flushPromises()
   expect(w.attributes('role')).toBe('dialog');expect(w.attributes('aria-modal')).toBe('true')
-  expect(document.body.style.overflow).toBe('hidden');expect(document.fullscreenElement).toBeFalsy()
+  expect(document.body.classList.contains('modal-scroll-lock')).toBe(true);expect(document.fullscreenElement).toBeFalsy()
   await button.trigger('click');await flushPromises()
-  expect(document.body.style.overflow).toBe('');expect(document.activeElement).toBe(button.element)
+  expect(document.body.classList.contains('modal-scroll-lock')).toBe(false);expect(document.activeElement).toBe(button.element)
  })
  it('compact chart click opens once and chart interaction inside the dialog cannot reopen or close it',async()=>{
   const w=chart();await flushPromises();const surface=w.get('[data-testid="etf-chart"]')
@@ -57,6 +57,19 @@ describe('indicator popup viewport and Escape',()=>{
   const sr=w.get('[data-testid="chart-sr-toggle"]'),volume=w.get('button[title*="成交量副图"]')
   expect(sr.attributes('aria-pressed')).toBe('true');expect(volume.attributes('aria-pressed')).toBe('false')
   await sr.trigger('click');expect(sr.attributes('aria-pressed')).toBe('false')
+  for(const value of ['BOX','PIVOT','MA','BOLL','ATR','FIB','DERIVED','MACD','KDJ','RSI']){
+   expect((w.get(`.study-controls input[value="${value}"]`).element as HTMLInputElement).checked).toBe(false)
+  }
+ })
+ it('keeps body locked until the last of two chart dialogs closes',async()=>{
+  const first=chart(),second=chart();await flushPromises()
+  await first.get('[data-testid="chart-fullscreen"]').trigger('click')
+  await second.get('[data-testid="chart-fullscreen"]').trigger('click');await flushPromises()
+  expect(document.body.classList.contains('modal-scroll-lock')).toBe(true)
+  await first.get('[data-testid="chart-fullscreen"]').trigger('click');await flushPromises()
+  expect(document.body.classList.contains('modal-scroll-lock')).toBe(true)
+  await second.get('[data-testid="chart-fullscreen"]').trigger('click');await flushPromises()
+  expect(document.body.classList.contains('modal-scroll-lock')).toBe(false)
  })
 })
 

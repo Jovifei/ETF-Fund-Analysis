@@ -68,3 +68,14 @@ The correction does not weaken either assertion:
 - no-report UUID behavior is tested with an isolated empty repository stub, while the existing create/idempotence path separately retains duplicate coverage.
 
 Calibration governance is tightened beyond the local failures. Aggregate means can no longer hide a bad formal horizon: each configured horizon has its own instrument/sample/metric gate. Probability-style metrics must be finite and within [0,1]. Empty horizons fail. Obvious mock/fixture/demo/test/synthetic source labels and malformed lineage digests fail. Most importantly, holdout/PIT eligibility is code-controlled: the current `forecast-validation-v0.8-research-only` contract is explicitly non-qualifying and the eligible-contract allowlist is empty. A JSON report cannot promote itself by setting holdout/PIT/calibration flags to true. Qualification therefore remains UNKNOWN and calibration remains blocked.
+
+
+## Iteration 77 chart interaction hardening
+
+Static review found four interaction defects after the first modal implementation:
+- the first-class support/resistance toggle only removed PIVOT while BOX and other SR-derived method groups could remain;
+- the custom Tab boundary omitted native `summary` controls and counted controls hidden inside collapsed `details`;
+- each chart instance independently saved/restored `body.style.overflow`, so overlapping dialogs could unlock one another;
+- Legacy collapse changed CSS geometry without redrawing the canvas at compact dimensions.
+
+The correction makes the SR action own every SR level group (BOX/PIVOT/MA/BOLL/ATR/FIB/DERIVED/MACD/KDJ/RSI) while leaving CHAN independent. Dialog focus calculation includes visible summaries and excludes collapsed-detail descendants. Body locking uses a shared token-counted `modal-scroll-lock` class so the last dialog owns unlock. Legacy expand/collapse redraws on both geometry transitions; overlay close suppresses only the pointless hidden redraw. Browser acceptance now cycles focus repeatedly, rejects hidden-focus states, requires summary participation, and verifies lock release plus compact redraw.

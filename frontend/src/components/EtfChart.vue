@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
 import { popupLayout } from '../lib/popupLayout'
+import { acquireDialogScrollLock, releaseDialogScrollLock } from '../lib/dialogScrollLock'
 import { serverStudies, studyAvailable, volumeAvailable } from '../lib/chartStudies'
 import { ChartAdapter, chanOverlay, groupsForLevel } from '../lib/chartAdapter'
 import { num, levelPrice } from '../lib/format'
@@ -20,9 +21,11 @@ const data=displayData
 const periods=computed(()=>[...['1d','1w','1mo'],...(props.allowMinutes?['30m','60m']:[])])
 const periodNames:Record<string,string>={'1d':'日 K','1w':'周 K','1mo':'月 K','30m':'30 分钟','60m':'小时 K'}
 const groups=['BOX','PIVOT','MA','BOLL','ATR','FIB','DERIVED','MACD','KDJ','RSI','CHAN']
+const supportResistanceGroups=new Set(['BOX','PIVOT','MA','BOLL','ATR','FIB','DERIVED','MACD','KDJ','RSI'])
+const defaultSupportResistanceGroups=['BOX','PIVOT']
 const names:Record<string,string>={BOX:'日线箱体',PIVOT:'结构支撑压力',MA:'均线参考',BOLL:'布林带参考',ATR:'波幅参考',FIB:'斐波那契',DERIVED:'其他派生价位',MACD:'MACD',KDJ:'KDJ',RSI:'RSI',CHAN:'缠论笔段中枢'}
-const selected=ref(['BOX','PIVOT'])
-const supportResistanceVisible=computed(()=>selected.value.includes('PIVOT'))
+const selected=ref([...defaultSupportResistanceGroups])
+const supportResistanceVisible=computed(()=>selected.value.some(item=>supportResistanceGroups.has(item)))
 const indicatorPanel=ref<HTMLDetailsElement|null>(null), indicators=ref(['MA']), showVolume=ref(false)
 const menuPosition=ref<Record<string,string>>({})
 function positionIndicators(){
@@ -39,7 +42,11 @@ const activeIndicators=computed(()=>indicators.value.filter(key=>studyAvailable(
 const indicatorCount=computed(()=>activeIndicators.value.length+(showVolume.value&&volumeAvailable(displayData.value)?1:0))
 function closeIndicators(){if(indicatorPanel.value){indicatorPanel.value.open=false;indicatorPanel.value.querySelector('summary')?.focus()}}
 function outside(event:PointerEvent){if(indicatorPanel.value?.open&&!indicatorPanel.value.contains(event.target as Node))indicatorPanel.value.open=false}
-function toggleSupportResistance(){selected.value=supportResistanceVisible.value?selected.value.filter(item=>item!=='PIVOT'):[...new Set([...selected.value,'PIVOT'])]}
+function toggleSupportResistance(){
+ selected.value=supportResistanceVisible.value
+  ? selected.value.filter(item=>!supportResistanceGroups.has(item))
+  : [...new Set([...selected.value,...defaultSupportResistanceGroups])]
+}
 function openCompactChart(){if(!expanded.value)void toggleExpanded()}
 const levels=computed(()=>{
  if(!displayData.value.sr_overlay_allowed)return []
@@ -71,13 +78,26 @@ const candidateBox=computed(()=>{
 })
 const boxState:Record<string,string>={candidate:'候选',confirmed:'已确认',breakout_attempt:'突破尝试',breakout_confirmed:'收盘突破已确认',failed_breakout:'假突破',invalidated:'失效',expired:'已到期'}
 const intradaySide:Record<string,string>={upper:'上沿',lower:'下沿',both:'上下沿'}
-let adapter:ChartAdapter|null=null,mountRevision=0,returnFocus:HTMLElement|null=null,previousBodyOverflow=''
+let adapter:ChartAdapter|null=null,mountRevision=0,returnFocus:HTMLElement|null=null,scrollLockToken:symbol|null=null
 async function mount(){const revision=++mountRevision;await nextTick();if(revision!==mountRevision)return;adapter?.destroy();adapter=null;failed.value='';cursor.value=displayData.value.bars.at(-1);if(!host.value||!displayData.value.available)return;try{adapter=new ChartAdapter(host.value,displayData.value,props.cost??null,b=>cursor.value=b,selected.value);adapter.setIndicatorSelection(activeIndicators.value,showVolume.value);adapter.range(range.value)}catch{failed.value='图表初始化失败，请重新读取。数值仍可在下方查看。'}}
 function reset(){range.value=100;adapter?.reset()}
+function dialogFocusable(){
+ if(!root.value)return [] as HTMLElement[]
+ const candidates=[...root.value.querySelectorAll<HTMLElement>('button:not([disabled]),summary,[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')]
+ return candidates.filter(element=>{
+  if(element.hidden||element.closest('[hidden],[aria-hidden="true"]'))return false
+  const collapsed=element.closest('details:not([open])')
+  if(collapsed){
+   const summary=collapsed.firstElementChild?.tagName==='SUMMARY'?collapsed.firstElementChild:collapsed.querySelector('summary')
+   if(summary!==element)return false
+  }
+  return true
+ })
+}
 async function closeExpanded(){
  if(!expanded.value)return
  expanded.value=false
- document.body.style.overflow=previousBodyOverflow
+ releaseDialogScrollLock(scrollLockToken);scrollLockToken=null
  await nextTick()
  adapter?.chart.resize()
  returnFocus?.focus()
@@ -86,9 +106,8 @@ async function closeExpanded(){
 async function toggleExpanded(){
  if(expanded.value){await closeExpanded();return}
  returnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null
- previousBodyOverflow=document.body.style.overflow
  expanded.value=true
- document.body.style.overflow='hidden'
+ scrollLockToken??=acquireDialogScrollLock()
  await nextTick()
  adapter?.chart.resize()
  expandButton.value?.focus()
@@ -99,7 +118,7 @@ function key(event:KeyboardEvent){
   if(expanded.value){event.preventDefault();void closeExpanded();return}
  }
  if(!expanded.value||event.key!=='Tab'||!root.value)return
- const focusable=[...root.value.querySelectorAll<HTMLElement>('button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')]
+ const focusable=dialogFocusable()
  if(!focusable.length)return
  const first=focusable[0],last=focusable[focusable.length-1]
  if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus()}
@@ -109,7 +128,7 @@ onMounted(()=>{void mount();document.addEventListener('keydown',key);document.ad
 watch(()=>[props.data,props.cost,priceBasis.value],mount)
 watch(()=>selected.value.join(','),()=>adapter?.setStudySelection(selected.value))
 watch(()=>[activeIndicators.value.join(','),showVolume.value],()=>adapter?.setIndicatorSelection(activeIndicators.value,showVolume.value))
-onBeforeUnmount(()=>{++mountRevision;adapter?.destroy();adapter=null;if(expanded.value)document.body.style.overflow=previousBodyOverflow;document.removeEventListener('keydown',key);document.removeEventListener('pointerdown',outside);window.removeEventListener('resize',positionIndicators);window.removeEventListener('scroll',positionIndicators,true);window.visualViewport?.removeEventListener('resize',positionIndicators);window.visualViewport?.removeEventListener('scroll',positionIndicators)})
+onBeforeUnmount(()=>{++mountRevision;adapter?.destroy();adapter=null;releaseDialogScrollLock(scrollLockToken);scrollLockToken=null;document.removeEventListener('keydown',key);document.removeEventListener('pointerdown',outside);window.removeEventListener('resize',positionIndicators);window.removeEventListener('scroll',positionIndicators,true);window.visualViewport?.removeEventListener('resize',positionIndicators);window.visualViewport?.removeEventListener('scroll',positionIndicators)})
 </script>
 <template><section ref="root" class="chart-workspace" :class="{'expanded-chart':expanded}" :role="expanded?'dialog':undefined" :aria-modal="expanded?true:undefined" :aria-label="expanded?(label??data.ts_code)+' K线大图':undefined">
  <div class="chart-top"><div class="range-buttons" aria-label="K线周期"><button v-for="p in periods" :key="p" :class="{active:data.interval===p}" :aria-pressed="data.interval===p" @click="emit('period',p)">{{periodNames[p]}}</button></div><div v-if="basisTransition" class="range-buttons price-basis-toggle" role="group" aria-label="K线价格口径"><button class="button small" data-testid="chart-basis-raw" :aria-pressed="priceBasis==='raw'" @click="priceBasis='raw'">原始行情</button><button class="button small" data-testid="chart-basis-research" :aria-pressed="priceBasis==='research'" @click="priceBasis='research'">拆分调整研究</button></div><div class="actions chart-actions"><button class="button small" data-testid="chart-sr-toggle" :aria-pressed="supportResistanceVisible" :disabled="!data.sr_overlay_allowed" :title="data.sr_overlay_allowed?'切换已验证支撑压力图层':'当前价格口径或快照不允许绘制支撑压力'" @click="toggleSupportResistance">显示支撑／压力</button><button class="button small" :aria-pressed="showVolume&&volumeAvailable(data)" :disabled="!volumeAvailable(data)" :title="volumeAvailable(data)?'切换真实成交量副图':'当前没有成交量，未知量额不补零'" @click="showVolume=!showVolume">成交量</button>

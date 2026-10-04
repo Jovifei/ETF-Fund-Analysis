@@ -195,7 +195,8 @@ test('wide table contract supplies sticky edges and horizontal behavior at 1440,
   assert.match(script, /api\('\/api\/decision-board\/refresh'/);
   assert.match(script, /drawDecisionSnapshotChart/);
   assert.match(html, /id="chartExpandButton"/);
-  assert.match(script, /setLegacyChartExpanded/);
+  assert.match(script, /setLegacyChartExpanded\(expanded, redraw = true\)/);
+  assert.match(script, /setLegacyChartExpanded\(false, false\)/);
   assert.match(script, /chartCanvas.*addEventListener\('click'/);
   assert.match(css, /detail-modal\.chart-expanded/);
   for (const marker of ['decision-table-wrap', 'decision-sticky-first', 'decision-sticky-last', '@media (max-width:1024px)', '@media (max-width:390px)']) assert.ok(css.includes(marker), `${marker} missing`);
