@@ -88,3 +88,15 @@ This is software causality hardening only.
 Before local handoff, read-time reference propagation was rechecked. SignalGrade accepted an explicit `as_of` for quote/share-scale selection but its indicator/forecast compatibility helpers still compared against wall-clock now. They now receive the same normalized reference, and the regression explicitly proves a future current-version indicator is unavailable at that read time.
 
 Portfolio optimization now passes its own Settings instance into HoldingService so quote-time validation uses the same timezone/provider/runtime context as the optimization report.
+
+
+## Iteration 89 acceptance reconciliation
+
+Local reception and exact Linux full CI found no need to weaken any stale/future compatibility gate. The failures were split into fixture coherence and one cross-surface display adapter inconsistency.
+
+- Four SignalCenter positive fixtures created evidence one or more days in the future. They now use recent past timestamps that remain unexpired. All future-negative contracts remain unchanged.
+- Two DecisionBoard stale-qualified fixtures generated historical IndicatorSnapshot values through IndicatorService but inherited current wall-clock `generated_at`. Their synthetic snapshot generation time is now bound to the historical indicator as-of date before the unchanged stale/non-anomaly assertions run.
+- The independent pre-change flow-share golden file and full-row equality assertion remain unchanged. The test first exercises SignalGrade with a current-compatible fixture, then explicitly restores the captured legacy Indicator identity only for the DecisionBoard half of that historical golden. New snapshot-contract tests independently cover current compatibility; the old non-flow golden is not rewritten.
+- Kline's KDJ display adapter returned an empty `sub` for unknown evidence while SignalGrade's shared classifier returned `KDJ不足`. The adapter now propagates the same classifier label in `sub`, preserving cross-surface semantics without inventing evidence.
+
+These repairs are test-fixture coherence plus a display-shape consistency fix. They do not admit future/stale snapshots as current evidence.

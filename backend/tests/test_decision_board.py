@@ -121,6 +121,13 @@ def test_trailing_price_only_tail_keeps_last_qualified_snapshot_stale_not_anomal
     db_session.flush()
     assert IndicatorService(settings).refresh_all(db_session, run_id="tail-fixture-indicators")["created"] == 1
     qualified_date = start + timedelta(days=79)
+    snapshot = db_session.scalar(
+        select(IndicatorSnapshot).where(IndicatorSnapshot.instrument_id == instrument.id)
+    )
+    assert snapshot is not None
+    snapshot.generated_at = datetime(
+        qualified_date.year, qualified_date.month, qualified_date.day, 16, 16, tzinfo=SHANGHAI
+    )
     db_session.add(DailyBar(
         instrument_id=instrument.id, trade_date=start + timedelta(days=80),
         open=2.8, high=2.82, low=2.78, close=2.8, pre_close=2.79,
@@ -208,6 +215,14 @@ def test_official_split_gap_uses_stale_research_snapshot_not_anomaly(db_session)
     db_session.flush()
     outcome = IndicatorService(settings).refresh_all(db_session, run_id="official-split-indicators")
     assert outcome["created"] == 1
+    snapshot = db_session.scalar(
+        select(IndicatorSnapshot).where(IndicatorSnapshot.instrument_id == instrument.id)
+    )
+    assert snapshot is not None
+    snapshot.generated_at = datetime(
+        snapshot.as_of_date.year, snapshot.as_of_date.month, snapshot.as_of_date.day,
+        16, 16, tzinfo=SHANGHAI,
+    )
     payload = DecisionBoardService(settings).refresh(
         db_session, generated_at=datetime(2025, 8, 6, 14, 30, tzinfo=SHANGHAI)
     ).payload
