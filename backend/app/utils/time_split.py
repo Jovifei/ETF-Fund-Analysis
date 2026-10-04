@@ -20,6 +20,7 @@ class PurgedHoldoutBounds:
     test_start: object
     train_before: object
     train_last: object | None
+    label_end_before: object
     label_horizon: int
     embargo_sessions: int
     purge_sessions: int
@@ -30,6 +31,7 @@ class PurgedHoldoutBounds:
             "test_start": str(self.test_start),
             "train_before": str(self.train_before),
             "train_last": str(self.train_last) if self.train_last is not None else None,
+            "label_end_before": str(self.label_end_before),
             "label_horizon": self.label_horizon,
             "embargo_sessions": self.embargo_sessions,
             "purge_sessions": self.purge_sessions,
@@ -46,6 +48,7 @@ class PurgedWalkForwardFold:
     train_first: object
     train_before: object
     train_last: object
+    label_end_before: object
     test_start: object
     test_end: object
     label_horizon: int
@@ -61,6 +64,7 @@ class PurgedWalkForwardFold:
             "train_first": str(self.train_first),
             "train_before": str(self.train_before),
             "train_last": str(self.train_last),
+            "label_end_before": str(self.label_end_before),
             "test_start": str(self.test_start),
             "test_end": str(self.test_end),
             "label_horizon": self.label_horizon,
@@ -109,11 +113,13 @@ def purged_holdout_bounds(
 
     train_before = calendar[train_before_index]
     train_last = calendar[train_before_index - 1]
+    label_end_before = calendar[split_index - embargo] if embargo else calendar[split_index]
     purged_dates = tuple(calendar[train_before_index:split_index])
     return PurgedHoldoutBounds(
         test_start=calendar[split_index],
         train_before=train_before,
         train_last=train_last,
+        label_end_before=label_end_before,
         label_horizon=horizon,
         embargo_sessions=embargo,
         purge_sessions=purge_sessions,
@@ -185,6 +191,7 @@ def purged_expanding_walk_forward_folds(
                 train_first=calendar[0],
                 train_before=guard.train_before,
                 train_last=guard.train_last,
+                label_end_before=guard.label_end_before,
                 test_start=test_start,
                 test_end=test_end,
                 label_horizon=horizon,

@@ -6,10 +6,15 @@ gate blocking, version-consistency blocking. Does NOT test actual promotion logi
 """
 from __future__ import annotations
 
+import json
+from datetime import datetime
 from pathlib import Path
 
+from app.models import ReportArtifact
 from app.services.calibration_service import CalibrationService
 from app.services.task_service import TaskService
+from app.utils.hashing import stable_hash
+from app.utils.reproducibility import current_git_commit
 
 
 def _latest_validation_payload(bootstrapped, db_session) -> dict:
@@ -117,3 +122,88 @@ def test_calibrate_reject_blocks_approval_with_version_mismatch(bootstrapped, db
         db_session.rollback()
     except ValueError as exc:
         assert "model_version" in str(exc)
+
+
+def _write_validation_artifact(db_session, tmp_path, payload):
+    content_hash = stable_hash(payload)
+    path = tmp_path / f"validation-{content_hash[:8]}.json"
+    path.write_text(json.dumps(payload, allow_nan=True), encoding="utf-8")
+    db_session.add(ReportArtifact(
+        report_type="forecast_validation",
+        as_of_time=datetime.now().astimezone(),
+        file_path=str(path),
+        content_hash=content_hash,
+        metadata_json={},
+    ))
+    db_session.flush()
+    return path
+
+
+def _synthetic_validation_payload(svc, *, horizons=(1, 3, 5, 10), source="public_composite",
+                                  pit=True, holdout=True, nan_metric=False):
+    rows = []
+    for instrument in range(5):
+        metrics = {}
+        for horizon in horizons:
+            metrics[str(horizon)] = {
+                "sample_count": 20,
+                "directional_accuracy": float("nan") if nan_metric and instrument == 0 and horizon == horizons[0] else 0.6,
+                "brier_score": 0.2,
+                "interval_80_coverage": 0.8,
+                "quantile_crossing_rate": 0.0,
+                "support_touch_brier": 0.2,
+                "resistance_touch_brier": 0.2,
+            }
+        rows.append({"status": "ok", "horizons": metrics})
+    return {
+        "run_id": "synthetic-validation",
+        "model_version": svc.strategy["forecast_version"],
+        "feature_schema_version": svc.strategy["feature_schema_version"],
+        "config_hash": stable_hash(svc.strategy),
+        "git_commit_sha": current_git_commit(),
+        "horizon_contract": list(horizons),
+        "input_lineage_hash": "a" * 64,
+        "input_contract": {
+            "source": source,
+            "independent_holdout": holdout,
+            "pit_qualified": pit,
+            "qualification": "SYNTHETIC_TEST_ONLY",
+        },
+        "instruments": rows,
+    }
+
+
+def test_default_run_id_no_longer_raises_name_error(db_session):
+    result = CalibrationService().create_candidate(db_session)
+    assert result["status"] == "skipped"
+    assert len(result["run_id"]) == 32
+
+
+def test_candidate_fails_closed_for_single_horizon_mock_no_holdout_and_nan(db_session, tmp_path):
+    svc = CalibrationService()
+    payload = _synthetic_validation_payload(
+        svc, horizons=(1,), source="mock", pit=False, holdout=False, nan_metric=True
+    )
+    _write_validation_artifact(db_session, tmp_path, payload)
+    result = svc.create_candidate(db_session, run_id="strict-negative")
+    items = result["gate_results"]["items"]
+    assert result["gates_passed"] is False
+    assert items["finite_metrics"] is False
+    assert items["all_formal_horizons"] is False
+    assert items["independent_holdout"] is False
+    assert items["source_non_mock"] is False
+    assert items["pit_qualified"] is False
+
+
+def test_approval_reloads_and_rehashes_original_validation_artifact(db_session, tmp_path):
+    svc = CalibrationService()
+    payload = _synthetic_validation_payload(svc)
+    path = _write_validation_artifact(db_session, tmp_path, payload)
+    result = svc.create_candidate(db_session, run_id="strict-positive-fixture")
+    assert result["gates_passed"] is True
+    path.write_text(json.dumps({**payload, "run_id": "tampered-after-candidate"}), encoding="utf-8")
+    try:
+        svc.decide(db_session, result["profile_id"], "approved", approved_by="test-user")
+        raise AssertionError("tampered validation artifact must not be approved")
+    except ValueError as exc:
+        assert "validation_content_hash_matches" in str(exc)

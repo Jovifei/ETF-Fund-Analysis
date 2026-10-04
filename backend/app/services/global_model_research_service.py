@@ -136,9 +136,8 @@ class GlobalModelResearchService:
                     "random_shuffle": False,
                     "embargo_sessions": embargo_sessions,
                     "label_leakage_policy": (
-                        "for every horizon h and every fold, exclude h plus embargo sessions "
-                        "immediately before the OOS test boundary so each training forward label "
-                        "ends before the first test session"
+                        "each row carries its instrument-specific label_end_date; training requires "
+                        "label_end_date strictly before the embargo-adjusted OOS boundary"
                     ),
                     "preprocessing_policy": (
                         "fit any learned preprocessing inside each fold only; the current benchmark "
@@ -152,8 +151,9 @@ class GlobalModelResearchService:
             }
             for horizon in horizons:
                 target = f"forward_return_{horizon}"
+                label_end = f"label_end_date_{horizon}"
                 features = [name for name in HORIZON_FEATURES[horizon] if name in panel.columns]
-                work = panel[["trade_date", target, *features]].replace([np.inf, -np.inf], np.nan).dropna()
+                work = panel[["trade_date", label_end, target, *features]].replace([np.inf, -np.inf], np.nan).dropna()
                 folds = purged_expanding_walk_forward_folds(
                     dates,
                     label_horizon=horizon,
@@ -169,7 +169,10 @@ class GlobalModelResearchService:
                 q90_parts: list[np.ndarray] = []
                 crossing_parts: list[np.ndarray] = []
                 for fold in folds:
-                    train = work.loc[work["trade_date"] < fold.train_before]
+                    train = work.loc[
+                        (work["trade_date"] < fold.test_start)
+                        & (work[label_end] < fold.label_end_before)
+                    ]
                     test = work.loc[
                         (work["trade_date"] >= fold.test_start)
                         & (work["trade_date"] <= fold.test_end)
@@ -185,6 +188,10 @@ class GlobalModelResearchService:
                             "train_observed_last_date": (
                                 str(train["trade_date"].max()) if not train.empty else None
                             ),
+                            "train_label_end_last": (
+                                str(train[label_end].max()) if not train.empty else None
+                            ),
+                            "label_end_guard": "per_sample_strict_before",
                             "test_observed_first_date": (
                                 str(test["trade_date"].min()) if not test.empty else None
                             ),

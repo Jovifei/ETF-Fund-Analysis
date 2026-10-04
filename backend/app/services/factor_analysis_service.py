@@ -426,9 +426,11 @@ class FactorAnalysisService:
         benchmark_code = str(self.strategy["signal"].get("regime_benchmark", "510300.SH"))
         panel = add_oss_research_factor_diagnostics(panel, benchmark_code)
         for horizon in aligned_research_horizons(self.strategy):
+            grouped = panel.groupby("ts_code", observed=True)
             panel[f"forward_return_{horizon}"] = (
-                panel.groupby("ts_code", observed=True)["close"].shift(-horizon) / panel["close"] - 1.0
+                grouped["close"].shift(-horizon) / panel["close"] - 1.0
             )
+            panel[f"label_end_date_{horizon}"] = grouped["trade_date"].shift(-horizon)
         regimes = _regime_labels(panel, benchmark_code)
         panel["regime"] = panel["trade_date"].map(regimes).fillna("unknown")
         return panel

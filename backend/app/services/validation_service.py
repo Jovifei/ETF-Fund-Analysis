@@ -11,12 +11,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.models import DailyBar, Instrument, ReportArtifact
+from app.models import Instrument, ReportArtifact
 from app.services.event_service import emit_event
-from app.services.forecast_service import ForecastResult, similarity_forecast
-from app.utils.feature_store import add_cross_sectional_features, build_feature_frame, feature_columns_for_horizon
+from app.services.forecast_service import ForecastResult, ForecastService, similarity_forecast
+from app.utils.feature_store import feature_columns_for_horizon
 from app.utils.hashing import stable_hash
 from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS
+from app.utils.reproducibility import current_git_commit
 
 
 def _safe_mean(values: list[float]) -> float | None:
@@ -121,41 +122,14 @@ class ForecastValidationService:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
         self.strategy = self.settings.load_strategy()
+        self._frame_history_hashes: dict[int, str] = {}
 
     def _frames(self, db: Session, instruments: list[Instrument]) -> dict[int, pd.DataFrame]:
-        items: list[pd.DataFrame] = []
-        for instrument in instruments:
-            rows = db.scalars(
-                select(DailyBar)
-                .where(DailyBar.instrument_id == instrument.id)
-                .order_by(DailyBar.trade_date)
-            ).all()
-            if not rows:
-                continue
-            raw = pd.DataFrame(
-                [
-                    {
-                        "trade_date": row.trade_date,
-                        "open": row.open,
-                        "high": row.high,
-                        "low": row.low,
-                        "close": row.close,
-                        "volume": row.volume or 0,
-                        "amount": row.amount or 0,
-                    }
-                    for row in rows
-                ]
-            )
-            rich = build_feature_frame(raw, self.strategy["indicator"]).frame
-            rich["instrument_id"] = instrument.id
-            items.append(rich)
-        if not items:
-            return {}
-        panel = add_cross_sectional_features(pd.concat(items, ignore_index=True))
-        return {
-            int(instrument_id): group.sort_values("trade_date").reset_index(drop=True)
-            for instrument_id, group in panel.groupby("instrument_id", observed=True)
-        }
+        """Use the exact formal forecast history/corporate-action/unit contract."""
+        formal = ForecastService(self.settings)
+        frames = formal._frames(db, instruments)
+        self._frame_history_hashes = dict(getattr(formal, "_frame_history_hashes", {}))
+        return frames
 
     def _validate_instrument(self, instrument: Instrument, frame: pd.DataFrame) -> dict:
         cfg = self.strategy["forecast"]
@@ -246,6 +220,17 @@ class ForecastValidationService:
             "generated_at": now.isoformat(),
             "model_version": self.strategy["forecast_version"],
             "feature_schema_version": self.strategy.get("feature_schema_version"),
+            "config_hash": stable_hash(self.strategy),
+            "git_commit_sha": current_git_commit(),
+            "horizon_contract": [int(value) for value in self.strategy["forecast"].get("horizons", DEFAULT_RESEARCH_HORIZONS)],
+            "input_lineage_hash": stable_hash(self._frame_history_hashes),
+            "input_contract": {
+                "uses_formal_forecast_frame_contract": True,
+                "source": self.settings.market_provider,
+                "independent_holdout": False,
+                "pit_qualified": False,
+                "qualification": "UNKNOWN",
+            },
             "method": "rolling-origin similarity endpoint-and-path forecast audit",
             "promotion_policy": "manual review required; this task never changes calibration_status",
             "metrics": [

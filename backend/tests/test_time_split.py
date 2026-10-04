@@ -23,6 +23,7 @@ def test_purged_holdout_excludes_labels_that_touch_test_boundary():
     assert split.test_start == dates[20]
     assert split.train_before == dates[15]
     assert split.train_last == dates[14]
+    assert split.label_end_before == dates[20]
     assert split.purged_dates == tuple(dates[15:20])
     assert split.purge_sessions == 5
 
@@ -41,6 +42,7 @@ def test_purged_holdout_embargo_widens_gap():
     )
     assert split.train_before == dates[15]
     assert split.train_last == dates[14]
+    assert split.label_end_before == dates[18]
     assert split.purge_sessions == 5
     assert len(split.purged_dates) == 5
 

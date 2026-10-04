@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import uuid
 from datetime import datetime
 from typing import Any
@@ -57,7 +58,7 @@ class CalibrationService:
 
     def create_candidate(self, db: Session, run_id: str | None = None) -> dict[str, Any]:
         """从最新 forecast_validation 报告生成候选 Profile（幂等：同一验证哈希只建一条）。"""
-        run_id = run_id or uuid4().hex
+        run_id = run_id or uuid.uuid4().hex
         artifact = db.scalars(
             select(ReportArtifact)
             .where(ReportArtifact.report_type == "forecast_validation")
@@ -85,12 +86,8 @@ class CalibrationService:
             }
 
         try:
-            payload = json.loads(
-                artifact.file_path_content
-                if hasattr(artifact, "file_path_content")
-                else _read_report(artifact.file_path)
-            )
-        except (OSError, ValueError) as exc:
+            payload = _artifact_payload(artifact)
+        except (OSError, ValueError, TypeError) as exc:
             return {
                 "run_id": run_id,
                 "status": "skipped",
@@ -99,8 +96,9 @@ class CalibrationService:
 
         model_version = str(payload.get("model_version") or "")
         feature_schema_version = str(payload.get("feature_schema_version") or "")
-        config_hash = stable_hash(self.strategy)
+        config_hash = str(payload.get("config_hash") or "")
         summary = self._summarize(payload)
+        summary["validation_content_hash_matches"] = stable_hash(payload) == artifact.content_hash
         gate_results = self._evaluate_gates(summary)
 
         profile = CalibrationProfile(
@@ -155,7 +153,7 @@ class CalibrationService:
             return {"profile_id": profile_id, "status": "rejected"}
 
         # 批准前的核对单
-        checks = self._approval_checks(profile)
+        checks = self._approval_checks(db, profile)
         if not checks["all_passed"]:
             raise ValueError(
                 "approval blocked by failed checks: "
@@ -198,7 +196,7 @@ class CalibrationService:
 
     def _summarize(self, payload: dict[str, Any]) -> dict[str, Any]:
         instruments = payload.get("instruments") or []
-        ok_rows = [item for item in instruments if item.get("status") == "ok"]
+        ok_rows = [item for item in instruments if isinstance(item, dict) and item.get("status") == "ok"]
         total_samples = 0
         directionals: list[float] = []
         briers: list[float] = []
@@ -206,10 +204,26 @@ class CalibrationService:
         crossings: list[float] = []
         touch_briers: list[float] = []
         per_horizon: dict[str, dict[str, list[float]]] = {}
+        horizons_present: set[str] = set()
+        nonfinite_metric_count = 0
+
+        def finite_metric(value: Any) -> float | None:
+            nonlocal nonfinite_metric_count
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                return None
+            number = float(value)
+            if not math.isfinite(number):
+                nonfinite_metric_count += 1
+                return None
+            return number
+
         for row in ok_rows:
             for horizon, metrics in (row.get("horizons") or {}).items():
+                if not isinstance(metrics, dict):
+                    continue
+                horizons_present.add(str(horizon))
                 samples = int(metrics.get("sample_count") or 0)
-                total_samples += samples
+                total_samples += max(0, samples)
                 bucket = per_horizon.setdefault(str(horizon), {})
                 for key, store in (
                     ("directional_accuracy", directionals),
@@ -217,49 +231,62 @@ class CalibrationService:
                     ("interval_80_coverage", coverages),
                     ("quantile_crossing_rate", crossings),
                 ):
-                    value = metrics.get(key)
-                    if isinstance(value, (int, float)):
-                        store.append(float(value))
-                        bucket.setdefault(key, []).append(float(value))
+                    number = finite_metric(metrics.get(key))
+                    if number is not None:
+                        store.append(number)
+                        bucket.setdefault(key, []).append(number)
                 for key in ("support_touch_brier", "resistance_touch_brier"):
-                    value = metrics.get(key)
-                    if isinstance(value, (int, float)):
-                        touch_briers.append(float(value))
-        def _mean(values: list[float]) -> float | None:
+                    number = finite_metric(metrics.get(key))
+                    if number is not None:
+                        touch_briers.append(number)
+
+        def mean(values: list[float]) -> float | None:
             return round(sum(values) / len(values), 4) if values else None
 
+        contract = payload.get("input_contract") if isinstance(payload.get("input_contract"), dict) else {}
         summary: dict[str, Any] = {
             "instrument_count": len(ok_rows),
             "total_samples": total_samples,
-            "mean_directional_accuracy": _mean(directionals),
-            "mean_brier_score": _mean(briers),
-            "mean_interval_80_coverage": _mean(coverages),
-            "mean_quantile_crossing_rate": _mean(crossings),
-            "mean_touch_brier": _mean(touch_briers),
+            "mean_directional_accuracy": mean(directionals),
+            "mean_brier_score": mean(briers),
+            "mean_interval_80_coverage": mean(coverages),
+            "mean_quantile_crossing_rate": mean(crossings),
+            "mean_touch_brier": mean(touch_briers),
             "per_horizon": {
                 horizon: {
-                    "mean_directional_accuracy": _mean(vals.get("directional_accuracy", [])),
-                    "mean_interval_80_coverage": _mean(vals.get("interval_80_coverage", [])),
+                    "mean_directional_accuracy": mean(vals.get("directional_accuracy", [])),
+                    "mean_interval_80_coverage": mean(vals.get("interval_80_coverage", [])),
                 }
                 for horizon, vals in sorted(per_horizon.items())
             },
+            "horizons_present": sorted(horizons_present),
+            "horizon_contract": [str(value) for value in (payload.get("horizon_contract") or [])],
+            "nonfinite_metric_count": nonfinite_metric_count,
+            "independent_holdout": contract.get("independent_holdout") is True,
+            "source": str(contract.get("source") or ""),
+            "pit_qualified": contract.get("pit_qualified") is True,
+            "report_config_hash": str(payload.get("config_hash") or ""),
+            "report_git_commit_sha": str(payload.get("git_commit_sha") or ""),
+            "input_lineage_hash": str(payload.get("input_lineage_hash") or ""),
         }
-        summary["git_commit_sha"] = current_git_commit()
         return summary
 
     def _evaluate_gates(self, summary: dict[str, Any]) -> dict[str, Any]:
         def gate(name: str, actual: Any, minimum: float | None = None, maximum: float | None = None) -> dict:
-            if actual is None:
-                return {"name": name, "passed": False, "actual": None,
-                        "threshold": f"min={minimum} max={maximum}", "reason": "metric missing"}
+            if isinstance(actual, bool) or not isinstance(actual, (int, float)) or not math.isfinite(float(actual)):
+                return {"name": name, "passed": False, "actual": actual,
+                        "threshold": f"min={minimum} max={maximum}", "reason": "metric missing or non-finite"}
+            number = float(actual)
             passed = True
-            if minimum is not None and actual < minimum:
+            if minimum is not None and number < minimum:
                 passed = False
-            if maximum is not None and actual > maximum:
+            if maximum is not None and number > maximum:
                 passed = False
-            return {"name": name, "passed": passed, "actual": actual,
+            return {"name": name, "passed": passed, "actual": number,
                     "threshold": f"min={minimum} max={maximum}"}
 
+        expected_horizons = {str(int(value)) for value in self.strategy["forecast"].get("horizons", (1, 3, 5, 10))}
+        actual_horizons = set(summary.get("horizons_present") or [])
         items = {
             "instrument_count": gate("instrument_count", summary.get("instrument_count"),
                                      minimum=self.gates["minimum_instruments"])["passed"],
@@ -278,22 +305,68 @@ class CalibrationService:
                                            maximum=self.gates["maximum_quantile_crossing_rate"])["passed"],
             "touch_brier": gate("mean_touch_brier", summary.get("mean_touch_brier"),
                                 maximum=self.gates["maximum_touch_brier"])["passed"],
+            "finite_metrics": summary.get("nonfinite_metric_count") == 0,
+            "all_formal_horizons": actual_horizons == expected_horizons
+                and set(summary.get("horizon_contract") or []) == expected_horizons,
+            "independent_holdout": summary.get("independent_holdout") is True,
+            "source_non_mock": bool(summary.get("source")) and str(summary.get("source")).lower() != "mock",
+            "pit_qualified": summary.get("pit_qualified") is True,
+            "report_config_hash_present": bool(summary.get("report_config_hash")),
+            "report_git_commit_present": bool(summary.get("report_git_commit_sha")),
+            "input_lineage_hash_present": bool(summary.get("input_lineage_hash")),
+            "validation_content_hash_matches": summary.get("validation_content_hash_matches") is True,
         }
         return {"all_passed": all(items.values()), "items": items}
 
-    def _approval_checks(self, profile: CalibrationProfile) -> dict[str, Any]:
+    def _approval_checks(self, db: Session, profile: CalibrationProfile) -> dict[str, Any]:
+        artifact = db.scalars(
+            select(ReportArtifact).where(ReportArtifact.content_hash == profile.validation_content_hash)
+        ).first()
+        if artifact is None:
+            return {"all_passed": False, "items": {"validation_artifact_present": False}}
+        try:
+            payload = _artifact_payload(artifact)
+        except (OSError, ValueError, TypeError):
+            return {"all_passed": False, "items": {"validation_artifact_readable": False}}
+
+        summary = self._summarize(payload)
+        content_matches = stable_hash(payload) == artifact.content_hash == profile.validation_content_hash
+        summary["validation_content_hash_matches"] = content_matches
+        recomputed_gates = self._evaluate_gates(summary)
         current_model = self.strategy["forecast_version"]
         current_schema = self.strategy.get("feature_schema_version", "")
         current_config_hash = stable_hash(self.strategy)
-        gates = profile.gate_results or {}
+        report_model = str(payload.get("model_version") or "")
+        report_schema = str(payload.get("feature_schema_version") or "")
+        report_config = str(payload.get("config_hash") or "")
+        report_git = str(payload.get("git_commit_sha") or "")
         items = {
+            "validation_artifact_present": True,
+            "validation_content_hash_matches": content_matches,
+            "model_version_matches_report": profile.model_version == report_model,
             "model_version_matches_current": profile.model_version == current_model,
+            "feature_schema_matches_report": profile.feature_schema_version == report_schema,
             "feature_schema_matches_current": profile.feature_schema_version == current_schema,
+            "config_hash_matches_report": profile.config_hash == report_config,
             "config_hash_matches_current": profile.config_hash == current_config_hash,
-            "gates_passed": bool(gates.get("all_passed")),
+            "report_git_commit_matches_current": bool(report_git) and report_git == current_git_commit(),
+            "gates_recomputed": bool(recomputed_gates.get("all_passed")),
+            "stored_gates_match_recomputed": stable_hash(profile.gate_results or {}) == stable_hash(recomputed_gates),
+            "sample_count_matches_report": profile.sample_count == int(summary.get("total_samples") or 0),
             "sample_count_sufficient": profile.sample_count >= self.gates["minimum_total_samples"],
         }
         return {"all_passed": all(items.values()), "items": items}
+
+def _artifact_payload(artifact: ReportArtifact) -> dict[str, Any]:
+    text = (
+        artifact.file_path_content
+        if hasattr(artifact, "file_path_content")
+        else _read_report(artifact.file_path)
+    )
+    payload = json.loads(text)
+    if not isinstance(payload, dict):
+        raise ValueError("validation report must be a JSON object")
+    return payload
 
 
 def _read_report(file_path: str) -> str:
