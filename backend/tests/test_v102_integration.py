@@ -150,7 +150,15 @@ def test_catalog_sync_keeps_existing_holdings_and_inactive_research_scope(db_ses
     from app.providers.catalog import CatalogRows
     from app.providers.types import InstrumentRecord
     marker = uuid4().hex
-    item = Instrument(ts_code='591997.SH',symbol='591997',name=marker,kind='ETF',enabled=False)
+    occupied = set(db_session.scalars(
+        select(Instrument.ts_code).where(Instrument.ts_code.like("59%.SH"))
+    ).all())
+    ts_code = next(
+        (f"{value:06d}.SH" for value in range(590000, 600000) if f"{value:06d}.SH" not in occupied),
+        None,
+    )
+    assert ts_code is not None
+    item = Instrument(ts_code=ts_code, symbol=ts_code[:6], name=marker, kind='ETF', enabled=False)
     db_session.add(item);db_session.flush()
     row_id = item.id
     monkeypatch.setattr(worker,'catalog_records',lambda _:CatalogRows([InstrumentRecord(ts_code=item.ts_code,symbol=item.symbol,name='非行业货币ETF',kind='ETF',exchange='SH')],coverage={'ETF':{'source':'fixture','count':1},'LOF':{'source':None,'count':0}}))

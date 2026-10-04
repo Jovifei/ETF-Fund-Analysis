@@ -36,3 +36,10 @@ The project TD Setup counter may contribute evidence inside the reversal-family 
 ## Classification
 
 This stage fixes a feature-validity defect, not the underlying external-library definition differences. ADX/DMI zero-fill, MFI/CMF neutral display fills and RSRS display zero remain permitted presentation conventions; they are no longer silently counted as mature research features.
+
+
+## Exact Linux full-CI reconciliation
+
+Exact `01128da3` workspace and platform workflows succeeded, and local affected acceptance passed 56 tests. Full CI failed in an unrelated integration test before compile/image stages: `test_catalog_sync_keeps_existing_holdings_and_inactive_research_scope` hardcoded `591997.SH` as a supposedly private fixture code, but the session-scoped test database can already contain that valid catalog code from earlier bootstrap/catalog activity. The UNIQUE constraint correctly rejected the duplicate.
+
+The test now queries currently occupied 59xxxx.SH instrument codes and selects the first unused valid six-digit code. It does not weaken the unique constraint, delete existing catalog state, or alter catalog business behavior; the test still proves that sync preserves an existing inactive instrument identity while updating its catalog metadata.
