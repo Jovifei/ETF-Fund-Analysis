@@ -22,7 +22,7 @@ Private Chinese ETF/LOF research system,14:30 same-evidence decisions and chart/
 
 ## Key files
 
-AGENTS.md,config/strategy.json,backend/app/services/report_artifact_contract.py,calibration_service.py,crosscheck_engine.py,backend/app/workspace/read_model.py,backend/app/utils/snapshot_contract.py (locate actual module if moved),docs/audits/REPORT_ARTIFACT_INTEGRITY_20261004.md and latest acceptance receipts.
+AGENTS.md,config/strategy.json,backend/app/services/report_artifact_contract.py,calibration_service.py,crosscheck_engine.py,backend/app/workspace/read_model.py,backend/app/services/snapshot_contract.py,docs/audits/REPORT_ARTIFACT_INTEGRITY_20261004.md and latest acceptance receipts.
 
 ## Next whole stage
 
