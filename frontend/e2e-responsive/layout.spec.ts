@@ -104,6 +104,7 @@ test('chart canvases follow viewport, sidebar, fullscreen and pointer interactio
   const box = (await chart.boundingBox())!
   await page.mouse.move(box.x + 100, box.y + 80); await page.mouse.down()
   await page.mouse.move(box.x + 160, box.y + 80, { steps: 5 }); await page.mouse.up()
+  await expect(page.locator('.expanded-chart')).toHaveCount(0)
   await page.getByTestId('chart-fullscreen').click()
   const dialog=page.locator('.expanded-chart')
   await expect(dialog).toBeVisible()

@@ -48,9 +48,20 @@ function toggleSupportResistance(){
   : [...new Set([...selected.value,...defaultSupportResistanceGroups])]
 }
 function focusChartInsideDialog(){if(expanded.value)host.value?.focus({preventScroll:true})}
+function chartPointerDown(event:PointerEvent){
+ if(expanded.value){focusChartInsideDialog();return}
+ compactPointerOrigin={x:event.clientX,y:event.clientY};compactPointerDragged=false
+}
+function chartPointerMove(event:PointerEvent){
+ if(expanded.value||!compactPointerOrigin)return
+ const dx=event.clientX-compactPointerOrigin.x,dy=event.clientY-compactPointerOrigin.y
+ if(Math.hypot(dx,dy)>8)compactPointerDragged=true
+}
+function resetCompactPointer(){compactPointerOrigin=null;compactPointerDragged=false}
 function openCompactChart(){
  if(expanded.value){focusChartInsideDialog();return}
- void toggleExpanded()
+ if(compactPointerDragged){resetCompactPointer();return}
+ resetCompactPointer();void toggleExpanded()
 }
 const levels=computed(()=>{
  if(!displayData.value.sr_overlay_allowed)return []
@@ -83,6 +94,7 @@ const candidateBox=computed(()=>{
 const boxState:Record<string,string>={candidate:'候选',confirmed:'已确认',breakout_attempt:'突破尝试',breakout_confirmed:'收盘突破已确认',failed_breakout:'假突破',invalidated:'失效',expired:'已到期'}
 const intradaySide:Record<string,string>={upper:'上沿',lower:'下沿',both:'上下沿'}
 let adapter:ChartAdapter|null=null,mountRevision=0,returnFocus:HTMLElement|null=null,scrollLockToken:symbol|null=null
+let compactPointerOrigin:{x:number;y:number}|null=null,compactPointerDragged=false
 async function mount(){const revision=++mountRevision;await nextTick();if(revision!==mountRevision)return;adapter?.destroy();adapter=null;failed.value='';cursor.value=displayData.value.bars.at(-1);if(!host.value||!displayData.value.available)return;try{adapter=new ChartAdapter(host.value,displayData.value,props.cost??null,b=>cursor.value=b,selected.value);adapter.setIndicatorSelection(activeIndicators.value,showVolume.value);adapter.range(range.value)}catch{failed.value='图表初始化失败，请重新读取。数值仍可在下方查看。'}}
 function reset(){range.value=100;adapter?.reset()}
 function dialogFocusable(){
@@ -143,7 +155,7 @@ onBeforeUnmount(()=>{++mountRevision;adapter?.destroy();adapter=null;releaseDial
  <details><summary>显示范围</summary><div class="range-buttons"><button v-for="n in [60,100,250]" :key="n" @click="range=n;adapter?.range(n)">{{n}} 根</button></div></details><button class="button small" @click="reset" data-testid="chart-reset">复位图表</button><button ref="expandButton" class="button small" data-testid="chart-fullscreen" :aria-expanded="expanded" @click="toggleExpanded">{{expanded?'关闭大图':'放大图表'}}</button></div></div>
  <div class="study-controls" aria-label="辅助线与指标"><strong class="study-caption">研究图层</strong><label v-for="g in groups" :key="g"><input v-model="selected" type="checkbox" :value="g"/>{{names[g]}}</label><button class="button small" @click="selected=[...groups]">打开全部</button><button class="button small" @click="selected=[]">隐藏全部</button></div>
  <div class="chart-legend"><strong>{{label??data.ts_code}}</strong><span v-if="data.cost_overlay_allowed&&cost" style="color:#d8b776" data-testid="chart-cost-label">我的成本 {{num(cost,3)}}</span><span>{{cursor?.date??'—'}}</span><span>开 {{num(cursor?.open,3)}}</span><span>高 {{num(cursor?.high,3)}}</span><span>低 {{num(cursor?.low,3)}}</span><span>收 {{num(cursor?.close,3)}}</span><span v-if="cursor?.is_partial">本周期未结束</span></div>
- <div v-if="failed" class="notice error-notice">{{failed}}</div><div ref="host" class="chart" :class="{'chart-clickable':!expanded}" :role="expanded?'img':'button'" tabindex="0" :aria-label="expanded?(label??'ETF')+' K线大图，支持滚轮缩放、拖拽平移和双击复位':(label??'ETF')+' K线，点击放大；支持滚轮缩放和拖拽平移'" data-testid="etf-chart" @pointerdown.capture="focusChartInsideDialog" @click="openCompactChart" @keydown.enter.prevent="openCompactChart" @keydown.space.prevent="openCompactChart" @dblclick.stop="reset"/>
+ <div v-if="failed" class="notice error-notice">{{failed}}</div><div ref="host" class="chart" :class="{'chart-clickable':!expanded}" :role="expanded?'img':'button'" tabindex="0" :aria-label="expanded?(label??'ETF')+' K线大图，支持滚轮缩放、拖拽平移和双击复位':(label??'ETF')+' K线，点击放大；支持滚轮缩放和拖拽平移'" data-testid="etf-chart" @pointerdown.capture="chartPointerDown" @pointermove.capture="chartPointerMove" @pointercancel.capture="resetCompactPointer" @click="openCompactChart" @keydown.enter.prevent="openCompactChart" @keydown.space.prevent="openCompactChart" @dblclick.stop="reset"/>
  <div class="chart-legend" data-testid="chart-indicators"><span v-for="key in ['macd_dif','macd_dea','macd_hist','kdj_k','kdj_d','kdj_j','rsi14']" :key="key">{{key.toUpperCase()}} {{num(cursor?.indicators[key],key.startsWith('macd')?6:2)}}</span></div>
  <div v-if="levels.length" class="chart-legend" aria-label="当前支撑压力快照价位"><span v-for="(l,i) in levels" :key="i" :title="Array.isArray(l.methods)?l.methods.join('、'):''" :class="String(l.kind).includes('support')?'bear':'bull'">{{String(l.kind).includes('support')?'支撑':'压力'}} {{num(levelPrice(l),3)}}</span></div>
  <details v-if="levels.length" class="zone-notes" data-testid="chart-level-evidence"><summary>查看支撑压力价位依据（{{levels.length}}）</summary><p class="small-note">窄图保留原价格线，长说明移到这里，避免遮挡蜡烛；结构价位只计独立价格触碰。</p><ul><li v-for="(l,i) in levels" :key="i">{{String(l.kind).includes('support')?'支撑':'压力'}} {{num(levelPrice(l),3)}} · {{Array.isArray(l.methods)?l.methods.join(' / '):'价格研究'}}{{l.category==='price_structure'?` · ${l.touch_count} 次独立触碰`:''}}</li></ul></details>

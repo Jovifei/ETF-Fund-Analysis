@@ -108,3 +108,12 @@ The sole failure was a stale test assertion in `test_postdeploy_board.py` that h
 The test now imports the production `METHOD_VERSION` for the current-version assertion instead of duplicating a version literal. A separate regression explicitly mutates a persisted snapshot to the prior v4 identity and requires `SupportResistanceService.latest()` to return None without adding or dirtying ORM state, so old-snapshot rejection is preserved rather than weakened. Existing assertions in the same postdeploy case continue to cover initial GET no-write behavior, confirmed structure boxes, actionable=false, source/input identity, as-of hiding, weekly interval blocking and intraday read semantics.
 
 This commit is test/audit-only; application and configuration bytes remain identical to `ef777ad0`.
+
+
+## Iteration 79 hosted responsive reconciliation
+
+Exact `fd88fc7` local acceptance passed the affected postdeploy/SR suite (35 PASS) with runtime application/frontend/config bytes unchanged. Hosted `audit-platforms` succeeded. The exact workspace workflow reached its responsive browser step and reported 16 PASS / 2 FAIL; artifact `workspace-evidence-37184595254` (ID `11296946319`, SHA-256 `5cc32d88cc2a97c61ac7c0875b9a9fcaa40d6cc5dd01d20c0d88aa810d5f8353`) preserved the traces and reports.
+
+The first failure was a stale expectation: volume is deliberately opt-in after the chart UX repair, so the responsive indicator test now requires initial `aria-pressed=false`, verifies one click enables it, and a second click returns it to false while the original candle canvas instance and no-write contract remain intact.
+
+The second failure exposed a real interaction ambiguity. A compact-chart drag could be followed by a browser click event, causing the new click-to-enlarge handler to open the dialog before the explicit enlarge button; the test then clicked the button and correctly closed it. The component now distinguishes a simple click from a drag with an 8px pointer-movement threshold. Compact drag/pan stays compact; a simple compact click still opens the dialog; expanded pointer interactions retain focus and never reopen it. The responsive test explicitly requires the dialog to remain absent after the drag before using the enlarge button. This preserves both intended UX invariants instead of weakening either test.
