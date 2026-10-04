@@ -88,3 +88,12 @@ The supplied forecast audit also showed a separate credibility issue that was no
 `similarity_forecast` now records the raw neighbor count, a conservative maximum count of non-overlapping forward-label windows, the union of future label steps and a label-step overlap ratio. The confidence sample factor uses the non-overlapping count and is capped by the former raw factor, so this change can only reduce or preserve the sample contribution to confidence. Expected return, p_up, weighted neighbors and quantiles are unchanged. A frozen regression reproduces the audit example: 60 consecutive horizon-20 neighbors cover 79 unique future steps but only three non-overlapping label windows.
 
 Because confidence semantics changed, the candidate forecast identity is advanced to `similarity-corridor-v0.7.5-overlap-aware`. Persisted older forecasts remain incompatible through the existing version contract. Calibration remains `not_calibrated`; this diagnostic is not an OOS/PIT qualification.
+
+
+## Local Chromium reception and final dialog correction
+
+Local receipt `dc4a82b` validated exact `29c25d7`: focused backend 138 PASS, Vue 172 PASS, typecheck/build/compileall and 11 Node tests PASS. Real Chromium launched successfully but the six modal entrypoint cases still required correction.
+
+Five shared-Vue entry cases had already opened the dialog and passed real canvas height checks. Their common failure came after pointer pan/click: browser focus could transiently remain outside the explicit dialog tab sequence before the test recorded state. The component now focuses the chart host on pointer interaction while expanded, and the Tab trap also recovers from any outside active element to the first/last visible dialog control. The browser test records containment after each Tab key, which tests the actual focus-trap contract while still rejecting collapsed-details descendants.
+
+The sixth failure was a test-contract error, not a missing iframe overlay. The embedded original decision board intentionally handles `.decision-data-row` with `navigateEtf`, which posts `etf-board:navigate` to the Vue parent; `OriginalDecisionBoard.vue` then routes to `/etf/<code>`. It does not open the legacy `#detailOverlay` inside that embedded frame. Chromium acceptance now follows that real path and then verifies the shared compact-chart dialog. The standalone legacy static shell remains covered by its Node/static contract; no hidden test-only production route was added.

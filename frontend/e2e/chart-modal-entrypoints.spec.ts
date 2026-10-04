@@ -33,6 +33,7 @@ async function openFromCompactChart(page: Page, chart: Locator, label: string, i
 
   const focusStates: Array<{tag:string; hiddenByCollapsedDetails:boolean; inside:boolean}> = []
   for(let index=0;index<36;index++){
+    await page.keyboard.press('Tab')
     focusStates.push(await page.evaluate(()=>{
       const active=document.activeElement as HTMLElement|null
       const dialog=document.querySelector('.expanded-chart')
@@ -40,7 +41,6 @@ async function openFromCompactChart(page: Page, chart: Locator, label: string, i
       const summary=collapsed?.firstElementChild?.tagName==='SUMMARY'?collapsed.firstElementChild:collapsed?.querySelector('summary')
       return {tag:active?.tagName??'',hiddenByCollapsedDetails:Boolean(collapsed&&summary!==active),inside:Boolean(active&&dialog?.contains(active))}
     }))
-    await page.keyboard.press('Tab')
   }
   expect(focusStates.every(state=>state.inside&&!state.hiddenByCollapsedDetails)).toBe(true)
   expect(focusStates.some(state=>state.tag==='SUMMARY')).toBe(true)
@@ -82,30 +82,14 @@ test('global search to ETF Detail retains chart-surface modal entry', async ({ p
   await openFromCompactChart(page, chart, 'search-detail', info)
 })
 
-test('Legacy detail canvas click enlarges once and measures its actual canvas', async ({ page }, info) => {
+test('original-board row uses its real parent navigation contract then opens the shared chart dialog', async ({ page }, info) => {
   await page.goto('/')
   const frame = page.frameLocator('iframe[title="原版 ETF 决策快照"]')
   await frame.locator('#searchInput').fill('512480')
-  const row = frame.locator('.decision-data-row').first()
+  const row = frame.locator('.decision-data-row[data-code="512480.SH"]').first()
   await expect(row).toBeVisible()
   await row.click()
-  const overlay = frame.locator('#detailOverlay')
-  await expect(overlay).not.toHaveClass(/hidden/)
-  const canvas = frame.locator('#chartCanvas')
-  await expect(canvas).toBeVisible()
-  const compact = Math.round((await canvas.boundingBox())!.height)
-  await canvas.click({ position: { x: 80, y: 80 } })
-  const modal = frame.locator('#detailOverlay .detail-modal')
-  await expect(modal).toHaveClass(/chart-expanded/)
-  const expanded = Math.round((await canvas.boundingBox())!.height)
-  await info.attach('legacy-pane-heights', {
-    body: JSON.stringify({ compact_canvas_px: compact, expanded_canvas_px: expanded }),
-    contentType: 'application/json',
-  })
-  expect(expanded).toBeGreaterThan(compact + 40)
-  await canvas.click({ position: { x: 120, y: 100 } })
-  await expect(modal).toHaveClass(/chart-expanded/)
-  await frame.locator('#chartExpandButton').click()
-  await expect(modal).not.toHaveClass(/chart-expanded/)
-  await expect.poll(async()=>Math.round((await canvas.boundingBox())!.height)).toBeLessThan(expanded-40)
+  await expect(page).toHaveURL(/\/etf\/512480\.SH$/)
+  const chart = page.getByTestId('etf-chart')
+  await openFromCompactChart(page, chart, 'original-board-detail', info)
 })

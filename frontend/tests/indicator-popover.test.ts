@@ -48,8 +48,9 @@ describe('indicator popup viewport and Escape',()=>{
   expect(w.classes()).not.toContain('expanded-chart')
   await surface.trigger('click');await flushPromises();expect(w.classes()).toContain('expanded-chart')
   expect(surface.attributes('role')).toBe('img')
-  await surface.trigger('click');await surface.trigger('pointermove');await flushPromises()
+  await surface.trigger('pointerdown');await surface.trigger('click');await surface.trigger('pointermove');await flushPromises()
   expect(w.classes()).toContain('expanded-chart')
+  expect(document.activeElement).toBe(surface.element)
   expect(w.findAll('.expanded-chart')).toHaveLength(1)
  })
  it('keeps support resistance first-class and auxiliary panes opt-in by default',async()=>{
