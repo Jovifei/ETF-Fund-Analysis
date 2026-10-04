@@ -29,6 +29,7 @@ from app.models import (
     SectorSnapshot,
 )
 from app.services.current_decision_service import CurrentDecisionService
+from app.services.snapshot_contract import SNAPSHOT_CONTRACT_VERSION, snapshot_issues
 from app.utils.indicator_state import (
     kdj_state_view,
     ma_state_view,
@@ -88,17 +89,26 @@ class KlineStabilizationService:
     def _instruments(self, db: Session) -> list[Instrument]:
         return list(db.scalars(select(Instrument).where(Instrument.enabled.is_(True))).all())
 
-    def _latest_indicator_values(self, db: Session, instrument_id: int) -> tuple[dict[str, Any], dict[str, Any]]:
-        """最新 + 上一条 IndicatorSnapshot.values_json；指标状态唯一数据源。"""
-        rows = db.scalars(
+    def _latest_indicator_values(
+        self, db: Session, instrument_id: int
+    ) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
+        """Current-compatible latest indicator plus previous same-identity values."""
+        current = db.scalar(
             select(IndicatorSnapshot)
             .where(IndicatorSnapshot.instrument_id == instrument_id)
-            .order_by(IndicatorSnapshot.as_of_date.desc(), IndicatorSnapshot.generated_at.desc())
-            .limit(2)
-        ).all()
-        latest = dict(rows[0].values_json or {}) if rows else {}
-        previous = dict(rows[1].values_json or {}) if len(rows) > 1 else {}
-        return latest, previous
+            .order_by(
+                IndicatorSnapshot.as_of_date.desc(),
+                IndicatorSnapshot.generated_at.desc(),
+                IndicatorSnapshot.id.desc(),
+            )
+            .limit(1)
+        )
+        issues = snapshot_issues(current, self.settings, None, kind="indicator")
+        if current is None or issues:
+            return {}, {}, issues
+        from app.utils.indicator_history import previous_values as previous_indicator_values
+        previous = previous_indicator_values(db, current) or {}
+        return dict(current.values_json or {}), previous, []
 
     def _recent_daily_closes(self, db: Session, instrument_id: int) -> list[float | None]:
         values = db.scalars(
@@ -117,14 +127,21 @@ class KlineStabilizationService:
             .limit(1)
         )
 
-    @staticmethod
-    def _latest_forecast(db: Session, instrument_id: int, horizon: int = 1) -> ForecastSnapshot | None:
-        return db.scalar(
+    def _latest_forecast(
+        self, db: Session, instrument_id: int, horizon: int = 1
+    ) -> tuple[ForecastSnapshot | None, list[str]]:
+        row = db.scalar(
             select(ForecastSnapshot)
             .where(ForecastSnapshot.instrument_id == instrument_id, ForecastSnapshot.horizon == horizon)
-            .order_by(ForecastSnapshot.as_of_date.desc(), ForecastSnapshot.generated_at.desc())
+            .order_by(
+                ForecastSnapshot.as_of_date.desc(),
+                ForecastSnapshot.generated_at.desc(),
+                ForecastSnapshot.id.desc(),
+            )
             .limit(1)
         )
+        issues = snapshot_issues(row, self.settings, None, kind="forecast")
+        return (row if not issues else None), issues
 
     def _sector_alias(self) -> dict[str, str]:
         """读取 config 中的主题→行业板块显式映射表（去掉下划线开头的注释键）。"""
@@ -292,7 +309,7 @@ class KlineStabilizationService:
         decision_snapshot_id: str | None = None,
     ) -> dict[str, Any]:
         # 指标状态唯一数据源：IndicatorSnapshot.values_json（与 signal_grade 同一口径）。
-        values, previous_values = self._latest_indicator_values(db, instrument.id)
+        values, previous_values, indicator_issues = self._latest_indicator_values(db, instrument.id)
         quote = self._latest_quote(db, instrument.id)
 
         today_pct = _pct(_finite(quote.pct_change)) if quote else None
@@ -306,7 +323,7 @@ class KlineStabilizationService:
             vs_yesterday = "↑" if change > 0.001 else ("↓" if change < -0.001 else "→")
 
         td = td_state_view(values)
-        stored_forecast = self._latest_forecast(db, instrument.id, 1)
+        stored_forecast, forecast_issues = self._latest_forecast(db, instrument.id, 1)
         if stored_forecast is None:
             pattern = {
                 "expected_return": None, "p_up": None, "confidence": 0, "sample_count": 0,
@@ -386,6 +403,11 @@ class KlineStabilizationService:
             "kdj": kdj_state_view(values, previous_values, self.thresholds),
             "td": td,
             "rsi": rsi_state_view(values, self.thresholds),
+            "snapshot_compatibility": {
+                "contract": SNAPSHOT_CONTRACT_VERSION,
+                "indicator": indicator_issues,
+                "forecast_1d": forecast_issues,
+            },
             "sector": sector,
             "sector_concept": sector_concept,
             "market_breadth": market_breadth,

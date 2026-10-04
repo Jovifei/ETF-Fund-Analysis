@@ -1,5 +1,5 @@
 {
-  "version": "etf-1430-workbench-v0.1.3",
+  "version": "etf-1430-workbench-v0.1.4-current-snapshot",
   "decision_timezone": "Asia/Shanghai",
   "decision_window": {
     "start": "14:20",

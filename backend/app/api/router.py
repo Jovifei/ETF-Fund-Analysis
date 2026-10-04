@@ -541,7 +541,7 @@ def holdings(
     # 持仓页融合（PR-D）：当前动作 + 1/3/5/10 预测 + 距支撑/压力，全部读已落库快照。
     instruments = {inst.ts_code: inst for inst in db.scalars(select(Instrument)).all()}
     _, decisions = CurrentDecisionService(settings).resolve_many(db, list(instruments.values()))
-    forecast_map = latest_forecast_map(db)
+    forecast_map = latest_forecast_map(db, settings=settings)
     sr_service = SupportResistanceService(settings)
     for row in rows:
         code = str(row.get("ts_code") or "").upper()

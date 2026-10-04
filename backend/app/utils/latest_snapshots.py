@@ -6,7 +6,8 @@
 """
 from __future__ import annotations
 
-from typing import Iterable
+from datetime import datetime
+from typing import Iterable, Any
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
@@ -15,7 +16,10 @@ from app.models import ForecastSnapshot, SignalSnapshot
 
 
 def latest_forecast_map(
-    db: Session, instrument_ids: Iterable[int] | None = None
+    db: Session,
+    instrument_ids: Iterable[int] | None = None,
+    *,
+    settings: Any | None = None,
 ) -> dict[int, dict[int, ForecastSnapshot]]:
     """每个 (instrument, horizon) 的最新 ForecastSnapshot。"""
     grouped = (
@@ -48,11 +52,26 @@ def latest_forecast_map(
         existing = bucket.get(int(row.horizon))
         if existing is None or (row.generated_at or "") >= (existing.generated_at or ""):
             bucket[int(row.horizon)] = row
+    if settings is not None:
+        from app.services.snapshot_contract import snapshot_issues
+        filtered: dict[int, dict[int, ForecastSnapshot]] = {}
+        for instrument_id, bucket in result.items():
+            current = {
+                horizon: row for horizon, row in bucket.items()
+                if not snapshot_issues(row, settings, None, kind="forecast")
+            }
+            if current:
+                filtered[instrument_id] = current
+        return filtered
     return result
 
 
 def latest_signal_map(
-    db: Session, instrument_ids: Iterable[int] | None = None
+    db: Session,
+    instrument_ids: Iterable[int] | None = None,
+    *,
+    settings: Any | None = None,
+    at: datetime | None = None,
 ) -> dict[int, SignalSnapshot]:
     """每个 instrument 的最新 SignalSnapshot（替代 as_of_time 升序全表扫描）。"""
     grouped = select(
@@ -79,4 +98,11 @@ def latest_signal_map(
         existing = result.get(row.instrument_id)
         if existing is None or row.id > existing.id:
             result[row.instrument_id] = row
+    if settings is not None:
+        from app.services.snapshot_contract import signal_issues
+        return {
+            instrument_id: row
+            for instrument_id, row in result.items()
+            if not signal_issues(row, settings, at=at)
+        }
     return result

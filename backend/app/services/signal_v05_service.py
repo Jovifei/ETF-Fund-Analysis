@@ -71,7 +71,7 @@ class SignalV05Service(SignalService):
         ]
         if bool(adjustment_cfg.get("enabled", False)) and calibrated_forecasts:
             contributions: list[float] = []
-            for horizon, weight in ((1, 0.50), (5, 0.30), (20, 0.20)):
+            for horizon, weight in self._forecast_score_weights().items():
                 forecast = forecasts.get(horizon)
                 if forecast is None or forecast.expected_return is None:
                     continue

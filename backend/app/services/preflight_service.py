@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.clock import MarketClock
 from app.core.config import Settings, get_settings
+from app.services.snapshot_contract import snapshot_issues
 from app.services.trading_calendar_service import TradingCalendarService
 from app.models import DailyBar, ForecastSnapshot, IndicatorSnapshot, Instrument, QuoteSnapshot
 
@@ -124,10 +125,15 @@ class PreflightService:
             .where(ForecastSnapshot.instrument_id == instrument.id)
             .order_by(ForecastSnapshot.as_of_date.desc(), ForecastSnapshot.generated_at.desc())
         ).all()
-        latest_by_horizon: dict[int, ForecastSnapshot] = {}
+        latest_raw_by_horizon: dict[int, ForecastSnapshot] = {}
         for item in forecasts:
-            latest_by_horizon.setdefault(item.horizon, item)
-        for horizon in (1, 5, 20):
+            latest_raw_by_horizon.setdefault(item.horizon, item)
+        latest_by_horizon = {
+            horizon: item
+            for horizon, item in latest_raw_by_horizon.items()
+            if not snapshot_issues(item, self.settings, None, kind="forecast")
+        }
+        for horizon in [int(value) for value in self.strategy.get("forecast", {}).get("horizons", ())]:
             item = latest_by_horizon.get(horizon)
             if item is None or item.p_up is None:
                 missing_optional.append(f"{horizon}日预测")
