@@ -39,4 +39,4 @@ def test_factor_masks_are_materialized_not_deepcopied_in_dataframe_attrs():
     # Pandas deep-copies attrs for every slice/concat/reduction. A per-row mask
     # grid here multiplied walk-forward runtime; the mask is already in values.
     assert len(json.dumps(rich.attrs)) < 512
-    assert rich.attrs['input_validity_policy']=='raw-dependency-mask-v1'
+    assert rich.attrs['input_validity_policy']=='raw-dependency-and-maturity-mask-v2'

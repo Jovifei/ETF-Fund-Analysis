@@ -1,8 +1,8 @@
 {
   "market_data_contract_version": "cn-fund-shares-cny-v1.0.4-corporate-action-research",
   "version": "signal-v0.7.2-qualification-audit",
-  "indicator_version": "ind-v0.7.5-obv-flow-contract",
-  "forecast_version": "similarity-corridor-v0.7.6-obv-flow",
+  "indicator_version": "ind-v0.7.6-maturity-mask",
+  "forecast_version": "similarity-corridor-v0.7.7-maturity-mask",
   "signal_center_version": "signal-center-v0.3.0-canonical-fallback",
   "signal_grade_version": "signal-grade-v0.3.1-reference-display",
   "signal_grade": {
@@ -142,7 +142,7 @@
     "maximum_confidence_uncalibrated": 55,
     "validation_step": 5,
     "validation_max_points": 120,
-    "feature_schema_version": "feature-store-v0.7.5-obv-flow",
+    "feature_schema_version": "feature-store-v0.7.6-maturity-mask",
     "conformal_alpha": 0.2,
     "interval_method": "local_conformal_research_v1",
     "path_extremes": true,
@@ -214,9 +214,9 @@
     "single_fund_target_cap": 0.25
   },
   "backtest_version": "rotation-v0.5.1",
-  "feature_schema_version": "feature-store-v0.7.5-obv-flow",
+  "feature_schema_version": "feature-store-v0.7.6-maturity-mask",
   "strategy_engine": {
-    "version": "strategy-family-v0.5.2-obv-flow",
+    "version": "strategy-family-v0.5.3-maturity-mask",
     "family_weights": {
       "trend": 0.18,
       "momentum": 0.16,
