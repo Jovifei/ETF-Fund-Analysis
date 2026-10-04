@@ -60,6 +60,7 @@ class RotationBacktestService:
                 "close": float(row["close"]),
                 "volume": None if pd.isna(row.get("volume")) else float(row["volume"]),
                 "amount": None if pd.isna(row.get("amount")) else float(row["amount"]),
+                "trade_activity_observed": bool(row.get("trade_activity_observed", False)),
                 "adjust": row.get("adjust"),
                 "source": row.get("source"),
                 "fetched_at": None if pd.isna(row.get("fetched_at")) else str(row.get("fetched_at")),
@@ -139,6 +140,11 @@ class RotationBacktestService:
                             if (self.settings.market_provider == "mock" or row_units_verified(row))
                             and row.amount is not None and math.isfinite(float(row.amount))
                             else np.nan
+                        ),
+                        "trade_activity_observed": bool(
+                            row.volume is not None
+                            and math.isfinite(float(row.volume))
+                            and float(row.volume) > 0
                         ),
                         "adjust": row.adjust,
                         "source": row.source,
@@ -333,7 +339,11 @@ class RotationBacktestService:
         open_prices = {
             code: float(frame.loc[trade_date, "open"])
             for code, frame in frames.items()
-            if trade_date in frame.index and float(frame.loc[trade_date, "open"]) > 0
+            if (
+                trade_date in frame.index
+                and float(frame.loc[trade_date, "open"]) > 0
+                and bool(frame.loc[trade_date, "trade_activity_observed"])
+            )
         }
         valuation_prices: dict[str, float] = {}
         for code, frame in frames.items():
@@ -614,7 +624,16 @@ class RotationBacktestService:
                     else "documented_endpoint_units_only"
                 ),
                 "excluded_instruments": load_exclusions,
-                "input_hash_policy": "single_raw_basis_daily_rows_v2",
+                "execution_tradability_contract": {
+                    "policy": "raw_positive_volume_presence_v1",
+                    "suspension_proxy": "raw_volume_finite_and_gt_zero",
+                    "volume_unit_interpretation_required": False,
+                    "participation_cap_qualified": False,
+                    "market_impact_model_qualified": False,
+                    "price_limit_execution_qualified": False,
+                    "qualification": "UNKNOWN",
+                },
+                "input_hash_policy": "single_raw_basis_daily_rows_v3-activity",
                 "input_hashes": {code: self._frame_input_hash(frame) for code, frame in sorted(frames.items())},
                 "start_date": equity_records[0]["date"],
                 "end_date": equity_records[-1]["date"],
@@ -638,6 +657,10 @@ class RotationBacktestService:
                 "configured_max_per_theme": int(self.config.get("max_per_theme", 1)),
                 "historical_theme_constraint_applied": False,
                 "historical_theme_constraint_reason": "effective_dated_theme_history_unavailable",
+                "execution_requires_observed_trade_activity": True,
+                "participation_cap_qualified": False,
+                "market_impact_model_qualified": False,
+                "price_limit_execution_qualified": False,
                 "future_trade_dates_in_features": False,
                 "point_in_time_revision_qualified": False,
                 "pit_note": "daily-bar revision/publication PIT is not proven by this backtest",

@@ -60,6 +60,7 @@ def _frame_input_hash(frame: pd.DataFrame) -> str:
             "close": float(row["close"]),
             "volume": None if pd.isna(row.get("volume")) else float(row["volume"]),
             "amount": None if pd.isna(row.get("amount")) else float(row["amount"]),
+            "trade_activity_observed": bool(row.get("trade_activity_observed", False)),
             "adjust": row.get("adjust"),
             "source": row.get("source"),
             "fetched_at": None if pd.isna(row.get("fetched_at")) else str(row.get("fetched_at")),
@@ -166,6 +167,11 @@ class CrosscheckEngine:
                         and b.amount is not None and math.isfinite(float(b.amount))
                         else None
                     ),
+                    "trade_activity_observed": bool(
+                        b.volume is not None
+                        and math.isfinite(float(b.volume))
+                        and float(b.volume) > 0
+                    ),
                     "adjust": b.adjust,
                     "source": b.source,
                     "fetched_at": b.fetched_at,
@@ -183,7 +189,13 @@ class CrosscheckEngine:
 
         if data_contract.get("execution_price_basis") != "raw_unadjusted_no_corporate_action_position_events_v1":
             return {"status": "skipped", "reason": "primary_execution_price_basis_unsupported"}
-        if data_contract.get("input_hash_policy") != "single_raw_basis_daily_rows_v2":
+        tradability = data_contract.get("execution_tradability_contract")
+        if (
+            not isinstance(tradability, dict)
+            or tradability.get("policy") != "raw_positive_volume_presence_v1"
+        ):
+            return {"status": "skipped", "reason": "primary_execution_tradability_contract_missing"}
+        if data_contract.get("input_hash_policy") != "single_raw_basis_daily_rows_v3-activity":
             return {"status": "skipped", "reason": "primary_input_hash_policy_unsupported"}
         expected_hashes = data_contract.get("input_hashes")
         if not isinstance(expected_hashes, dict):
@@ -250,7 +262,8 @@ class CrosscheckEngine:
                 if day not in frame.index:
                     continue
                 value = float(frame.at[day, "open"])
-                if math.isfinite(value) and value > 0:
+                activity = bool(frame.at[day, "trade_activity_observed"])
+                if math.isfinite(value) and value > 0 and activity:
                     open_prices[code] = value
 
             open_value = 0.0

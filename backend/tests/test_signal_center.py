@@ -81,21 +81,34 @@ def _attach(
         )
     )
     if existing is None:
-        db.add(
-            IndicatorSnapshot(
-                instrument_id=instrument.id,
-                as_of_date=when.date(),
-                version=strategy["indicator_version"],
-                feature_schema_version=strategy["feature_schema_version"],
-                config_hash=config_hash,
-                values_json=values,
-                technical_score=technical,
-                risk_score=risk,
-                trend_label="震荡",
-                data_quality=90.0,
-                input_hash=indicator_input_hash,
-            )
+        existing = IndicatorSnapshot(
+            instrument_id=instrument.id,
+            as_of_date=when.date(),
+            version=strategy["indicator_version"],
+            feature_schema_version=strategy["feature_schema_version"],
+            config_hash=config_hash,
+            values_json=values,
+            technical_score=technical,
+            risk_score=risk,
+            trend_label="震荡",
+            data_quality=90.0,
+            input_hash=indicator_input_hash,
+            generated_at=when,
         )
+        db.add(existing)
+    else:
+        # Bootstrap may already have the same date/current identity. This helper
+        # owns its synthetic positive evidence and must update that row rather
+        # than silently leaving bootstrap values in place.
+        existing.feature_schema_version = strategy["feature_schema_version"]
+        existing.config_hash = config_hash
+        existing.values_json = values
+        existing.technical_score = technical
+        existing.risk_score = risk
+        existing.trend_label = "震荡"
+        existing.data_quality = 90.0
+        existing.input_hash = indicator_input_hash
+        existing.generated_at = when
     snapshot_inputs = {
         "contract_version": SIGNAL_INPUT_CONTRACT_VERSION,
         "formal_forecast_horizons": [int(value) for value in strategy["forecast"]["horizons"]],
@@ -372,6 +385,11 @@ def test_current_fronts_follow_latest_decision_board_grade(bootstrapped, db_sess
         score=90.0,
         values=_indicator_values(return_20d=0.03, return_5d=0.01, rsi14=55.0),
     )
+    db_session.flush()
+    # This case specifically verifies one canonical board row plus per-instrument
+    # SignalGrade fallback. Remove bootstrap board snapshots so their full row set
+    # cannot supersede the synthetic one below.
+    db_session.execute(delete(DecisionBoardSnapshot))
     db_session.flush()
     snapshot_id = "canonical-signal-center-test"
     db_session.add(
