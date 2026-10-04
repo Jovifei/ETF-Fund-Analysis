@@ -43,6 +43,15 @@ describe('indicator popup viewport and Escape',()=>{
   await button.trigger('click');await flushPromises()
   expect(document.body.style.overflow).toBe('');expect(document.activeElement).toBe(button.element)
  })
+ it('compact chart click opens once and chart interaction inside the dialog cannot reopen or close it',async()=>{
+  const w=chart();await flushPromises();const surface=w.get('[data-testid="etf-chart"]')
+  expect(w.classes()).not.toContain('expanded-chart')
+  await surface.trigger('click');await flushPromises();expect(w.classes()).toContain('expanded-chart')
+  expect(surface.attributes('role')).toBe('img')
+  await surface.trigger('click');await surface.trigger('pointermove');await flushPromises()
+  expect(w.classes()).toContain('expanded-chart')
+  expect(w.findAll('.expanded-chart')).toHaveLength(1)
+ })
  it('keeps support resistance first-class and auxiliary panes opt-in by default',async()=>{
   const w=chart();await flushPromises()
   const sr=w.get('[data-testid="chart-sr-toggle"]'),volume=w.get('button[title*="成交量副图"]')

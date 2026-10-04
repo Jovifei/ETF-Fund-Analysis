@@ -2369,6 +2369,7 @@ function bindEvents() {
   if (boardAdd) boardAdd.addEventListener('submit', submitBoardFund);
   qsa('[data-close]').forEach(button=>button.addEventListener('click',()=>closeModal(button.dataset.close)));
   qs('#chartExpandButton')?.addEventListener('click',()=>setLegacyChartExpanded(!qs('#detailOverlay .detail-modal')?.classList.contains('chart-expanded')));
+  qs('#chartCanvas')?.addEventListener('click',()=>{if(!qs('#detailOverlay .detail-modal')?.classList.contains('chart-expanded'))setLegacyChartExpanded(true);});
   qsa('.overlay').forEach(overlay=>{
     overlay.addEventListener('click',event=>{if(event.target===overlay&&!overlay.classList.contains('auth-overlay')&&!['portfolioImportOverlay','portfolioConfirmOverlay'].includes(overlay.id))closeModal(overlay.id);});
     overlay.addEventListener('keydown', trapModalFocus);

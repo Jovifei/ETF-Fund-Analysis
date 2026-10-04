@@ -1,4 +1,4 @@
-"""支撑/压力唯一计算与读取入口（support-resistance-v4-structure）。
+"""支撑/压力唯一计算与读取入口（support-resistance-v5-indicators）。
 
 全系统的支撑压力只在这里计算并落库（SupportResistanceSnapshot），
 决策总表 / 14:30 工作台 / ETF 详情一律读取快照，禁止各自从日线重算。
@@ -28,7 +28,7 @@ from app.utils.support_resistance import build_support_resistance
 
 logger = logging.getLogger(__name__)
 
-METHOD_VERSION = "support-resistance-v5-rich-indicators"
+METHOD_VERSION = "support-resistance-v5-indicators"
 DEFAULT_WINDOW = 250
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 DAILY_SETTLEMENT = time(15, 15)
@@ -101,7 +101,22 @@ class SupportResistanceService:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
         self.config = self._load_config()
-        self.config_hash = stable_hash(self.config)
+        strategy = self.settings.load_strategy()
+        self.indicator_config = dict(strategy.get("indicator") or {})
+        self.indicator_version = str(strategy.get("indicator_version") or "")
+        self.indicator_config_hash = stable_hash(self.indicator_config)
+        self.config_hash = stable_hash({
+            "support_resistance": self.config,
+            "indicator_config": self.indicator_config,
+            "indicator_version": self.indicator_version,
+        })
+
+    def _snapshot_identity_matches(self, snapshot: Any) -> bool:
+        return (
+            snapshot is not None
+            and snapshot.method_version == METHOD_VERSION
+            and snapshot.config_hash == self.config_hash
+        )
 
     def _load_config(self) -> dict[str, Any]:
         path = PROJECT_ROOT / "config" / "etf_1430_workbench.json"
@@ -168,9 +183,9 @@ class SupportResistanceService:
         frame.attrs["price_basis"] = basis
         frame.attrs["instrument"] = instrument.ts_code if instrument else str(instrument_id)
         frame.attrs["contains_mock"] = any("mock" in str(row.source).lower() for row in rows)
-        strategy = self.settings.load_strategy()
-        frame.attrs["indicator_version"] = strategy["indicator_version"]
-        return _with_canonical_indicators(frame, strategy["indicator"])
+        frame.attrs["indicator_version"] = self.indicator_version
+        frame.attrs["indicator_config_hash"] = self.indicator_config_hash
+        return _with_canonical_indicators(frame, self.indicator_config)
 
     # -------------------------------------------------------------- 计算/落库
 
@@ -286,7 +301,8 @@ class SupportResistanceService:
         volume_ready = bool(bars and frame["volume"].notna().all())
         amount_ready = bool(bars and frame["amount"].notna().all())
         payload.update(method_version=METHOD_VERSION, config_hash=self.config_hash,
-            input_hash=frame.attrs.get("input_hash"), indicator_version=frame.attrs.get("indicator_version"), actionable=False,
+            input_hash=frame.attrs.get("input_hash"), indicator_version=frame.attrs.get("indicator_version"),
+            indicator_config_hash=frame.attrs.get("indicator_config_hash"), actionable=False,
             qualification="mock" if frame.attrs.get("contains_mock") else "blocked" if issue
                           else "price_only_research" if not volume_ready else "research_only",
             input_availability={"volume": volume_ready, "amount": amount_ready, "estimated_amount": False},
@@ -318,8 +334,7 @@ class SupportResistanceService:
             .order_by(SupportResistanceSnapshot.as_of_date.desc(), SupportResistanceSnapshot.generated_at.desc())
             .limit(1)
         )
-        if (snapshot is None or snapshot.method_version != METHOD_VERSION
-                or snapshot.config_hash != self.config_hash):
+        if not self._snapshot_identity_matches(snapshot):
             return None
         frame = self._sr_frame(db, instrument_id)
         if frame.empty or frame.iloc[-1]["trade_date"] != snapshot.as_of_date:
