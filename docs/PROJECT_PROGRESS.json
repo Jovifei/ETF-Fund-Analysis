@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "roadmap_version": "2026-10-02-v2",
-  "updated_at": "2026-10-04T00:30:19+08:00",
+  "updated_at": "2026-10-04T01:24:00+08:00",
   "current_stage": "S8-F0证据调查 / S4-U06修订证据卡 / S2私有验收待完成",
   "current_iteration": 71,
   "planning_source": "同一远端ChatGPT v2方向修订（只读核验摘要）及本地现场元数据核验；无新增源码独立审核",
@@ -14,7 +14,7 @@
   "actionable": false,
   "runtime_activated": false,
   "auto_trading": false,
-  "next_task": "S4-U06：1577全量通过/11既有跳过、139 Vue及完整21文件独立审核通过；普通快进既有分支并核验精确CI/3项新增浏览器截图，不部署",
+  "next_task": "S4-U06首轮6798843三项CI通过；仅修正被粘性工具栏遮挡的测试取景，发布后核验摘要命中检查与六张完整/视口截图，不部署",
   "blockers": [
     "5m/15m真实量额、单位/时间/PIT及成本可行性未解决：先做S8-F0，不再排在所有UX之后",
     "63c426a已部署；完整发布收据、f0迁移回滚兼容、图层合同和私有功能独立接收待核对",
@@ -748,7 +748,7 @@
       "id": "S4",
       "name": "图表与Chan用户体验",
       "legacy": "R4C M4/M5",
-      "status": "WU2 v110精确CI闭环；S4-U06修订证据卡本地全量与完整21文件审核通过，精确提交浏览器CI待发布后完成，未部署",
+      "status": "S4-U06首轮精确CI与浏览器断言通过；取景遮挡修正待新提交截图验收，未部署",
       "counter_frozen": false,
       "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
       "dimensions": {
@@ -847,7 +847,7 @@
             "docs/audits/S4_U06_CHAN_REVISION_EVIDENCE_20261003.md"
           ],
           "na_reasons": {},
-          "scope_note": "仅当前已验证观测的修订变化证据与折叠卡；ABSENT不等于失效，确认/PIT未知；本地浏览器启动EPERM，完整/托管证据待完成，不代表M4全部验收。"
+          "scope_note": "仅当前已验证观测的修订变化证据与折叠卡；ABSENT不等于失效，确认/PIT未知。6798843精确CI通过，桌面/320px首轮取景不完整；仅测试修正后六张截图待核验，不代表M4全部验收。"
         },
         {
           "id": "S4-U07",
@@ -2375,7 +2375,7 @@
     "backend_full": "FINAL_1588_COLLECTED_1577_PASS_11_EXISTING_SKIP_0_FAILURES_0_ERRORS",
     "review": "FINAL_21_FILE_REVIEW_PASS",
     "local_browser": "NOT_RUN_CHROMIUM_LAUNCH_EPERM_THREE_FAILED_BEFORE_ASSERTIONS",
-    "hosted_ci": "PENDING_PUBLICATION",
+    "hosted_ci": "FIRST_HEAD_ALL_THREE_SUCCESS_CAPTURE_CORRECTION_PENDING",
     "geometry": "EXACT_OLD_PROJECTION_AND_OVERLAY_PARITY",
     "read_model_version": "UNCHANGED_V110",
     "chart_version": "UNCHANGED_V1_2_0",
@@ -2393,6 +2393,20 @@
     "frozen_source_files": 12,
     "skip_identities": "MATCH_EXACT_8C62D70_HOSTED_PREDECESSOR",
     "timezone": "20_UI_CASES_PASS_SHANGHAI_AND_NEW_YORK",
-    "static_checks": "RUFF_COMPILE_JS_SYNTAX_27_JS_SECRET_SCAN_DIFF_CHECK_PASS"
+    "static_checks": "RUFF_COMPILE_JS_SYNTAX_27_JS_SECRET_SCAN_DIFF_CHECK_PASS",
+    "code_sha": "679884311c2edd9eb189f9544917ac5aa8b3715a",
+    "code_tree": "c78d5ae166ccb93ee924b0307f04d55086809164",
+    "hosted_ci_runs": {
+      "ci": 37139009497,
+      "workspace_ci": 37139009418,
+      "audit_platforms": 37139009439
+    },
+    "hosted_backend": "1588_COLLECTED_1577_PASS_11_EXISTING_SKIP_0_FAILURES_0_ERRORS",
+    "hosted_backend_seconds": 874.786,
+    "hosted_junit_sha256": "9c2db74cec473453a7d59243351203718b10de5ca7e4afc90d35d2a45629a1d1",
+    "hosted_browser": "34_CHROMIUM_3_NEW_CASES_5_AUTH_18_RESPONSIVE_PASS",
+    "hosted_screenshots": "FIRST_HEAD_DESKTOP_320PX_ELEMENT_CAPTURE_OCCLUDED_LEGACY_CLEAR",
+    "capture_correction": "TEST_ONLY_REAL_TOOLBAR_BOUNDS_HIT_TARGET_VIEWPORT_AND_FULL_PAGE_NO_RUNTIME_CHANGE",
+    "capture_correction_validation": "LOCAL_TYPECHECK_3_TEST_REGISTRATIONS_DIFF_AND_INDEPENDENT_TEST_SOURCE_REVIEW_PASS_HOSTED_PENDING"
   }
 }

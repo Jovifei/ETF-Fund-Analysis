@@ -1,7 +1,30 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Locator, type Page } from '@playwright/test'
 import fixture from '../tests/fixtures/chan_chart_projection.json' with { type: 'json' }
 import revision from '../tests/fixtures/chan_revision_evidence.json' with { type: 'json' }
 import type { ChanRevisionEvidence, ChanTransition } from '../src/lib/types'
+
+async function captureEvidence(page: Page, card: Locator, path: string) {
+  const summary = card.locator('summary')
+  await summary.evaluate(element => {
+    const headerHeight = document.querySelector('.topbar')?.getBoundingClientRect().height ?? 0
+    window.scrollTo({ top: window.scrollY + element.getBoundingClientRect().top - headerHeight - 16, behavior: 'instant' })
+  })
+  await summary.focus()
+  await expect.poll(() => summary.evaluate(element => {
+    const bounds = element.getBoundingClientRect()
+    const headerBottom = document.querySelector('.topbar')?.getBoundingClientRect().bottom ?? 0
+    const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2)
+    return bounds.top >= headerBottom + 12 && bounds.bottom <= window.innerHeight &&
+      bounds.left >= 0 && bounds.right <= window.innerWidth && !!hit && element.contains(hit)
+  })).toBe(true)
+  await expect(summary).toBeFocused()
+  await page.screenshot({ path: path.replace('.png', '-viewport.png') })
+  // An oversized element screenshot scrolls its top behind the real sticky header.
+  // Keep all application chrome and capture the complete document from its top.
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }))
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+  await page.screenshot({ path, fullPage: true })
+}
 
 async function syntheticObservation(page: Page, legacy = false, longIdentities = false) {
   await page.route('**/api/workspace/instruments/510300.SH/chart?**', async route => {
@@ -45,7 +68,7 @@ test('saved Chan evidence opens by keyboard and resets with the observation peri
   await page.keyboard.press('Enter')
   await expect(page.getByTestId('chan-transition')).toHaveCount(6)
   await expect(card).toContainText('变化状态未知')
-  await card.screenshot({ path: info.outputPath('chan-evidence-desktop-open.png') })
+  await captureEvidence(page, card, info.outputPath('chan-evidence-desktop-open.png'))
   await page.getByRole('button', { name: '周 K', exact: true }).click()
   await expect(page.getByRole('button', { name: '周 K', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await page.getByRole('checkbox', { name: '缠论笔段中枢', exact: true }).check()
@@ -68,7 +91,7 @@ test('saved Chan evidence wraps long identities on a 320px screen and hides with
   expect(bounds.scroll).toBeLessThanOrEqual(bounds.client + 1)
   expect(bounds.right).toBeLessThanOrEqual(bounds.width)
   expect((await card.locator('summary').boundingBox())!.height).toBeGreaterThanOrEqual(44)
-  await card.screenshot({ path: info.outputPath('chan-evidence-320px-open.png') })
+  await captureEvidence(page, card, info.outputPath('chan-evidence-320px-open.png'))
   await toggle.uncheck()
   await expect(card).toHaveCount(0)
 })
@@ -82,5 +105,5 @@ test('old saved observation responses expose missing evidence without inventing 
   await expect(card).toContainText('当前响应未提供修订变化记录')
   await expect(card).not.toContainText('没有修订变化条目')
   await expect(page.getByTestId('chan-transition')).toHaveCount(0)
-  await card.screenshot({ path: info.outputPath('chan-evidence-legacy-unknown.png') })
+  await captureEvidence(page, card, info.outputPath('chan-evidence-legacy-unknown.png'))
 })

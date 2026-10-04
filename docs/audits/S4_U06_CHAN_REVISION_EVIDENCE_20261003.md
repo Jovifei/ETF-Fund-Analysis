@@ -55,7 +55,7 @@ remain covered by their unchanged existing tests.
   The current local attempt failed before any page assertion because Chromium
   ProcessSingleton socket creation returned EPERM. All three are NOT RUN as
   product/browser acceptance; no local screenshot or visual pass is claimed.
-- Exact new-commit hosted CI and browser screenshots: PENDING PUBLICATION.
+- Initial candidate state at review: exact new-commit hosted CI and browser screenshots were pending publication. The first hosted result and capture correction are recorded below.
 
 The first backend aggregate passed 1587 collected / 1576 passed / 11 existing
 skips / zero failures/errors in 615.767 seconds. It preceded the added real
@@ -92,3 +92,57 @@ Frozen runtime SHA-256:
 - frontend/src/components/ChanEvidenceCard.vue: `47385c2ce391ccf7c7a201eec2883792a56fb251eab462a40ee63df97fded1f7`
 - frontend/src/components/EtfChart.vue: `4869b5c4335bcc4e47294b776f9dd98627cbec58fb3678dca0eb41f6e9b60099`
 - frontend/src/lib/types.ts: `94fb2ed852ff0b8b259cc98ca9b18ac68e49556fda7f1328571797a1000355b5`
+
+
+## First exact-head CI and capture correction — 2026-10-03 17:24 UTC
+
+The existing branch advanced normally to `679884311c2edd9eb189f9544917ac5aa8b3715a`,
+parent `8c62d70f4ecccc1c9819be36cad09a1f7da6a826`, exact reviewed tree
+`c78d5ae166ccb93ee924b0307f04d55086809164`. All three exact-head workflows
+finished successfully, with the full run terminal at 17:20:56 UTC:
+
+- [Full CI](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37139009497):
+  1588 collected / 1577 passed / 11 existing skips / zero failures or errors,
+  874.786 seconds. All testcase and skip identities match the final local run.
+  JUnit SHA-256: `9c2db74cec473453a7d59243351203718b10de5ca7e4afc90d35d2a45629a1d1`.
+- [Workspace CI](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37139009418):
+  283 backend contracts passed with one existing Windows-only skip; actual
+  typecheck, 139 Vue tests, production build, 34 Chromium cases including all
+  three new evidence-card cases, five authenticated journeys and 18 responsive
+  cases passed. The source archive embeds the exact commit; all 21 reviewed
+  files match their bytes, Git blobs and modes.
+- [Platform audit](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37139009439):
+  PostgreSQL 23/23 and Windows bridge 20/20 passed with no skips or errors.
+
+The audit ZIP SHA-256 `f5ee1ab247cfc754d59697330166813e2ea6315f1658d1e400d5e9cc705b3920`
+and workspace ZIP SHA-256 `f32cdf5aea081b6e7e1ec269a55d7cc42380e9bf51865780fef971c9a595c712`
+match GitHub metadata. Inventory SHA-256 is
+`c8ed397a80a7baf65173ac74a446768e4f7d9b5991f2cdee7d887169de5fb64d`;
+source/tree are exact, tracked state is clean, and there are no untracked
+application files. Image build, isolated PostgreSQL smoke and export passed;
+image ID is `sha256:80036c91a8e52340618cb31be6d5a46d4e146c9f696327185fc4f6103c618dd6`.
+The large image ZIP is metadata-verified only. Inventory correctly remains
+incomplete solely for the absent published registry digest; production is not
+deployed and data qualification is not asserted. Npm audit still reports two
+moderate and one low finding, zero high/critical.
+
+Independent visual inspection found incomplete capture evidence despite passing
+browser assertions: element screenshots of the tall desktop and 320px cards
+scroll their top behind the real sticky toolbar. The legacy capture is clear,
+and long identities wrap. The original PNGs and their hashes remain retained:
+
+- Desktop: `08c0c07bb0bcfea045bb3685833b34ab68ff7a0843f5c3b2c97371d3e0a35f14`.
+- 320px: `4401c6a1240e2811d4114073731c1431f0d6639ee3500a1fb28281aef7eef5d1`.
+- Legacy: `93ffb0b9383420425371cbb92322be63d075a2ab52d21c436a54af0a70e53b14`.
+
+This observation is the reproduced failure for the capture-only correction.
+The browser test now scrolls the summary below the unchanged toolbar with a
+margin, focuses it, asserts viewport bounds and the real hit target, and saves
+a viewport screenshot. It then scrolls to document top and saves the complete
+page. No toolbar is hidden, no application CSS/runtime changes, and no existing
+assertion is removed. Local actual typecheck, all three Playwright test
+registrations and diff checks pass; independent test-source review passes.
+Local Chromium remains launch-blocked as recorded above, so the new assertions
+and all six replacement captures require corrected-head hosted execution and
+visual inspection. Complete visual acceptance remains PENDING. The original
+full CI finished before correction publication, without cancellation.
