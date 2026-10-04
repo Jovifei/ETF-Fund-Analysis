@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import numpy as np
 import pandas as pd
 
-from app.services.forecast_service import similarity_forecast
+from app.services.forecast_service import _label_overlap_diagnostics, similarity_forecast
 from app.utils.feature_store import FEATURE_SCHEMA_VERSION, build_feature_frame, feature_columns_for_horizon
 
 
@@ -49,6 +49,11 @@ def test_similarity_forecast_builds_endpoint_and_path_corridors():
     assert corridor["terminal_price_q10"] <= corridor["terminal_price_q50"] <= corridor["terminal_price_q90"]
     assert 0 <= corridor["corridor_position"] <= 100
     assert "current row never enters candidates" in result.diagnostics["no_lookahead_rule"]
+    assert result.diagnostics["raw_neighbor_count"] == result.sample_count
+    assert 1 <= result.diagnostics["effective_non_overlapping_neighbor_count"] <= result.sample_count
+    assert result.diagnostics["effective_sample_factor"] <= result.diagnostics["raw_sample_factor"]
+    assert 0 <= result.diagnostics["label_overlap_ratio"] <= 1
+    assert result.diagnostics["confidence_sample_basis"] == "non_overlapping_forward_label_windows"
 
 
 def test_forecast_short_history_fails_closed():
@@ -63,3 +68,28 @@ def test_forecast_short_history_fails_closed():
     assert result.p_up is None
     assert result.confidence == 0
     assert result.diagnostics["reason"] == "history_too_short"
+
+
+def test_overlap_diagnostics_match_consecutive_twenty_session_labels():
+    diagnostics = _label_overlap_diagnostics(range(220, 280), 20)
+    assert diagnostics["raw_neighbor_count"] == 60
+    assert diagnostics["effective_non_overlapping_neighbor_count"] == 3
+    assert diagnostics["unique_future_label_steps"] == 79
+    assert diagnostics["label_overlap_ratio"] == round(1 - 79 / (60 * 20), 6)
+
+
+def test_overlap_aware_confidence_never_uses_raw_neighbor_count_as_independent_evidence():
+    frame = build_feature_frame(_bars(520), {}).frame
+    result = similarity_forecast(
+        frame,
+        horizon=10,
+        neighbors=80,
+        minimum_neighbors=25,
+        maximum_confidence=55,
+        feature_columns=feature_columns_for_horizon(10, frame.columns),
+    )
+    assert result.sample_count > 0
+    assert result.diagnostics["effective_non_overlapping_neighbor_count"] < result.sample_count
+    assert result.diagnostics["effective_sample_factor"] < result.diagnostics["raw_sample_factor"]
+    assert result.confidence <= 55
+    assert result.diagnostics["calibration_claim"] == "research_only_not_calibrated"

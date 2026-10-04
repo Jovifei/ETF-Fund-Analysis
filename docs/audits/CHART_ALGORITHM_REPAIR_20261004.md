@@ -79,3 +79,12 @@ Static review found four interaction defects after the first modal implementatio
 - Legacy collapse changed CSS geometry without redrawing the canvas at compact dimensions.
 
 The correction makes the SR action own every SR level group (BOX/PIVOT/MA/BOLL/ATR/FIB/DERIVED/MACD/KDJ/RSI) while leaving CHAN independent. Dialog focus calculation includes visible summaries and excludes collapsed-detail descendants. Body locking uses a shared token-counted `modal-scroll-lock` class so the last dialog owns unlock. Legacy expand/collapse redraws on both geometry transitions; overlay close suppresses only the pointless hidden redraw. Browser acceptance now cycles focus repeatedly, rejects hidden-focus states, requires summary participation, and verifies lock release plus compact redraw.
+
+
+## Next-stage execution: overlapping-label confidence
+
+The supplied forecast audit also showed a separate credibility issue that was not one of the three hard failures: raw nearest-neighbor count can substantially overstate independent evidence when forward label windows overlap. This stage closes that item without changing point forecasts.
+
+`similarity_forecast` now records the raw neighbor count, a conservative maximum count of non-overlapping forward-label windows, the union of future label steps and a label-step overlap ratio. The confidence sample factor uses the non-overlapping count and is capped by the former raw factor, so this change can only reduce or preserve the sample contribution to confidence. Expected return, p_up, weighted neighbors and quantiles are unchanged. A frozen regression reproduces the audit example: 60 consecutive horizon-20 neighbors cover 79 unique future steps but only three non-overlapping label windows.
+
+Because confidence semantics changed, the candidate forecast identity is advanced to `similarity-corridor-v0.7.5-overlap-aware`. Persisted older forecasts remain incompatible through the existing version contract. Calibration remains `not_calibrated`; this diagnostic is not an OOS/PIT qualification.

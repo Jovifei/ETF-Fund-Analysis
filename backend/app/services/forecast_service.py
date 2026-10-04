@@ -110,6 +110,36 @@ def _pinball_safe_quantiles(values: np.ndarray) -> tuple[float, float, float, fl
     return tuple(float(item) for item in ordered)  # type: ignore[return-value]
 
 
+def _label_overlap_diagnostics(positions: Iterable[int], horizon: int) -> dict[str, float | int]:
+    """Conservative independence diagnostics for overlapping forward-label windows."""
+    width = int(horizon)
+    ordered = sorted({int(value) for value in positions})
+    if width <= 0 or not ordered:
+        return {
+            "raw_neighbor_count": len(ordered),
+            "effective_non_overlapping_neighbor_count": 0,
+            "unique_future_label_steps": 0,
+            "label_overlap_ratio": 0.0,
+        }
+    unique_steps: set[int] = set()
+    effective = 0
+    last_end = -1
+    for position in ordered:
+        start, end = position + 1, position + width
+        unique_steps.update(range(start, end + 1))
+        if start > last_end:
+            effective += 1
+            last_end = end
+    total_steps = len(ordered) * width
+    overlap_ratio = 1.0 - len(unique_steps) / total_steps if total_steps else 0.0
+    return {
+        "raw_neighbor_count": len(ordered),
+        "effective_non_overlapping_neighbor_count": effective,
+        "unique_future_label_steps": len(unique_steps),
+        "label_overlap_ratio": round(max(0.0, min(1.0, overlap_ratio)), 6),
+    }
+
+
 def similarity_forecast(
     indicator_frame: pd.DataFrame,
     *,
@@ -122,6 +152,7 @@ def similarity_forecast(
 ) -> ForecastResult:
     horizon = int(horizon)
     frame = indicator_frame.copy()
+    frame["_row_position"] = np.arange(len(frame), dtype=int)
     if len(frame) < max(100, horizon + 70):
         return _empty_result(horizon, "history_too_short")
 
@@ -161,6 +192,7 @@ def similarity_forecast(
     terminal = nearest["target_terminal"].to_numpy(dtype=float)
     path_low = nearest["target_path_low"].to_numpy(dtype=float)
     path_high = nearest["target_path_high"].to_numpy(dtype=float)
+    overlap = _label_overlap_diagnostics(nearest["_row_position"].to_numpy(dtype=int), horizon)
     if len(terminal) < minimum_neighbors:
         return _empty_result(horizon, "not_enough_neighbors", len(terminal))
 
@@ -246,7 +278,12 @@ def similarity_forecast(
     mean_distance = float(np.mean(nearest_distances))
     dispersion = float(np.std(terminal))
     interval_width = max(0.0, conformal_q90 - conformal_q10)
-    sample_factor = min(1.0, len(terminal) / max(neighbors, 1))
+    raw_sample_factor = min(1.0, len(terminal) / max(neighbors, 1))
+    effective_sample_factor = min(
+        raw_sample_factor,
+        float(overlap["effective_non_overlapping_neighbor_count"]) / max(neighbors, 1),
+    )
+    sample_factor = effective_sample_factor
     distance_factor = 1.0 / (1.0 + mean_distance)
     dispersion_factor = 1.0 / (1.0 + dispersion * 20.0)
     width_factor = 1.0 / (1.0 + interval_width * 10.0)
@@ -263,6 +300,10 @@ def similarity_forecast(
         "feature_schema_version": FEATURE_SCHEMA_VERSION,
         "candidate_count": int(len(candidates)),
         "neighbor_count": int(len(terminal)),
+        **overlap,
+        "raw_sample_factor": round(raw_sample_factor, 6),
+        "effective_sample_factor": round(effective_sample_factor, 6),
+        "confidence_sample_basis": "non_overlapping_forward_label_windows",
         "mean_distance": round(mean_distance, 6),
         "target_std": round(dispersion, 6),
         "terminal_return_q05": round(conformal_q05, 6),
