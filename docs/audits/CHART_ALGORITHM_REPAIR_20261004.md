@@ -117,3 +117,12 @@ Exact `fd88fc7` local acceptance passed the affected postdeploy/SR suite (35 PAS
 The first failure was a stale expectation: volume is deliberately opt-in after the chart UX repair, so the responsive indicator test now requires initial `aria-pressed=false`, verifies one click enables it, and a second click returns it to false while the original candle canvas instance and no-write contract remain intact.
 
 The second failure exposed a real interaction ambiguity. A compact-chart drag could be followed by a browser click event, causing the new click-to-enlarge handler to open the dialog before the explicit enlarge button; the test then clicked the button and correctly closed it. The component now distinguishes a simple click from a drag with an 8px pointer-movement threshold. Compact drag/pan stays compact; a simple compact click still opens the dialog; expanded pointer interactions retain focus and never reopen it. The responsive test explicitly requires the dialog to remain absent after the drag before using the enlarge button. This preserves both intended UX invariants instead of weakening either test.
+
+
+## Iteration 80 Linux CI report-selection repair
+
+Exact `fd88fc7` full CI exposed seven calibration negative-test failures that did not reproduce on local Windows. The failures were not gate regressions: each test received a stale `duplicate`/other result without `gate_results` because `CalibrationService.create_candidate()` selected the latest validation artifact by `as_of_time DESC`.
+
+That ordering is unsafe across the supported SQLite test/runtime contract. `ReportArtifact.as_of_time` is semantic report time and SQLAlchemy's timezone-aware datetime can be stored as a naive SQLite value. A pre-existing application timestamp expressed in Asia/Shanghai can therefore sort eight wall-clock hours ahead of a newly inserted UTC fixture even when the latter was appended later.
+
+Calibration now selects the most recently appended validation artifact by monotonic `ReportArtifact.id DESC`. The test helper uses the same append-order contract. A dedicated regression inserts an older artifact with a deliberately larger wall-clock `as_of_time`, then appends a newer artifact with a smaller UTC-style wall clock; candidate creation must select the later insertion and expose its four-horizon contract. No calibration threshold or negative gate was removed or weakened.

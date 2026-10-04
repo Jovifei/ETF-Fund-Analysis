@@ -68,7 +68,7 @@ class CalibrationService:
         artifact = db.scalars(
             select(ReportArtifact)
             .where(ReportArtifact.report_type == "forecast_validation")
-            .order_by(ReportArtifact.as_of_time.desc(), ReportArtifact.id.desc())
+            .order_by(ReportArtifact.id.desc())
             .limit(1)
         ).first()
         if artifact is None:
