@@ -41,3 +41,17 @@ def test_strategy_engine_surfaces_risk_off_evidence():
     assert result.risks
     assert any(item["direction"] == "negative" for item in result.signals)
     assert result.family_scores["trend"] < 50
+
+
+def test_td_setup_is_supporting_evidence_not_standalone_reversal_confirmation():
+    td_only = evaluate_strategy_families({
+        "rsi14": 55, "wr14": -50, "td_buy_setup": 9,
+    })
+    assert "oversold_reversal" not in {item["key"] for item in td_only.signals}
+
+    combined = evaluate_strategy_families({
+        "rsi14": 30, "wr14": -85, "td_buy_setup": 7,
+    })
+    signal = next(item for item in combined.signals if item["key"] == "oversold_reversal")
+    assert signal["name"] == "超跌衰竭观察"
+    assert "非反转确认" in signal["reason"]

@@ -217,7 +217,8 @@ def evaluate_strategy_families(
     if cmf20 >= 0.05 and mfi14 >= 55 and obv_slope > 0:
         hit("money_flow_confirmation", "资金流确认", "volume_flow", volume_flow, "CMF、MFI 与5日净方向量流同向改善")
     if rsi14 <= 35 and wr14 <= -80 and td_buy >= 7:
-        hit("oversold_reversal", "超跌反转观察", "reversal", reversal, "RSI/WR 超卖并伴随 TD 低位计数")
+        hit("oversold_reversal", "超跌衰竭观察", "reversal", reversal,
+            "RSI/WR 超卖并伴随项目 TD Setup 低位计数；仅作衰竭证据，非反转确认")
     if _b(values, "false_breakout_risk"):
         hit("false_breakout", "假突破风险", "breakout", 100 - breakout, "冲击箱体/通道上沿但量能不足或收盘回落", "negative")
     if _b(values, "pullback_support_broken"):

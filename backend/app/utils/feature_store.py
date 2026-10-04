@@ -8,7 +8,7 @@ import pandas as pd
 
 from app.utils.indicators_v05 import calculate_indicators
 
-FEATURE_SCHEMA_VERSION = "feature-store-v0.7.5-obv-flow"
+FEATURE_SCHEMA_VERSION = "feature-store-v0.7.6-maturity-mask"
 
 LEGACY_FEATURES = (
     "return_1d",
