@@ -9,9 +9,12 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
+from app.core.config import get_settings
 from app.models import ReportArtifact
 from app.services.calibration_service import CalibrationService
+from app.services.report_artifact_contract import latest_system_report
 from app.services.validation_service import VALIDATION_CONTRACT_VERSION
 from app.services.task_service import TaskService
 from app.utils.hashing import stable_hash
@@ -20,16 +23,9 @@ from app.utils.reproducibility import current_git_commit
 
 def _latest_validation_payload(bootstrapped, db_session) -> dict:
     """Run validate_forecasts and read back the written report JSON."""
-    from sqlalchemy import select
-    from app.models import ReportArtifact
     result = TaskService().run(db_session, "validate_forecasts")
     db_session.commit()
-    artifact = db_session.scalars(
-        select(ReportArtifact)
-        .where(ReportArtifact.report_type == "forecast_validation")
-        .order_by(ReportArtifact.id.desc())
-        .limit(1)
-    ).first()
+    artifact = latest_system_report(db_session, "forecast_validation")
     assert artifact is not None
     payload = Path(artifact.file_path).read_text(encoding="utf-8")
     return __import__("json").loads(payload), result, artifact
@@ -54,6 +50,8 @@ def test_calibrate_creates_candidate_and_is_idempotent(bootstrapped, db_session)
 
     # First: validate so we have a report
     payload, val_result, artifact = _latest_validation_payload(bootstrapped, db_session)
+    assert payload["report_type"] == "forecast_validation"
+    assert artifact.user_id is None
 
     # Create candidate
     result1 = svc.create_candidate(db_session, run_id="test-create-1")
@@ -126,8 +124,11 @@ def test_calibrate_reject_blocks_approval_with_version_mismatch(bootstrapped, db
 
 
 def _write_validation_artifact(db_session, tmp_path, payload, *, as_of_time=None):
+    del tmp_path
     content_hash = stable_hash(payload)
-    path = tmp_path / f"validation-{content_hash[:8]}.json"
+    root = get_settings().reports_dir
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / f"validation-{content_hash[:8]}-{uuid4().hex[:8]}.json"
     path.write_text(json.dumps(payload, allow_nan=True), encoding="utf-8")
     db_session.add(ReportArtifact(
         report_type="forecast_validation",
@@ -157,6 +158,7 @@ def _synthetic_validation_payload(svc, *, horizons=(1, 3, 5, 10), source="public
             }
         rows.append({"status": "ok", "horizons": metrics})
     return {
+        "report_type": "forecast_validation",
         "run_id": run_id,
         "validation_contract_version": VALIDATION_CONTRACT_VERSION,
         "model_version": svc.strategy["forecast_version"],
@@ -217,6 +219,9 @@ def test_approval_reloads_and_rehashes_original_validation_artifact(db_session, 
     assert result["gates_passed"] is False
     assert result["gate_results"]["items"]["validation_contract_eligible"] is False
     path.write_text(json.dumps({**payload, "run_id": "tampered-after-candidate"}), encoding="utf-8")
+    replay = svc.create_candidate(db_session, run_id="tampered-duplicate-recheck")
+    assert replay["status"] == "skipped"
+    assert "unreadable" in replay["reason"]
     try:
         svc.decide(db_session, result["profile_id"], "approved", approved_by="test-user")
         raise AssertionError("tampered validation artifact must not be approved")

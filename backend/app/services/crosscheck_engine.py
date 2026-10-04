@@ -23,6 +23,10 @@ from app.core.config import Settings, get_settings
 from app.models import DailyBar, Instrument, ReportArtifact
 from app.providers.corporate_action_contract import official_corporate_actions
 from app.providers.data_contract import row_units_verified
+from app.services.report_artifact_contract import (
+    latest_system_report,
+    read_system_json_report,
+)
 from app.utils.hashing import stable_hash
 from app.utils.universe_contract import UNIVERSE_CONTRACT_VERSION, parse_listing_date
 
@@ -78,21 +82,15 @@ class CrosscheckEngine:
 
     def run(self, db: Session) -> dict[str, Any]:
         # 1. 加载最新 rotation_backtest 报告
-        artifact = db.scalars(
-            select(ReportArtifact)
-            .where(ReportArtifact.report_type == "rotation_backtest")
-            .order_by(ReportArtifact.id.desc())
-            .limit(1)
-        ).first()
+        artifact = latest_system_report(db, "rotation_backtest")
         if artifact is None:
             return {"status": "skipped", "reason": "no rotation_backtest report found"}
         try:
-            report = json.loads(Path(artifact.file_path).read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
+            report = read_system_json_report(
+                artifact, self.settings, expected_type="rotation_backtest"
+            )
+        except (OSError, ValueError, TypeError) as exc:
             return {"status": "skipped", "reason": f"report unreadable: {type(exc).__name__}"}
-
-        if stable_hash(report) != artifact.content_hash:
-            return {"status": "skipped", "reason": "primary_report_content_hash_mismatch"}
 
         decisions = report.get("decisions", [])
         trades_primary = report.get("trades", [])

@@ -32,6 +32,10 @@ from app.models import (
 )
 from app.services.decision_board_service import DecisionBoardService
 from app.services.factor_analysis_service import DEFAULT_FACTORS
+from app.services.report_artifact_contract import (
+    latest_system_report,
+    read_system_json_report,
+)
 from app.services.support_resistance_service import SupportResistanceService
 from app.utils.hashing import stable_hash
 from app.workspace.catalog_search import matching_reason, search_terms
@@ -553,23 +557,71 @@ def chart_data(db: Session, settings: Settings, code: str, interval: str, limit:
 
 
 def factor_view(db: Session, settings: Settings) -> dict:
-    configured = list(settings.load_strategy().get("factor_analysis", {}).get("factors", DEFAULT_FACTORS))
-    artifact = db.scalar(select(ReportArtifact).where(ReportArtifact.report_type == "factor_effectiveness", ReportArtifact.user_id.is_(None)).order_by(ReportArtifact.as_of_time.desc(), ReportArtifact.id.desc()).limit(1))
+    strategy = settings.load_strategy()
+    configured = list(strategy.get("factor_analysis", {}).get("factors", DEFAULT_FACTORS))
+    artifact = latest_system_report(db, "factor_effectiveness")
     report = None
+    report_state = "missing"
+    report_reason = "no_factor_effectiveness_report"
+
     if artifact:
         try:
-            path = Path(artifact.file_path).resolve(strict=True)
-            path.relative_to(settings.reports_dir.resolve())
-            with path.open("rb") as handle:
-                raw = handle.read(4_000_001)
-            if len(raw) > 4_000_000:
-                raise ValueError("report too large")
-            parsed = json.loads(raw)
-            if parsed.get("report_type") == "factor_effectiveness" and stable_hash(parsed) == artifact.content_hash:
+            parsed = read_system_json_report(
+                artifact, settings, expected_type="factor_effectiveness"
+            )
+        except (OSError, ValueError, TypeError) as exc:
+            report_state = "invalid"
+            report_reason = f"report_integrity_failed:{type(exc).__name__}"
+        else:
+            metadata = artifact.metadata_json or {}
+            panel = parsed.get("panel") if isinstance(parsed.get("panel"), dict) else {}
+            research_contract = (
+                panel.get("research_input_contract")
+                if isinstance(panel.get("research_input_contract"), dict)
+                else {}
+            )
+            universe_contract = (
+                panel.get("universe_contract")
+                if isinstance(panel.get("universe_contract"), dict)
+                else {}
+            )
+            expected_analysis = str(strategy.get("factor_analysis", {}).get("version") or "")
+            expected_schema = str(strategy.get("feature_schema_version") or "")
+            incompatibilities: list[str] = []
+            if str(parsed.get("analysis_version") or "") != expected_analysis:
+                incompatibilities.append("analysis_version_mismatch")
+            if str(parsed.get("feature_schema_version") or "") != expected_schema:
+                incompatibilities.append("feature_schema_version_mismatch")
+            if stable_hash(research_contract) != str(metadata.get("research_input_contract_hash") or ""):
+                incompatibilities.append("research_input_contract_hash_mismatch")
+            if stable_hash(universe_contract) != str(metadata.get("universe_contract_hash") or ""):
+                incompatibilities.append("universe_contract_hash_mismatch")
+            if parsed.get("qualification") != "UNKNOWN":
+                incompatibilities.append("qualification_contract_mismatch")
+            if not isinstance(universe_contract.get("survivorship_bias_controlled"), bool):
+                incompatibilities.append("survivorship_contract_missing")
+            if incompatibilities:
+                report_state = "incompatible"
+                report_reason = ",".join(incompatibilities)
+            else:
                 report = parsed
-        except (OSError, ValueError, TypeError):
-            report = None
-    return {"registry": [{"name": name, "status": "research_candidate", "strategy_promotion": False} for name in configured], "name_count": len(configured), "validated_count": None, "report": report, "actionable": False, "note": "名称数量不是独立有效因子数量；诊断结果不代表样本外合格。"}
+                report_state = "current"
+                report_reason = None
+
+    return {
+        "registry": [
+            {"name": name, "status": "research_candidate", "strategy_promotion": False}
+            for name in configured
+        ],
+        "name_count": len(configured),
+        "validated_count": None,
+        "report": report,
+        "report_state": report_state,
+        "report_reason": report_reason,
+        "report_artifact_id": artifact.id if artifact is not None else None,
+        "actionable": False,
+        "note": "名称数量不是独立有效因子数量；诊断结果不代表样本外合格。",
+    }
 
 
 def portfolio_risk(db: Session, settings: Settings, user_id: int | None) -> dict:

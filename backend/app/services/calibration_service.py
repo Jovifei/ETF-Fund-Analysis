@@ -10,7 +10,6 @@
 """
 from __future__ import annotations
 
-import json
 import logging
 import math
 import re
@@ -24,6 +23,10 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.models import CalibrationProfile, ReportArtifact
 from app.services.event_service import emit_event
+from app.services.report_artifact_contract import (
+    latest_system_report,
+    read_system_json_report,
+)
 from app.utils.hashing import stable_hash
 from app.utils.reproducibility import current_git_commit
 
@@ -65,17 +68,23 @@ class CalibrationService:
     def create_candidate(self, db: Session, run_id: str | None = None) -> dict[str, Any]:
         """从最新 forecast_validation 报告生成候选 Profile（幂等：同一验证哈希只建一条）。"""
         run_id = run_id or uuid.uuid4().hex
-        artifact = db.scalars(
-            select(ReportArtifact)
-            .where(ReportArtifact.report_type == "forecast_validation")
-            .order_by(ReportArtifact.id.desc())
-            .limit(1)
-        ).first()
+        artifact = latest_system_report(db, "forecast_validation")
         if artifact is None:
             return {
                 "run_id": run_id,
                 "status": "skipped",
                 "reason": "no forecast_validation report found; run validate_forecasts first",
+            }
+
+        try:
+            payload = read_system_json_report(
+                artifact, self.settings, expected_type="forecast_validation"
+            )
+        except (OSError, ValueError, TypeError) as exc:
+            return {
+                "run_id": run_id,
+                "status": "skipped",
+                "reason": f"validation report unreadable: {type(exc).__name__}",
             }
 
         existing = db.scalars(
@@ -89,15 +98,6 @@ class CalibrationService:
                 "status": "duplicate",
                 "profile_id": existing.id,
                 "reason": "candidate already exists for this validation content hash",
-            }
-
-        try:
-            payload = _artifact_payload(artifact)
-        except (OSError, ValueError, TypeError) as exc:
-            return {
-                "run_id": run_id,
-                "status": "skipped",
-                "reason": f"validation report unreadable: {type(exc).__name__}",
             }
 
         model_version = str(payload.get("model_version") or "")
@@ -402,12 +402,18 @@ class CalibrationService:
 
     def _approval_checks(self, db: Session, profile: CalibrationProfile) -> dict[str, Any]:
         artifact = db.scalars(
-            select(ReportArtifact).where(ReportArtifact.content_hash == profile.validation_content_hash)
+            select(ReportArtifact).where(
+                ReportArtifact.content_hash == profile.validation_content_hash,
+                ReportArtifact.report_type == "forecast_validation",
+                ReportArtifact.user_id.is_(None),
+            )
         ).first()
         if artifact is None:
             return {"all_passed": False, "items": {"validation_artifact_present": False}}
         try:
-            payload = _artifact_payload(artifact)
+            payload = read_system_json_report(
+                artifact, self.settings, expected_type="forecast_validation"
+            )
         except (OSError, ValueError, TypeError):
             return {"all_passed": False, "items": {"validation_artifact_readable": False}}
 
@@ -438,19 +444,3 @@ class CalibrationService:
             "sample_count_sufficient": profile.sample_count >= self.gates["minimum_total_samples"],
         }
         return {"all_passed": all(items.values()), "items": items}
-
-def _artifact_payload(artifact: ReportArtifact) -> dict[str, Any]:
-    text = (
-        artifact.file_path_content
-        if hasattr(artifact, "file_path_content")
-        else _read_report(artifact.file_path)
-    )
-    payload = json.loads(text)
-    if not isinstance(payload, dict):
-        raise ValueError("validation report must be a JSON object")
-    return payload
-
-
-def _read_report(file_path: str) -> str:
-    with open(file_path, encoding="utf-8") as handle:
-        return handle.read()
