@@ -3,7 +3,8 @@ from datetime import date,timedelta
 from copy import deepcopy
 import pytest
 from app.core.config import get_settings
-from app.workspace.research_outlook import compute
+from app.utils.horizons import aligned_research_horizons
+from app.workspace.research_outlook import HORIZONS, VERSION, compute
 
 
 def samples():
@@ -39,3 +40,12 @@ def test_mock_input_never_becomes_qualified_by_settings():
     for row in rows:row['source']='mock'
     result=compute(rows,Settings(market_provider='akshare'))
     assert result['qualification']=='mock' and not result['actionable']
+
+
+def test_research_outlook_horizons_remain_distinct_from_formal_forecast_contract():
+    strategy = get_settings().load_strategy()
+    formal = tuple(aligned_research_horizons(strategy))
+    assert HORIZONS == (1, 5, 20)
+    assert formal == (1, 3, 5, 10)
+    assert 20 not in formal
+    assert VERSION != strategy["forecast_version"]
