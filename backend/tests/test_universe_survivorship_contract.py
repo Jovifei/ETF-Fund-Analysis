@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.core.config import get_settings
 from app.models import DailyBar, Instrument
 from app.services.backtest_service import RotationBacktestService
+from app.services.crosscheck_engine import _filter_bars_from_primary_listing
 from app.services.factor_analysis_service import FactorAnalysisService
 from app.utils.universe_contract import (
     UNIVERSE_CONTRACT_VERSION,
@@ -132,3 +133,21 @@ def test_transaction_backtest_filters_prelisting_rows_but_does_not_claim_histori
     assert universe["historical_membership_available"] is False
     assert universe["survivorship_bias_controlled"] is False
     db_session.rollback()
+
+
+def test_crosscheck_replay_uses_primary_listing_evidence_not_current_metadata():
+    bars = [
+        SimpleNamespace(trade_date=date(2025, 1, 3)),
+        SimpleNamespace(trade_date=date(2025, 1, 6)),
+        SimpleNamespace(trade_date=date(2025, 1, 7)),
+    ]
+    primary_contract = {
+        "version": UNIVERSE_CONTRACT_VERSION,
+        "listing_dates": {"TEST.SH": "2025-01-06"},
+    }
+    kept = _filter_bars_from_primary_listing(bars, "TEST.SH", primary_contract)
+    assert [bar.trade_date for bar in kept] == [date(2025, 1, 6), date(2025, 1, 7)]
+
+    # Current Instrument metadata is intentionally absent from this helper:
+    # the replay is pinned to primary-report evidence, not today's catalog.
+    assert _filter_bars_from_primary_listing(bars, "OTHER.SH", primary_contract) == bars

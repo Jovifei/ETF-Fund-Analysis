@@ -80,3 +80,10 @@ Until such evidence exists:
 - factor/global cross-sectional results are diagnostics on a current-survivor pool;
 - transaction backtests are not historical investable-universe proofs;
 - no strategy/model/data qualification can be promoted from these results.
+
+
+## Crosscheck listing-date symmetry
+
+Remote static review found one replay asymmetry before local handoff: primary backtest hashes are computed after known pre-listing rows are removed, while crosscheck initially reconstructed all raw rows. A valid primary report with pre-listing fixture/history could therefore be misreported as `primary_inputs_changed`.
+
+Crosscheck now filters replay bars using the **listing_dates frozen in the primary universe contract** before hashing or replay. It deliberately does not re-read current Instrument metadata for this decision. A regression proves that primary listing evidence controls replay filtering and that codes without frozen listing evidence are left untouched.
