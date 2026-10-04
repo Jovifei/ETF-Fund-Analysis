@@ -20,7 +20,7 @@ from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS
 from app.utils.reproducibility import current_git_commit
 
 
-VALIDATION_CONTRACT_VERSION = "forecast-validation-v0.8-research-only"
+VALIDATION_CONTRACT_VERSION = "forecast-validation-v0.8.1-artifact-bound-research-only"
 
 
 def _safe_mean(values: list[float]) -> float | None:
@@ -219,6 +219,7 @@ class ForecastValidationService:
         ]
         now = datetime.now(self.settings.timezone)
         payload = {
+            "report_type": "forecast_validation",
             "run_id": run_id,
             "generated_at": now.isoformat(),
             "validation_contract_version": VALIDATION_CONTRACT_VERSION,
