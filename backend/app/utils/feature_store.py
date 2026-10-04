@@ -8,7 +8,7 @@ import pandas as pd
 
 from app.utils.indicators_v05 import calculate_indicators
 
-FEATURE_SCHEMA_VERSION = "feature-store-v0.7.4-rsi-contract"
+FEATURE_SCHEMA_VERSION = "feature-store-v0.7.5-obv-flow"
 
 LEGACY_FEATURES = (
     "return_1d",

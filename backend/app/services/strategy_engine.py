@@ -215,7 +215,7 @@ def evaluate_strategy_families(
     if chip_winner >= 0.88 and rsi14 >= 75:
         hit("chip_crowded", "获利盘近似拥挤", "structure", 100 - structure, "成交分布推算的获利盘比例偏高且动量过热，注意兑现压力", "negative")
     if cmf20 >= 0.05 and mfi14 >= 55 and obv_slope > 0:
-        hit("money_flow_confirmation", "资金流确认", "volume_flow", volume_flow, "CMF、MFI 与 OBV 同向改善")
+        hit("money_flow_confirmation", "资金流确认", "volume_flow", volume_flow, "CMF、MFI 与5日净方向量流同向改善")
     if rsi14 <= 35 and wr14 <= -80 and td_buy >= 7:
         hit("oversold_reversal", "超跌反转观察", "reversal", reversal, "RSI/WR 超卖并伴随 TD 低位计数")
     if _b(values, "false_breakout_risk"):

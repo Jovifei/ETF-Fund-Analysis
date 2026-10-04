@@ -2,14 +2,15 @@
 
 Unknown volume is not a zero-volume session. Windows contaminated by unknown
 inputs yield NaN/null and do not count towards factor coverage. Price-only
-features remain available. Cumulative OBV requires the entire input prefix.
+features remain available. Cumulative OBV requires the entire input prefix;
+the offset-invariant 5-session OBV flow feature only requires its recent window.
 """
 import numpy as np
 import pandas as pd
 
 VOLUME_FEATURES = {
     "volume_ma20": 20, "volume_ratio": 20, "volume_zscore20": 20,
-    "obv": 0, "obv_slope_5": 0, "mfi14": 15, "cmf20": 20,
+    "obv": 0, "obv_slope_5": 5, "mfi14": 15, "cmf20": 20,
     "volume_breakout": 20, "false_breakout_risk": 20,
     "pullback_volume_ratio": 0, "pullback_ready": 0, "second_launch": 0,
     "pullback_support_broken": 0, "last_ignition_volume": 0,

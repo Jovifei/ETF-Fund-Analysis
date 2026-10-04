@@ -23,3 +23,14 @@ TD calculation/counts are unchanged. Structured TD snapshots now carry `definiti
 ## Classification
 
 ATR/MACD/ADX-DMI/OBV initialization differences remain `DEFINITION_DIFFERENCE`, not confirmed formula bugs. KDJ/CMF/RSRS/TD are project-defined contracts. The new regression suite freezes these semantics so a future formula change must be intentional and version-reviewed.
+
+
+## Follow-up confirmed bug: OBV percentage slope
+
+The cumulative OBV starting offset itself remains a definition difference. A separate downstream bug was confirmed: the public `obv_slope_5` feature used `OBV.pct_change(5)`. Percentage change of a cumulative series is not invariant to an arbitrary additive starting offset, and zero denominators were converted through inf/NaN to 0. That feature feeds forecast/factor/strategy research.
+
+The compatibility field name remains `obv_slope_5`, but its definition is now the bounded five-session net directional volume balance:
+
+`sum(sign(close.diff()) * volume, 5) / sum(abs(volume), 5)`
+
+It is dimensionless, offset-invariant and bounded to [-1,1]. Existing strategy thresholds retain their intended sign/magnitude interpretation. Unknown volume in the recent window remains unknown rather than becoming zero. Because semantics change, indicator, feature schema, forecast and strategy-engine identities are all advanced; old persisted results must fail version compatibility rather than be relabelled.
