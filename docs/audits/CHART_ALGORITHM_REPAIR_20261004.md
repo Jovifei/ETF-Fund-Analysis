@@ -97,3 +97,14 @@ Local receipt `dc4a82b` validated exact `29c25d7`: focused backend 138 PASS, Vue
 Five shared-Vue entry cases had already opened the dialog and passed real canvas height checks. Their common failure came after pointer pan/click: browser focus could transiently remain outside the explicit dialog tab sequence before the test recorded state. The component now focuses the chart host on pointer interaction while expanded, and the Tab trap also recovers from any outside active element to the first/last visible dialog control. The browser test records containment after each Tab key, which tests the actual focus-trap contract while still rejecting collapsed-details descendants.
 
 The sixth failure was a test-contract error, not a missing iframe overlay. The embedded original decision board intentionally handles `.decision-data-row` with `navigateEtf`, which posts `etf-board:navigate` to the Vue parent; `OriginalDecisionBoard.vue` then routes to `/etf/<code>`. It does not open the legacy `#detailOverlay` inside that embedded frame. Chromium acceptance now follows that real path and then verifies the shared compact-chart dialog. The standalone legacy static shell remains covered by its Node/static contract; no hidden test-only production route was added.
+
+
+## Iteration 78 full-regression reconciliation
+
+Local acceptance receipt `96957fa` validated exact `ef777ad0`: modal Chromium 6/6 PASS, persisted-fractal Chromium 3/3 PASS, Vue 172 PASS, typecheck/build PASS, focused backend 138 PASS, compileall and Node 11 PASS. The complete backend suite collected 1689 tests and produced 1665 PASS / 23 SKIP / 1 FAIL in 809.386 seconds.
+
+The sole failure was a stale test assertion in `test_postdeploy_board.py` that hardcoded `support-resistance-v4-structure` even though the accepted service contract intentionally advanced to `support-resistance-v5-indicators`. Production backend/config bytes were unchanged between `29c25d7` and `ef777ad0`.
+
+The test now imports the production `METHOD_VERSION` for the current-version assertion instead of duplicating a version literal. A separate regression explicitly mutates a persisted snapshot to the prior v4 identity and requires `SupportResistanceService.latest()` to return None without adding or dirtying ORM state, so old-snapshot rejection is preserved rather than weakened. Existing assertions in the same postdeploy case continue to cover initial GET no-write behavior, confirmed structure boxes, actionable=false, source/input identity, as-of hiding, weekly interval blocking and intraday read semantics.
+
+This commit is test/audit-only; application and configuration bytes remain identical to `ef777ad0`.
