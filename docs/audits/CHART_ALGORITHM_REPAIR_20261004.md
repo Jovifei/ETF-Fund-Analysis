@@ -133,3 +133,10 @@ Calibration now selects the most recently appended validation artifact by monoto
 The remaining preprocessing audit found no learned scaler or normalization fitted outside a fold in `GlobalModelResearchService`: the optional LightGBM/CatBoost benchmark fits each model directly on that fold's `train_x` and predicts only its `test_x`. No runtime scaler was introduced merely to imitate another framework.
 
 A real audit gap remained in reproducibility. The report recorded fold dates and sample counts but did not content-address the exact rows consumed by each fold, so a later reviewer could not prove which instrument/date/label/feature panel produced a metric. Each fold now records ordered SHA-256 identities for its train and test rows, the lineage column list, and distinct instrument counts. The report also binds strategy config hash and git commit and explicitly states that PIT qualification is false, costs/slippage are not included, this is not a strategy backtest, and qualification remains UNKNOWN. These are evidence fields only; model training, predictions, split boundaries and metrics are unchanged.
+
+
+## Cross-surface horizon contract audit
+
+The remaining 1/5/20 versus 1/3/5/10 review found intentional separation rather than a defect. Workspace Research Outlook uses its own `price-similarity-research-v106-1-5-20` identity/cache and marks outputs `not_strategy_output=true`, `calibration_status=not_calibrated`, `probability_label=historical_frequency`, and `actionable=false`. Formal forecast snapshots use the strategy's separate 1/3/5/10 contract and model version.
+
+A regression now freezes both horizon tuples and requires the research model identity to remain different from the formal forecast version. No global horizon replacement was made.
