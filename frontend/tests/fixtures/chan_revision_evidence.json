@@ -1,0 +1,14 @@
+{
+  "sequence_number": 7,
+  "cutoff_at": "2026-09-08 07:00:00",
+  "input_revision_id": "input-revision-7",
+  "input_hash": "input-hash-7",
+  "transitions": [
+    {"structure_key":"structure-new","status":"OBSERVED_NEW","revision_id":"revision-new","prior_revision_id":null,"reappearance":false},
+    {"structure_key":"structure-changed","status":"OBSERVED_CHANGED","revision_id":"revision-2","prior_revision_id":"revision-1","reappearance":false},
+    {"structure_key":"structure-unchanged","status":"OBSERVED_UNCHANGED","revision_id":"revision-current-observation","prior_revision_id":"revision-prior-observation","reappearance":false},
+    {"structure_key":"structure-absent","status":"OBSERVED_ABSENT","revision_id":null,"prior_revision_id":"revision-absent","reappearance":false},
+    {"structure_key":"structure-reappeared","status":"OBSERVED_NEW","revision_id":"revision-reappeared","prior_revision_id":null,"reappearance":true},
+    {"structure_key":"structure-unknown","status":null,"revision_id":null,"prior_revision_id":null,"reappearance":null}
+  ]
+}

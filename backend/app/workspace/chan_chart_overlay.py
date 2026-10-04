@@ -122,7 +122,33 @@ def project_persisted_chan(evidence: dict[str, Any] | None, research_price_basis
                     "source": "persisted",
                 })
     projected.update(drawable=True, bi=strokes, zhongshu=zones, undrawable_bi=undrawable, disclaimer=_DRAWN)
+    if isinstance(evidence.get("transitions"), list):
+        projected["revision_evidence"] = _revision_evidence(evidence)
     return projected
+
+
+def _revision_evidence(evidence: dict[str, Any]) -> dict[str, Any]:
+    """Allowlist saved metadata only; never infer revisions from chart geometry."""
+    sequence = evidence.get("sequence_number")
+    result: dict[str, Any] = {
+        "sequence_number": sequence if type(sequence) is int and sequence > 0 else None,
+        **{key: _optional_text(evidence.get(key)) for key in ("cutoff_at", "input_revision_id", "input_hash")},
+        "transitions": [],
+    }
+    statuses = {"OBSERVED_NEW", "OBSERVED_CHANGED", "OBSERVED_UNCHANGED", "OBSERVED_ABSENT"}
+    for value in evidence["transitions"]:
+        item = value if isinstance(value, dict) else {}
+        status = _optional_text(item.get("status"))
+        result["transitions"].append({
+            **{key: _optional_text(item.get(key)) for key in ("structure_key", "revision_id", "prior_revision_id")},
+            "status": status if status in statuses else None,
+            "reappearance": item.get("reappearance") if type(item.get("reappearance")) is bool else None,
+        })
+    return result
+
+
+def _optional_text(value: Any) -> str | None:
+    return value if isinstance(value, str) and value.strip() else None
 
 
 def _finite(value: Any) -> float | None:

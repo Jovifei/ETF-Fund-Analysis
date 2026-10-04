@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import fixture from './fixtures/chan_chart_projection.json'
+import revision from './fixtures/chan_revision_evidence.json'
 import type { ChartData } from '../src/lib/types'
 
 const mocked = vi.hoisted(() => ({ chart: { setPriceVolumePrecision: vi.fn(), applyNewData: vi.fn(), createIndicator: vi.fn(), createOverlay: vi.fn(), subscribeAction: vi.fn(), unsubscribeAction: vi.fn(), setBarSpace: vi.fn(), scrollToRealTime: vi.fn(), resize: vi.fn(), removeIndicator: vi.fn(), removeOverlay: vi.fn() } }))
@@ -20,6 +21,13 @@ function zone(chart: ChartData, start: unknown, end: unknown) {
 }
 
 describe('persisted backend Chan timestamp projection', () => {
+  it('keeps the complete overlay geometry and styles identical when revision evidence is added', () => {
+    const before = draw(data())
+    mocked.chart.createOverlay.mockClear()
+    const chart = data()
+    chart.chan_observation!.revision_evidence = structuredClone(revision)
+    expect(draw(chart)).toEqual(before)
+  })
   it('draws the real backend projection without changing prices, qualification or source payload', () => {
     const chart = data(), before = structuredClone(chart)
     expect(chanOverlay(chart).mode).toBe('persisted')

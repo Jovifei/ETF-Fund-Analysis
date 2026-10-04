@@ -1,3 +1,7 @@
+## 2026-10-04 最新部署授权
+
+Jovi现已授权最新425f048代码测试通过后部署，取代下面记录的v110暂缓决定。当前生产仍ef287c0；本批候选尚未部署。
+
 ## 2026-10-04 当前接力
 
 - 最终目标仍是14:30同证据ETF研究工作台，不连接券商、不自动交易。
@@ -78,3 +82,17 @@ S2可用性面板已发布：源码abae131，镜像配置38c2c13c，schema f0不
 生产数据库认证：AUTH_ENABLED=true、AUTO_CREATE_SCHEMA=false、AUTH_COOKIE_SECURE=true；DATABASE_URL由受保护环境传入，禁止读取或回显值。正常初始化运维入口fund-decision auth-bootstrap-admin由有权限人员在确需时使用；已有账户通过浏览器正常登录，本轮不执行初始化。见[部署清单](CODEX_DEPLOYMENT_TASKS.md)。
 
 [旧交接长账本](docs/archive/project-simplification-20261002/HANDOFF.md)已归档。数据库、备份、证据、NOTICE及含未提交资料的工作区保留。
+
+## 最新远端候选记录
+
+## S4-U06首轮CI通过，截图取景修正待验收 — 2026-10-04 01:24 上海
+
+6798843三项精确CI成功：1577后端通过/11既有跳过、139 Vue、34 Chromium（含3新增证据卡）、5认证、18响应式及PG/Windows通过；21文件归档和JUnit/清单哈希已核验。独立看图发现桌面/320px元素截图被真实粘性栏遮住，未宣称完整视觉通过。仅修正测试取景，新增摘要视口/点击命中检查及原页面完整截图；源码不变，修正提交CI与六张截图待核验。见[回执](docs/audits/S4_U06_CHAN_REVISION_EVIDENCE_20261003.md)。
+
+## S4-U06修订证据卡 — 2026-10-04 00:07 上海
+
+既有验证读取的修订状态/身份进入可选图表投影，新增默认折叠证据卡；缺身份保持未知，未观察到不等于失效，确认/PIT不晋升。当前47聚焦通过/1既有PG跳过、139 Vue和实际类型/构建通过；独立运行时审核PASS，修订ID绑定观测的真实持久化夹具已核验，最终全量1588收集/1577通过/11既有跳过/0失败错误（589.294秒），完整21文件终态独立复核通过，本地Chromium启动EPERM，3项新增浏览器用例待精确CI。见[回执](docs/audits/S4_U06_CHAN_REVISION_EVIDENCE_20261003.md)。
+
+## WU2 v110精确CI闭环 — 2026-10-04 00:07 上海
+
+8c62d70已正常快进发布，三项CI均成功：1565后端通过/11既有跳过，116 Vue、31 Chromium、5认证、18响应式及PG/Windows通过。源码归档17文件、JUnit/清单及ZIP哈希核验；旧v109原记录保留，无部署/registry发布。见[闭环](docs/audits/WU2_FLOW_SHARE_READ_CONTRACT_20261003.md#wu2-flowshare-exact-commit-ci-closure--2026-10-03-1540-utc)。

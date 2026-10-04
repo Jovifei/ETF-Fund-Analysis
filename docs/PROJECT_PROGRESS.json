@@ -2,7 +2,7 @@
   "schema_version": 1,
   "roadmap_version": "2026-10-02-v2",
   "updated_at": "2026-10-04",
-  "current_stage": "ef287c0已上线待私有/手机验收；v110已合入测试并按Jovi决定暂缓上线",
+  "current_stage": "最新425f048证据卡候选接收验证，Jovi已授权测试通过后部署v110；当前线上ef287c0",
   "current_iteration": 71,
   "planning_source": "同一远端ChatGPT v2方向修订（只读核验摘要）及本地现场元数据核验；无新增源码独立审核",
   "deployed_code_sha": "ef287c06b4bd6b8ecd507149a0a0d7bd398e4162",
@@ -14,12 +14,11 @@
   "actionable": false,
   "runtime_activated": false,
   "auto_trading": false,
-  "next_task": "v110最终本地1553通过/23既有跳过，确认5c1e2a4完整CI终态；遵守Jovi暂缓v110上线/刷新决定，待可用时完成实体手机私有验收。",
+  "next_task": "接收425f048到main，保持Windows网络guard修复；本地回归与精确CI通过后备份/可回滚上线，必要时现有受审计任务重建v110看板。",
   "blockers": [
     "5m/15m真实量额、单位/时间/PIT及成本可行性未解决：先做S8-F0，不再排在所有UX之后",
     "历史记录：远端文件连接曾启动超时；该连接当前状态未复核，既有GitHub实施/审核正常推进，不冻结已授权低风险工程",
-    "实体手机暂无法验收；私有真实详情/R10仍待证据",
-    "v110旧看板版本失配影响已告知；Jovi选择只整合测试、暂缓上线/刷新"
+    "实体手机暂无法验收；私有真实详情/R10仍待证据"
   ],
   "release_gates": [
     {
@@ -456,7 +455,7 @@
       "id": "S3",
       "name": "研究基座与Chan后端",
       "legacy": "R4A/R4B/R4C M0–M3",
-      "status": "ef287c0已按精确CI镜像上线；schema f0不变；完整私有/手机验收待完成",
+      "status": "当前63c426a已部署；增量与私有验收待独立接收",
       "counter_frozen": false,
       "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
       "dimensions": {
@@ -749,7 +748,7 @@
       "id": "S4",
       "name": "图表与Chan用户体验",
       "legacy": "R4C M4/M5",
-      "status": "中枢坐标与结算显示已随ef287c0上线；flow/share v110已合入测试但暂缓上线；完整私有/手机验收待完成",
+      "status": "S4-U06首轮精确CI与浏览器断言通过；取景遮挡修正待新提交截图验收，未部署",
       "counter_frozen": false,
       "counter_note": "候选任务目录；适用维度与逐项证据待映射/正式冻结",
       "dimensions": {
@@ -838,14 +837,17 @@
           "id": "S4-U06",
           "name": "修订变化解释",
           "dimensions": {
-            "code": "TODO",
-            "tests": "TODO",
-            "review": "PENDING",
-            "deploy": "TODO",
-            "live": "TODO"
+            "code": "部分PASS",
+            "tests": "部分PASS",
+            "review": "部分PASS",
+            "deploy": "PENDING",
+            "live": "PENDING"
           },
-          "evidence": [],
-          "na_reasons": {}
+          "evidence": [
+            "docs/audits/S4_U06_CHAN_REVISION_EVIDENCE_20261003.md"
+          ],
+          "na_reasons": {},
+          "scope_note": "仅当前已验证观测的修订变化证据与折叠卡；ABSENT不等于失效，确认/PIT未知。6798843精确CI通过，桌面/320px首轮取景不完整；仅测试修正后六张截图待核验，不代表M4全部验收。"
         },
         {
           "id": "S4-U07",
@@ -2120,8 +2122,23 @@
     },
     {
       "date": "2026-10-04",
+      "iteration": 71,
+      "description": "WU2 v110已正常快进发布8c62d70，三项精确CI均SUCCESS；后端1576收集/1565通过/11既有跳过/0失败错误，520.570秒；116 Vue、31 Chromium、5认证、18响应式、PG23和Windows20通过。审计/JUnit/清单及源码归档17文件同字节核验，未部署、未发布registry。"
+    },
+    {
+      "date": "2026-10-04",
+      "iteration": 71,
+      "description": "按S4-U06/M4冻结修订证据展示范围，先复现3项后端缺失字段失败和前端组件缺失，再添加可选投影与折叠卡；22聚焦、134 Vue及实际类型/构建通过，旧几何/版本/资格不变。全量和独立审核中；本地Chromium启动EPERM，3新增浏览器断言/截图未执行，待精确CI。 独立审核发现并纠正把UNCHANGED与修订ID相等关联的显示假设，补真实持久化前后观测不同ID夹具；最终139 Vue与1588收集/1577通过/11既有跳过/0失败错误（589.294秒）通过，12运行时/测试/夹具哈希稳定，完整21文件终态独立复核通过。"
+    },
+    {
+      "date": "2026-10-04",
       "iteration": 72,
       "description": "本地整合main ef287c0三CI通过；Windows全量1478通过/23跳过，116前端/5相关Chromium通过。Jovi授权清构建缓存回收6.076GB，新备份SHA/gzip通过；精确镜像f2b9435三服务健康、schema f0不变，公开/307兼容跳转/匿名401验证通过。手机启动自动审批拦截，Jovi暂无法手机验收。新8c62d70/v110合入main并最小修复Windows网络保护夹具；91聚焦通过、完整回归重跑。Jovi选择暂缓v110上线和刷新；资格UNKNOWN/actionable=false。 最终5c1e2a4 Windows回归1576收集/1553通过/23既有跳过/0失败错误，627.224秒；跳过身份未变。workspace/platform CI成功、完整CI仍运行。"
+    },
+    {
+      "date": "2026-10-04",
+      "iteration": 73,
+      "description": "Jovi明确授权最新代码测试通过后部署，解除v110暂缓；本批冻结425f048。文档合并保留ef287c0已验证线上事实，合入新证据卡候选，尚未新部署。"
     }
   ],
   "incoming_candidate": {
@@ -2289,7 +2306,7 @@
     "cloud_browser": "FRESH_CHROMIUM_EPERM_BEFORE_NAVIGATION",
     "hosted_browser": "31_SMOKE_5_AUTH_18_RESPONSIVE_PASS_INCLUDING_3_NEW_SETTLEMENT_CASES",
     "remote_ci": "ALL_3_EXACT_HEAD_SUCCESS",
-    "deploy": "DEPLOYED_EF287C0_PENDING_PRIVATE_PHONE_ACCEPTANCE",
+    "deploy": "NOT_DEPLOYED",
     "engine_confirmation": "unknown",
     "real_data": "UNKNOWN",
     "actionable": false,
@@ -2313,7 +2330,7 @@
     "remote_junit_sha256": "739ad754b32e16fa6e884d61cb27a90ac0ecdb64a17a288e1ab729ce1f32b2b2",
     "remote_audit_zip_sha256": "5902a2e09777d69d3bd94078071331896fd17d6743ea4c1b9d7b3c9e18de370b",
     "remote_workspace_zip_sha256": "e755c1a839c9765bfc4d4dc73c6f5cc3f7d53c80449cacd9ff4b6aa85b34b6ee",
-    "ci_image": "EF287C0_ARCHIVE_DIGEST_VERIFIED_DEPLOYED_NOT_REGISTRY_PUBLISHED"
+    "ci_image": "BUILT_SMOKED_EXPORTED_NOT_DEPLOYED_NOT_PUBLISHED"
   },
   "wu2_flow_share_provenance_current_batch": {
     "baseline_sha": "422c5c403d7336d1f7f01307bb99d5b8f2e6f25e",
@@ -2328,7 +2345,7 @@
     "frontend": "116_PASS_TYPECHECK_BUILD_PASS",
     "backend_full": "FINAL_1576_COLLECTED_1565_PASS_11_EXISTING_SKIP_0_FAILURES",
     "independent_review": "FINAL_17_FILE_REVIEW_PASS",
-    "hosted_ci": "PENDING_PUBLICATION",
+    "hosted_ci": "EXACT_COMMIT_ALL_THREE_SUCCESS",
     "deploy": "NOT_DEPLOYED",
     "real_data": "UNKNOWN",
     "actionable": false,
@@ -2344,19 +2361,62 @@
     "backend_junit_sha256": "8cce0c47c9745454d06820498f766f12f9891f6dde22814f736e8c4da3c73093",
     "skip_identities": "MATCH_EXACT_422C5C4_PREDECESSOR",
     "static_checks": "RUFF_COMPILE_JS_SYNTAX_27_JS_SECRET_SCAN_DIFF_CHECK_PASS",
-    "local_windows_acceptance": {
-      "source": "5c1e2a4504bba71f20d02bcf1e2f86263f24d121",
-      "runtime_matches": "8c62d70",
-      "tests": 1576,
-      "passed": 1553,
-      "skipped": 23,
-      "failures": 0,
-      "errors": 0,
-      "seconds": 627.224,
-      "skip_identity_changes": 0,
-      "full_ci": "RUNNING_37139304073",
-      "deployment": "OWNER_DEFERRED",
-      "receipt": "docs/audits/MAIN_ROLLOUT_20261004.md"
-    }
+    "code_sha": "8c62d70f4ecccc1c9819be36cad09a1f7da6a826",
+    "code_tree": "3ca3364758445338b0cdf7924ecb545afe66e5f6",
+    "hosted_ci_runs": {
+      "ci": 37133218581,
+      "workspace_ci": 37133218609,
+      "audit_platforms": 37133218580
+    },
+    "hosted_backend": "1576_COLLECTED_1565_PASS_11_EXISTING_SKIP_0_FAILURES_0_ERRORS",
+    "hosted_backend_seconds": 520.57,
+    "hosted_junit_sha256": "d473896b2a5ee79303bb0fed22117a20361b3f29b9f7ac022e2187df4eb3bfe4",
+    "hosted_browser": "31_SMOKE_5_AUTH_18_RESPONSIVE_PASS_SYNTHETIC",
+    "hosted_source_archive": "ALL_17_REVIEWED_FILES_EXACT_MATCH",
+    "production_deployed": false
+  },
+  "s4_u06_revision_evidence_current_batch": {
+    "baseline_sha": "8c62d70f4ecccc1c9819be36cad09a1f7da6a826",
+    "scope": "OPTIONAL_VERIFIED_REVISION_PROJECTION_AND_COLLAPSED_CARD",
+    "plan": "tasks/plans/2026-10-03-s4-u06-chan-revision-evidence.md",
+    "evidence": "docs/audits/S4_U06_CHAN_REVISION_EVIDENCE_20261003.md",
+    "focused_backend": "47_PASS_1_EXISTING_PG_SKIP",
+    "frontend": "139_PASS_TYPECHECK_BUILD_PASS",
+    "backend_full": "FINAL_1588_COLLECTED_1577_PASS_11_EXISTING_SKIP_0_FAILURES_0_ERRORS",
+    "review": "FINAL_21_FILE_REVIEW_PASS",
+    "local_browser": "NOT_RUN_CHROMIUM_LAUNCH_EPERM_THREE_FAILED_BEFORE_ASSERTIONS",
+    "hosted_ci": "FIRST_HEAD_ALL_THREE_SUCCESS_CAPTURE_CORRECTION_PENDING",
+    "geometry": "EXACT_OLD_PROJECTION_AND_OVERLAY_PARITY",
+    "read_model_version": "UNCHANGED_V110",
+    "chart_version": "UNCHANGED_V1_2_0",
+    "production_deployed": false,
+    "real_data": "UNKNOWN",
+    "actionable": false,
+    "independent_focused_backend": "48_PASS_1_EXISTING_PG_SKIP_INCLUDING_CHART_ROUTE",
+    "first_backend_full": "PRELIMINARY_1587_COLLECTED_1576_PASS_11_EXISTING_SKIP_0_FAILURES",
+    "first_backend_seconds": 615.767,
+    "first_backend_junit_sha256": "da1fc2bce89291381faeca526f383910b3389096d3b04db2d9f8712a25a07890",
+    "independent_adversarial": "576_GEOMETRY_PARITY_COMBINATIONS_AND_SIX_NAMESPACE_STREAMS_PASS",
+    "unchanged_revision_semantics": "VERIFIED_STATUS_NOT_ID_EQUALITY_REAL_PERSISTED_FIXTURE",
+    "backend_seconds": 589.294,
+    "backend_junit_sha256": "64ea3143a4a71301f505aa22dcdcae3a8b2b50b987e2109999eb5aba83cfd413",
+    "frozen_source_files": 12,
+    "skip_identities": "MATCH_EXACT_8C62D70_HOSTED_PREDECESSOR",
+    "timezone": "20_UI_CASES_PASS_SHANGHAI_AND_NEW_YORK",
+    "static_checks": "RUFF_COMPILE_JS_SYNTAX_27_JS_SECRET_SCAN_DIFF_CHECK_PASS",
+    "code_sha": "679884311c2edd9eb189f9544917ac5aa8b3715a",
+    "code_tree": "c78d5ae166ccb93ee924b0307f04d55086809164",
+    "hosted_ci_runs": {
+      "ci": 37139009497,
+      "workspace_ci": 37139009418,
+      "audit_platforms": 37139009439
+    },
+    "hosted_backend": "1588_COLLECTED_1577_PASS_11_EXISTING_SKIP_0_FAILURES_0_ERRORS",
+    "hosted_backend_seconds": 874.786,
+    "hosted_junit_sha256": "9c2db74cec473453a7d59243351203718b10de5ca7e4afc90d35d2a45629a1d1",
+    "hosted_browser": "34_CHROMIUM_3_NEW_CASES_5_AUTH_18_RESPONSIVE_PASS",
+    "hosted_screenshots": "FIRST_HEAD_DESKTOP_320PX_ELEMENT_CAPTURE_OCCLUDED_LEGACY_CLEAR",
+    "capture_correction": "TEST_ONLY_REAL_TOOLBAR_BOUNDS_HIT_TARGET_VIEWPORT_AND_FULL_PAGE_NO_RUNTIME_CHANGE",
+    "capture_correction_validation": "LOCAL_TYPECHECK_3_TEST_REGISTRATIONS_DIFF_AND_INDEPENDENT_TEST_SOURCE_REVIEW_PASS_HOSTED_PENDING"
   }
 }
