@@ -9,7 +9,7 @@ from pathlib import Path
 
 from app.services.backtest_service import RotationBacktestService
 from app.services.task_service import TaskService
-from app.services.crosscheck_engine import crosscheck_main
+from app.services.crosscheck_engine import CrosscheckEngine, crosscheck_main
 
 
 def test_backtest_crosscheck_task_exists():
@@ -51,3 +51,29 @@ def test_crosscheck_mock_flagged(bootstrapped, db_session):
     assert result["status"] == "pass"
     assert result["qualification"] == "mock_or_synthetic"
     assert result["actionable"] is False
+
+
+def test_crosscheck_fails_if_primary_daily_inputs_changed_after_report(bootstrapped, db_session):
+    from sqlalchemy import select
+    from app.models import DailyBar, Instrument
+
+    primary = RotationBacktestService().run(db_session, run_id="test-crosscheck-lineage")
+    db_session.commit()
+    payload = json.loads(Path(primary["path"]).read_text(encoding="utf-8"))
+    code = next(iter(payload["data"]["input_hashes"]))
+    inst = db_session.scalar(select(Instrument).where(Instrument.ts_code == code))
+    assert inst is not None
+    bar = db_session.scalars(
+        select(DailyBar).where(DailyBar.instrument_id == inst.id).order_by(DailyBar.trade_date)
+    ).first()
+    assert bar is not None
+    original = bar.close
+    bar.close = float(original) * 1.001
+    db_session.flush()
+
+    result = CrosscheckEngine().run(db_session)
+    assert result["status"] == "fail"
+    assert result["reason"] == "primary_inputs_changed"
+    assert code in result["mismatched_codes"]
+    assert result["actionable"] is False
+    db_session.rollback()

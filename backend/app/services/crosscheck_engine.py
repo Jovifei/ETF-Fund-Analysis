@@ -39,6 +39,23 @@ SLIPPAGE_TOLERANCE = 0.01
 WIN_RATE_TOLERANCE = 0.05
 
 
+def _frame_input_hash(frame: pd.DataFrame) -> str:
+    records = []
+    for trade_date, row in frame.iterrows():
+        records.append({
+            "trade_date": str(trade_date),
+            "open": float(row["open"]),
+            "high": float(row["high"]),
+            "low": float(row["low"]),
+            "close": float(row["close"]),
+            "volume": None if pd.isna(row.get("volume")) else float(row["volume"]),
+            "amount": None if pd.isna(row.get("amount")) else float(row["amount"]),
+            "source": row.get("source"),
+            "fetched_at": None if pd.isna(row.get("fetched_at")) else str(row.get("fetched_at")),
+        })
+    return stable_hash(records)
+
+
 class CrosscheckEngine:
     """独立第二引擎：读取主引擎报告，逐日重放，输出对账结果。"""
 
@@ -108,11 +125,37 @@ class CrosscheckEngine:
                     "close": float(b.close),
                     "high": float(b.high),
                     "low": float(b.low),
-                } for b in bars]).set_index("date")
+                    "volume": float(b.volume) if b.volume is not None and math.isfinite(float(b.volume)) else None,
+                    "amount": float(b.amount) if b.amount is not None and math.isfinite(float(b.amount)) else None,
+                    "source": b.source,
+                    "fetched_at": b.fetched_at,
+                } for b in bars])
+                df = (
+                    df.sort_values(["date", "fetched_at"])
+                    .drop_duplicates("date", keep="last")
+                    .set_index("date")
+                    .sort_index()
+                )
                 bar_frames[code] = df
 
         if not bar_frames:
             return {"status": "skipped", "reason": "no bar data loaded"}
+
+        expected_hashes = (report.get("data") or {}).get("input_hashes")
+        if not isinstance(expected_hashes, dict):
+            return {"status": "skipped", "reason": "primary_input_hashes_missing"}
+        replay_hashes = {code: _frame_input_hash(frame) for code, frame in sorted(bar_frames.items())}
+        mismatched = sorted(
+            code for code in all_codes
+            if expected_hashes.get(code) != replay_hashes.get(code)
+        )
+        if mismatched:
+            return {
+                "status": "fail",
+                "reason": "primary_inputs_changed",
+                "mismatched_codes": mismatched,
+                "actionable": False,
+            }
 
         # 3. 构建决策日期→调仓映射
         decision_map: dict[str, dict] = {}

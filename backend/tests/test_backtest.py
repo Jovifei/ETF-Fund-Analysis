@@ -26,5 +26,8 @@ def test_rotation_backtest_is_next_open_and_audited(bootstrapped, db_session):
     assert payload["audit"]["minimum_commission"] == strategy["backtest"]["minimum_commission"]
     assert payload["audit"]["slippage_rate"] == strategy["backtest"]["slippage_rate"]
     assert payload["data"]["contains_mock"] is True
+    assert payload["data"]["input_hash_policy"] == "deduped_daily_rows_v1"
+    assert payload["data"]["input_hashes"]
+    assert all(len(value) == 64 for value in payload["data"]["input_hashes"].values())
     assert all(item["feature_date_max"] == item["as_of_close"] for item in payload["decisions"])
     assert all(item["execution_date"] > item["as_of_close"] for item in payload["decisions"])

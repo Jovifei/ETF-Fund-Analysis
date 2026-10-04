@@ -40,6 +40,23 @@ class RotationBacktestService:
         self.config = self.strategy.get("backtest", {})
 
     @staticmethod
+    def _frame_input_hash(frame: pd.DataFrame) -> str:
+        records = []
+        for trade_date, row in frame.iterrows():
+            records.append({
+                "trade_date": str(trade_date),
+                "open": float(row["open"]),
+                "high": float(row["high"]),
+                "low": float(row["low"]),
+                "close": float(row["close"]),
+                "volume": None if pd.isna(row.get("volume")) else float(row["volume"]),
+                "amount": None if pd.isna(row.get("amount")) else float(row["amount"]),
+                "source": row.get("source"),
+                "fetched_at": None if pd.isna(row.get("fetched_at")) else str(row.get("fetched_at")),
+            })
+        return stable_hash(records)
+
+    @staticmethod
     def _percentile_rank(values: pd.Series) -> pd.Series:
         # Missing factor evidence is not the bottom percentile. Preserve NaN so
         # strategies that positively weight the factor can fail closed.
@@ -535,6 +552,8 @@ class RotationBacktestService:
             "data": {
                 "sources": sources,
                 "instrument_count": len(frames),
+                "input_hash_policy": "deduped_daily_rows_v1",
+                "input_hashes": {code: self._frame_input_hash(frame) for code, frame in sorted(frames.items())},
                 "start_date": equity_records[0]["date"],
                 "end_date": equity_records[-1]["date"],
                 "benchmark": benchmark_code,

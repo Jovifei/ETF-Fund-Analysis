@@ -79,3 +79,12 @@ Local acceptance should run:
 - compileall.
 
 Exact hosted full CI must prove the independent replay, image build/smoke and database contracts. No deployment is implied by passing this stage.
+
+
+## Replay input identity
+
+A second-engine replay is only meaningful when both engines consume the same historical dataset. Primary rotation reports now record an ordered SHA-256 for every de-duplicated daily-bar frame, including OHLC, quantity fields, source and fetched-at identity.
+
+Crosscheck independently rebuilds those canonical daily frames, verifies every related target/trade code plus the benchmark against the primary report hashes, and returns `primary_inputs_changed` instead of replaying if history has changed. A regression mutates one DailyBar after primary report creation and requires the crosscheck to fail with the mutated code listed.
+
+This does not make the dataset point-in-time qualified: it only proves same-input replay. Historical publication/revision PIT remains explicitly unqualified.
