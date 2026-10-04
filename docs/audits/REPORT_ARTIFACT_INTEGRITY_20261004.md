@@ -100,3 +100,12 @@ This stage authenticates stored software artifacts. It does not make the underly
 `REAL_DATA_QUALIFICATION=UNKNOWN`
 `actionable=false`
 `calibration_status=not_calibrated`
+
+
+## Exact CI fixture reconciliation
+
+Local reception and exact Linux full CI exposed three test-contract issues, not production security regressions.
+
+Two private-artifact tests constructed AuthUser with the malformed placeholder `$argon2id$fixture`. The existing model correctly rejected it under the parseable Argon2id PHC contract. Tests now use the repository's reviewed `hash_password` helper; PHC validation is unchanged and private-artifact rejection still executes.
+
+The calibration tamper regression previously expected the older approval failure key `validation_content_hash_matches`. With the new bounded reader, tampering is rejected one layer earlier as `validation_artifact_readable=false`. The test now asserts that earlier fail-closed contract. Candidate creation still rejects tampering before duplicate short-circuiting, and approval still fails.

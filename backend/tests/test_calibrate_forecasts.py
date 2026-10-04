@@ -226,7 +226,7 @@ def test_approval_reloads_and_rehashes_original_validation_artifact(db_session, 
         svc.decide(db_session, result["profile_id"], "approved", approved_by="test-user")
         raise AssertionError("tampered validation artifact must not be approved")
     except ValueError as exc:
-        assert "validation_content_hash_matches" in str(exc)
+        assert "validation_artifact_readable" in str(exc)
 
 
 def test_bad_h10_cannot_hide_inside_good_aggregate_metrics(db_session, tmp_path):
