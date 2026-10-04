@@ -21,6 +21,11 @@ from app.services.flow_share_research import (
     latest_share_scales,
 )
 from app.services.kline_stabilization_service import KlineStabilizationService
+from app.services.snapshot_contract import (
+    SNAPSHOT_CONTRACT_VERSION,
+    quote_issues,
+    snapshot_issues,
+)
 from app.utils.indicator_state import (
     classify_kdj,
     classify_ma,
@@ -260,11 +265,11 @@ class SignalGradeService:
         instruments = db.scalars(
             select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code)
         ).all()
-        latest_indicators = self._latest_indicators(db)
+        latest_indicators = self._latest_indicators(db, as_of=reference)
         previous_indicators = self._previous_indicators(db, latest_indicators)
-        latest_quotes = self._latest_quotes(db)
+        latest_quotes = self._latest_quotes(db, as_of=reference)
         latest_scales = self._latest_share_scales(db, as_of=reference)
-        latest_forecasts = self._latest_horizon_forecasts(db, 1)
+        latest_forecasts = self._latest_horizon_forecasts(db, 1, as_of=reference)
 
         classified: list[dict[str, Any]] = []
         for instrument in instruments:
@@ -313,6 +318,7 @@ class SignalGradeService:
         )
         return {
             "version": self.version,
+            "current_snapshot_contract": SNAPSHOT_CONTRACT_VERSION,
             "flow_share_contract": FLOW_CONTRACT,
             "flow_share_changes_grade": False,
             "disclaimer": self.config.get("disclaimer", "研究提示，非操作指令"),
@@ -325,8 +331,9 @@ class SignalGradeService:
             "rows": classified,
         }
 
-    @staticmethod
-    def _latest_indicators(db: Session) -> dict[int, IndicatorSnapshot]:
+    def _latest_indicators(
+        self, db: Session, *, as_of: datetime | None = None
+    ) -> dict[int, IndicatorSnapshot]:
         rows = db.scalars(
             select(IndicatorSnapshot).order_by(
                 IndicatorSnapshot.instrument_id,
@@ -337,7 +344,13 @@ class SignalGradeService:
         latest: dict[int, IndicatorSnapshot] = {}
         for row in rows:
             latest.setdefault(row.instrument_id, row)
-        return latest
+        return {
+            ident: row for ident, row in latest.items()
+            if not snapshot_issues(
+                row, self.settings, None, kind="indicator",
+                at=as_of or datetime.now(self.settings.timezone)
+            )
+        }
 
     @staticmethod
     def _previous_indicators(db: Session, latest: dict) -> dict:
@@ -345,22 +358,31 @@ class SignalGradeService:
         return {ident: values for ident, current in latest.items()
                 if (values := previous_values(db, current)) is not None}
 
-    @staticmethod
-    def _latest_quotes(db: Session) -> dict[int, QuoteSnapshot]:
+    def _latest_quotes(
+        self, db: Session, *, as_of: datetime
+    ) -> dict[int, QuoteSnapshot]:
         rows = db.scalars(
-            select(QuoteSnapshot).order_by(QuoteSnapshot.instrument_id, QuoteSnapshot.quote_time.desc())
+            select(QuoteSnapshot).order_by(
+                QuoteSnapshot.instrument_id,
+                QuoteSnapshot.quote_time.desc(),
+                QuoteSnapshot.id.desc(),
+            )
         ).all()
         latest: dict[int, QuoteSnapshot] = {}
         for row in rows:
             latest.setdefault(row.instrument_id, row)
-        return latest
+        return {
+            ident: row for ident, row in latest.items()
+            if not quote_issues(row, self.settings, at=as_of)
+        }
 
     @staticmethod
     def _latest_share_scales(db: Session, *, as_of: datetime) -> dict[int, EtfShareScale]:
         return latest_share_scales(db, as_of=as_of)
 
-    @staticmethod
-    def _latest_horizon_forecasts(db: Session, horizon: int) -> dict[int, ForecastSnapshot]:
+    def _latest_horizon_forecasts(
+        self, db: Session, horizon: int, *, as_of: datetime | None = None
+    ) -> dict[int, ForecastSnapshot]:
         rows = db.scalars(
             select(ForecastSnapshot)
             .where(ForecastSnapshot.horizon == horizon)
@@ -373,4 +395,10 @@ class SignalGradeService:
         latest: dict[int, ForecastSnapshot] = {}
         for row in rows:
             latest.setdefault(row.instrument_id, row)
-        return latest
+        return {
+            ident: row for ident, row in latest.items()
+            if not snapshot_issues(
+                row, self.settings, None, kind="forecast",
+                at=as_of or datetime.now(self.settings.timezone)
+            )
+        }

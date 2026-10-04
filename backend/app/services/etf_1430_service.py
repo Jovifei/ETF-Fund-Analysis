@@ -33,6 +33,12 @@ from app.models import (
 )
 from app.services.event_service import emit_event
 from app.services.current_decision_service import CurrentDecisionService
+from app.services.snapshot_contract import (
+    SNAPSHOT_CONTRACT_VERSION,
+    quote_issues,
+    signal_issues,
+    snapshot_issues,
+)
 from app.services.support_resistance_service import SupportResistanceService
 from app.utils.hashing import stable_hash
 from app.utils.latest_snapshots import latest_forecast_map
@@ -71,10 +77,16 @@ class ETF1430WorkbenchService:
             select(model).where(model.instrument_id == instrument_id).order_by(order.desc()).limit(1)
         )
 
-    @staticmethod
-    def _latest_forecasts(db: Session, instrument_id: int) -> dict[int, ForecastSnapshot]:
-        """每 horizon 取最新一条（窗口查询，不加载全量历史）。"""
-        return latest_forecast_map(db, [instrument_id]).get(instrument_id, {})
+    def _latest_forecasts(
+        self, db: Session, instrument_id: int, *, at: datetime | None = None
+    ) -> dict[int, ForecastSnapshot]:
+        """每 horizon 取时间最新且当前兼容的一条；不回退旧版本。"""
+        return latest_forecast_map(
+            db,
+            [instrument_id],
+            settings=self.settings,
+            at=at or datetime.now(self.timezone),
+        ).get(instrument_id, {})
 
     def _bars(self, db: Session, instrument_id: int) -> list[DailyBar]:
         """日线行（升序）。14:30 行不再做请求内特征重算——指标一律读快照。"""
@@ -376,11 +388,36 @@ class ETF1430WorkbenchService:
     def _row(self, db: Session, instrument: Instrument, *, include_chart: bool = False, user_id: int | None = None, current_decision: dict[str, Any] | None = None, decision_snapshot_id: str | None = None) -> dict[str, Any]:
         # 请求内不再做特征重算：指标读 IndicatorSnapshot，支撑压力读统一快照服务。
         bars = self._bars(db, instrument.id)
-        quote = self._latest(db, QuoteSnapshot, instrument.id, QuoteSnapshot.quote_time)
-        indicator = self._latest(db, IndicatorSnapshot, instrument.id, IndicatorSnapshot.generated_at)
-        signal = self._latest(db, SignalSnapshot, instrument.id, SignalSnapshot.as_of_time)
+        reference = datetime.now(self.timezone)
+        raw_quote = self._latest(db, QuoteSnapshot, instrument.id, QuoteSnapshot.quote_time)
+        quote_problems = quote_issues(raw_quote, self.settings, at=reference)
+        quote = raw_quote if not quote_problems else None
+        raw_indicator = db.scalar(
+            select(IndicatorSnapshot)
+            .where(IndicatorSnapshot.instrument_id == instrument.id)
+            .order_by(
+                IndicatorSnapshot.as_of_date.desc(),
+                IndicatorSnapshot.generated_at.desc(),
+                IndicatorSnapshot.id.desc(),
+            )
+            .limit(1)
+        )
+        indicator_issues = snapshot_issues(
+            raw_indicator, self.settings, None, kind="indicator", at=reference
+        )
+        indicator = raw_indicator if not indicator_issues else None
+        raw_signal = db.scalar(
+            select(SignalSnapshot)
+            .where(SignalSnapshot.instrument_id == instrument.id)
+            .order_by(SignalSnapshot.as_of_time.desc(), SignalSnapshot.id.desc())
+            .limit(1)
+        )
+        signal_problems = signal_issues(
+            raw_signal, self.settings, at=reference
+        )
+        signal = raw_signal if not signal_problems else None
         holding = db.scalar(select(Holding).where(Holding.instrument_id == instrument.id, Holding.user_id == user_id))
-        persisted = self._latest_forecasts(db, instrument.id)
+        persisted = self._latest_forecasts(db, instrument.id, at=reference)
         forecasts = self._persisted_forecasts(persisted)
         if current_decision is None:
             decision_snapshot_id, decision_map = CurrentDecisionService(self.settings).resolve_many(db, [instrument])
@@ -419,6 +456,12 @@ class ETF1430WorkbenchService:
             f"预测 {forecast_score:.1f}",
         ]
         risks: list[str] = []
+        if quote_problems:
+            risks.append("行情快照不兼容：" + "、".join(quote_problems))
+        if indicator_issues:
+            risks.append("指标快照不兼容：" + "、".join(indicator_issues))
+        if signal_problems:
+            risks.append("信号快照不兼容：" + "、".join(signal_problems))
         if not qualification["actionable"]:
             risks.append("实时源时间或14:30窗口未通过资格，仅供研究")
         if all(item.get("calibration_status") != "calibrated" for item in forecasts.values()):
@@ -464,6 +507,12 @@ class ETF1430WorkbenchService:
             "component_scores": component_scores,
             "structure_metrics": structure_metrics,
             "support_resistance": sr,
+            "snapshot_compatibility": {
+                "contract": SNAPSHOT_CONTRACT_VERSION,
+                "quote": quote_problems,
+                "indicator": indicator_issues,
+                "signal": signal_problems,
+            },
             "forecasts": {str(key): value for key, value in forecasts.items()},
             "indicator": {
                 "version": indicator.version if indicator else None,

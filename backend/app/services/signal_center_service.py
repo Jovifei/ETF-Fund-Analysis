@@ -10,6 +10,11 @@ from app.core.config import Settings, get_settings
 from app.models import DecisionBoardSnapshot, IndicatorSnapshot, Instrument, NewsItem, SignalSnapshot
 from app.services.holding_service import HoldingService
 from app.services.signal_grade_service import SignalGradeService
+from app.services.snapshot_contract import (
+    SNAPSHOT_CONTRACT_VERSION,
+    current_signal,
+    snapshot_issues,
+)
 from app.utils.current_decision import resolve_current_decision, summarize_sources
 from app.utils.numbers import clamp, finite_or_none, percentile_rank
 
@@ -145,7 +150,8 @@ class SignalCenterService:
             "signal_grade_fallback_version": grade_payload.get("version"),
             "coefficient_semantics": "ranking_and_take_profit_only_when_current_state_is_canonical",
             "decision_snapshot_id": decision_snapshot_id,
-            "curve_basis": "historical_signal_snapshots_legacy",
+            "curve_basis": "historical_signal_snapshots_legacy_mixed_versions",
+            "current_snapshot_contract": SNAPSHOT_CONTRACT_VERSION,
             "summary": summary,
             "fronts": {
                 "opportunity": self._front(rows, "opportunity", front_size, self._opportunity_key),
@@ -502,15 +508,17 @@ class SignalCenterService:
 
     # ----------------------------------------------------------------- latest
 
-    @staticmethod
-    def _latest_signals(db: Session) -> dict[int, SignalSnapshot]:
+    def _latest_signals(self, db: Session) -> dict[int, SignalSnapshot]:
         latest: dict[int, SignalSnapshot] = {}
+        now = datetime.now(self.settings.timezone)
         for snapshot in db.scalars(select(SignalSnapshot).order_by(SignalSnapshot.as_of_time.asc())).all():
             latest[snapshot.instrument_id] = snapshot
-        return latest
+        return {
+            ident: row for ident, row in latest.items()
+            if current_signal(row, self.settings, at=now) is not None
+        }
 
-    @staticmethod
-    def _latest_indicators(db: Session) -> dict[int, IndicatorSnapshot]:
+    def _latest_indicators(self, db: Session) -> dict[int, IndicatorSnapshot]:
         latest: dict[int, IndicatorSnapshot] = {}
         for snapshot in db.scalars(
             select(IndicatorSnapshot).order_by(
@@ -518,4 +526,10 @@ class SignalCenterService:
             )
         ).all():
             latest[snapshot.instrument_id] = snapshot
-        return latest
+        return {
+            ident: row for ident, row in latest.items()
+            if not snapshot_issues(
+                row, self.settings, None, kind="indicator",
+                at=datetime.now(self.settings.timezone)
+            )
+        }

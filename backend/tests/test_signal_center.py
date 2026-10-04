@@ -5,18 +5,19 @@ from datetime import datetime, timedelta
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
+from app.core.config import get_settings
 from app.main import app
 from app.models import DecisionBoardSnapshot, IndicatorSnapshot, Instrument, NewsItem, SignalSnapshot
+from app.services.decision_board_service import READ_MODEL_VERSION
 from app.services.holding_service import HoldingService
+from app.services.snapshot_contract import SIGNAL_INPUT_CONTRACT_VERSION
+from app.utils.hashing import stable_hash
 from app.services.signal_center_service import (
     OPPORTUNITY_STATES,
     RISK_STATES,
     SignalCenterService,
 )
 from app.utils.current_decision import DECISION_BOARD_SOURCE, MIXED_SOURCE, SIGNAL_GRADE_SOURCE
-
-STRATEGY_VERSION = "signal-v0.4.0"
-INDICATOR_VERSION = "indicator-v0.2.0"
 
 
 def _indicator_values(**overrides) -> dict:
@@ -68,12 +69,15 @@ def _attach(
     risk: float = 40.0,
 ) -> None:
     stamp = when.strftime("%Y%m%d%H%M")
+    strategy = get_settings().load_strategy()
+    config_hash = stable_hash(strategy)
+    indicator_input_hash = f"it-{instrument.ts_code}-{stamp}"
     db.flush()  # session autoflush=False，先落盘同事务已挂起行
     existing = db.scalar(
         select(IndicatorSnapshot).where(
             IndicatorSnapshot.instrument_id == instrument.id,
             IndicatorSnapshot.as_of_date == when.date(),
-            IndicatorSnapshot.version == INDICATOR_VERSION,
+            IndicatorSnapshot.version == strategy["indicator_version"],
         )
     )
     if existing is None:
@@ -81,22 +85,38 @@ def _attach(
             IndicatorSnapshot(
                 instrument_id=instrument.id,
                 as_of_date=when.date(),
-                version=INDICATOR_VERSION,
+                version=strategy["indicator_version"],
+                feature_schema_version=strategy["feature_schema_version"],
+                config_hash=config_hash,
                 values_json=values,
                 technical_score=technical,
                 risk_score=risk,
                 trend_label="震荡",
                 data_quality=90.0,
-                input_hash=f"it-{instrument.ts_code}-{stamp}",
+                input_hash=indicator_input_hash,
             )
         )
+    snapshot_inputs = {
+        "contract_version": SIGNAL_INPUT_CONTRACT_VERSION,
+        "formal_forecast_horizons": [int(value) for value in strategy["forecast"]["horizons"]],
+        "forecast_score_horizon_weights": {"1": 0.5, "5": 0.3},
+        "quote_input_hash": None,
+        "indicator": {
+            "input_hash": indicator_input_hash,
+            "as_of_date": when.date().isoformat(),
+            "version": strategy["indicator_version"],
+            "feature_schema_version": strategy["feature_schema_version"],
+            "config_hash": config_hash,
+        },
+        "forecasts": {},
+    }
     db.add(
         SignalSnapshot(
             instrument_id=instrument.id,
             as_of_time=when,
-            strategy_version=STRATEGY_VERSION,
-            indicator_version=INDICATOR_VERSION,
-            forecast_version="similarity-v0.2.0",
+            strategy_version=strategy["version"],
+            indicator_version=strategy["indicator_version"],
+            forecast_version=strategy["forecast_version"],
             state=state,
             score=score,
             confidence=60.0,
@@ -104,8 +124,8 @@ def _attach(
             first_step_target_weight=None,
             reasons_json=[],
             risks_json=[],
-            evidence_json={},
-            input_hash=f"sig-{instrument.ts_code}-{stamp}",
+            evidence_json={"snapshot_inputs": snapshot_inputs},
+            input_hash=stable_hash({"snapshot_inputs": snapshot_inputs, "strategy": strategy}),
             expires_at=when + timedelta(hours=2),
             is_actionable=False,
             data_quality=90.0,
@@ -362,6 +382,8 @@ def test_current_fronts_follow_latest_decision_board_grade(bootstrapped, db_sess
             freshness="fresh",
             payload_json={
                 "snapshot_id": snapshot_id,
+                "read_model_version": READ_MODEL_VERSION,
+                "config_hash": stable_hash(get_settings().load_strategy()),
                 "rows": [{"ts_code": instrument.ts_code, "grade": "减仓"}],
             },
         )

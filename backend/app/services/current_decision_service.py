@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -30,11 +31,10 @@ class CurrentDecisionService:
         )
         if snapshot is None:
             return None, {}
-        if self.settings.market_provider != "mock":
-            from app.services.decision_board_service import DecisionBoardService
-            payload = DecisionBoardService(self.settings).read_latest(db, snapshot_id=snapshot.snapshot_id) or {}
-        else:
-            payload = snapshot.payload_json if isinstance(snapshot.payload_json, dict) else {}
+        from app.services.decision_board_service import DecisionBoardService
+        payload = DecisionBoardService(self.settings).read_latest(
+            db, snapshot_id=snapshot.snapshot_id
+        ) or {}
         mapped: dict[str, dict[str, Any]] = {}
         for row in payload.get("rows", []) or []:
             if not isinstance(row, dict):
@@ -69,7 +69,11 @@ class CurrentDecisionService:
             if str(row.get("ts_code") or "").strip().upper() in missing
         }
 
-        latest_signals: dict[int, SignalSnapshot] = latest_signal_map(db)
+        latest_signals: dict[int, SignalSnapshot] = latest_signal_map(
+            db,
+            settings=self.settings,
+            at=datetime.now(self.settings.timezone),
+        )
 
         result: dict[str, dict[str, Any]] = {}
         for instrument in instruments:

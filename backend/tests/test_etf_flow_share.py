@@ -278,8 +278,11 @@ def test_grade_keeps_technical_label_and_refuses_actionable_flow(db_session):
         previous_shares=1000, share_delta=-100, share_delta_ratio=-0.1, day_over_day=True, proxy="份额减少",
         source="akshare:fund_etf_scale_sse", exchange="SH", fetched_at=when, quality_hash="scale-grade",
     ))
+    strategy = Settings(_env_file=None, market_provider="akshare").load_strategy()
+    from app.utils.hashing import stable_hash
     db_session.add(IndicatorSnapshot(
-        instrument_id=instrument.id, as_of_date=date(2026, 9, 2), version="ind-test",
+        instrument_id=instrument.id, as_of_date=date(2026, 9, 2), version=strategy["indicator_version"],
+        feature_schema_version=strategy["feature_schema_version"], config_hash=stable_hash(strategy),
         values_json={
             "close": 2.4, "ma5": 2.4, "ma10": 2.35, "ma20": 2.22, "ma30": 2.1,
             "macd_dif": 0.02, "macd_dea": 0.01, "macd_hist": 0.01,

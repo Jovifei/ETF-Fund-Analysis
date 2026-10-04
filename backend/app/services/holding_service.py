@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import Settings, get_settings
 from app.models import Holding, Instrument, QuoteSnapshot
 from app.services.event_service import emit_event
+from app.services.snapshot_contract import quote_issues
 
 
 class HoldingNotFoundError(LookupError):
@@ -14,6 +17,9 @@ class HoldingNotFoundError(LookupError):
 
 
 class HoldingService:
+    def __init__(self, settings: Settings | None = None) -> None:
+        self.settings = settings or get_settings()
+
     @staticmethod
     def _instrument(db: Session, ts_code: str) -> Instrument:
         instrument = db.scalar(select(Instrument).where(Instrument.ts_code == ts_code.upper()))
@@ -32,12 +38,15 @@ class HoldingService:
                 .order_by(QuoteSnapshot.quote_time.desc())
                 .limit(1)
             )
+            reference = datetime.now(self.settings.timezone)
+            quote_problems = quote_issues(quote, self.settings, at=reference)
+            current_quote = quote if not quote_problems else None
             shares = float(holding.shares or 0)
             cost = float(holding.cost_price or 0)
-            price = float(quote.price) if quote else cost
-            market_value = shares * price
+            price = float(current_quote.price) if current_quote is not None else None
+            market_value = shares * price if price is not None else None
             cost_value = shares * cost
-            pnl = market_value - cost_value
+            pnl = market_value - cost_value if market_value is not None else None
             result.append(
                 {
                     "id": holding.id,
@@ -48,17 +57,28 @@ class HoldingService:
                     "shares": shares,
                     "cost_price": cost,
                     "latest_price": price,
-                    "market_value": round(market_value, 2),
-                    "pnl": round(pnl, 2),
-                    "pnl_pct": round((price / cost - 1) * 100, 3) if cost > 0 else None,
+                    "market_value": round(market_value, 2) if market_value is not None else None,
+                    "pnl": round(pnl, 2) if pnl is not None else None,
+                    "pnl_pct": round((price / cost - 1) * 100, 3) if price is not None and cost > 0 else None,
+                    "quote_issues": quote_problems,
                     "target_weight": holding.target_weight,
                     "notes": holding.notes,
                     "updated_at": holding.updated_at,
                 }
             )
-        total = sum(float(item["market_value"]) for item in result)
+        pricing_complete = all(item["market_value"] is not None for item in result)
+        total = (
+            sum(float(item["market_value"]) for item in result)
+            if pricing_complete
+            else 0.0
+        )
         for item in result:
-            item["current_weight"] = round(float(item["market_value"]) / total, 6) if total > 0 else 0.0
+            item["current_weight"] = (
+                round(float(item["market_value"]) / total, 6)
+                if pricing_complete and total > 0 and item["market_value"] is not None
+                else None
+            )
+            item["pricing_complete"] = pricing_complete
         return result
 
     def upsert(

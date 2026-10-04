@@ -21,6 +21,14 @@ from app.models import (
 )
 from app.services.event_service import emit_event
 from app.services.preflight_service import PreflightService
+from app.services.snapshot_contract import (
+    SIGNAL_INPUT_CONTRACT_VERSION,
+    current_signal,
+    formal_forecast_horizons,
+    quote_issues,
+    signal_forecast_score_weights,
+    snapshot_issues,
+)
 from app.services.trading_calendar_service import TradingCalendarService
 from app.utils.hashing import stable_hash
 from app.utils.numbers import clamp
@@ -65,6 +73,12 @@ class SignalService:
         for row in rows:
             result.setdefault(row.horizon, row)
         return result
+
+    def _formal_forecast_horizons(self) -> list[int]:
+        return formal_forecast_horizons(self.strategy)
+
+    def _forecast_score_weights(self) -> dict[int, float]:
+        return signal_forecast_score_weights(self.strategy)
 
     def _news_theme_score(self, db: Session, instrument: Instrument, now: datetime) -> tuple[float, list[str]]:
         cutoff = now - timedelta(hours=72)
@@ -192,7 +206,7 @@ class SignalService:
         forecast_scores: list[float] = []
         forecast_confidences: list[float] = []
         forecast_weight = 0.0
-        for horizon, weight in ((1, 0.5), (5, 0.3), (20, 0.2)):
+        for horizon, weight in self._forecast_score_weights().items():
             item = forecasts.get(horizon)
             if item and item.p_up is not None:
                 forecast_scores.append((float(item.p_up) * 100) * weight)
@@ -235,8 +249,8 @@ class SignalService:
         source_factor = 100.0 if quote and quote.is_realtime and not quote.degraded_reason else 55.0
         forecast_conf = sum(forecast_confidences) / len(forecast_confidences) if forecast_confidences else 25.0
         confidence = 0.5 * data_quality + 0.25 * forecast_conf + 0.25 * source_factor
-        required_horizons = {1, 5, 20}
-        fully_calibrated = required_horizons.issubset(forecasts) and all(
+        required_horizons = set(self._formal_forecast_horizons())
+        fully_calibrated = bool(required_horizons) and required_horizons.issubset(forecasts) and all(
             forecasts[horizon].calibration_status == "calibrated" for horizon in required_horizons
         )
         confidence = clamp(confidence, 0, 85 if fully_calibrated else 60)
@@ -372,7 +386,7 @@ class SignalService:
                 .order_by(QuoteSnapshot.quote_time.desc())
                 .limit(1)
             )
-            if quote:
+            if quote and not quote_issues(quote, self.settings, at=now):
                 latest_quotes[instrument.id] = quote
             indicator = db.scalar(
                 select(IndicatorSnapshot)
@@ -380,7 +394,10 @@ class SignalService:
                 .order_by(IndicatorSnapshot.as_of_date.desc(), IndicatorSnapshot.generated_at.desc())
                 .limit(1)
             )
-            if indicator and (
+            indicator_identity_issues = snapshot_issues(
+                indicator, self.settings, None, kind="indicator", at=now
+            )
+            if indicator and not indicator_identity_issues and (
                 instrument.id not in blocked
                 or (qualified_through is not None and indicator.as_of_date <= qualified_through)
             ):
@@ -392,13 +409,21 @@ class SignalService:
             ).all()
             if instrument.id in blocked and qualified_through is not None:
                 forecasts = [item for item in forecasts if item.as_of_date <= qualified_through]
-            latest_forecasts[instrument.id] = self._latest_by_horizon(list(forecasts))
+            latest_raw = self._latest_by_horizon(list(forecasts))
+            latest_forecasts[instrument.id] = {
+                horizon: item
+                for horizon, item in latest_raw.items()
+                if not snapshot_issues(
+                    item, self.settings, None, kind="forecast", at=now
+                )
+            }
             previous = db.scalar(
                 select(SignalSnapshot)
                 .where(SignalSnapshot.instrument_id == instrument.id)
                 .order_by(SignalSnapshot.as_of_time.desc())
                 .limit(1)
             )
+            previous = current_signal(previous, self.settings, at=now)
             if previous:
                 previous_signals[instrument.id] = previous
 
@@ -429,13 +454,41 @@ class SignalService:
         created = 0
         state_counts: dict[str, int] = defaultdict(int)
         for item in candidates:
+            snapshot_inputs = {
+                "contract_version": SIGNAL_INPUT_CONTRACT_VERSION,
+                "formal_forecast_horizons": self._formal_forecast_horizons(),
+                "forecast_score_horizon_weights": {
+                    str(key): value for key, value in self._forecast_score_weights().items()
+                },
+                "quote_input_hash": item.quote.quality_hash if item.quote else None,
+                "indicator": (
+                    {
+                        "input_hash": item.indicator.input_hash,
+                        "as_of_date": item.indicator.as_of_date.isoformat(),
+                        "version": item.indicator.version,
+                        "feature_schema_version": item.indicator.feature_schema_version,
+                        "config_hash": item.indicator.config_hash,
+                    }
+                    if item.indicator is not None
+                    else None
+                ),
+                "forecasts": {
+                    str(key): {
+                        "input_hash": value.input_hash,
+                        "as_of_date": value.as_of_date.isoformat(),
+                        "model_version": value.model_version,
+                        "feature_schema_version": value.feature_schema_version,
+                        "config_hash": value.config_hash,
+                    }
+                    for key, value in sorted(item.forecasts.items())
+                },
+            }
             input_payload = {
-                "indicator": item.indicator.input_hash if item.indicator else None,
-                "quote": item.quote.quality_hash if item.quote else None,
-                "forecasts": {key: value.input_hash for key, value in item.forecasts.items()},
+                "snapshot_inputs": snapshot_inputs,
                 "strategy": self.strategy,
             }
             evidence = {
+                "snapshot_inputs": snapshot_inputs,
                 "theme_score": item.theme_score,
                 "fund_quality_score": item.fund_quality_score,
                 "market_regime": market_regime,

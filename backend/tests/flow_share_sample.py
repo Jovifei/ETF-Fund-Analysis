@@ -5,7 +5,10 @@ from zoneinfo import ZoneInfo
 AS_OF = datetime(2026, 9, 2, 14, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
 
 def add_sample(db):
+    from app.core.config import get_settings
     from app.models import EtfShareScale, IndicatorSnapshot, Instrument, QuoteSnapshot
+    from app.utils.hashing import stable_hash
+    strategy = get_settings().load_strategy()
     instrument = Instrument(
         ts_code="510390.SH", symbol="510390", name="流量样本",
         kind="ETF", exchange="SH", enabled=True,
@@ -31,7 +34,9 @@ def add_sample(db):
     ))
     db.add(IndicatorSnapshot(
         instrument_id=instrument.id, as_of_date=date(2026, 9, 2),
-        version="ind-test", generated_at=AS_OF,
+        version=strategy["indicator_version"], generated_at=AS_OF,
+        feature_schema_version=strategy["feature_schema_version"],
+        config_hash=stable_hash(strategy),
         values_json={
             "close": 2.4, "ma5": 2.4, "ma10": 2.35, "ma20": 2.22,
             "ma30": 2.1, "macd_dif": 0.02, "macd_dea": 0.01,

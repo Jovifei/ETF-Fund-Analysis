@@ -24,6 +24,12 @@ from app.models import (
 from app.services.holding_service import HoldingService
 from app.services.market_context_service import MarketContextService
 from app.services.runtime_service import RuntimeService
+from app.services.snapshot_contract import (
+    SNAPSHOT_CONTRACT_VERSION,
+    quote_issues,
+    signal_issues,
+    snapshot_issues,
+)
 
 
 class DashboardService:
@@ -81,10 +87,34 @@ class DashboardService:
         )
         rows: list[dict[str, Any]] = []
         for instrument in instruments:
-            quote = self._latest_quote(db, instrument.id)
-            indicator = self._latest_indicator(db, instrument.id)
-            forecasts = self._latest_forecasts(db, instrument.id)
-            signal = self._latest_signal(db, instrument.id)
+            reference = datetime.now(self.settings.timezone)
+            raw_quote = self._latest_quote(db, instrument.id)
+            quote_problems = quote_issues(raw_quote, self.settings, at=reference)
+            quote = raw_quote if not quote_problems else None
+            raw_indicator = self._latest_indicator(db, instrument.id)
+            indicator_issues = snapshot_issues(
+                raw_indicator, self.settings, None, kind="indicator", at=reference
+            )
+            indicator = raw_indicator if not indicator_issues else None
+
+            raw_forecasts = self._latest_forecasts(db, instrument.id)
+            forecast_issues = {
+                horizon: snapshot_issues(
+                    item, self.settings, None, kind="forecast", at=reference
+                )
+                for horizon, item in raw_forecasts.items()
+            }
+            forecasts = {
+                horizon: item
+                for horizon, item in raw_forecasts.items()
+                if not forecast_issues[horizon]
+            }
+
+            raw_signal = self._latest_signal(db, instrument.id)
+            signal_problems = signal_issues(
+                raw_signal, self.settings, at=reference
+            )
+            signal = raw_signal if not signal_problems else None
             holding = holdings_by_instrument.get(instrument.id)
             values = indicator.values_json if indicator else {}
             rows.append(
@@ -184,6 +214,17 @@ class DashboardService:
                     }
                     if signal
                     else None,
+                    "snapshot_compatibility": {
+                        "contract": SNAPSHOT_CONTRACT_VERSION,
+                        "quote": quote_problems,
+                        "indicator": indicator_issues,
+                        "forecasts": {
+                            str(horizon): issues
+                            for horizon, issues in forecast_issues.items()
+                            if issues
+                        },
+                        "signal": signal_problems,
+                    },
                     "holding": {
                         "shares": float(holding.shares or 0),
                         "cost_price": float(holding.cost_price or 0),
