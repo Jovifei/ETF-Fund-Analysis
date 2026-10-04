@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 
 from app.core.config import get_settings
+from app.core.security import hash_password
 from app.models import AuthUser, ReportArtifact
 from app.services.report_artifact_contract import (
     latest_system_report,
@@ -58,7 +59,7 @@ def test_latest_system_report_uses_append_order_and_ignores_user_owned(db_sessio
     )
     user = AuthUser(
         username=f"artifact-{uuid4().hex}",
-        password_hash="$argon2id$fixture",
+        password_hash=hash_password("artifact test password"),
         role="member",
         status="active",
     )
@@ -130,7 +131,7 @@ def test_system_json_reader_rejects_path_escape_tamper_type_and_user_owned(db_se
 
     user = AuthUser(
         username=f"artifact-reader-{uuid4().hex}",
-        password_hash="$argon2id$fixture",
+        password_hash=hash_password("artifact test password"),
         role="member",
         status="active",
     )
