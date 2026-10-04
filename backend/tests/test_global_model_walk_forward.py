@@ -51,6 +51,11 @@ def test_global_model_research_uses_purged_expanding_walk_forward(
     db_session, monkeypatch, tmp_path
 ):
     panel = _synthetic_panel()
+    panel.attrs["research_input_contract"] = {
+        "policy": "synthetic-test-price-basis",
+        "basis_by_instrument": {},
+        "excluded": [],
+    }
     monkeypatch.setattr(FactorAnalysisService, "_panel", lambda self, db: panel)
 
     service = GlobalModelResearchService()
@@ -79,6 +84,8 @@ def test_global_model_research_uses_purged_expanding_walk_forward(
     assert payload["evidence_contract"]["slippage_included"] is False
     assert payload["evidence_contract"]["strategy_backtest"] is False
     assert payload["evidence_contract"]["qualification"] == "UNKNOWN"
+    assert payload["panel_research_input_contract"]["policy"] == "synthetic-test-price-basis"
+    assert len(payload["panel_research_input_contract_hash"]) == 64
 
     for horizon in DEFAULT_RESEARCH_HORIZONS:
         item = payload["horizons"][str(horizon)]

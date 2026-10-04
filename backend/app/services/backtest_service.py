@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.models import DailyBar, Instrument, ReportArtifact
+from app.providers.corporate_action_contract import official_corporate_actions
+from app.providers.data_contract import price_history_issue, row_units_verified
 from app.services.event_service import emit_event
 from app.utils.hashing import stable_hash
 
@@ -51,6 +53,7 @@ class RotationBacktestService:
                 "close": float(row["close"]),
                 "volume": None if pd.isna(row.get("volume")) else float(row["volume"]),
                 "amount": None if pd.isna(row.get("amount")) else float(row["amount"]),
+                "adjust": row.get("adjust"),
                 "source": row.get("source"),
                 "fetched_at": None if pd.isna(row.get("fetched_at")) else str(row.get("fetched_at")),
             })
@@ -62,22 +65,41 @@ class RotationBacktestService:
         # strategies that positively weight the factor can fail closed.
         return values.rank(method="average", pct=True)
 
-    def _load_frames(self, db: Session) -> tuple[dict[str, Instrument], dict[str, pd.DataFrame]]:
+    @staticmethod
+    def _execution_history_issue(rows: list[DailyBar], ts_code: str) -> str | None:
+        if not rows:
+            return "history_missing"
+        adjustments = {row.adjust for row in rows}
+        if len(adjustments) != 1:
+            return "ambiguous_price_basis"
+        adjustment = next(iter(adjustments))
+        if adjustment != "none":
+            return "execution_requires_raw_unadjusted_prices"
+        ordered = sorted(rows, key=lambda row: row.trade_date)
+        first, last = ordered[0].trade_date, ordered[-1].trade_date
+        if any(first <= event.ex_date <= last for event in official_corporate_actions(ts_code)):
+            return "corporate_action_position_accounting_not_implemented"
+        return price_history_issue(ordered)
+
+    def _load_frames(
+        self, db: Session
+    ) -> tuple[dict[str, Instrument], dict[str, pd.DataFrame], list[dict[str, str]]]:
         instruments = db.scalars(
             select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code)
         ).all()
         instrument_map = {item.ts_code: item for item in instruments}
         frames: dict[str, pd.DataFrame] = {}
+        exclusions: list[dict[str, str]] = []
         for instrument in instruments:
             rows = db.scalars(
                 select(DailyBar)
                 .where(DailyBar.instrument_id == instrument.id)
-                .order_by(DailyBar.trade_date)
+                .order_by(DailyBar.trade_date, DailyBar.adjust)
             ).all()
-            if not rows:
+            issue = self._execution_history_issue(list(rows), instrument.ts_code)
+            if issue:
+                exclusions.append({"ts_code": instrument.ts_code, "reason": issue})
                 continue
-            # If multiple adjustment variants ever coexist, prefer the most recent
-            # record for a date while retaining the source in the audit payload.
             frame = pd.DataFrame(
                 [
                     {
@@ -86,22 +108,27 @@ class RotationBacktestService:
                         "high": float(row.high),
                         "low": float(row.low),
                         "close": float(row.close),
-                        "volume": float(row.volume) if row.volume is not None and math.isfinite(float(row.volume)) else np.nan,
-                        "amount": float(row.amount) if row.amount is not None and math.isfinite(float(row.amount)) else np.nan,
+                        "volume": (
+                            float(row.volume)
+                            if (self.settings.market_provider == "mock" or row_units_verified(row))
+                            and row.volume is not None and math.isfinite(float(row.volume))
+                            else np.nan
+                        ),
+                        "amount": (
+                            float(row.amount)
+                            if (self.settings.market_provider == "mock" or row_units_verified(row))
+                            and row.amount is not None and math.isfinite(float(row.amount))
+                            else np.nan
+                        ),
+                        "adjust": row.adjust,
                         "source": row.source,
                         "fetched_at": row.fetched_at,
                     }
                     for row in rows
                 ]
-            )
-            frame = (
-                frame.sort_values(["trade_date", "fetched_at"])
-                .drop_duplicates("trade_date", keep="last")
-                .set_index("trade_date")
-                .sort_index()
-            )
+            ).set_index("trade_date").sort_index()
             frames[instrument.ts_code] = frame
-        return instrument_map, frames
+        return instrument_map, frames, exclusions
 
     def _feature_table(self, frames: dict[str, pd.DataFrame], as_of: date) -> pd.DataFrame:
         records: list[dict] = []
@@ -419,7 +446,7 @@ class RotationBacktestService:
 
     def run(self, db: Session, run_id: str | None = None) -> dict:
         run_id = run_id or uuid4().hex
-        instrument_map, frames = self._load_frames(db)
+        instrument_map, frames, load_exclusions = self._load_frames(db)
         benchmark_code = str(self.config.get("benchmark", self.strategy["signal"]["regime_benchmark"]))
         benchmark = frames.get(benchmark_code)
         if benchmark is None or benchmark.empty:
@@ -439,7 +466,9 @@ class RotationBacktestService:
         decisions: list[dict] = []
         equity_records: list[dict] = []
         exposures: list[float] = []
-        quality_warnings: list[str] = []
+        quality_warnings: list[str] = [
+            f"{item['ts_code']}: {item['reason']}" for item in load_exclusions
+        ]
 
         for code, frame in frames.items():
             daily_jump = frame["close"].pct_change().abs()
@@ -552,7 +581,14 @@ class RotationBacktestService:
             "data": {
                 "sources": sources,
                 "instrument_count": len(frames),
-                "input_hash_policy": "deduped_daily_rows_v1",
+                "execution_price_basis": "raw_unadjusted_no_corporate_action_position_events_v1",
+                "quantity_contract": (
+                    "mock_passthrough"
+                    if self.settings.market_provider == "mock"
+                    else "documented_endpoint_units_only"
+                ),
+                "excluded_instruments": load_exclusions,
+                "input_hash_policy": "single_raw_basis_daily_rows_v2",
                 "input_hashes": {code: self._frame_input_hash(frame) for code, frame in sorted(frames.items())},
                 "start_date": equity_records[0]["date"],
                 "end_date": equity_records[-1]["date"],

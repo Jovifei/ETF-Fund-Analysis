@@ -213,7 +213,7 @@
     "max_per_theme": 1,
     "single_fund_target_cap": 0.25
   },
-  "backtest_version": "rotation-v0.5.2-validity-crosscheck",
+  "backtest_version": "rotation-v0.5.3-price-basis",
   "feature_schema_version": "feature-store-v0.7.6-maturity-mask",
   "strategy_engine": {
     "version": "strategy-family-v0.5.3-maturity-mask",
@@ -229,14 +229,14 @@
     }
   },
   "global_model_research": {
-    "version": "global-model-research-v0.2.0-purged-walk-forward",
+    "version": "global-model-research-v0.2.1-price-basis",
     "embargo_sessions": 0,
     "walk_forward_folds": 4,
     "walk_forward_test_sessions": 20,
     "walk_forward_min_train_sessions": 150
   },
   "factor_analysis": {
-    "version": "factor-analysis-v0.2.0-horizon-aligned",
+    "version": "factor-analysis-v0.2.1-price-basis",
     "quantiles": 5,
     "horizons": [
       1,

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.models import DailyBar, Instrument, ReportArtifact
+from app.providers.corporate_action_contract import canonical_research_history
 from app.services.event_service import emit_event
 from app.utils.feature_store import add_cross_sectional_features, build_feature_frame
 from app.utils.hashing import stable_hash
@@ -388,15 +389,24 @@ class FactorAnalysisService:
             query.order_by(Instrument.ts_code)
         ).all()
         frames: list[pd.DataFrame] = []
+        basis_by_instrument: dict[str, dict[str, object]] = {}
+        exclusions: list[dict[str, str]] = []
+        from app.providers.data_contract import row_units_verified
+
         for instrument in instruments:
             rows = db.scalars(
                 select(DailyBar)
                 .where(DailyBar.instrument_id == instrument.id)
-                .order_by(DailyBar.trade_date)
+                .order_by(DailyBar.trade_date, DailyBar.adjust)
             ).all()
-            from app.providers.data_contract import price_history_issue, row_units_verified
-            if len(rows) < 160 or price_history_issue(rows):
+            selection = canonical_research_history(rows, instrument.ts_code)
+            if not selection.allowed or len(selection.rows) < 160:
+                exclusions.append({
+                    "ts_code": instrument.ts_code,
+                    "reason": selection.reason or "history_below_160_rows",
+                })
                 continue
+            research_rows = list(selection.rows)
             raw = pd.DataFrame(
                 [
                     {
@@ -411,7 +421,7 @@ class FactorAnalysisService:
                         "volume": row.volume if row_units_verified(row) or self.settings.market_provider == "mock" else np.nan,
                         "amount": row.amount if row_units_verified(row) or self.settings.market_provider == "mock" else np.nan,
                     }
-                    for row in rows
+                    for row in research_rows
                 ]
             )
             rich = build_feature_frame(raw, self.strategy["indicator"]).frame
@@ -419,12 +429,36 @@ class FactorAnalysisService:
             rich["ts_code"] = instrument.ts_code
             rich["theme_l1"] = instrument.theme_l1 or "未分类"
             rich["theme_l2"] = instrument.theme_l2 or "未分类"
+            rich["price_basis_id"] = selection.price_basis_id
+            rich["price_basis"] = selection.price_basis
             frames.append(rich)
+            basis_by_instrument[instrument.ts_code] = {
+                "price_basis_id": selection.price_basis_id,
+                "price_basis": selection.price_basis,
+                "source_adjustment": selection.source_adjustment,
+                "corporate_action_adjusted": selection.corporate_action_adjusted,
+            }
         if not frames:
-            return pd.DataFrame()
+            panel = pd.DataFrame()
+            panel.attrs["research_input_contract"] = {
+                "policy": "canonical_research_history_v1",
+                "basis_by_instrument": basis_by_instrument,
+                "excluded": exclusions,
+            }
+            return panel
         panel = add_cross_sectional_features(pd.concat(frames, ignore_index=True))
+        research_input_contract = {
+            "policy": "canonical_research_history_v1",
+            "basis_by_instrument": basis_by_instrument,
+            "excluded": exclusions,
+        }
+        panel.attrs["research_input_contract"] = research_input_contract
         benchmark_code = str(self.strategy["signal"].get("regime_benchmark", "510300.SH"))
         panel = add_oss_research_factor_diagnostics(panel, benchmark_code)
+        # groupby/apply/concat/merge operations are not an evidence store;
+        # reattach the explicit contract after enrichment instead of relying on
+        # pandas attrs propagation details.
+        panel.attrs["research_input_contract"] = research_input_contract
         for horizon in aligned_research_horizons(self.strategy):
             grouped = panel.groupby("ts_code", observed=True)
             panel[f"forward_return_{horizon}"] = (
@@ -484,13 +518,17 @@ class FactorAnalysisService:
             "report_type": "factor_effectiveness",
             "feature_schema_version": self.strategy.get("feature_schema_version"),
             "strategy_version": self.strategy.get("version"),
+            "analysis_version": self.strategy.get("factor_analysis", {}).get("version"),
             "research_status": "diagnostic_only_not_strategy_promotion",
+            "qualification": "UNKNOWN",
+            "point_in_time_revision_qualified": False,
             "horizons": list(horizons),
             "panel": {
                 "rows": int(len(panel)),
                 "instruments": int(panel["ts_code"].nunique()),
                 "first_date": str(panel["trade_date"].min()),
                 "last_date": str(panel["trade_date"].max()),
+                "research_input_contract": panel.attrs.get("research_input_contract", {}),
             },
             "metrics": metrics,
             "top_absolute_rank_ic": ranked[:30],
@@ -507,6 +545,8 @@ class FactorAnalysisService:
                 "oss_factor_scope": "factor-analysis-only; excluded from production forecast feature templates",
                 "benchmark_exposure": f"rolling 60-session beta/correlation versus {benchmark_code}",
                 "promotion_policy": "manual review plus walk-forward/holdout/ablation required",
+                "price_basis_policy": "canonical_research_history_v1",
+                "point_in_time_revision_qualified": False,
             },
         }
         content_hash = stable_hash(payload)
@@ -525,6 +565,8 @@ class FactorAnalysisService:
                     "filename": filename,
                     "factor_count": len(factors),
                     "instrument_count": int(panel["ts_code"].nunique()),
+                    "analysis_version": self.strategy.get("factor_analysis", {}).get("version"),
+                    "research_input_contract_hash": stable_hash(panel.attrs.get("research_input_contract", {})),
                 },
             )
         )

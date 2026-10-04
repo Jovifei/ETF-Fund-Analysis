@@ -167,6 +167,53 @@ class ResearchReturnSeriesStatus:
     reasons: tuple[str, ...] = field(default_factory=tuple)
 
 
+@dataclass(frozen=True, slots=True)
+class CanonicalResearchHistory:
+    rows: tuple[object, ...]
+    allowed: bool
+    reason: str | None
+    source_adjustment: str | None
+    price_basis_id: str | None
+    price_basis: str | None
+    corporate_action_adjusted: bool
+
+
+def canonical_research_history(
+    rows,
+    ts_code: str,
+    *,
+    effective_through: date | None = None,
+) -> CanonicalResearchHistory:
+    """Select one unambiguous research price basis and apply evidence-bound actions.
+
+    Mixed source adjustment variants are never resolved by fetched-at recency.
+    """
+    ordered = tuple(sorted(rows or (), key=lambda row: row.trade_date))
+    if not ordered:
+        return CanonicalResearchHistory((), False, "history_missing", None, None, None, False)
+    adjustments = {getattr(row, "adjust", None) for row in ordered}
+    if len(adjustments) != 1:
+        return CanonicalResearchHistory((), False, "ambiguous_price_basis", None, None, None, False)
+    adjustment = next(iter(adjustments))
+    if adjustment not in {"none", "qfq", "hfq", RESEARCH_ADJUST}:
+        return CanonicalResearchHistory((), False, "unknown_price_basis", str(adjustment), None, None, False)
+
+    horizon = effective_through or ordered[-1].trade_date
+    research_rows = tuple(research_history_rows(ordered, ts_code, effective_through=effective_through))
+    issue = price_history_issue(research_rows)
+    basis = research_price_basis(ts_code, str(adjustment), effective_through=horizon)
+    adjusted = any(getattr(row, "adjust", None) == RESEARCH_ADJUST for row in research_rows)
+    return CanonicalResearchHistory(
+        research_rows if issue is None else (),
+        issue is None,
+        issue,
+        str(adjustment),
+        str(basis["price_basis_id"]),
+        str(basis["basis"]),
+        adjusted,
+    )
+
+
 def documented_588200_split_fixture() -> dict:
     """External announcement metadata plus the unmodified raw gap.
 
