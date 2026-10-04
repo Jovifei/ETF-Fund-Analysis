@@ -163,6 +163,10 @@ td .forecast-surface { min-height:132px; padding:8px 9px; white-space:normal; }
 .button-row { margin-top:14px; display:flex; justify-content:flex-end; }
 .modal-close { position:absolute; right:12px; top:9px; width:34px; height:34px; border:0; background:transparent; color:var(--muted); font-size:24px; }
 .detail-modal { width:min(96vw,1250px); }
+.legacy-chart-modal-open { overflow:hidden; }
+.detail-chart-actions { display:flex; justify-content:flex-end; margin:10px 0 6px; }
+.detail-modal.chart-expanded { width:min(98vw,1580px); max-height:96vh; }
+.detail-modal.chart-expanded #chartCanvas { width:100%; min-height:420px; }
 .detail-hero { display:flex; align-items:flex-end; gap:26px; flex-wrap:wrap; margin-top:14px; padding:15px; }
 .detail-primary-change span,.detail-secondary-price span { display:block; color:var(--muted); font-size:10px; }
 .detail-primary-change strong { display:block; margin-top:2px; font-size:30px; letter-spacing:-1px; }
