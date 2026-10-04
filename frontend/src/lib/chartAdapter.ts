@@ -53,7 +53,7 @@ export function chanOverlay(data: Pick<ChartData, 'chan_observation' | 'studies'
     const zs = Array.isArray(observation.zhongshu) ? observation.zhongshu.length : 0
     const skipped = observation.undrawable_bi ? ` ${observation.undrawable_bi} 笔因方向不明未绘制。` : ''
     const settlement = chanSettlement(observation.settlement_status)
-    return { mode: 'persisted', geometry: observation, note: `已保存缠论 · 分型 ${fx} · 笔 ${bi} · 中枢 ${zs}。${settlement.label}（${settlement.dashed ? '虚线' : '实线'}）。结算状态仅描述本次观测输入，引擎确认未知。来自持久化 CZSC 观测，不含线段、背驰和买卖点。${skipped}` }
+    return { mode: 'persisted', geometry: observation, note: `已保存缠论 · 分型 ${fx} · 笔 ${bi} · 中枢 ${zs}。${settlement.label}（${settlement.dashed ? '虚线' : '实线'}）。结算状态仅描述本次观测输入，引擎确认未知。来自持久化 CZSC 观测，不含线段、背驰和买卖点。顶/底分型不是买卖建议或交易信号；标记位于已保存观测的来源蜡烛，不代表历史确认时点。缺蜡烛或同日同类价格冲突不绘制。${skipped}` }
   }
   if (observation && observation.fallback_allowed === false) {
     return { mode: 'blocked', geometry: null, note: observation.disclaimer || '已保存缠论读模型未通过校验，不改用简化结构代替。' }
@@ -73,6 +73,15 @@ function register() {
   if (registered) return
   registered = true
   for (const def of definitions) registerIndicator({ name: def.name, shortName: def.title, precision: 4, calcParams: [], figures: def.fields.map(key => ({ key, title: `${key.replace('macd_', '').replace('kdj_', '').toUpperCase()}: `, type: key === 'macd_hist' ? 'bar' : 'line', ...(key === 'macd_hist' ? { styles: ({ current }: { current: { indicatorData?: Record<string, number | null> } }) => ({ color: (current.indicatorData?.macd_hist ?? 0) >= 0 ? '#f3737c' : '#4dba90' }) } : {}) })), calc: list => list.map(bar => (bar as KLineData & { indicators: Record<string, number | null> }).indicators ?? {}) })
+  registerOverlay({ name: 'chanFractal', totalStep: 2, needDefaultPointFigure: false, needDefaultXAxisFigure: false, needDefaultYAxisFigure: false, createPointFigures: ({ coordinates, bounding, overlay }) => {
+    if (!coordinates.length) return []
+    const point = coordinates[0], extra = overlay.extendData as { mark: 'top' | 'bottom'; dashed: boolean }
+    if (!['top', 'bottom'].includes(extra.mark)) return []
+    return [
+      { type: 'circle', attrs: { x: point.x, y: point.y, r: 4 }, styles: { style: 'stroke', color: '#9bc8dc', borderColor: '#9bc8dc', borderSize: 1.5, borderStyle: extra.dashed ? 'dashed' : 'solid', borderDashedValue: [3, 2] } },
+      { type: 'text', attrs: { x: Math.max(24, Math.min(point.x, bounding.width - 24)), y: Math.max(12, Math.min(point.y + (extra.mark === 'top' ? -14 : 18), bounding.height - 12)), text: extra.mark === 'top' ? '顶分型' : '底分型', align: 'center', baseline: 'middle' }, styles: { color: '#9bc8dc', size: 11, backgroundColor: '#11181e', borderSize: 0 } },
+    ]
+  } })
   registerOverlay({ name: 'researchZone', totalStep: 3, needDefaultPointFigure: false, needDefaultXAxisFigure: false, needDefaultYAxisFigure: false, createPointFigures: ({ coordinates, bounding, overlay }) => {
     if (coordinates.length < 2) return []
     const extra = overlay.extendData as { color: string; label: string }
@@ -174,7 +183,33 @@ export class ChartAdapter {
       if (selected.includes('CHAN')) {
         const view = chanOverlay(data)
         this.chan(view.geometry, view.mode === 'persisted' ? chanSettlement(data.chan_observation?.settlement_status) : undefined)
+        if (view.mode === 'persisted') this.fractals()
       }
+  }
+  private fractals() {
+    if (!['1d', '1w', '1mo'].includes(this.data.interval)) return
+    const raw = this.data.chan_observation?.fx
+    if (!Array.isArray(raw)) return
+    // Never choose one arbitrary price for conflicting same-day/mark evidence.
+    // Equal duplicates collapse; top and bottom remain separate descriptions.
+    const groups = new Map<string, { timestamp: number; price: number; mark: 'top' | 'bottom'; conflict: boolean }>()
+    for (const item of raw) {
+      if (!item || typeof item !== 'object' || !['top', 'bottom'].includes(item.mark) || item.source !== 'persisted' || typeof item.price !== 'number' || !Number.isFinite(item.price) || item.price <= 0) continue
+      const day = candleDay(item.date)
+      if (!day) continue
+      const candles = this.data.bars.filter(bar => candleDay(bar.date) === day)
+      if (candles.length !== 1) continue
+      const timestamp = projectBars(candles)[0].timestamp
+      if (!Number.isFinite(timestamp)) continue
+      const key = `${day}:${item.mark}`, previous = groups.get(key)
+      if (previous) previous.conflict ||= previous.price !== item.price
+      else groups.set(key, { timestamp, price: item.price, mark: item.mark, conflict: false })
+    }
+    const settlement = chanSettlement(this.data.chan_observation?.settlement_status)
+    for (const item of [...groups.values()].filter(item => !item.conflict).sort((a, b) => a.timestamp - b.timestamp || a.mark.localeCompare(b.mark))) {
+      this.chart.createOverlay({ name: 'chanFractal', groupId: 'server_research_studies', lock: true,
+        points: [{ timestamp: item.timestamp, value: item.price }], extendData: { mark: item.mark, dashed: settlement.dashed } })
+    }
   }
   private chan(raw: unknown, settlement?: ChanSettlement) {
     if (!raw || typeof raw !== 'object') return
