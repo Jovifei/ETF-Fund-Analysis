@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-"""TD 九转 (TD Sequential / Demark 9) 工具。
+"""项目 TD Setup 计数工具。
 
-扩展 indicators._td_setup 的计数逻辑，输出目标看板风格的九转标签：
+这里只实现 close[t] 与 close[t-4] 的连续 Setup 计数和展示标签，
+不是完整 TD Sequential，也不产生交易信号。扩展 indicators._td_setup：
   - 顶部序列: 连续 9 根收盘价 > 4 根前收盘价 -> TD9 下跌变盘（上涨衰竭）
   - 底部序列: 连续 9 根收盘价 < 4 根前收盘价 -> TD9 上涨变盘（下跌衰竭）
 
@@ -14,6 +15,8 @@ from dataclasses import dataclass
 from typing import Any
 
 import pandas as pd
+
+from app.utils.indicator_contract import INDICATOR_DEFINITION_CONTRACT_VERSION
 
 
 @dataclass(slots=True)
@@ -44,7 +47,7 @@ def compute_td_setup(close: pd.Series, setup_length: int = 9) -> TDSetupResult:
 
     Args:
         close: 收盘价序列（须按时间升序）。
-        setup_length: 变盘计数阈值，默认 9（Demark 标准）。
+        setup_length: 项目 Setup 计数阈值，默认 9；不表示完整 TD Sequential。
 
     Returns:
         TDSetupResult 结构化结果。
@@ -160,7 +163,9 @@ def td_setup_snapshot(frame: pd.DataFrame, setup_length: int = 9) -> dict[str, A
         }
     """
     if frame is None or frame.empty or "close" not in frame.columns:
-        return {"label": "—", "direction": "none", "sub_label": "", "desc": "", "countdown": 0, "setup_length": setup_length}
+        return {"label": "—", "direction": "none", "sub_label": "", "desc": "", "countdown": 0,
+                "setup_length": setup_length, "definition_version": INDICATOR_DEFINITION_CONTRACT_VERSION,
+                "scope": "setup_only_not_full_td_sequential", "actionable": False}
     df = frame.copy().sort_values("trade_date") if "trade_date" in frame.columns else frame.copy()
     close = pd.to_numeric(df["close"], errors="coerce")
     result = compute_td_setup(close, setup_length)
@@ -171,4 +176,7 @@ def td_setup_snapshot(frame: pd.DataFrame, setup_length: int = 9) -> dict[str, A
         "desc": result.desc,
         "countdown": result.countdown,
         "setup_length": setup_length,
+        "definition_version": INDICATOR_DEFINITION_CONTRACT_VERSION,
+        "scope": "setup_only_not_full_td_sequential",
+        "actionable": False,
     }

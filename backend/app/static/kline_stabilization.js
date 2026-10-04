@@ -203,8 +203,8 @@ function legendHtml() {
     </div>
     <div style="height:8px"></div>
     <div class="macd-legend-grid">
-      <div class="macd-legend-item"><span class="dk-st dk-tr label">TD≥9 下跌变盘</span><span class="desc">连续上涨衰竭 · 见顶信号 · 可能转跌</span></div>
-      <div class="macd-legend-item"><span class="dk-st dk-tb label">TD≥9 上涨变盘</span><span class="desc">连续下跌衰竭 · 见底信号 · 可能反弹</span></div>
+      <div class="macd-legend-item"><span class="dk-st dk-tr label">TD Setup≥9 · 上涨衰竭</span><span class="desc">项目 Setup 计数参考 · 非完整 TD Sequential · 非交易信号</span></div>
+      <div class="macd-legend-item"><span class="dk-st dk-tb label">TD Setup≥9 · 下跌衰竭</span><span class="desc">项目 Setup 计数参考 · 非完整 TD Sequential · 非交易信号</span></div>
       <div class="macd-legend-item"><span class="dk-st dk-vf label">均线 ↑↓</span><span class="desc">↑=价格在均线上方(多) ↓=下方(空)</span></div>
       <div class="macd-legend-item"><span class="dk-st dk-tw label">量能标注</span><span class="desc">放量≥1.15 · 平量0.9~1.15 · 缩量&lt;0.9</span></div>
     </div>

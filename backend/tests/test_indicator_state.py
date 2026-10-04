@@ -102,5 +102,6 @@ def test_view_adapters_shapes():
     assert volume["text"].startswith("放量") and volume["cls"] == "vol-expand"
     td = td_state_view({"td_sell_setup": 9})
     assert td["label"] == "TD9" and td["direction"] == "sell" and td["countdown"] == 9
+    assert td["desc"] == "上涨衰竭 setup 参考 · 非交易信号"
     td_none = td_state_view({})
     assert td_none["label"] == "—" and td_none["countdown"] == 0
