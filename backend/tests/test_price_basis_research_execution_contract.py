@@ -121,7 +121,7 @@ def test_factor_panel_uses_evidence_bound_split_research_basis(monkeypatch, db_s
     db_session.flush()
 
     settings = get_settings().model_copy(update={"market_provider": "akshare"})
-    panel = FactorAnalysisService(settings)._panel(db_session, [inst.id])
+    panel = FactorAnalysisService(settings)._panel(db_session, instrument_ids={inst.id})
     assert not panel.empty
     assert set(panel["ts_code"]) == {code}
     assert panel["price_basis"].nunique() == 1

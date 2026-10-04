@@ -89,3 +89,10 @@ Qualification stays `UNKNOWN`; backtests and factor diagnostics remain research-
 ## Panel metadata preservation
 
 The factor panel passes through groupby/apply/concat/merge enrichment before targets are added. Pandas attrs are not used as an implicit persistence mechanism: the canonical research-input contract is now explicitly reattached after OSS factor enrichment. Tests inspect the final returned panel, not an intermediate frame.
+
+
+## Exact interface acceptance repair
+
+Local reception and exact Linux full CI both stopped before the new split/basis assertions because the regression called the keyword-only production interface as a positional argument. The production signature is `_panel(db, *, instrument_ids: set[int] | None = None)`.
+
+The test now calls `_panel(db_session, instrument_ids={inst.id})`. No price-basis runtime code, threshold, version, or assertion was weakened; the existing official-split continuity, stable basis identity, final-panel metadata and return-continuity assertions remain unchanged and must now execute.
