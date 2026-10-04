@@ -11,7 +11,7 @@ from app.core.config import get_settings
 from app.db.base import Base
 from app.models import DailyBar, Instrument, QuoteSnapshot, DecisionBoardSnapshot
 from app.services.decision_board_service import DecisionBoardService
-from app.services.support_resistance_service import SupportResistanceService
+from app.services.support_resistance_service import METHOD_VERSION, SupportResistanceService
 
 
 @pytest.fixture
@@ -140,6 +140,22 @@ def test_snapshot_contract_rejects_old_versions_without_rewriting_them():
 
 
 
+def test_sr_latest_rejects_prior_method_snapshot_without_get_writes(isolated):
+    from app.models import SupportResistanceSnapshot
+
+    db, inst = isolated
+    add_bar(db, inst)
+    service = SupportResistanceService()
+    service.compute(db, inst.id)
+    snapshot = db.query(SupportResistanceSnapshot).filter_by(instrument_id=inst.id).one()
+    snapshot.method_version = "support-resistance-v4-structure"
+    db.flush()
+
+    assert service.latest(db, inst.id) is None
+    assert not db.new and not db.dirty
+    assert snapshot.method_version == "support-resistance-v4-structure"
+
+
 def test_sr_does_not_reuse_a_snapshot_after_a_same_day_price_revision(isolated):
     db,inst=isolated
     bar=add_bar(db,inst)
@@ -177,7 +193,7 @@ def test_sr_snapshot_contains_versioned_daily_structures_and_get_stays_read_only
     computed = service.compute(db, inst.id)
     persisted = service.latest(db, inst.id)
 
-    assert computed["method_version"] == "support-resistance-v4-structure"
+    assert computed["method_version"] == METHOD_VERSION
     assert computed["structures"]["boxes"][0]["state"] == "confirmed"
     assert computed["structures"]["actionable"] is False
     assert persisted is not None and persisted["structures"]["input_hash"] == computed["structures"]["input_hash"]
