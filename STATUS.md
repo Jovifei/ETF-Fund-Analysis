@@ -1,3 +1,9 @@
+## 最新原分支发布闭环 — 2026-10-05 12:39 上海
+
+当前board修复已发布为 `bfd57d7`，分类证据内容身份修复为 `8a6711a`，官方分钟接口纯文档批为 `aeb89b8`；三批各自三项精确CI全部成功，完整tree与相应本地候选一致。原分支保持 `codex/post-release-indicator-audit-20261004`。完整SHA、父提交、tree和CI链接见[原分支发布闭环](docs/audits/ORIGINAL_BRANCH_PUBLICATION_CLOSURE_20261005.md)。
+
+此前“本地候选/尚未发布/等待恢复”段落是当时历史，以下保留。当前不再有这两批的GitHub发布阻碍。未合并main、未部署、未调用行情API；真实数据资格/分钟可行性仍UNKNOWN、actionable=false、not_calibrated。Windows根目录文档及本地hub尚未在此云端任务同步。
+
 ## 最新本地候选状态 — 2026-10-05 上海
 
 最后已发布为6608602，三项精确CI成功。当前board读取修复已保存本地d9d1dea，完整1741通过/11跳过、142顺序与独立17通过，尚未发布。其后的分类证据内容身份候选完整1762通过/11跳过，45扩展及独立24通过，依赖d9d1dea；两批均无精确远端CI/部署收据。等待原分支发布恢复，不把本地通过当线上更新。见[分类候选收据](docs/audits/CLASSIFICATION_CONTENT_IDENTITY_20261005.md)。

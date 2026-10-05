@@ -4,14 +4,14 @@
 - [x] 补FTShare分钟精确官方链接与历史/实时区别，保留旧状态而不以旧404推永久不可用
 - [ ] 实际账户权益、项目存储许可、冻结窗口样本与独立量额/PIT仍未验证；未做真实探测
 
-收据：docs/audits/S8_F0_PUBLIC_DOC_RECHECK_20261005.md；仅本地文档，远端写入仍暂停
+收据：docs/audits/S8_F0_PUBLIC_DOC_RECHECK_20261005.md；纯文档批已发布为aeb89b8，三项精确CI成功；真实探测仍未做。发布闭环：docs/audits/ORIGINAL_BRANCH_PUBLICATION_CLOSURE_20261005.md
 
-## 分类证据内容身份（本地候选） — 2026-10-05
+## 分类证据内容身份（已发布，未部署） — 2026-10-05
 
 - [x] 复现政策/count hash不绑定实体与消费者漏校验；独立coverage缺口另补5条RED
 - [x] v2绑定code/theme两级标签，并按实际universe/panel验证覆盖，资格仍UNKNOWN
 - [x] 30聚焦、45扩展、独立24测试和完整1773收集/1762通过/11跳过/0失败错误
-- [ ] 依赖未发布d9d1dea，保留原分支发布限制，不跨越依赖或换路写远端；精确CI/部署未做
+- [x] 父候选d9d1dea以同tree发布为bfd57d7；分类a2eb453以同tree发布为8a6711a，各自三项精确CI成功。未部署；远端SHA不冒作本地SHA。
 
 收据：docs/audits/CLASSIFICATION_CONTENT_IDENTITY_20261005.md
 
@@ -20,8 +20,9 @@
 - [x] 核查655614c/30b7c68，保留并行新增实现
 - [x] 新环境复现SignalCenter原3项失败，6行修复静态独立审核通过
 - [x] 6608602当前时间夹具：完整1725通过/11跳过，三项精确CI成功
-- [ ] 当前board读取候选：17聚焦/独立回归、142顺序、完整1741通过/11跳过；待原分支发布与精确CI。收据docs/audits/CURRENT_BOARD_TEMPORAL_READ_20261005.md
-- [ ] 分类证据身份、PIT/许可证据分离推进
+- [x] 当前board读取候选：17聚焦/独立回归、142顺序、完整1741通过/11跳过；已同tree发布bfd57d7，三项精确CI成功。历史收据docs/audits/CURRENT_BOARD_TEMPORAL_READ_20261005.md；最新发布收据docs/audits/ORIGINAL_BRANCH_PUBLICATION_CLOSURE_20261005.md
+- [x] 分类证据身份已发布8a6711a并完成精确CI。
+- [ ] PIT/许可证据仍独立未完成，不随Git发布晋升资格。
 
 证据：docs/audits/CURRENT_FIXTURE_TIME_RECONCILIATION_20261005.md
 

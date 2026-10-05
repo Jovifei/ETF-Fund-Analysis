@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "roadmap_version": "2026-10-02-v2",
-  "updated_at": "2026-10-05T09:48:00+08:00",
-  "current_stage": "6608602已三CI成功；未发布d9d1dea board修复1741通过；分类证据本地最终1762通过，等待原分支发布恢复",
+  "updated_at": "2026-10-05T12:39:30+08:00",
+  "current_stage": "原分支board bfd57d7、分类证据8a6711a、分钟接口文档aeb89b8已发布；各自三项精确CI成功，未部署",
   "current_iteration": 71,
   "planning_source": "同一远端ChatGPT v2方向修订（只读核验摘要）及本地现场元数据核验；无新增源码独立审核",
   "deployed_code_sha": "ef287c06b4bd6b8ecd507149a0a0d7bd398e4162",
@@ -14,7 +14,7 @@
   "actionable": false,
   "runtime_activated": false,
   "auto_trading": false,
-  "next_task": "保留两个独立本地候选及完整证据；远端发布限制解除后先核最新HEAD，再按父依赖与同tree安全快进、精确CI；未进行部署。",
+  "next_task": "本轮冻结修复及公开文档批已完成原分支发布/精确CI；保留真实账户权益、存储许可、冻结窗口样本及量额/时间/PIT为UNKNOWN，真实探测须另行授权；本地根文档与hub待对应环境核验。",
   "blockers": [
     "5m/15m真实量额、单位/时间/PIT及成本可行性未解决：先做S8-F0，不再排在所有UX之后",
     "历史记录：远端文件连接曾启动超时；该连接当前状态未复核，既有GitHub实施/审核正常推进，不冻结已授权低风险工程",
@@ -2159,6 +2159,11 @@
       "date": "2026-10-05",
       "iteration": 71,
       "description": "S8-F0-03只读核验官方公开文档：新补FTShare历史5/15服务端聚合与实时1m分离、数量/开闭戳定义和套餐归属；AKShare明确5/15/复权但单位/历史保证仍缺；Tushare资料重核、Sina分钟官方合同未定位。无账户/API/采购/生产操作，资格与真实可行性仍UNKNOWN。"
+    },
+    {
+      "date": "2026-10-05",
+      "iteration": 71,
+      "description": "原分支按同tree及实际远端父依赖非强制发布：本地d9d1dea→远端bfd57d7、a2eb453→8a6711a、6be6d7d→aeb89b8，各自三项精确CI终态成功。修正当前LOCAL_ONLY/暂停发布状态，历史审计正文保留；未部署/真实探测，资格UNKNOWN/actionable=false。本地根文档与hub未在云端同步。收据：docs/audits/ORIGINAL_BRANCH_PUBLICATION_CLOSURE_20261005.md"
     }
   ],
   "incoming_candidate": {
@@ -2452,22 +2457,42 @@
   },
   "post_release_board_current_batch": {
     "base_sha": "6608602093d27704b4bebc8fb2affe36f65cfc32",
-    "code": "LOCAL_COMMITTED_UNPUBLISHED",
+    "code": "PUBLISHED_SAME_TREE",
     "tests": "1752_TOTAL_1741_PASS_11_SKIP_0_FAIL_142_ORDERED_PASS",
     "review": "INDEPENDENT_DIFF_PASS_17_INDEPENDENT_TESTS",
     "deployment": "NOT_PERFORMED",
     "evidence": "docs/audits/CURRENT_BOARD_TEMPORAL_READ_20261005.md",
-    "ci": "REMOTE_PUBLICATION_PENDING_EXECUTION_APPROVAL",
-    "local_sha": "d9d1dea9734f2a52c865a44d2d8b6c1b418ad67e"
+    "ci": "SUCCESS_ALL_THREE_EXACT_COMMIT",
+    "local_sha": "d9d1dea9734f2a52c865a44d2d8b6c1b418ad67e",
+    "published_sha": "bfd57d7b5db1b1979d40cf8c450efc8e8da94607",
+    "tree_sha": "360f2f88fb353c382b31f3233f3593877cd7bcf7",
+    "ci_runs": [
+      37258973887,
+      37258973899,
+      37258973888
+    ],
+    "publication_receipt": "docs/audits/ORIGINAL_BRANCH_PUBLICATION_CLOSURE_20261005.md"
   },
   "classification_content_current_batch": {
     "base_local_sha": "d9d1dea9734f2a52c865a44d2d8b6c1b418ad67e",
-    "dependency_published": false,
-    "code": "LOCAL_ONLY_CONTENT_BOUND_CONTRACT",
+    "dependency_published": true,
+    "code": "PUBLISHED_CONTENT_BOUND_CONTRACT",
     "tests": "1773_TOTAL_1762_PASS_11_SKIP_0_FAIL_45_EXPANDED_PASS",
     "review": "INDEPENDENT_DIFF_PASS_24_INDEPENDENT_TESTS",
-    "publication": "LOCAL_ONLY_PENDING_PARENT_PUBLICATION",
-    "evidence": "docs/audits/CLASSIFICATION_CONTENT_IDENTITY_20261005.md"
+    "publication": "PUBLISHED_SAME_TREE",
+    "evidence": "docs/audits/CLASSIFICATION_CONTENT_IDENTITY_20261005.md",
+    "local_sha": "a2eb45320668d6888890fcef81233f88fba7f46f",
+    "published_sha": "8a6711adaa291699c5a6f3d53d936cd41c87282a",
+    "remote_parent_sha": "bfd57d7b5db1b1979d40cf8c450efc8e8da94607",
+    "tree_sha": "5450f5746877872278ecf9f51e01adb01f174a14",
+    "ci": "SUCCESS_ALL_THREE_EXACT_COMMIT",
+    "ci_runs": [
+      37261163306,
+      37261163303,
+      37261163292
+    ],
+    "deployment": "NOT_PERFORMED",
+    "publication_receipt": "docs/audits/ORIGINAL_BRANCH_PUBLICATION_CLOSURE_20261005.md"
   },
   "f0_public_docs_recheck": {
     "date": "2026-10-05",
@@ -2480,7 +2505,18 @@
     ],
     "status": "DOCS_RECHECK_COMPLETE_ACTUAL_FEASIBILITY_UNKNOWN",
     "actual_probes": "NOT_RUN",
-    "publication": "LOCAL_ONLY",
-    "evidence": "docs/audits/S8_F0_PUBLIC_DOC_RECHECK_20261005.md"
+    "publication": "PUBLISHED_SAME_TREE",
+    "evidence": "docs/audits/S8_F0_PUBLIC_DOC_RECHECK_20261005.md",
+    "local_sha": "6be6d7d09a2ff8a8604c04a0655ca73ac0571269",
+    "published_sha": "aeb89b8a174148256a9eb723aa05ee5363d9698d",
+    "remote_parent_sha": "8a6711adaa291699c5a6f3d53d936cd41c87282a",
+    "tree_sha": "4135c7aaccca2bee64b60be6a2f64e26c23a8eaa",
+    "ci": "SUCCESS_ALL_THREE_EXACT_COMMIT",
+    "ci_runs": [
+      37262844331,
+      37262844344,
+      37262844330
+    ],
+    "publication_receipt": "docs/audits/ORIGINAL_BRANCH_PUBLICATION_CLOSURE_20261005.md"
   }
 }

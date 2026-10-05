@@ -2,11 +2,11 @@
 
 > 本文件由 scripts/update_project_progress.py 从 PROJECT_PROGRESS.json 生成。修改台账后重新生成，勿直接修改本文件。
 
-更新：2026-10-05T09:48:00+08:00 · iteration 71 · 当前 6608602已三CI成功；未发布d9d1dea board修复1741通过；分类证据本地最终1762通过，等待原分支发布恢复
+更新：2026-10-05T12:39:30+08:00 · iteration 71 · 当前 原分支board bfd57d7、分类证据8a6711a、分钟接口文档aeb89b8已发布；各自三项精确CI成功，未部署
 
 [总阶段路线图](PROJECT_MASTER_ROADMAP.md) · [图形进度板](PROJECT_PROGRESS.html) · [维护规则](PROJECT_PROGRESS_MAINTENANCE.md)
 
-**当前下一步：** 保留两个独立本地候选及完整证据；远端发布限制解除后先核最新HEAD，再按父依赖与同tree安全快进、精确CI；未进行部署。
+**当前下一步：** 本轮冻结修复及公开文档批已完成原分支发布/精确CI；保留真实账户权益、存储许可、冻结窗口样本及量额/时间/PIT为UNKNOWN，真实探测须另行授权；本地根文档与hub待对应环境核验。
 
 全项目验收分母尚未冻结；以下显示阶段状态和证据闭环，不能推算全项目完成百分比。
 
@@ -293,3 +293,4 @@
 - 2026-10-05 / iteration71：6608602已原分支非强制发布并核同tree；下一批5条RED证实未来board与SignalCenter旧合同原grade读取漏洞。统一当前读取并保留历史ID审核，13项合同通过，全量/顺序/独立审核中；fixture原断言保留。无部署。
 - 2026-10-05 / iteration71：当前board第二批本地d9d1dea完整1741通过/11跳过、142顺序及独立17通过，远端未发布；分类第三批独立本地候选绑定真实分类内容并统一读取校验，24聚焦通过，扩展/完整验证中。无远端写入/部署，不以6608602 CI替代新候选证据。
 - 2026-10-05 / iteration71：S8-F0-03只读核验官方公开文档：新补FTShare历史5/15服务端聚合与实时1m分离、数量/开闭戳定义和套餐归属；AKShare明确5/15/复权但单位/历史保证仍缺；Tushare资料重核、Sina分钟官方合同未定位。无账户/API/采购/生产操作，资格与真实可行性仍UNKNOWN。
+- 2026-10-05 / iteration71：原分支按同tree及实际远端父依赖非强制发布：本地d9d1dea→远端bfd57d7、a2eb453→8a6711a、6be6d7d→aeb89b8，各自三项精确CI终态成功。修正当前LOCAL_ONLY/暂停发布状态，历史审计正文保留；未部署/真实探测，资格UNKNOWN/actionable=false。本地根文档与hub未在云端同步。收据：docs/audits/ORIGINAL_BRANCH_PUBLICATION_CLOSURE_20261005.md
