@@ -46,6 +46,7 @@ from app.utils.numbers import finite_or_none
 from app.utils.support_resistance import build_support_resistance
 
 READ_MODEL_VERSION = "decision-read-v110-flow-share-provenance"
+CURRENT_BOARD_READ_CONTRACT = "current-board-read-v1-temporal"
 HORIZONS = (1, 3, 5, 10)
 # Must match docs/INTRADAY_REFRESH_CADENCE.md and refresh_policy windows.
 # Lunch 11:31–12:59 is intentionally absent.  14:50–15:00 is every 2 minutes.
@@ -296,7 +297,10 @@ class DecisionBoardService:
         self._prune_snapshot_dates(db)
         return SnapshotBuild(snapshot, payload)
 
-    def read_latest(self, db: Session, *, horizon: int = 1, snapshot_id: str | None = None) -> dict | None:
+    def read_latest(
+        self, db: Session, *, horizon: int = 1, snapshot_id: str | None = None,
+        at: datetime | None = None,
+    ) -> dict | None:
         self._validate_horizon(horizon)
         snapshot = (
             db.scalar(select(DecisionBoardSnapshot).where(DecisionBoardSnapshot.snapshot_id == snapshot_id).limit(1))
@@ -305,10 +309,46 @@ class DecisionBoardService:
         )
         if snapshot is None:
             return None if snapshot_id is not None else self._empty_payload(horizon)
+        # Explicit snapshot IDs retain the historical inspection route. Current
+        # consumers must opt into the same reference even when resolving an ID.
+        # Validate the newest row, never silently substitute an older board.
+        if snapshot_id is None or at is not None:
+            reference = at or datetime.now(self.settings.timezone)
+            reference = (reference.replace(tzinfo=self.settings.timezone)
+                         if reference.tzinfo is None else reference.astimezone(self.settings.timezone))
+            generated = snapshot.generated_at
+            generated = (generated.replace(tzinfo=self.settings.timezone)
+                         if generated.tzinfo is None else generated.astimezone(self.settings.timezone))
+            if generated > reference:
+                blocked = self._empty_payload(horizon)
+                blocked.update(
+                    snapshot_id=snapshot.snapshot_id,
+                    generated_at=snapshot.generated_at,
+                    next_refresh_at=snapshot.next_refresh_at,
+                    freshness="blocked",
+                    read_contract="snapshot_after_read_time",
+                    current_board_read_contract=CURRENT_BOARD_READ_CONTRACT,
+                )
+                raw_payload = snapshot.payload_json if isinstance(snapshot.payload_json, dict) else {}
+                raw_rows = raw_payload.get("rows")
+                blocked["blocked_instrument_codes"] = sorted({
+                    row["ts_code"].strip().upper()
+                    for row in (raw_rows if isinstance(raw_rows, list) else [])
+                    if isinstance(row, dict) and isinstance(row.get("ts_code"), str)
+                    and row["ts_code"].strip()
+                })
+                blocked["data_status"].update(
+                    freshness="blocked", reason_code="snapshot_after_read_time"
+                )
+                blocked["source_status"].update(
+                    freshness="blocked", reason_code="snapshot_after_read_time"
+                )
+                return blocked
         payload = self._select_horizon(dict(snapshot.payload_json or {}), horizon)
         from app.utils.hashing import stable_hash
         compatible = (payload.get("read_model_version") == READ_MODEL_VERSION
                       and payload.get("config_hash") == stable_hash(self.settings.load_strategy()))
+        payload["current_board_read_contract"] = CURRENT_BOARD_READ_CONTRACT
         payload["read_contract"] = "version_matched" if compatible else "legacy_snapshot_requires_rebuild"
         if not compatible:
             payload["freshness"] = "stale"
@@ -338,6 +378,11 @@ class DecisionBoardService:
 
     def read_instrument(self, db: Session, ts_code: str, *, horizon: int = 1, snapshot_id: str | None = None) -> dict | None:
         payload = self.read_latest(db, horizon=horizon, snapshot_id=snapshot_id)
+        return self.instrument_from_payload(payload, ts_code, horizon=horizon)
+
+    @staticmethod
+    def instrument_from_payload(payload: dict | None, ts_code: str, *, horizon: int = 1) -> dict | None:
+        """Project a checked board payload without another query or mutation."""
         if payload is None:
             return None
         normalized = ts_code.strip().upper()

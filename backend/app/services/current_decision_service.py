@@ -33,7 +33,7 @@ class CurrentDecisionService:
             return None, {}
         from app.services.decision_board_service import DecisionBoardService
         payload = DecisionBoardService(self.settings).read_latest(
-            db, snapshot_id=snapshot.snapshot_id
+            db, snapshot_id=snapshot.snapshot_id, at=datetime.now(self.settings.timezone)
         ) or {}
         mapped: dict[str, dict[str, Any]] = {}
         for row in payload.get("rows", []) or []:

@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.models import DecisionBoardSnapshot, IndicatorSnapshot, Instrument, NewsItem, SignalSnapshot
+from app.models import IndicatorSnapshot, Instrument, NewsItem, SignalSnapshot
 from app.services.holding_service import HoldingService
 from app.services.signal_grade_service import SignalGradeService
 from app.services.snapshot_contract import (
@@ -486,25 +486,12 @@ class SignalCenterService:
         # 与 signal_service._news_theme_score 同口径：50 + 35 × 均值
         return {theme: 50.0 + 35.0 * (sum(values) / len(values)) for theme, values in impacts.items()}
 
-    @staticmethod
-    def _latest_decision_rows(db: Session) -> tuple[str | None, dict[str, dict[str, Any]]]:
-        snapshot = db.scalar(
-            select(DecisionBoardSnapshot)
-            .order_by(DecisionBoardSnapshot.generated_at.desc(), DecisionBoardSnapshot.id.desc())
-            .limit(1)
-        )
-        if snapshot is None:
-            return None, {}
-        payload = snapshot.payload_json if isinstance(snapshot.payload_json, dict) else {}
-        rows = payload.get("rows") if isinstance(payload, dict) else []
-        mapped: dict[str, dict[str, Any]] = {}
-        for row in rows or []:
-            if not isinstance(row, dict):
-                continue
-            ts_code = str(row.get("ts_code") or "").strip().upper()
-            if ts_code:
-                mapped[ts_code] = row
-        return snapshot.snapshot_id, mapped
+    def _latest_decision_rows(self, db: Session) -> tuple[str | None, dict[str, dict[str, Any]]]:
+        # Use the same version/config/time-aware reader as other current surfaces.
+        # A raw persisted grade is not automatically current evidence.
+        from app.services.current_decision_service import CurrentDecisionService
+
+        return CurrentDecisionService(self.settings).latest_board_rows(db)
 
     # ----------------------------------------------------------------- latest
 

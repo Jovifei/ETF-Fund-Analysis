@@ -50,3 +50,13 @@ The expanded deliberately ordered subset (SignalCenter → history → board →
 These are scheduled for a separate fixture-isolation stage, retaining the original assertions. An initial isolated candidate passed the three affected cases together with both preceding modules (34 tests), but is not included in the frozen six-line candidate or represented as a final reviewed fix.
 
 Exact committed hosted CI remains pending after publication. Full-suite success in its normal order does not imply order independence, runtime board-read safety, live data qualification or deployment readiness.
+
+### Exact hosted closure
+
+Published exact commit `6608602093d27704b4bebc8fb2affe36f65cfc32`, tree `c29f11b42872501ba2fb1677e83b458fc34f1144`, was verified at the original branch after a non-forced fast-forward. All three exact-commit workflows completed successfully:
+
+- [Full CI 37247286247](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37247286247)
+- [Workspace CI 37247286259](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37247286259)
+- [Platform audit 37247286235](https://github.com/Jovifei/ETF-Fund-Analysis/actions/runs/37247286235)
+
+The local Git transport had no configured credentials. The existing authorized GitHub connector created the identical tree and parented commit; the non-forced ref update was guarded by a fresh expected-parent check and independently re-read afterward. No credential or security setting was changed. This closes the six-line fixture stage; it does not close the separately recorded order-dependence/runtime-read stages or authorize a data-qualification claim.

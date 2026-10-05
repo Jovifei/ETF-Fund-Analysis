@@ -102,7 +102,8 @@ def test_health_sort_key_is_display_only_and_keeps_existing_grade_order() -> Non
     assert health_sort_key("减仓", "missing") > health_sort_key("观望", "stale")
 
 
-def test_trailing_price_only_tail_keeps_last_qualified_snapshot_stale_not_anomaly(db_session) -> None:
+def test_trailing_price_only_tail_keeps_last_qualified_snapshot_stale_not_anomaly(corporate_action_cutoff_db) -> None:
+    db_session = corporate_action_cutoff_db
     settings = get_settings().model_copy(update={"market_provider": "akshare"})
     instrument = Instrument(
         ts_code="998871.SH", symbol="998871", name="tail fallback fixture", kind="ETF", enabled=True
@@ -148,7 +149,8 @@ def test_trailing_price_only_tail_keeps_last_qualified_snapshot_stale_not_anomal
     db_session.flush()
 
 
-def test_tail_snapshot_after_qualified_date_remains_anomalous(db_session) -> None:
+def test_tail_snapshot_after_qualified_date_remains_anomalous(corporate_action_cutoff_db) -> None:
+    db_session = corporate_action_cutoff_db
     settings = get_settings().model_copy(update={"market_provider": "akshare"})
     instrument = Instrument(ts_code="998872.SH", symbol="998872", name="tail snapshot fixture", kind="ETF", enabled=True)
     db_session.add(instrument)
@@ -182,7 +184,8 @@ def test_tail_snapshot_after_qualified_date_remains_anomalous(db_session) -> Non
     db_session.flush()
 
 
-def test_official_split_gap_uses_stale_research_snapshot_not_anomaly(db_session) -> None:
+def test_official_split_gap_uses_stale_research_snapshot_not_anomaly(corporate_action_cutoff_db) -> None:
+    db_session = corporate_action_cutoff_db
     settings = get_settings().model_copy(update={"market_provider": "akshare"})
     existing = db_session.scalar(select(Instrument).where(Instrument.ts_code == "512000.SH"))
     if existing is not None:
@@ -290,35 +293,41 @@ def test_demo_refresh_is_ephemeral_and_does_not_write_production_snapshot(db_ses
 
 
 def test_provisional_input_is_isolated_from_daily_bars(db_session, bootstrapped) -> None:
-    service = DecisionBoardService()
-    before = db_session.scalar(select(func.count(DailyBar.id)))
+    # This case owns its provisional table input; restore it even on failure.
+    try:
+        db_session.execute(delete(DecisionBoardProvisionalInput))
+        db_session.flush()
+        service = DecisionBoardService()
+        before = db_session.scalar(select(func.count(DailyBar.id)))
 
-    service.record_provisional_input(
-        db_session,
-        ts_code="510300.SH",
-        observed_at=datetime(2026, 8, 31, 14, 30, tzinfo=SHANGHAI),
-        source="fresh_test_provider",
-        timestamp_verified=False,
-        open_price=3.0,
-        high_price=3.1,
-        low_price=2.9,
-        last_price=3.05,
-        volume=100.0,
-        amount=300.0,
-        pct_change_percent_points=0.01,
-    )
+        service.record_provisional_input(
+            db_session,
+            ts_code="510300.SH",
+            observed_at=datetime(2026, 8, 31, 14, 30, tzinfo=SHANGHAI),
+            source="fresh_test_provider",
+            timestamp_verified=False,
+            open_price=3.0,
+            high_price=3.1,
+            low_price=2.9,
+            last_price=3.05,
+            volume=100.0,
+            amount=300.0,
+            pct_change_percent_points=0.01,
+        )
 
-    assert db_session.scalar(select(func.count(DailyBar.id))) == before
-    assert db_session.scalar(select(func.count(DecisionBoardProvisionalInput.id))) == 1
+        assert db_session.scalar(select(func.count(DailyBar.id))) == before
+        assert db_session.scalar(select(func.count(DecisionBoardProvisionalInput.id))) == 1
 
-    payload = service.refresh(
-        db_session, generated_at=datetime(2026, 8, 31, 14, 35, tzinfo=SHANGHAI)
-    ).payload
-    row = next(item for item in payload["rows"] if item["ts_code"] == "510300.SH")
-    assert row["provisional"]["used_for_derived_values"] is True
-    assert row["provisional"]["status"] == "computed_unverified_research_only"
-    assert row["indicator"]["display_basis"] == "intraday_provisional_research"
-    assert row["indicator"]["as_of_date"].startswith("2026-08-31T14:30")
+        payload = service.refresh(
+            db_session, generated_at=datetime(2026, 8, 31, 14, 35, tzinfo=SHANGHAI)
+        ).payload
+        row = next(item for item in payload["rows"] if item["ts_code"] == "510300.SH")
+        assert row["provisional"]["used_for_derived_values"] is True
+        assert row["provisional"]["status"] == "computed_unverified_research_only"
+        assert row["indicator"]["display_basis"] == "intraday_provisional_research"
+        assert row["indicator"]["as_of_date"].startswith("2026-08-31T14:30")
+    finally:
+        db_session.rollback()
 
 
 @pytest.mark.parametrize(
@@ -685,10 +694,13 @@ def test_snapshot_marks_old_verified_quote_stale_and_keeps_anomaly_visible(db_se
         row = next(item for item in payload["rows"] if item["instrument_id"] == indicator.instrument_id)
         assert row["freshness"] == "stale"
         assert row["data_status"] == "quote_stale_at_snapshot_generation"
-        db_session.delete(indicator)
+        instrument_id = indicator.instrument_id
+        db_session.execute(delete(IndicatorSnapshot).where(
+            IndicatorSnapshot.instrument_id == instrument_id
+        ))
         db_session.flush()
         payload = DecisionBoardService().refresh(db_session, generated_at=generated).payload
-        assert next(row for row in payload["groups"]["数据异常"] if row["instrument_id"] == indicator.instrument_id)["grade"] == "数据异常"
+        assert next(row for row in payload["groups"]["数据异常"] if row["instrument_id"] == instrument_id)["grade"] == "数据异常"
     finally:
         db_session.rollback()
 

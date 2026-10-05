@@ -2,8 +2,8 @@
 
 - [x] 核查655614c/30b7c68，保留并行新增实现
 - [x] 新环境复现SignalCenter原3项失败，6行修复静态独立审核通过
-- [ ] 当前候选聚焦/全量与精确CI闭环
-- [ ] 未来/旧合同board读取：已留3条业务失败回归，待下一批修复
+- [x] 6608602当前时间夹具：完整1725通过/11跳过，三项精确CI成功
+- [ ] 当前board读取候选：17聚焦/独立回归、142顺序、完整1741通过/11跳过；待原分支发布与精确CI。收据docs/audits/CURRENT_BOARD_TEMPORAL_READ_20261005.md
 - [ ] 分类证据身份、PIT/许可证据分离推进
 
 证据：docs/audits/CURRENT_FIXTURE_TIME_RECONCILIATION_20261005.md

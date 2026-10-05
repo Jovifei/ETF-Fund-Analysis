@@ -1,12 +1,11 @@
 from datetime import UTC, date, datetime, timedelta
-from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import pytest
 from app.core.config import get_settings
 from app.models import DailyBar, Instrument
 from app.workspace.read_model import chart_data
-from sqlalchemy import event
+from sqlalchemy import event, select
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
@@ -27,8 +26,13 @@ def isolated_chan_input_db(tmp_path):
 
 
 def _instrument(db, *, prefix: str = "59", ts_code: str | None = None) -> Instrument:
-    suffix = str(int(uuid4().hex[:5], 16) % 10000).zfill(4)
-    code = ts_code or f"{prefix}{suffix}.SH"
+    code = ts_code
+    if code is None:
+        db.flush()
+        occupied = set(db.scalars(select(Instrument.ts_code)).all())
+        code = next((f"{prefix}{value:04d}.SH" for value in range(10000)
+                     if f"{prefix}{value:04d}.SH" not in occupied), None)
+        assert code is not None, "Chan fixture instrument namespace exhausted"
     item = Instrument(
         ts_code=code,
         symbol=code[:6],
@@ -1001,3 +1005,14 @@ def test_non_daily_interval_is_blocked_and_freeze_performs_no_database_writes(db
     assert unsupported.status == "blocked"
     assert unsupported.reason_code == "unsupported_interval"
     assert dml_statements == []
+
+
+def test_fixture_instrument_codes_remain_unique_when_entropy_repeats(isolated_chan_input_db, monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setitem(globals(), 'uuid4', lambda: SimpleNamespace(hex='0' * 32))
+    first = _instrument(isolated_chan_input_db)
+    second = _instrument(isolated_chan_input_db)
+    assert first.ts_code != second.ts_code
+    assert first.ts_code.startswith('59') and second.ts_code.startswith('59')
+    assert first.ts_code.endswith('.SH') and second.ts_code.endswith('.SH')

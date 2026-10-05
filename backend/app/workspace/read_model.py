@@ -226,8 +226,13 @@ def instrument_detail(db: Session, settings: Settings, code: str, user_id: int |
     inst = db.scalar(select(Instrument).where(Instrument.ts_code == code, Instrument.kind.in_(("ETF", "LOF"))))
     if inst is None:
         return None
-    row = DecisionBoardService(settings).read_instrument(db, code)
-    decision_after_read = bool(row and market_time(row.get("generated_at")) > read_as_of)
+    board_service = DecisionBoardService(settings)
+    board_payload = board_service.read_latest(db, at=read_as_of) or {}
+    row = board_service.instrument_from_payload(board_payload, code)
+    decision_after_read = (
+        board_payload.get("read_contract") == "snapshot_after_read_time"
+        and code.strip().upper() in board_payload.get("blocked_instrument_codes", [])
+    )
     if decision_after_read:
         row = None
     indicator = db.scalar(select(IndicatorSnapshot).where(IndicatorSnapshot.instrument_id == inst.id).order_by(IndicatorSnapshot.as_of_date.desc(), IndicatorSnapshot.generated_at.desc(), IndicatorSnapshot.id.desc()).limit(1))
