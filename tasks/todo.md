@@ -1,3 +1,12 @@
+## 分类证据内容身份（本地候选） — 2026-10-05
+
+- [x] 复现政策/count hash不绑定实体与消费者漏校验；独立coverage缺口另补5条RED
+- [x] v2绑定code/theme两级标签，并按实际universe/panel验证覆盖，资格仍UNKNOWN
+- [x] 30聚焦、45扩展、独立24测试和完整1773收集/1762通过/11跳过/0失败错误
+- [ ] 依赖未发布d9d1dea，保留原分支发布限制，不跨越依赖或换路写远端；精确CI/部署未做
+
+收据：docs/audits/CLASSIFICATION_CONTENT_IDENTITY_20261005.md
+
 ## 当前证据时区与board读取 — 2026-10-05
 
 - [x] 核查655614c/30b7c68，保留并行新增实现

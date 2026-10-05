@@ -14,6 +14,7 @@ from app.services.report_artifact_contract import (
     read_system_json_report,
 )
 from app.utils.hashing import stable_hash
+from app.utils.historical_classification_contract import current_metadata_classification_contract
 from app.workspace.read_model import factor_view
 
 
@@ -160,9 +161,11 @@ def _factor_payload(settings, *, analysis_version: str | None = None):
     universe_contract = {
         "version": "research-universe-v1-current-enabled",
         "selection": "current_enabled_snapshot",
+        "instrument_codes": [],
         "survivorship_bias_controlled": False,
         "qualification": "UNKNOWN",
     }
+    classification_contract = current_metadata_classification_contract([])
     payload = {
         "report_type": "factor_effectiveness",
         "analysis_version": analysis_version or strategy["factor_analysis"]["version"],
@@ -171,11 +174,13 @@ def _factor_payload(settings, *, analysis_version: str | None = None):
         "panel": {
             "research_input_contract": research_contract,
             "universe_contract": universe_contract,
+            "classification_contract": classification_contract,
         },
     }
     metadata = {
         "research_input_contract_hash": stable_hash(research_contract),
         "universe_contract_hash": stable_hash(universe_contract),
+        "classification_contract_hash": stable_hash(classification_contract),
     }
     return payload, metadata
 

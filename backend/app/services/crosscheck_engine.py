@@ -29,7 +29,7 @@ from app.services.report_artifact_contract import (
 )
 from app.utils.hashing import stable_hash
 from app.utils.historical_classification_contract import (
-    HISTORICAL_CLASSIFICATION_CONTRACT_VERSION,
+    classification_contract_issues,
 )
 from app.utils.universe_contract import UNIVERSE_CONTRACT_VERSION, parse_listing_date
 
@@ -107,12 +107,12 @@ class CrosscheckEngine:
         if not isinstance(universe_contract, dict) or universe_contract.get("version") != UNIVERSE_CONTRACT_VERSION:
             return {"status": "skipped", "reason": "primary_universe_contract_missing"}
         classification_contract = data_contract.get("classification_contract")
-        if (
-            not isinstance(classification_contract, dict)
-            or classification_contract.get("version")
-            != HISTORICAL_CLASSIFICATION_CONTRACT_VERSION
-        ):
-            return {"status": "skipped", "reason": "primary_classification_contract_missing"}
+        classification_issues = classification_contract_issues(
+            classification_contract, expected_codes=universe_contract.get("instrument_codes"),
+        )
+        if classification_issues:
+            return {"status": "skipped", "reason": "primary_classification_contract_missing",
+                    "classification_issues": classification_issues}
         config = report.get("configuration")
         if not isinstance(config, dict):
             return {"status": "skipped", "reason": "primary_configuration_missing"}

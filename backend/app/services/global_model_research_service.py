@@ -16,6 +16,7 @@ from app.services.event_service import emit_event
 from app.services.factor_analysis_service import FactorAnalysisService
 from app.utils.feature_store import HORIZON_FEATURES
 from app.utils.hashing import stable_hash
+from app.utils.historical_classification_contract import classification_contract_issues
 from app.utils.horizons import aligned_research_horizons
 from app.utils.reproducibility import current_git_commit
 from app.utils.time_split import purged_expanding_walk_forward_folds
@@ -125,8 +126,12 @@ class GlobalModelResearchService:
             if not isinstance(universe_contract, dict) or not universe_contract.get("version"):
                 raise ValueError("global model research requires explicit universe contract")
             classification_contract = panel.attrs.get("classification_contract")
-            if not isinstance(classification_contract, dict) or not classification_contract.get("version"):
-                raise ValueError("global model research requires explicit historical classification contract")
+            classification_issues = classification_contract_issues(
+                classification_contract, expected_codes=panel["ts_code"].unique().tolist(),
+                allow_superset=True,
+            )
+            if classification_issues:
+                raise ValueError("global model research classification evidence invalid: " + ",".join(classification_issues))
             dates = sorted(panel["trade_date"].dropna().unique())
             if len(dates) < 240:
                 raise ValueError("global model research requires at least 240 distinct trading dates")

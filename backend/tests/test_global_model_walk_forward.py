@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -9,6 +10,7 @@ from app.services.factor_analysis_service import FactorAnalysisService
 from app.services.global_model_research_service import GlobalModelResearchService, _frame_digest
 from app.utils.feature_store import HORIZON_FEATURES
 from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS
+from app.utils.historical_classification_contract import current_metadata_classification_contract
 
 
 def _synthetic_panel() -> pd.DataFrame:
@@ -63,13 +65,10 @@ def test_global_model_research_uses_purged_expanding_walk_forward(
         "historical_membership_available": False,
         "qualification": "UNKNOWN",
     }
-    panel.attrs["classification_contract"] = {
-        "version": "historical-classification-v1-current-metadata-only",
-        "effective_dated_history_available": False,
-        "theme_point_in_time_qualified": False,
-        "historical_backtest_theme_constraint_applied": False,
-        "qualification": "UNKNOWN",
-    }
+    panel.attrs["classification_contract"] = current_metadata_classification_contract(
+        SimpleNamespace(ts_code=code, theme_l1=None, theme_l2=None)
+        for code in sorted(panel["ts_code"].unique())
+    )
     monkeypatch.setattr(FactorAnalysisService, "_panel", lambda self, db: panel)
 
     service = GlobalModelResearchService()
@@ -151,13 +150,10 @@ def test_sparse_instrument_uses_actual_label_end_not_global_calendar_distance(
         "historical_membership_available": False,
         "qualification": "UNKNOWN",
     }
-    panel.attrs["classification_contract"] = {
-        "version": "historical-classification-v1-current-metadata-only",
-        "effective_dated_history_available": False,
-        "theme_point_in_time_qualified": False,
-        "historical_backtest_theme_constraint_applied": False,
-        "qualification": "UNKNOWN",
-    }
+    panel.attrs["classification_contract"] = current_metadata_classification_contract(
+        SimpleNamespace(ts_code=code, theme_l1=None, theme_l2=None)
+        for code in sorted(panel["ts_code"].unique())
+    )
     dates = sorted(panel["trade_date"].unique())
     first_test = dates[-80:]
     missing = set(dates[175:180])

@@ -38,6 +38,7 @@ from app.services.report_artifact_contract import (
 )
 from app.services.support_resistance_service import SupportResistanceService
 from app.utils.hashing import stable_hash
+from app.utils.historical_classification_contract import classification_contract_issues
 from app.workspace.catalog_search import matching_reason, search_terms
 from app.workspace.chart import CORE_FIELDS, cached_indicator_series, number
 from app.workspace.config import workspace_settings
@@ -590,6 +591,7 @@ def factor_view(db: Session, settings: Settings) -> dict:
                 if isinstance(panel.get("universe_contract"), dict)
                 else {}
             )
+            classification_contract = panel.get("classification_contract")
             expected_analysis = str(strategy.get("factor_analysis", {}).get("version") or "")
             expected_schema = str(strategy.get("feature_schema_version") or "")
             incompatibilities: list[str] = []
@@ -601,6 +603,11 @@ def factor_view(db: Session, settings: Settings) -> dict:
                 incompatibilities.append("research_input_contract_hash_mismatch")
             if stable_hash(universe_contract) != str(metadata.get("universe_contract_hash") or ""):
                 incompatibilities.append("universe_contract_hash_mismatch")
+            incompatibilities.extend(classification_contract_issues(
+                classification_contract, expected_codes=universe_contract.get("instrument_codes"),
+            ))
+            if stable_hash(classification_contract) != str(metadata.get("classification_contract_hash") or ""):
+                incompatibilities.append("classification_contract_hash_mismatch")
             if parsed.get("qualification") != "UNKNOWN":
                 incompatibilities.append("qualification_contract_mismatch")
             if not isinstance(universe_contract.get("survivorship_bias_controlled"), bool):
