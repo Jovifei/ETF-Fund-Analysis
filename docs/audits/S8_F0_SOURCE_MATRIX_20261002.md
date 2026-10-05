@@ -1,3 +1,20 @@
+# S8-F0 Source Evidence Matrix v5 — 2026-10-05
+
+Status: DOCS_ONLY / overall feasibility UNKNOWN. No account/API probe or permission promotion.
+
+Current public-document recheck: [dated evidence and direct sources](S8_F0_PUBLIC_DOC_RECHECK_20261005.md).
+
+| Existing candidate | Current documentation finding | Unresolved project gate |
+|---|---|---|
+| Tushare | [etf_mins](https://tushare.pro/document/2?doc_id=387) documents 5/15; generic prices/terms rechecked | ETF-specific entitlement, storage/reuse and actual time/PIT/sample evidence |
+| FTShare | [Historical ETF minutes](https://market.ft.tech/gateway/doc/p/oj78iq7k): 5/15 server aggregation and explicit quantity/open-close fields; [real-time](https://market.ft.tech/gateway/doc/p/rytblp5v) is separate one-minute service | Price/license/actual access/history depth/PIT unknown; current adapter has no minute override |
+| AKShare/Eastmoney | [Official intraday wrapper](https://akshare.akfamily.xyz/data/fund/fund_public.html) documents 5/15 and adjustment choices | Minute quantity units, guaranteed history, time/PIT and upstream-use permission unresolved |
+| Sina | No official ETF minute API contract found in the bounded review | Minute capability/units/license/cost remain UNKNOWN, not declared unsupported |
+
+All four remain unqualified for real F0/F1. The pair, date window, budget and actual-probe boundaries below are unchanged.
+
+## Historical v4 record (preserved)
+
 # S8-F0 Source Evidence Matrix v4 — 2026-10-03 Asia/Shanghai
 
 Status: UNKNOWN / EVIDENCE_COLLECTION

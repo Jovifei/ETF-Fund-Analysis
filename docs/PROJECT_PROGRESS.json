@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "roadmap_version": "2026-10-02-v2",
-  "updated_at": "2026-10-05T09:34:00+08:00",
+  "updated_at": "2026-10-05T09:48:00+08:00",
   "current_stage": "6608602已三CI成功；未发布d9d1dea board修复1741通过；分类证据本地最终1762通过，等待原分支发布恢复",
   "current_iteration": 71,
   "planning_source": "同一远端ChatGPT v2方向修订（只读核验摘要）及本地现场元数据核验；无新增源码独立审核",
@@ -2154,6 +2154,11 @@
       "date": "2026-10-05",
       "iteration": 71,
       "description": "当前board第二批本地d9d1dea完整1741通过/11跳过、142顺序及独立17通过，远端未发布；分类第三批独立本地候选绑定真实分类内容并统一读取校验，24聚焦通过，扩展/完整验证中。无远端写入/部署，不以6608602 CI替代新候选证据。"
+    },
+    {
+      "date": "2026-10-05",
+      "iteration": 71,
+      "description": "S8-F0-03只读核验官方公开文档：新补FTShare历史5/15服务端聚合与实时1m分离、数量/开闭戳定义和套餐归属；AKShare明确5/15/复权但单位/历史保证仍缺；Tushare资料重核、Sina分钟官方合同未定位。无账户/API/采购/生产操作，资格与真实可行性仍UNKNOWN。"
     }
   ],
   "incoming_candidate": {
@@ -2463,5 +2468,19 @@
     "review": "INDEPENDENT_DIFF_PASS_24_INDEPENDENT_TESTS",
     "publication": "LOCAL_ONLY_PENDING_PARENT_PUBLICATION",
     "evidence": "docs/audits/CLASSIFICATION_CONTENT_IDENTITY_20261005.md"
+  },
+  "f0_public_docs_recheck": {
+    "date": "2026-10-05",
+    "scope": "OFFICIAL_PUBLIC_DOCUMENTATION_ONLY",
+    "sources": [
+      "Tushare",
+      "FTShare",
+      "AKShare/Eastmoney",
+      "Sina"
+    ],
+    "status": "DOCS_RECHECK_COMPLETE_ACTUAL_FEASIBILITY_UNKNOWN",
+    "actual_probes": "NOT_RUN",
+    "publication": "LOCAL_ONLY",
+    "evidence": "docs/audits/S8_F0_PUBLIC_DOC_RECHECK_20261005.md"
   }
 }
