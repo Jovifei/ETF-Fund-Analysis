@@ -74,3 +74,4 @@ Choose isolated execution directories beneath the authorized project writable ro
 
 
 - Jovi authorized local completion when remote repeatedly failed integration. Perform concrete implementation and verification; do not keep asking remote for the same unfulfilled action or claim its narrative is a source change.
+- 2026-10-05: Current-state positive fixtures must use aware application-market time and be later than bootstrap evidence. Naive host now minus minutes may become another market date or an expired/older row; repair the fixture, not latest/future/version gates. Recheck upstream before publication and never transfer a full-suite receipt across concurrent source changes.

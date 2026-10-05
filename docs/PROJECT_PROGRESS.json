@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "roadmap_version": "2026-10-02-v2",
-  "updated_at": "2026-10-04",
-  "current_stage": "最新425f048证据卡候选接收验证，Jovi已授权测试通过后部署v110；当前线上ef287c0",
+  "updated_at": "2026-10-05T07:56:00+08:00",
+  "current_stage": "655614c发布后审计候选：当前证据夹具时区修复与快照读取复核，不部署",
   "current_iteration": 71,
   "planning_source": "同一远端ChatGPT v2方向修订（只读核验摘要）及本地现场元数据核验；无新增源码独立审核",
   "deployed_code_sha": "ef287c06b4bd6b8ecd507149a0a0d7bd398e4162",
@@ -14,7 +14,7 @@
   "actionable": false,
   "runtime_activated": false,
   "auto_trading": false,
-  "next_task": "接收425f048到main，保持Windows网络guard修复；本地回归与精确CI通过后备份/可回滚上线，必要时现有受审计任务重建v110看板。",
+  "next_task": "完成6行当前时间夹具修复的独立审核/全量/精确CI，然后统一未来与旧合同board读取，分类证据身份另批推进。",
   "blockers": [
     "5m/15m真实量额、单位/时间/PIT及成本可行性未解决：先做S8-F0，不再排在所有UX之后",
     "历史记录：远端文件连接曾启动超时；该连接当前状态未复核，既有GitHub实施/审核正常推进，不冻结已授权低风险工程",
@@ -2139,6 +2139,11 @@
       "date": "2026-10-04",
       "iteration": 73,
       "description": "Jovi明确授权最新代码测试通过后部署，解除v110暂缓；本批冻结425f048。文档合并保留ef287c0已验证线上事实，合入新证据卡候选，尚未新部署。"
+    },
+    {
+      "date": "2026-10-05",
+      "iteration": 71,
+      "description": "重新读取实施分支655614c与接收分支30b7c68，保留并行回测门禁与共享夹具修复。当前6行aware-market-time候选独立静态审核通过；新环境原基线复现3失败/8通过，候选验证中。旧1725全量通过收据仅历史，不转移到新基线。原生产字段未独立重观测，保留原收据。"
     }
   ],
   "incoming_candidate": {
@@ -2418,5 +2423,15 @@
     "hosted_screenshots": "FIRST_HEAD_DESKTOP_320PX_ELEMENT_CAPTURE_OCCLUDED_LEGACY_CLEAR",
     "capture_correction": "TEST_ONLY_REAL_TOOLBAR_BOUNDS_HIT_TARGET_VIEWPORT_AND_FULL_PAGE_NO_RUNTIME_CHANGE",
     "capture_correction_validation": "LOCAL_TYPECHECK_3_TEST_REGISTRATIONS_DIFF_AND_INDEPENDENT_TEST_SOURCE_REVIEW_PASS_HOSTED_PENDING"
+  },
+  "post_release_clock_current_batch": {
+    "base_sha": "655614c89d14d121880d8f9cfb9823e395352c7e",
+    "branch": "codex/post-release-indicator-audit-20261004",
+    "code": "TEST_FIXTURE_ONLY",
+    "tests": "FULL_1725_PASS_11_SKIP_ORDERED_SUBSET_3_FAILURES_RETAINED",
+    "review": "INDEPENDENT_STATIC_PASS_63_ASSERTIONS_UNCHANGED",
+    "deployment": "NOT_PERFORMED",
+    "evidence": "docs/audits/CURRENT_FIXTURE_TIME_RECONCILIATION_20261005.md",
+    "ci": "PENDING_EXACT_COMMIT"
   }
 }

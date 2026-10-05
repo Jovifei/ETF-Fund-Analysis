@@ -234,7 +234,7 @@ def test_curve_uses_latest_snapshot_per_instrument_per_day(bootstrapped, db_sess
 def test_take_profit_front_ranks_overheated_instruments(bootstrapped, db_session):
     hot = _instrument(db_session, "512170.SH")
     cold = _instrument(db_session, "518880.SH")
-    when = datetime.now() - timedelta(minutes=30)
+    when = datetime.now(get_settings().timezone)
     _attach(
         db_session,
         hot,
@@ -263,7 +263,7 @@ def test_take_profit_front_ranks_overheated_instruments(bootstrapped, db_session
 
 
 def test_sector_strength_ranking_with_news_component(bootstrapped, db_session):
-    when = datetime.now() - timedelta(minutes=20)
+    when = datetime.now(get_settings().timezone)
     medicine = _instrument(db_session, "512170.SH")
     _attach(
         db_session,
@@ -291,7 +291,7 @@ def test_sector_strength_ranking_with_news_component(bootstrapped, db_session):
             technical=28.0,
             risk=62.0,
         )
-    published = datetime.now() - timedelta(hours=1)
+    published = datetime.now(get_settings().timezone) - timedelta(hours=1)
     db_session.add(
         NewsItem(
             source="test",
@@ -324,7 +324,7 @@ def test_sector_strength_ranking_with_news_component(bootstrapped, db_session):
 
 def test_in_account_flag_for_held_instruments(bootstrapped, db_session):
     instrument = _instrument(db_session, "512170.SH")
-    when = datetime.now() - timedelta(minutes=10)
+    when = datetime.now(get_settings().timezone)
     _attach(
         db_session,
         instrument,
@@ -376,7 +376,7 @@ def test_signal_center_api_and_settings(bootstrapped):
 
 def test_current_fronts_follow_latest_decision_board_grade(bootstrapped, db_session):
     instrument = _instrument(db_session, "510300.SH")
-    when = datetime.now() - timedelta(minutes=2)
+    when = datetime.now(get_settings().timezone)
     _attach(
         db_session,
         instrument,
@@ -395,7 +395,7 @@ def test_current_fronts_follow_latest_decision_board_grade(bootstrapped, db_sess
     db_session.add(
         DecisionBoardSnapshot(
             snapshot_id=snapshot_id,
-            generated_at=when + timedelta(minutes=1),
+            generated_at=when,
             next_refresh_at=when + timedelta(minutes=10),
             freshness="fresh",
             payload_json={
