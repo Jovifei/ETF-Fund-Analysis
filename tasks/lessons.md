@@ -1,80 +1,12 @@
-# Lessons
+# 工程经验
 
-- 2026-10-02: 对服务器清理先用网站路由、容器角色、挂载与依赖确认用途；向 Jovi 说明“旧基金诊断残留”与正在使用的产品。用户已明确授权清理不需要的实例时，执行有证据支持的最小清理，保留共享数据；不能把不熟悉的服务名直接视为无用。
-- 2026-10-02: 经 stdin 执行 shell 脚本时，先完整读取脚本再交给 bash 执行，避免 docker exec 消耗脚本输入。备份必须确认最终归档路径、checksum、大小和权限；退出 0 不代表已发布备份。禁止调用默认指向生产的 restore_postgres.sh 做隔离恢复演练。
-
-- 2026-09-30: 定时接力必须优先读取本聊天当前 checkpoint 和精确候选证据；旧聊天 interrupted 不代表备份仍在执行，也不能覆盖已通过的 M0/R4C 阶段。远端 AX 内容截断时用完整 DOM 读取最新 PLAN_UPDATE 后再判断是否仍等授权。
-
-- 2026-09-29: 持续 C2C 项目中，不能把“最终人工验收”表述为阶段循环的停止条件；远端计划/本地实现与测试/GitHub/远端复核/下一阶段计划持续进行，只在计划明确要求 Jovi 本人决策的具体门禁暂停。
-- 2026-09-28: Jovi's C2C workflow is a continuing stage loop: remote plan/review, local implementation and tests, GitHub push, then remote audit and the next plan. Human acceptance is a later product gate, not a stop condition between stages; raise technical-route disagreements to the remote reviewer with evidence.
-- 2026-09-23: Windows checkout settings can leave tracked `.sh` files as CRLF in the Git blob; Linux then fails before the script body with `/usr/bin/env: bash\r`. Pin `*.sh text eol=lf` in `.gitattributes` and assert shell entrypoints contain no CR byte; `shellcheck` alone does not catch the shebang failure.
-- 2026-09-23: A green CI image build can exceed a small production host's cgroup during Vue typechecking or native wheel compilation. Set build-stage-only Node/Cargo limits, keep Docker build CPU/memory bounded, and verify production before replacing containers; do not raise limits until the host can safely provide them.
-- 2026-09-23: Docker build cgroup limits on a low-RAM host did not prevent the host OOM killer from terminating a live scheduler process. Build and smoke the immutable image on CI, upload it with source/tree labels and SHA-256, then transfer/load by verified digest; never compile concurrently with production schedulers.
-
-- 2026-09-21: 验收更新必须对账抓取、计算、发布、页面四层；部分失败的历史补抓不得长期占用盘中流水线。数据源选择与业务计算必须使用同一官方企业行为研究视图。
-
-- 2026-09-21: 公共源量额对账要同时使用小数绝对阈值和规模相关相对阈值；只用固定 0.5 元会误拒绝大成交额的正常整数舍入，但相对阈值必须保持在远低于数量级错误的范围。
-
-- 2026-09-21: 当真实响应与文档单位标签冲突时，必须记录冲突并以独立同日对账守住门禁；升级单位合同后不能复用旧 uncertified 证据，必须重算同一绑定行。
-
-- 2026-09-21: Provider 权限受阻时先穷尽仓库已有的公开适配器和真实响应；开源工具可读不等于生产数据认证，必须把适配器合同、实际覆盖、同日独立证据和实时资格分开显示。
-
-- 2026-09-19: 修复任务依赖顺序时必须覆盖所有编排入口，至少同时检查 scheduler 与 `TaskService.full_pipeline`；只验证一个入口会让同类旧顺序继续生成使用过期依赖的决策快照。
-
-- 2026-09-07: 接收完整交付包时必须从精确父提交建立隔离分支，并把包内声明与本机重新执行的测试、Provider 可用性和生产服务器盘点分开记录；测试通过不等于真实数据资格或生产切换完成。
-- 2026-09-07: Playwright 的失败先区分实现缺陷与测试夹具残留；表格语义用 `scope` 固定，隔离 E2E 数据库每次运行前按受控测试条件清理，避免把上一次状态误判成页面回归。
-- 2026-09-07: 登录页显示“创建账户”不代表后端开放注册；必须同时核对 live runner 的数据库用户数、注册开关和邀请码。默认保持关闭，临时本机注册必须显式带邀请码，正式站不可跟随开启。
-
-- 2026-08-30: 当 Jovi 说明本地代码已由其他 Agent 更新时，先重新核对当前主目录的分支、提交、脏区、`STATUS.md`、`HANDOFF.md`、新增测试与运行中服务；不得把旧隔离 worktree 或旧交接摘要当作当前事实源。
-- 2026-08-30: 当 Jovi 指出执行过慢时，实施计划必须按任务分层验证：先跑受影响的聚焦测试，任务边界稳定后再跑一次全量；长测试要持续回报进度、检查并发进程和 SQLite 文件锁，不能反复无目的重跑全量。
-- 2026-08-31: 决策看板的快照契约必须先逐字段对齐 UI（宽表指标、分组、详情历史/情景/支撑压力、selected horizon）；不能以摘要行替代 snapshot-bound detail，也不能把未验证但完整的免费源 provisional 输入直接丢弃。
-- 2026-09-01: 任何看板 snapshot 路由必须支持显式 snapshot_id 复现；回报差值必须说明计算基准；下一刷新与保留策略必须以交易日而不是日历日为边界；替换页面入口时同步调整旧页面兼容测试。
-- 2026-09-01: 宽表排序键必须是后端提供的原始数值语义，不能依赖指标对象文本或 UI 猜测；预测排序只可用选定 horizon 的收益和置信度并将缺失值置后。
-- 2026-09-01: 排序同档必须提供数值次级键（量比、均线箭头、TD9 计数），并用实际 read/API snapshot payload 验证 horizon 切换，不能只测试纯辅助函数。
-- 2026-09-01: Provider percentage-points 与内部 decimal-ratio 必须在边界显式转换一次；任务入队、时效、新鲜度和事件都要以多 session/时间边界测试，而不能只凭单进程顺序假设。
-- 2026-09-01: 免费档加入备用 Provider 时，必须同时验证工厂顺序和 RuntimeService/TaskService 对持久化 Token 的实际绑定；只测直接 Settings token 会漏掉 UI 配置无法进入执行链的问题。
-- 2026-09-09: Provider audit source labels are bounded data, not free-form endpoint names; keep them under the database field limit or a valid source will be rejected after retrieval.
-- 2026-09-09: Shared-signal completeness and research diagnostics are separate gates; allow current-contract price-only data into price-factor diagnostics, but preserve null volume coverage and never promote the result.
-- 2026-09-09: PaddleOCR 3.x local models need manifest-listed model names, ndarray input, and Windows oneDNN disabled; keep all decoding inside the bounded child and retain timeout cleanup.
-- 2026-09-09: 项目知识库不能只写接力摘要；当项目包含多轮版本、部署、真实源、研究资格和开源借鉴时，必须把产品边界、工程关系、技术路线、完成/未完成证据、可复用经验和 revision/许可证/实际落点分主题记录，并同步到仓库 docs 与 Obsidian 五个核心槽位。
-- 2026-09-10: v1.0.4 接收时必须把远端 CI 的当前测试合同与已实现页面合同一起复核；旧 WorkBuddy 测试仍要求已删除的“较昨日”列，不能把 CI 失败归咎于环境，也不能删除该测试。
-- 2026-09-10: SQLite 的 DateTime(timezone=True) 回读可能丢失 tz；新闻 publication 的 naive 值按市场时区解释，fetched_at 默认值按 UTC 解释，aware publication 的保留行为要用带时区对象或 PostgreSQL 证据单独测试。
-- 2026-09-11: 公开行情回退不能只看 OHLC 是否返回；新浪历史接口同时返回量/额时，必须用 amount÷volume 与 close 的单位一致性回归校验后再解除 volume_missing 门禁，缺额或偏差过大继续保留 price-only，并在生产用受审计 bars→indicators→forecasts→signals→decision-board 链路重算。
-- 2026-09-11: 原版 WorkBuddy 看板使用的 legacy `/api/decision-board` 不继承 Vue API 的 no-store 约定；数据已落库但浏览器仍可能显示旧快照。凡是可变的 legacy JSON 读路由要同时固定前端 `cache: no-store` 和后端 `Cache-Control: private, no-store`，并用 snapshot_id 做线上回归。
-- 2026-09-18: Composite provider 不能把“非空”当作“合格”；低质量 price-only 或 degraded quote 必须继续尝试后备源，并把最后合格历史快照以 stale/非 actionable 方式展示，不能因行业板块成功而提升 ETF 决策资格。
-- 2026-09-20: Provider 资格脚本也不能把“三项接口非空”当作 qualified；单位与时间证据必须是显式门禁字段，空字典、字段名和均价比值都不是认证。现场接口恢复后仍需独立同日对账。
-- 2026-09-24: 当生产数据不更新时，分别核实网络端点、Provider 注册、业务资格、持久化和页面读模型；不能把“缺依赖”当默认解释。可显示的实时源时间不等于量额认证或 actionable。
-- 2026-09-24: Provider mock 必须断言完整 URL 路径和查询合同，并用有界真实响应交叉核对；如果测试夹具照抄适配器当前参数，错误的 query/path 也会被错误地“验证”为正确。
-- 2026-09-24: 响应大小上限必须在流式读取中执行；先完整 `get()` 再检查长度不能约束下载/解压内存。按小块累计，到阈值即停止并关闭流。
-- 2026-09-29: Codex with ChatGPT 是持续的“远端计划 → 本地执行 → 测试 → GitHub → 远端审查 → 下一阶段计划”循环；不能把项目停止条件误设为最终人工验收。每轮远端审核既核对本次交付是否符合上一轮计划/收据，也要明确评估技术路线；有分歧时带上具体代码证据与取舍先回远端讨论，再改变路线。仅在具体真人决策门禁暂停对应步骤。
-- 2026-09-30: Internal Chan workers must serialize canonical JSON before queue persistence, close each freeze session before CZSC, and publish in a separate short transaction. Existing queue claim/lease and publisher idempotency are the only retry guarantees; never imply that enqueue replays failed/terminal work automatically. Per-code failures must not overwrite prior committed evidence.
-- 2026-09-30: A syntactically valid ticker is not an ETF/LOF authorization. Enforce persisted instrument type at the internal worker boundary before freeze/CZSC, and test corrected-history and publisher-failure behavior through the worker→adapter→publisher transaction chain, not only at isolated layers.
-- 2026-09-30: A persisted transition row is not trustworthy because its shape is valid. Recompute each latest observation transition from the immediately previous verified evidence plus prior seen structure keys, and compare the complete row set so deleted absence events, wrong status, and reappearance tampering fail closed.
-
-## 2026-10-01 Workspace location correction
-Choose isolated execution directories beneath the authorized project writable root. Verify independent Git metadata and preserve pending files with SHA256 before switching execution. Do not treat a managed C-drive worktree as writable merely because it is readable.
-
-## 2026-10-02 总阶段与进度治理
-- 大阶段必须有稳定ID、目标、步骤和验收；子任务接力同时更新根docs总览，不能只维护细粒度聊天状态。
-- 平台健康和演练不替代私有线上验收；历史阶段不能反推出新台账PASS，分母正式冻结后才计算阶段比例。
-
-## 2026-10-02 外部评价后的路线纠偏
-- 关键数据可行性先于大规模UX/功能扩张；取得数据不等于统计有效，供应商/预算是明确决定。
-- 先读实时部署身份再写状态，旧验收计数不可继承到新schema；已上线待接收与未部署必须分清。
-- 单用户研究工具按真实风险分级验证，低风险改动批次回传；关键合同/资格仍独立审查。
-
-## 2026-10-02 跨AI阶段计划审核
-- 小阶段必须映射长期路线和最新证据；外部计划声称完成/owner决定时先对账，不假定为已验证前提。
-- 特征不足、评级异常和叠加禁用不能分别臆测为缺量额、量额异常和无计算结果。
-- 契约版本归属于实际改动响应；可观察只读产品阶段仍需发布和真实用户验收。
-
-## 2026-10-02 远端角色纠正
-- Jovi要求远端同时规划、审核和主要实现，通过GitHub交接；不能继续把远端限定为仅下发任务。
-- 角色授权不等于工具能力：核对真实GitHub写入/云执行能力与提交证据，不伪造远端已实现或90%完成。
-
-
-- Jovi authorized local completion when remote repeatedly failed integration. Perform concrete implementation and verification; do not keep asking remote for the same unfulfilled action or claim its narrative is a source change.
-- 2026-10-05: Current-state positive fixtures must use aware application-market time and be later than bootstrap evidence. Naive host now minus minutes may become another market date or an expired/older row; repair the fixture, not latest/future/version gates. Recheck upstream before publication and never transfer a full-suite receipt across concurrent source changes.
-- 2026-10-05: Current consumers that first select a snapshot ID must still supply a current read-time boundary; an explicit historical-ID API can otherwise become a future-data bypass. Reuse checked version/config projection instead of duplicating raw JSON readers. Test latest-invalid/no-older-fallback and exact timezone-equivalent boundaries.
-- 2026-10-05: Test fixtures asserting a whole-database count must own an isolated database/table scope. A missing-indicator scenario must remove all snapshots for its target, not one arbitrary row; always rollback fixture cleanup in finally so failures do not contaminate later tests.
-- 2026-10-05: Hashing only an evidence policy and row count does not identify the data. Classification lineage must bind exact instrument identities and both labels, with order-independent serialization and explicit missing values. Every calculation-grade reader must validate the content-bound contract, not just a nonempty version string, while leaving historical/PIT qualification false.
+- 图形、图例和依据必须共享同一方向枚举合同；兼容字段只在主字段缺失时使用，未知保持中性，不能用子串或默认分支推断金融方向。
+- 价格口径门禁覆盖所有消费研究价格的几何通道，包括斜向趋势线；阻断错配原始投影的同时，必须保留合法研究线、同口径原始线和独立成本/量额数据。
+- 用真实投影与适配器、不同原始/研究价格的夹具检查绘图调用，并配对正反断言；相等价格或过度mock会掩盖错配。
+- 当前时间、版本、输入内容与快照身份应有独立证据；未知量额、时间、PIT或许可不能由非空响应、页面可用或测试通过升级。
+- 本地验证、精确提交CI、部署、正常私有线上验收及实体手机是不同门槛；历史发布计数不能继承为新版本或全项目完成率。
+- 发布前检查完整载荷而不只看新增diff。状态文档仅保留当前目标、必要版本/证据和未完成门槛，移除个人路径、生产统计与内部操作历史；不把不必要内容搬到另一发布文件。
+- 文档精简时保留实现/测试哈希、阶段ID与验收状态，使用台账生成可读视图；字节未变时复用已绑定验证，不重复全量测试来制造新结果。
+- 遇阻先区分授权、载荷范围和执行访问问题，保存具体动作与证据；继续不依赖阻塞的核对，调整范围须经过明确确认，换工具或编码不能解决底层范围问题。
+- 冻结源码不冻结上游安全公告。长流程发布前先做轻量依赖门禁，比较官方最小修复版本和必要闭包；不要盲目audit-fix升级所有包或放宽阈值。
+- 测试框架主版本更新须验证完整前端、mock隔离、类型与构建；无变化的后端证据按哈希复用。浏览器启动失败须与页面断言失败分开，不能计为产品通过。

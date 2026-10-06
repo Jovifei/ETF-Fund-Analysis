@@ -14,6 +14,15 @@ export function olderThan(value: string | null | undefined, seconds: number) { c
 export function record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {} }
 export function numeric(value: unknown): number | null { return typeof value === 'number' && Number.isFinite(value) ? value : null }
 export function levelPrice(level: SupportLevel | number | null | undefined): number | null { return typeof level === 'number' ? level : numeric(level?.price ?? level?.level) }
+export function levelDirection(level: SupportLevel): 'support' | 'resistance' | 'unknown' {
+  // Nullish kind is absent; any explicit unknown kind must not borrow type's direction.
+  const value = level.kind ?? level.type
+  return value === 'support' || value === 'resistance' ? value : 'unknown'
+}
+export function levelDirectionLabel(level: SupportLevel): string {
+  const value = levelDirection(level)
+  return value === 'support' ? '支撑' : value === 'resistance' ? '压力' : '方向未知'
+}
 export function frequency(forecast: Forecast | undefined) { return forecast && typeof forecast.p_up === 'number' ? `${num(forecast.p_up * 100, 0)}%` : '—' }
 // A calibrated string alone is not a profile-bound model/data/horizon proof.
 export function forecastLabel(_forecast?: Forecast) { return '历史相似样本上涨频率' }

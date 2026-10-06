@@ -1,7 +1,7 @@
 /** Only projects server numbers: no financial formula is implemented in the browser. */
 import { init, dispose, registerIndicator, registerOverlay, ActionType, type Chart, type KLineData, type OverlayCreate } from 'klinecharts'
 import type { ChartBar, ChartData, ChanObservation, PriceBox, SupportLevel } from './types'
-import { levelPrice } from './format'
+import { levelDirection, levelDirectionLabel, levelPrice } from './format'
 import { serverStudies, studyAvailable, volumeAvailable } from './chartStudies'
 let registered = false
 const STUDY_GROUPS = ['PIVOT', 'MA', 'BOLL', 'ATR', 'FIB', 'DERIVED', 'MACD', 'KDJ', 'RSI', 'CHAN']
@@ -278,9 +278,9 @@ export class ChartAdapter {
   private zone(level: SupportLevel, timestamp: number) {
     const price = levelPrice(level)
     if (price == null) return
-    const support = String(level.kind ?? level.type).includes('support')
-    const color = support ? '#4dba90' : '#f3737c'
-    const label = `${support ? '支撑' : '压力'} ${price.toFixed(3)} · ${Array.isArray(level.methods)?level.methods.slice(0,2).join(' / '):'价格研究'}`
+    const direction = levelDirection(level)
+    const color = direction === 'support' ? '#4dba90' : direction === 'resistance' ? '#f3737c' : '#94a3b8'
+    const label = `${levelDirectionLabel(level)} ${price.toFixed(3)} · ${Array.isArray(level.methods)?level.methods.slice(0,2).join(' / '):'价格研究'}`
     this.chart.createOverlay({ name: 'researchZone', groupId:'server_research_studies', lock: true, points: [{ timestamp, value: level.zone_low ?? price }, { timestamp, value: level.zone_high ?? price }, { timestamp, value: price }], extendData: { color, label } })
     this.chart.createOverlay({ name: 'priceLine', groupId:'server_research_studies', lock: true, points: [{ timestamp, value: price }], styles: { line: { color, size: 1, style: 'dashed', dashedValue: [5, 3] }, text: { color, backgroundColor: `${color}22`, borderSize: 0 } } } as OverlayCreate)
   }
