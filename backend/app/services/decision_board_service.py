@@ -449,6 +449,7 @@ class DecisionBoardService:
             for instrument in instruments
         ]
         from app.utils.decision_reference import entry_exit_reference, theme_relative_ranks
+        from app.utils.sector_timing import build_sector_timing_observation
         ranks = theme_relative_ranks(rows)
         for row in rows:
             row["entry_exit_ref"] = entry_exit_reference(row.get("support_resistance"))
@@ -509,6 +510,7 @@ class DecisionBoardService:
             "rows": rows,
             "flow_share_contract": FLOW_CONTRACT,
             "flow_share_changes_grade": False,
+            "sector_timing": build_sector_timing_observation(rows),
             "research_only": True,
             "automatic_orders": False,
         }
@@ -1031,6 +1033,7 @@ class DecisionBoardService:
 
     @staticmethod
     def _empty_payload(horizon: int) -> dict:
+        from app.utils.sector_timing import empty_sector_timing_observation
         return {
             "snapshot_id": None,
             "generated_at": None,
@@ -1065,6 +1068,7 @@ class DecisionBoardService:
             "rows": [],
             "flow_share_contract": FLOW_CONTRACT,
             "flow_share_changes_grade": False,
+            "sector_timing": empty_sector_timing_observation(),
             "research_only": True,
             "automatic_orders": False,
         }
