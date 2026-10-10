@@ -116,3 +116,9 @@ DecisionSummary.vue 增加 data-testid="sector-timing-strip"，展示 sector_tim
 
 见 docs/planning/OPEN_SOURCE_FACTOR_SHORTLIST_SECTOR_TIMING.md。
 
+## 9. Phase 3（本机夜间硬化，未部署）
+
+- 补齐 `_latest_sector_market_evidence` + `_safe_sector_timing_observation`：SectorSnapshot / taxonomy 失败时写入空块，刷新不中断。
+- 读路径对缺失 `sector_timing` 软补空块，不因此把五档改成「数据异常」。
+- Bot 例程交接：`docs/planning/SECTOR_TIMING_DIGEST_HANDOFF.md`（例程改动由 Bot parent 执行）。
+- 下一因子试点 stub：`backend/app/utils/sector_rs_vol_gate.py`（20d RS + 简单波动门控，研究向）。

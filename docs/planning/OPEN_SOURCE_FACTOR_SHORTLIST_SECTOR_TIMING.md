@@ -33,3 +33,10 @@
 - 不把轮动策略参数直接写成生产加减仓指令。
 - 不引入 vn.py / rqalpha / backtrader 作为主路径。
 - 不在未校准前展示“可操作涨跌幅预测”。
+
+## Pilot stub（已落仓库，未挂决策板生产路径）
+
+- 模块：`backend/app/utils/sector_rs_vol_gate.py`
+- 能力：`relative_strength_20d`、`simple_vol_gate`、`annotate_theme_observation`
+- 约束：仅研究标注；**不**改五档、**不**升 `READ_MODEL_VERSION`、**不**部署。
+- 接入建议：先在单测/离线报告验证，再考虑挂到 `sector_timing.themes[].research_tags`。

@@ -361,6 +361,10 @@ class DecisionBoardService:
                            grade_reason="旧快照与当前读取合同不一致，请通过任务重算。", actionable=False,
                            forecasts={}, forecast_scenario=[])
             payload = self._select_horizon(payload, horizon)
+        # Optional research block: absent/broken sector_timing must not flip grades.
+        if not isinstance(payload.get("sector_timing"), dict):
+            from app.utils.sector_timing import empty_sector_timing_observation
+            payload["sector_timing"] = empty_sector_timing_observation()
         payload["flow_share_projection_contract"] = FLOW_CONTRACT
         for row in payload.get("rows", []):
             flow = row.get("flow_share")
@@ -452,6 +456,7 @@ class DecisionBoardService:
         from app.utils.decision_reference import entry_exit_reference, theme_relative_ranks
         from app.utils.sector_timing import (
             build_sector_timing_observation,
+            empty_sector_timing_observation,
             infer_afternoon_slot_hint,
         )
         ranks = theme_relative_ranks(rows)
@@ -514,15 +519,100 @@ class DecisionBoardService:
             "rows": rows,
             "flow_share_contract": FLOW_CONTRACT,
             "flow_share_changes_grade": False,
-            "sector_timing": build_sector_timing_observation(
+            "sector_timing": self._safe_sector_timing_observation(
+                db,
                 rows,
-                slot_hint=infer_afternoon_slot_hint(generated_at.hour, generated_at.minute),
-                market_evidence=self._latest_sector_market_evidence(db),
-                taxonomy=self.settings.load_taxonomy(),
+                generated_at=generated_at,
             ),
             "research_only": True,
             "automatic_orders": False,
         }
+
+    def _safe_sector_timing_observation(
+        self,
+        db: Session,
+        rows: list[dict],
+        *,
+        generated_at: datetime,
+    ) -> dict:
+        """Build sector_timing or return an empty schema-stable block.
+
+        Failures here must never block snapshot refresh or rewrite five-grade
+        values into data-anomaly grades. Sector evidence is optional corroboration only.
+        """
+        from app.utils.sector_timing import (
+            build_sector_timing_observation,
+            empty_sector_timing_observation,
+            infer_afternoon_slot_hint,
+        )
+
+        slot_hint = infer_afternoon_slot_hint(generated_at.hour, generated_at.minute)
+        try:
+            taxonomy = self.settings.load_taxonomy()
+        except Exception:
+            taxonomy = None
+        try:
+            return build_sector_timing_observation(
+                rows,
+                slot_hint=slot_hint,
+                market_evidence=self._latest_sector_market_evidence(db),
+                taxonomy=taxonomy,
+            )
+        except Exception:
+            return empty_sector_timing_observation(slot_hint=slot_hint)
+
+    def _latest_sector_market_evidence(self, db: Session) -> list[dict]:
+        """Latest industry SectorSnapshot rows for optional theme corroboration.
+
+        Soft-fails to [] when the table is empty, schema is unavailable, or any
+        query error occurs. Never invents pct_change / breadth.
+        """
+        try:
+            from sqlalchemy import case, func
+
+            latest_date = db.scalar(
+                select(func.max(SectorSnapshot.trade_date)).where(
+                    SectorSnapshot.board_type == "industry"
+                )
+            )
+            if latest_date is None:
+                return []
+            rows = db.scalars(
+                select(SectorSnapshot)
+                .where(
+                    SectorSnapshot.board_type == "industry",
+                    SectorSnapshot.trade_date == latest_date,
+                )
+                .order_by(
+                    case((SectorSnapshot.source != "mock-sector", 0), else_=1),
+                    SectorSnapshot.fetched_at.desc(),
+                    SectorSnapshot.id.desc(),
+                )
+            ).all()
+            evidence: list[dict] = []
+            seen: set[str] = set()
+            for row in rows:
+                name = str(getattr(row, "sector_name", "") or "").strip()
+                if not name or name in seen:
+                    continue
+                seen.add(name)
+                trade_date = getattr(row, "trade_date", None)
+                evidence.append(
+                    {
+                        "sector_name": name,
+                        "board_type": getattr(row, "board_type", None),
+                        "pct_change": getattr(row, "pct_change", None),
+                        "up_count": getattr(row, "up_count", None),
+                        "down_count": getattr(row, "down_count", None),
+                        "flat_count": getattr(row, "flat_count", None),
+                        "total_count": getattr(row, "total_count", None),
+                        "trade_date": trade_date.isoformat() if trade_date is not None else None,
+                        "source": getattr(row, "source", None),
+                    }
+                )
+            return evidence
+        except Exception:
+            return []
 
     def _row(self, db: Session, generated_at: datetime, instrument, grade_row, indicator, previous_values, quote, forecasts, provisional) -> dict:
         grade_row = grade_row or {}

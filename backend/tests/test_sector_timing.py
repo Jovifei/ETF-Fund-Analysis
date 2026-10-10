@@ -180,3 +180,29 @@ def test_infer_afternoon_slot_hint() -> None:
     assert infer_afternoon_slot_hint(14, 30) == "14:30"
     assert infer_afternoon_slot_hint(14, 45) == "14:45"
     assert infer_afternoon_slot_hint(10, 30) is None
+
+
+def test_empty_digest_is_non_actionable_and_schema_stable() -> None:
+    payload = empty_sector_timing_observation(slot_hint="14:45")
+    assert payload["actionable"] is False
+    assert payload["research_only"] is True
+    assert payload["calibration_status"] == "not_calibrated"
+    assert payload["digest"]["headline"]
+    assert payload["digest"]["add_themes"] == []
+    assert payload["digest"]["reduce_themes"] == []
+    assert payload["digest"]["field_path"] == "sector_timing.digest"
+    assert "偏强观察" in payload["digest"]["headline"]
+
+
+def test_build_survives_bad_market_evidence_rows() -> None:
+    rows = [
+        {"ts_code": "510300.SH", "theme_l1": "宽基", "grade": "观望", "return_5d": 0.0},
+    ]
+    # Malformed evidence must not raise and must not invent corroboration.
+    payload = build_sector_timing_observation(
+        rows,
+        market_evidence=[None, "bad", {"sector_name": ""}, 123],  # type: ignore[list-item]
+        taxonomy=SAMPLE_TAXONOMY,
+    )
+    assert payload["actionable"] is False
+    assert payload["themes"][0]["market_corroboration"]["available"] is False
