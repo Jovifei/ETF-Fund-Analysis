@@ -33,3 +33,47 @@ export function explainStatus(row: Record<string, unknown>): string {
   const mock=quote.is_mock===true || key==='mock' ? '演示数据，不可操作 · ' : ''
   return `${mock}${names[key]??'数据状态待核验'} · ${key} — ${reason}`
 }
+
+/** Research-only sector timing strip projection (same snapshot; no new grades). */
+export function sectorTimingDigest(board: unknown): {
+  headline: string
+  addThemes: string[]
+  reduceThemes: string[]
+  available: boolean
+  actionable: false
+  calibrationStatus: string
+} {
+  const root = record(board)
+  const timing = record(root.sector_timing)
+  const digest = record(timing.digest)
+  const summary = record(timing.summary)
+  const add = Array.isArray(digest.add_themes)
+    ? digest.add_themes.map(String)
+    : Array.isArray(summary.add_observation_themes)
+      ? summary.add_observation_themes.map(String)
+      : []
+  const reduce = Array.isArray(digest.reduce_themes)
+    ? digest.reduce_themes.map(String)
+    : Array.isArray(summary.reduce_observation_themes)
+      ? summary.reduce_observation_themes.map(String)
+      : []
+  let headline = ''
+  if (typeof digest.headline === 'string' && digest.headline.trim()) {
+    headline = digest.headline
+  } else if (add.length || reduce.length) {
+    const addPart = add.join('、') || '无'
+    const reducePart = reduce.join('、') || '无'
+    headline = '偏强观察: ' + addPart + ' | 偏弱观察: ' + reducePart + ' | 研究向不可操作'
+  }
+  return {
+    headline,
+    addThemes: add,
+    reduceThemes: reduce,
+    available: Boolean(headline),
+    actionable: false,
+    calibrationStatus:
+      typeof timing.calibration_status === 'string'
+        ? timing.calibration_status
+        : 'not_calibrated',
+  }
+}
