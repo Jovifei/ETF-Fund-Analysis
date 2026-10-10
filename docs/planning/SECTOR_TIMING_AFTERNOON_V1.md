@@ -78,3 +78,41 @@
 - 单测覆盖：空输入、单主题偏强/偏弱、缺失 theme、actionable 恒 false。  
 - 决策板 payload 含 `sector_timing` 且不改变既有 grade。  
 - 不修改 `READ_MODEL_VERSION`、不部署。
+
+## 8. Phase 2 交付（本机夜间，未部署）
+
+### 8.1 Bot / 例程字段路径（强制约定）
+
+从决策板 API 读取板块观察摘要（研究向，不可操作）：
+
+`
+GET /api/decision-board
+→ payload.sector_timing
+→ payload.sector_timing.digest
+→ payload.sector_timing.digest.headline
+→ payload.sector_timing.digest.add_themes
+→ payload.sector_timing.digest.reduce_themes
+→ payload.sector_timing.summary.add_observation_themes
+→ payload.sector_timing.summary.reduce_observation_themes
+→ payload.sector_timing.themes[].market_corroboration
+`
+
+稳定常量：sector_timing.field_paths / digest.field_path = sector_timing.digest。
+ctionable=false，calibration_status=not_calibrated；**不**升 READ_MODEL_VERSION。
+
+### 8.2 SectorSnapshot 旁证桥接
+
+- 构建快照时读取最新 oard_type=industry 的 SectorSnapshot（优先非 mock 源）。
+- 用 config/sector_taxonomy.json（exact + keyword_rules）映射 sector_name → theme_l1。
+- 映射失败则 market_corroboration.available=false / lignment=unavailable，**不编造**涨跌幅。
+- 旁证只标注 supports_add|supports_reduce|mixed|unavailable，**不改五档**。
+
+### 8.3 前端轻量条
+
+DecisionSummary.vue 增加 data-testid="sector-timing-strip"，展示 sector_timing.digest.headline。
+完整决策表 iframe 未改；大改 UI 留作后续。
+
+### 8.4 因子短名单（研究，不进生产五档）
+
+见 docs/planning/OPEN_SOURCE_FACTOR_SHORTLIST_SECTOR_TIMING.md。
+
