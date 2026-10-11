@@ -45,6 +45,11 @@ export function sectorTimingDigest(board: unknown): {
 } {
   const root = record(board)
   const timing = record(root.sector_timing)
+  if ((typeof root.read_contract === 'string' && root.read_contract !== 'version_matched') ||
+      timing.version !== 'sector-timing-observation-v2' ||
+      timing.evidence_contract !== 'sector-evidence-v2-source-percent-cutoff' || timing.reason_code) {
+    return { headline: '', addThemes: [], reduceThemes: [], available: false, actionable: false, calibrationStatus: 'not_calibrated' }
+  }
   const digest = record(timing.digest)
   const summary = record(timing.summary)
   const add = Array.isArray(digest.add_themes)

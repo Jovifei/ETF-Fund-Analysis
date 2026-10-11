@@ -361,10 +361,17 @@ class DecisionBoardService:
                            grade_reason="旧快照与当前读取合同不一致，请通过任务重算。", actionable=False,
                            forecasts={}, forecast_scenario=[])
             payload = self._select_horizon(payload, horizon)
-        # Optional research block: absent/broken sector_timing must not flip grades.
-        if not isinstance(payload.get("sector_timing"), dict):
-            from app.utils.sector_timing import empty_sector_timing_observation
+        # Sector metadata has its own contract; old boards cannot borrow a new label.
+        from app.utils.sector_timing import EVIDENCE_CONTRACT, empty_sector_timing_observation
+        timing = payload.get("sector_timing")
+        sector_compatible = (isinstance(timing, dict)
+                             and timing.get("version") == "sector-timing-observation-v2"
+                             and timing.get("evidence_contract") == EVIDENCE_CONTRACT)
+        if not compatible or not sector_compatible:
             payload["sector_timing"] = empty_sector_timing_observation()
+            payload["sector_timing"]["reason_code"] = (
+                "legacy_snapshot_requires_rebuild" if not compatible else "sector_evidence_contract_unverified"
+            )
         payload["flow_share_projection_contract"] = FLOW_CONTRACT
         for row in payload.get("rows", []):
             flow = row.get("flow_share")
@@ -555,39 +562,32 @@ class DecisionBoardService:
             return build_sector_timing_observation(
                 rows,
                 slot_hint=slot_hint,
-                market_evidence=self._latest_sector_market_evidence(db),
+                market_evidence=self._latest_sector_market_evidence(db, at=generated_at),
+                at=generated_at,
                 taxonomy=taxonomy,
             )
         except Exception:
             return empty_sector_timing_observation(slot_hint=slot_hint)
 
-    def _latest_sector_market_evidence(self, db: Session) -> list[dict]:
+    def _latest_sector_market_evidence(self, db: Session, *, at: datetime | None = None) -> list[dict]:
         """Latest industry SectorSnapshot rows for optional theme corroboration.
 
         Soft-fails to [] when the table is empty, schema is unavailable, or any
         query error occurs. Never invents pct_change / breadth.
         """
         try:
-            from sqlalchemy import case, func
-
-            latest_date = db.scalar(
-                select(func.max(SectorSnapshot.trade_date)).where(
-                    SectorSnapshot.board_type == "industry"
-                )
-            )
-            if latest_date is None:
+            if at is None or at.tzinfo is None:
                 return []
+            cutoff = at.astimezone(SHANGHAI)
             rows = db.scalars(
                 select(SectorSnapshot)
                 .where(
                     SectorSnapshot.board_type == "industry",
-                    SectorSnapshot.trade_date == latest_date,
+                    SectorSnapshot.source == "akshare",
+                    SectorSnapshot.trade_date == cutoff.date(),
+                    SectorSnapshot.fetched_at <= cutoff,
                 )
-                .order_by(
-                    case((SectorSnapshot.source != "mock-sector", 0), else_=1),
-                    SectorSnapshot.fetched_at.desc(),
-                    SectorSnapshot.id.desc(),
-                )
+                .order_by(SectorSnapshot.fetched_at.desc(), SectorSnapshot.id.desc())
             ).all()
             evidence: list[dict] = []
             seen: set[str] = set()
@@ -608,6 +608,7 @@ class DecisionBoardService:
                         "total_count": getattr(row, "total_count", None),
                         "trade_date": trade_date.isoformat() if trade_date is not None else None,
                         "source": getattr(row, "source", None),
+                        "fetched_at": getattr(row, "fetched_at", None),
                     }
                 )
             return evidence

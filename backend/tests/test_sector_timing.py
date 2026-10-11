@@ -1,6 +1,9 @@
 """Unit tests for research-only sector timing observation."""
 from __future__ import annotations
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from app.utils.sector_timing import (
     OBSERVATION_ADD,
     OBSERVATION_NEUTRAL,
@@ -11,7 +14,6 @@ from app.utils.sector_timing import (
     infer_afternoon_slot_hint,
     map_sector_name_to_theme_l1,
 )
-
 
 SAMPLE_TAXONOMY = {
     "exact": {
@@ -134,10 +136,12 @@ def test_market_corroboration_supports_add_without_overriding_grades() -> None:
             "down_count": 10,
             "trade_date": "2026-10-10",
             "source": "akshare",
+            "fetched_at": "2026-10-10T14:40:00+08:00",
         }
     ]
     payload = build_sector_timing_observation(
-        rows, slot_hint="14:45", market_evidence=evidence, taxonomy=SAMPLE_TAXONOMY
+        rows, slot_hint="14:45", market_evidence=evidence, taxonomy=SAMPLE_TAXONOMY,
+        at=datetime(2026, 10, 10, 14, 45, tzinfo=ZoneInfo("Asia/Shanghai"))
     )
     theme = payload["themes"][0]
     assert theme["observation"] == OBSERVATION_ADD
@@ -164,6 +168,7 @@ def test_unmapped_market_evidence_is_not_invented() -> None:
             "down_count": 1,
             "trade_date": "2026-10-10",
             "source": "akshare",
+            "fetched_at": "2026-10-10T14:40:00+08:00",
         }
     ]
     payload = build_sector_timing_observation(

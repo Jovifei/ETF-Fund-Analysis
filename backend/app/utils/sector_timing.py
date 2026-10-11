@@ -8,8 +8,10 @@ actionable=true, and never claims calibrated forecasts.
 """
 from __future__ import annotations
 
+from datetime import date, datetime
 from math import isfinite
 from typing import Any
+from zoneinfo import ZoneInfo
 
 ADD_GRADES = frozenset({"可加仓", "可入场", "可试错"})
 REDUCE_GRADES = frozenset({"减仓"})
@@ -26,6 +28,8 @@ _BASIS = (
 )
 
 # Bot / afternoon-routine field path (stable contract for digests).
+EVIDENCE_CONTRACT = "sector-evidence-v2-source-percent-cutoff"
+
 DIGEST_FIELD_PATH = "sector_timing.digest"
 SUMMARY_FIELD_PATH = "sector_timing.summary"
 API_READ_PATH = "GET /api/decision-board → payload.sector_timing"
@@ -36,7 +40,7 @@ def _finite(value: object) -> float | None:
         return None
     try:
         number = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     return number if isfinite(number) else None
 
@@ -141,6 +145,10 @@ def map_sector_name_to_theme_l1(
 def _empty_corroboration() -> dict[str, Any]:
     return {
         "available": False,
+        "reason_code": "evidence_missing",
+        "pct_change_unit": None,
+        "source_time": None,
+        "unit_qualification": "not_asserted",
         "matched_sectors": [],
         "mean_pct_change": None,
         "breadth_up": None,
@@ -169,9 +177,52 @@ def _alignment(observation: str, mean_pct_change: float | None) -> str:
     return "mixed"
 
 
+def _admission(row: dict[str, Any], at: datetime | None) -> str | None:
+    if at is None or at.tzinfo is None:
+        return "read_time_unknown"
+    cutoff = at.astimezone(ZoneInfo("Asia/Shanghai"))
+    if row.get("source") != "akshare" or row.get("board_type") != "industry":
+        return "source_unverified"
+    # The existing AKShare industry adapter stores percentage points unchanged.
+    # No schema field exists for publication time or upstream unit qualification.
+    if row.get("pct_change_unit") not in (None, "source_percent"):
+        return "unit_conflict"
+    try:
+        day = date.fromisoformat(str(row.get("trade_date")))
+    except (ValueError, TypeError):
+        return "trade_date_unknown"
+    if day > cutoff.date():
+        return "trade_date_after_cutoff"
+    if day < cutoff.date():
+        return "trade_date_stale"
+    fetched = row.get("fetched_at")
+    try:
+        fetched = datetime.fromisoformat(fetched) if isinstance(fetched, str) else fetched
+        if not isinstance(fetched, datetime):
+            return "acquisition_time_unknown"
+        if fetched.tzinfo is None:
+            fetched = fetched.replace(tzinfo=ZoneInfo("Asia/Shanghai"))
+        fetched = fetched.astimezone(ZoneInfo("Asia/Shanghai"))
+        if fetched > cutoff:
+            return "acquisition_after_cutoff"
+        if day > fetched.date():
+            return "trade_date_after_acquisition"
+    except (ValueError, OverflowError):
+        return "acquisition_time_invalid"
+    if _finite(row.get("pct_change")) is None:
+        return "values_missing"
+    return None
+
+
+def _count(value: Any) -> int | None:
+    number = _finite(value)
+    return int(number) if number is not None and number >= 0 and number.is_integer() else None
+
+
 def aggregate_market_evidence_by_theme(
     market_evidence: list[dict[str, Any]] | None,
     taxonomy: dict[str, Any] | None,
+    *, at: datetime | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Group optional SectorSnapshot-like rows by mapped theme_l1.
 
@@ -181,6 +232,7 @@ def aggregate_market_evidence_by_theme(
     """
 
     buckets: dict[str, list[dict[str, Any]]] = {}
+    rejected: dict[str, str] = {}
     for row in market_evidence or []:
         if not isinstance(row, dict):
             continue
@@ -191,6 +243,10 @@ def aggregate_market_evidence_by_theme(
         if not mapped:
             continue
         theme = mapped["theme_l1"]
+        reason = _admission(row, at)
+        if reason:
+            rejected.setdefault(theme, reason)
+            continue
         entry = {
             "sector_name": sector_name,
             "board_type": row.get("board_type"),
@@ -201,6 +257,7 @@ def aggregate_market_evidence_by_theme(
             "total_count": row.get("total_count"),
             "trade_date": row.get("trade_date"),
             "source": row.get("source"),
+            "fetched_at": str(row.get("fetched_at")),
             "match_kind": mapped["match_kind"],
             "matched_token": mapped["matched_token"],
             "confidence": mapped["confidence"],
@@ -210,11 +267,15 @@ def aggregate_market_evidence_by_theme(
     by_theme: dict[str, dict[str, Any]] = {}
     for theme, members in buckets.items():
         pcts = [item["pct_change"] for item in members if item["pct_change"] is not None]
-        ups = [int(item["up_count"]) for item in members if isinstance(item.get("up_count"), (int, float))]
-        downs = [int(item["down_count"]) for item in members if isinstance(item.get("down_count"), (int, float))]
+        ups = [value for item in members if (value := _count(item.get("up_count"))) is not None]
+        downs = [value for item in members if (value := _count(item.get("down_count"))) is not None]
         dates = [str(item["trade_date"]) for item in members if item.get("trade_date")]
         by_theme[theme] = {
             "available": True,
+            "reason_code": None,
+            "pct_change_unit": "source_percent",
+            "source_time": None,
+            "unit_qualification": "not_asserted",
             "matched_sectors": members,
             "mean_pct_change": _mean(pcts),
             "breadth_up": sum(ups) if ups else None,
@@ -224,6 +285,9 @@ def aggregate_market_evidence_by_theme(
             "actionable": False,
             "note": "AKShare_SectorSnapshot_optional_corroboration_via_taxonomy",
         }
+    for theme, reason in rejected.items():
+        if theme not in by_theme:
+            by_theme[theme] = {**_empty_corroboration(), "reason_code": reason}
     return by_theme
 
 
@@ -299,6 +363,7 @@ def build_sector_timing_observation(
     slot_hint: str | None = None,
     market_evidence: list[dict[str, Any]] | None = None,
     taxonomy: dict[str, Any] | None = None,
+    at: datetime | None = None,
 ) -> dict[str, Any]:
     """Build a research-only sector timing block from decision-board rows.
 
@@ -317,7 +382,7 @@ def build_sector_timing_observation(
         to map evidence sector_name → theme_l1.
     """
 
-    evidence_by_theme = aggregate_market_evidence_by_theme(market_evidence, taxonomy)
+    evidence_by_theme = aggregate_market_evidence_by_theme(market_evidence, taxonomy, at=at)
 
     buckets: dict[str, list[dict[str, Any]]] = {}
     for row in rows or []:
@@ -387,7 +452,9 @@ def build_sector_timing_observation(
     )
 
     return {
-        "version": "sector-timing-observation-v1",
+        "version": "sector-timing-observation-v2",
+        "evidence_contract": EVIDENCE_CONTRACT,
+        "read_as_of": at.isoformat() if isinstance(at, datetime) and at.tzinfo is not None else None,
         "slot_hint": slot_hint,
         "intended_slots": ["14:30", "14:45"],
         "research_only": True,

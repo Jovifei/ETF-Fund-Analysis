@@ -32,6 +32,8 @@ describe('responsive read projection, never a strategy', () => {
     expect(empty.actionable).toBe(false)
     const board = {
       sector_timing: {
+        version: 'sector-timing-observation-v2',
+        evidence_contract: 'sector-evidence-v2-source-percent-cutoff',
         calibration_status: 'not_calibrated',
         digest: {
           headline: '偏强观察: 红利 | 偏弱观察: 科技 | 研究向不可操作',
@@ -40,6 +42,12 @@ describe('responsive read projection, never a strategy', () => {
         },
       },
     }
+    for (const contract of ['legacy_snapshot_requires_rebuild', 'snapshot_after_read_time']) {
+      const blocked = sectorTimingDigest({ ...board, read_contract: contract })
+      expect(blocked.available).toBe(false)
+      expect(blocked.headline).toBe('')
+    }
+    expect(sectorTimingDigest({ sector_timing: { digest: board.sector_timing.digest } }).available).toBe(false)
     const digest = sectorTimingDigest(board)
     expect(digest.available).toBe(true)
     expect(digest.addThemes).toEqual(['红利'])
