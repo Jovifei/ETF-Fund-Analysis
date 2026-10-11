@@ -37,6 +37,10 @@ def test_rotation_backtest_is_next_open_and_audited(bootstrapped, db_session):
     assert payload["data"]["input_hash_policy"] == "single_raw_basis_daily_rows_v3-activity"
     tradability = payload["data"]["execution_tradability_contract"]
     assert tradability["policy"] == "raw_positive_volume_presence_v1"
+    assert tradability["valuation_policy"] == "last_observed_positive_volume_close_v1"
+    assert tradability["trade_ledger_reconciliation_required"] is True
+    assert payload["audit"]["valuation_policy"] == "last_observed_positive_volume_close_v1"
+    assert payload["audit"]["trade_ledger_reconciliation_required"] is True
     assert tradability["participation_cap_qualified"] is False
     assert tradability["market_impact_model_qualified"] is False
     assert tradability["price_limit_execution_qualified"] is False
