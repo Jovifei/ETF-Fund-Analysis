@@ -8,6 +8,8 @@ from __future__ import annotations
 from math import isfinite, sqrt
 from typing import Any
 
+CONTRACT_VERSION = "sector-rs-vol-research-v2"
+
 
 def _finite(value: object) -> float | None:
     if value is None or isinstance(value, bool):
@@ -26,6 +28,7 @@ def relative_strength_20d(return_20d: object, peer_returns_20d: list[object] | N
     peers = [value for value in (_finite(item) for item in (peer_returns_20d or [])) if value is not None]
     if target is None or not peers:
         return {
+            "contract_version": CONTRACT_VERSION,
             "return_20d": target,
             "peer_count": len(peers),
             "rank": None,
@@ -38,6 +41,7 @@ def relative_strength_20d(return_20d: object, peer_returns_20d: list[object] | N
     rank = better + 1
     percentile = round(100.0 * (1.0 - (rank - 1) / len(peers)), 2)
     return {
+        "contract_version": CONTRACT_VERSION,
         "return_20d": target,
         "peer_count": len(peers),
         "rank": rank,
@@ -48,12 +52,18 @@ def relative_strength_20d(return_20d: object, peer_returns_20d: list[object] | N
     }
 
 
-def simple_vol_gate(returns: list[object] | None, *, high_vol_percentile: float = 0.8) -> dict[str, Any]:
-    """Flag high realized vol from a short return sample (display gate only)."""
+def simple_vol_gate(returns: list[object] | None) -> dict[str, Any]:
+    """Daily decimal returns: sample stdev >= 0.03, not a percentile gate.
+
+    Callers must provide a daily time series, not member cross-sectional returns.
+    Invalid observations are omitted; at least five finite values are required.
+    No annualization, qualification or grade override is performed.
+    """
 
     series = [value for value in (_finite(item) for item in (returns or [])) if value is not None]
     if len(series) < 5:
         return {
+            "contract_version": CONTRACT_VERSION,
             "stdev": None,
             "gate": "unavailable",
             "high_vol": False,
@@ -66,11 +76,11 @@ def simple_vol_gate(returns: list[object] | None, *, high_vol_percentile: float 
     stdev = sqrt(var)
     elevated = stdev >= 0.03
     return {
+        "contract_version": CONTRACT_VERSION,
         "stdev": round(stdev, 6),
         "gate": "elevated_vol" if elevated else "normal_vol",
         "high_vol": elevated,
         "threshold_hint": 0.03,
-        "high_vol_percentile_config": high_vol_percentile,
         "research_only": True,
         "actionable": False,
         "note": "simple_sample_stdev_gate_not_a_grade_override",
@@ -81,9 +91,13 @@ def annotate_theme_observation(theme: dict[str, Any], *, peer_returns_20d: list[
     """Attach RS/vol research tags onto a sector_timing theme dict (copy)."""
 
     out = dict(theme)
-    returns = theme.get("member_returns") or theme.get("returns_sample") or []
-    out["rs_20d"] = relative_strength_20d(theme.get("mean_return_20d", theme.get("mean_return_5d")), peer_returns_20d)
+    daily_axis = theme.get("returns_axis") == "daily_time_series"
+    returns = theme.get("daily_returns") if daily_axis else None
+    out["rs_20d"] = relative_strength_20d(theme.get("mean_return_20d"), peer_returns_20d)
     out["vol_gate"] = simple_vol_gate(returns if isinstance(returns, list) else [])
+    if not daily_axis:
+        out["vol_gate"]["note"] = "daily_time_series_axis_required"
+    out["contract_version"] = CONTRACT_VERSION
     out["research_only"] = True
     out["actionable"] = False
     return out
