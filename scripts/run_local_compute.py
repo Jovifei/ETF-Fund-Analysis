@@ -73,6 +73,25 @@ def cmd_run(args: argparse.Namespace) -> int:
             "manifest": bundle["manifest"],
         }, indent=2, ensure_ascii=False))
 
+        if not args.no_upload:
+            auth_file = root / "config" / "producer_auth.json"
+            if auth_file.exists():
+                with open(auth_file, "r", encoding="utf-8") as f:
+                    auth_data = json.load(f)
+                os.environ["SHADOW_PRODUCER_TOKEN"] = auth_data["producer_token"]
+                os.environ["SHADOW_SIGNING_KEY_ID"] = auth_data["key_id"]
+                os.environ["SHADOW_SIGNING_SECRET"] = auth_data["signing_secret"]
+                sync_url = getattr(args, "sync_url", None) or "https://etf.joviluma.com/api/shadow/sync"
+                from app.workspace.shadow_client import upload_bundle
+                try:
+                    receipt = upload_bundle(sync_url, bundle)
+                    receipt_path = outbox / f"bundle_{bundle['manifest']['sequence']}.receipt.json"
+                    with open(receipt_path, "w", encoding="utf-8") as rf:
+                        json.dump(receipt, rf, indent=2, ensure_ascii=False)
+                    print(json.dumps({"status": "uploaded", "receipt": receipt}, indent=2, ensure_ascii=False))
+                except Exception as exc:
+                    print(json.dumps({"status": "upload_failed", "error": str(exc)}, indent=2, ensure_ascii=False))
+
         return 0
     finally:
         lock.release()
@@ -95,6 +114,7 @@ def main() -> int:
     p_run.add_argument("--profile", default="live", choices=["live", "mock"], help="Execution profile")
     p_run.add_argument("--provider", default="akshare", help="Market provider")
     p_run.add_argument("--config", default=None, help="Path to config json (universe, slots)")
+    p_run.add_argument("--sync-url", default="https://etf.joviluma.com/api/shadow/sync", help="HTTPS upload endpoint")
     p_run.add_argument("--no-upload", action="store_true", help="Do not upload after export")
 
     args = parser.parse_args()

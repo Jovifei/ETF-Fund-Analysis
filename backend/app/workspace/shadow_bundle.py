@@ -4,7 +4,7 @@ import hashlib
 import json
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -69,8 +69,9 @@ class ShadowStore:
         from app.workspace.shadow_projection import validate_public_chart
         for chart in blobs['charts'].values():
             validate_public_chart(chart)
+            shanghai_date = (generated.astimezone(timezone(timedelta(hours=8))) if generated.tzinfo else generated).date().isoformat()
             for bar in chart.get('bars',[])+chart.get('research_bars',[]):
-                if not isinstance(bar.get('date'),str) or bar['date'][:10]>generated.date().isoformat():raise ValueError('chart from future')
+                if not isinstance(bar.get('date'),str) or bar['date'][:10]>shanghai_date:raise ValueError('chart from future')
         if set(blobs['market'])!={'references'} or any(not isinstance(ref,dict) or set(ref)-{'id','source','source_timestamp','reason'} for ref in blobs['market'].get('references',[])):raise ValueError('nonpublic market fields')
         if any(ref.get('source_timestamp') and timestamp(ref['source_timestamp'])>generated for ref in blobs['market'].get('references',[])):raise ValueError('market from future')
         if not isinstance(blobs['market'].get('references'),list):raise ValueError('market references required')
