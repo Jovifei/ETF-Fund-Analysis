@@ -21,6 +21,7 @@ from app.services.runtime_service import RuntimeService
 from app.workspace.api import router as workspace_router
 from app.workspace.account_api import router as account_router
 from app.workspace.ui import WorkspaceMiddleware
+from app.workspace.shadow_api import router as shadow_router
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -97,6 +98,7 @@ app.include_router(workbench_1430_router)
 app.include_router(workbench_kline_router)
 app.include_router(workspace_router)
 app.include_router(account_router)
+app.include_router(shadow_router)
 
 
 @app.get("/", include_in_schema=False)
