@@ -125,7 +125,16 @@ class MarketService:
         lookback_days: int = 900,
         codes: list[str] | None = None,
         run_id: str | None = None,
+        mock_settled_date: date | None = None,
     ) -> dict:
+        if mock_settled_date is not None:
+            from app.services.settlement import settled_session
+            from app.services.trading_calendar_service import TradingCalendarService
+            if (self.settings.market_provider != "mock"
+                    or type(mock_settled_date) is not date
+                    or not TradingCalendarService(self.settings).decision(mock_settled_date).actionable
+                    or mock_settled_date > settled_session(self.settings, datetime.now(self.settings.timezone))):
+                raise ValueError("mock_settled_date_requires_verified_settled_mock_session")
         run_id = run_id or uuid4().hex
         instruments = db.scalars(
             select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code)
@@ -133,7 +142,7 @@ class MarketService:
         if codes:
             wanted = {code.upper() for code in codes}
             instruments = [item for item in instruments if item.ts_code.upper() in wanted or item.symbol in wanted]
-        end_date = datetime.now(self.settings.timezone).date()
+        end_date = mock_settled_date or datetime.now(self.settings.timezone).date()
         if self.settings.market_provider != "mock":
             from app.services.trading_calendar_service import TradingCalendarService
             now = datetime.now(self.settings.timezone)

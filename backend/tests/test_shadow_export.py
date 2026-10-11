@@ -102,7 +102,18 @@ def test_mock_collection_precedes_compute_without_live_fetch(tmp_path,monkeypatc
         def run(self,db,task,**kwargs):calls.append((task,kwargs));return {'status':'succeeded'}
         def close(self):pass
     monkeypatch.setattr(tasks,'TaskService',Spy)
+    from datetime import date
+    monkeypatch.setattr('app.services.settlement.settled_session', lambda _settings: date(2026, 10, 9))
     settings=SimpleNamespace(app_env='test',market_provider='mock',database_url='sqlite:///'+(tmp_path/'research.sqlite3').as_posix())
     compute_local(settings)
     assert [task for task,_ in calls]==['refresh_bars','refresh_quotes','refresh_sector_snapshots','refresh_indicators','refresh_forecasts','refresh_signals','refresh_decision_board']
-    assert calls[0][1]=={'lookback_days':120}
+    assert calls[0][1]=={'lookback_days':420, 'mock_settled_date':date(2026, 10, 9)}
+
+def test_offline_full_mock_quotes_remain_partial_but_displayable():
+    from app.workspace.shadow_export import offline_result_ready
+    result={'status':'partial','requested':35,'received':35,'missing':0,'degraded':35,'realtime':0}
+    assert offline_result_ready('refresh_quotes',result)
+    assert result['status']=='partial'
+    assert not offline_result_ready('refresh_quotes',{**result,'missing':1})
+    assert not offline_result_ready('refresh_forecasts',result)
+    assert not offline_result_ready('refresh_quotes',{**result,'status':'failed'})

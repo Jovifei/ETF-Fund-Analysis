@@ -35,7 +35,7 @@ def make_bundle(board,charts,market,*,sequence,generated_at,expires_at,code_sha,
     return {'manifest':manifest,'blobs':blobs}
 
 class ShadowStore:
-    def __init__(self,root,*,code_sha,config_hash,max_bytes=32*1024*1024,max_generations=20):
+    def __init__(self,root,*,code_sha,config_hash,max_bytes=64*1024*1024,max_generations=20):
         self.root=Path(root);self.code_sha=code_sha;self.config_hash=config_hash
         self.max_bytes=max_bytes;self.max_generations=max_generations
     def validate(self,bundle,now):
@@ -104,7 +104,9 @@ class ShadowStore:
             writes[self.root/'manifests'/bundle_id]=manifest_data
             for path,data in writes.items():
                 if path.exists() and path.read_bytes()!=data:raise ValueError('content collision')
-            self._gc()
+            # Reserve a conservative complete generation, including shared blobs.
+            needed=sum(len(data) for data in writes.values())+1024
+            self._gc(required_bytes=needed)
             files=[p for p in self.root.rglob('*') if p.is_file()]
             needed=sum(len(data) for path,data in writes.items() if not path.exists())+1024
             if sum(p.stat().st_size for p in files)+needed>self.max_bytes:raise ValueError('store capacity exceeded')
@@ -118,7 +120,7 @@ class ShadowStore:
             self._gc()
             return pointer
         finally:lock.unlink(missing_ok=True)
-    def _gc(self):
+    def _gc(self,required_bytes=0):
         protected=set()
         for name in ('latest.json','previous.json'):
             path=self.root/name
@@ -129,6 +131,15 @@ class ShadowStore:
             if len(keep)<self.max_generations:keep.add(path.name)
         for path in manifests:
             if re.fullmatch('[a-f0-9]{64}',path.name) and path.name not in keep and not path.is_symlink():path.unlink()
+        self._gc_blobs()
+        for path in reversed(manifests):
+            used=sum(p.stat().st_size for p in self.root.rglob('*') if p.is_file())
+            if used+required_bytes<=self.max_bytes:break
+            if (path.name not in protected and path.exists() and not path.is_symlink()
+                    and re.fullmatch('[a-f0-9]{64}',path.name)):
+                path.unlink()
+                self._gc_blobs()
+    def _gc_blobs(self):
         referenced=set()
         for path in (self.root/'manifests').iterdir():
             if re.fullmatch('[a-f0-9]{64}',path.name):referenced.update(json.loads(path.read_bytes())['parts'].values())

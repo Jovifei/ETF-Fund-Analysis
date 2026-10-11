@@ -57,15 +57,28 @@ def export_local(settings,*,sequence,code_sha,now=None):
                 refs.append({'id':item.id,'source':item.source,'source_timestamp':source_time.isoformat()})
             return make_bundle(board,charts,{'references':refs},sequence=sequence,generated_at=generated,expires_at=generated+timedelta(hours=2),code_sha=code_sha,config_hash=stable_hash(settings.load_strategy()))
     finally:engine.dispose()
+def offline_result_ready(task, result):
+    """Transport readiness only; Mock quotes remain degraded, never qualified."""
+    if result.get('status') == 'succeeded':
+        return True
+    return (task == 'refresh_quotes' and result.get('status') == 'partial'
+            and type(result.get('requested')) is int and result['requested'] > 0
+            and result.get('received') == result['requested']
+            and result.get('degraded') == result['requested']
+            and result.get('missing') == 0 and result.get('realtime') == 0)
+
 def compute_local(settings):
     if settings.app_env!='test' or settings.market_provider!='mock' or not settings.database_url.startswith('sqlite:///'):raise ValueError('offline local computation only')
     from app.services.task_service import TaskService
+    from app.services.settlement import settled_session
+    mock_date = settled_session(settings)
     engine=create_engine(settings.database_url);service=TaskService(settings);results=[]
     try:
         for task in ['refresh_bars','refresh_quotes','refresh_sector_snapshots','refresh_indicators','refresh_forecasts','refresh_signals','refresh_decision_board']:
             with Session(engine) as db,db.begin():
-                result=service.run(db,task,**({'lookback_days':120} if task=='refresh_bars' else {}))
+                result=service.run(db,task,**({'lookback_days':420, 'mock_settled_date':mock_date} if task=='refresh_bars' else {}))
+                result = {**result, 'task_name': task, 'display_ready': offline_result_ready(task, result)}
                 results.append(result)
-                if result.get('status')!='succeeded':break
+                if not result['display_ready']:break
     finally:service.close();engine.dispose()
     return results

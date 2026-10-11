@@ -80,3 +80,16 @@ def test_nested_unsafe_flag_valid_hash(tmp_path,key,value):
     data=bundle();data['blobs']['board']['rows'][0][key]=value;data['manifest']['parts']['board']=digest(data['blobs']['board'])
     with pytest.raises(ValueError,match='safety'):ShadowStore(tmp_path,code_sha='a'*40,config_hash='b'*64).publish(data,now=NOW)
 
+
+def test_byte_budget_collects_only_unprotected_old_generations(tmp_path):
+    from app.workspace.shadow_bundle import digest
+    store=ShadowStore(tmp_path,code_sha='a'*40,config_hash='b'*64,max_bytes=20000,max_generations=20)
+    for sequence in range(1,8):
+        value=bundle(sequence);value['blobs']['board']['rows'][0]['name']=str(sequence)+'x'*4500
+        value['manifest']['parts']['board']=digest(value['blobs']['board'])
+        store.publish(value,now=NOW)
+    assert store.read(now=NOW)['sequence']==7
+    import json
+    previous=json.loads((tmp_path/'previous.json').read_bytes())['bundle_id']
+    assert store.read(now=NOW,bundle_id=previous)['sequence']==6
+    assert sum(p.stat().st_size for p in tmp_path.rglob('*') if p.is_file())<=20000
