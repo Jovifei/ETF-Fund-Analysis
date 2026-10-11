@@ -1,6 +1,6 @@
-# 本地真实计算 → 网站展示：执行方案（共同审议稿 v1）
+# 本地真实计算 → 网站展示：执行方案（合并版 v2）
 
-状态：PLANNING_ONLY。本轮只制定方案；业务代码、任务、生产配置、数据及部署未变更。另一个执行 Agent 接手本方案。方案经 Codex 与基金决策网页端 GPT 独立提案、质疑、合并后定稿；文末记录实际审议意见，不能预先宣称共同批准。
+状态：PLAN_MERGED / EXECUTION_NOT_STARTED。本轮只制定方案；业务代码、任务、生产配置、数据及部署未变更。另一个执行 Agent 接手本方案。Codex与基金决策网页端GPT已完成独立提案、草案复议和意见合并；v2纳入已返回意见，最终复核状态见文末，不能预先宣称实现或上线完成。
 
 ## 1. 最终交付与基线
 
@@ -49,7 +49,9 @@ flowchart LR
 
 ## 3. 真实源、计算和时间合同
 
-复用已有factory/composite/public_composite/akshare适配器。执行前以实际配置与数据探测确定首期provider；历史heartbeat曾用composite而旧部署出现public_composite，不能仅按旧文本写死。独立live profile显式选择现有允许provider；ALLOW_MOCK_FALLBACK=false、LLM/付费AI关闭。保留既有Mock脚本的guard，新增live入口及专用本机所有者标记，不把test/mock guard删掉即可称live。
+复用已有factory/composite/public_composite/akshare适配器。执行前以实际配置与数据探测确定首期provider；历史heartbeat曾用composite而旧部署出现public_composite，不能仅按旧文本写死。显式分开 `research-mock` / `research-live` 两profile，不能命名成暗示策略可操作的production-live；ALLOW_MOCK_FALLBACK=false、LLM/付费AI关闭。保留既有Mock脚本的guard，新增live入口及专用本机所有者标记，不把test/mock guard删掉即可称live。
+
+Provider admission contract：provider_name、license_status（acquire/store/display分别判定）、quota_status、source_timestamp_quality、adjustment_policy、unit_policy、evidence_ref和checked_at必须记录。Adapter存在或HTTP成功不等于provider资格完成。不得用known research-only放行未知留存/网站展示许可；条款需接受或无法确认范围时问Jovi，仅阻断相应source/动作。时间/复权/量额不足阻断相关数值，其他可合法展示的结果按缺口和研究资格显示，不要求先完成预测OOS才传递合法展示包。
 
 真实非Mock不等于来源时间/复权/单位/PIT/许可/OOS都通过。为每类记录记录provider、trade_date、source_timestamp或unknown reason、fetched_at、adjustment_basis、units、数量/覆盖、缺口、延迟、使用许可证据引用。单位/复权冲突或未来时点阻断相关结果；源时间unknown不能包装为实时。网页能展示符合留存/展示范围的非实时研究结果，资格仍UNKNOWN/actionable=false/not_calibrated，不要求先完成策略OOS才能验收传输链路。
 
@@ -77,6 +79,8 @@ parts白名单至少覆盖实际正常页面：
 | sectors/index summaries | 页面实际使用且已迁移的必要投影；没有许可/数据就explicit unavailable |
 | source/status | generation、收发/最后成功时间、freshness per component、兼容性/拒绝原因、producer scope |
 
+Generation identity contract：`run_id, bundle_id, input_snapshot_hash, code_sha, config_hash, generated_at`在本机计算回执、upload receipt、正常页面metadata一致。parts按overview、单标的detail、单标的/周期chart、market小对象组织，manifest索引内容hash。服务端读取一张图/一页列表不得每次反序列化所有标的12–16MiB大包；接收端可按单对象落content-addressed blob，一次完整manifest才切指针，预算计所有blob/manifest/nonce/temp。缓存仅允许有界单代/对象，实测低内存服务器RSS峰值。不得通过另存完整大包+重复拆分副本绕过64MiB额度。
+
 逐项盘点Overview.vue/Detail.vue及其子组件实际API调用（news、indexes、Chan、Outlook不能忘）；建立endpoint→part→private-domain→迁移/空态表，不用一个大JSON“自认为完整”。目录搜索可用有界catalog或保留非行情metadataDB；缺标的/周期/新闻不能触发cloud采集。暂未迁移的页面功能应明显unsupported/unavailable，是否构成交付缺项由scope表决定，不能静默读旧云行情混代。
 
 推荐后台compatibility adapter：现有 `/api/workspace/overview`、instruments/{code}详情/图表等URL保持，增加 `WORKSPACE_RESEARCH_SOURCE=database|local_bundle` 与 `local_display_read.py`。同代adapter做过滤/分页/身份白名单映射，不重算指标、研究信号或预测。前端api.ts保持same-origin Cookie登录；加generation pin（响应ID→后续请求generation查询），旧包在请求期间受保护；切换期间出现不存在generation返回明确刷新/冲突，不能详情跨代。
@@ -91,7 +95,7 @@ parts白名单至少覆盖实际正常页面：
 
 复用既有etf.joviluma.com HTTPS入口，目标精确path，禁止重定向、HTTP、query凭据/签名URL、关闭TLS校验、新本机入站端口/NAT。网站超限、ENOSPC、perm、bad hash、wrong code/config、future、rollback sequence、过期、nonce重放拒绝后latest保持完整；旧latest/previous语义沿用正式recovery合同，留回滚包；不声称断电事务保证。
 
-状态区分：source新鲜度、transport生成/最后接收、算法资格独立。盘中quote超过15分钟默认stale，其他指标按真实session+source合同判断；包2小时过期沿用fail-closed，不为长期展示悄悄延长有效期。网站可在明确 stale/expired横幅下只读显示最后完成代作历史参考（需要新增专用stale envelope，不是把过期包重新判valid），清掉操作性digest/强弱当前状态；恢复收到新代才切回fresh。周末/盘后无新行情不是采集失败，按日历说明截止session。无任何代明确空态，不能重新拉真实行情。
+Freshness contract：`FRESH / DEGRADED / STALE / BLOCKED / UNKNOWN`逐组件表示完整性/源时点/契约状态，与source新鲜度、transport生成/最后接收、算法资格分开。盘中quote超过15分钟默认stale，其他指标按真实session+source合同判断，quote新不能刷新forecast旧状态。包2小时过期沿用fail-closed，不为长期展示悄悄延长有效期。网站可在明确 stale/expired横幅下只读显示最后完成代作历史参考（需要新增专用stale envelope，不是把过期包重新判valid），清掉操作性digest/强弱当前状态；恢复收到新代才切回fresh。周末/盘后无新行情不是采集失败，按日历说明截止session。无任何代明确空态，不能重新拉真实行情。
 
 ## 6. 定时计划与重启
 
@@ -107,7 +111,7 @@ parts白名单至少覆盖实际正常页面：
 
 Windows正式任务采用现有registrar扩展：绝对Python/代码/数据路径，固定WorkingDirectory，单实例/超时/退出码/轮转日志/上次成功marker。任务身份以Jovi已允许的用户上下文为首选，不创建高权限服务账号；如要注销后运行须选择受支持安全上下文，不能把登录密码放脚本或命令行。首次注册、持久凭据ACL及重启/注销操作需按第10节确认，Agent不擅自重启电脑。任务运行与Codex/浏览器/显卡状态无关。
 
-端到端调度验收至少跨两个交易日实际定时运行，并另测正常启动/睡眠/离线/恢复；7–14交易日长期观察为后续稳定性门槛，不阻挡最小真实链路修复与可回滚部署，不能把等Mock观察当下一步。
+端到端首验至少跨两个交易日实际定时运行，并另测正常启动/睡眠/离线/恢复；这只叫链路首验/preview，不叫长期运行资格。7–14交易日真实运行观察为后续稳定性门槛，不阻挡最小真实链路修复与可回滚部署，不能把等Mock观察当下一步。现有shadow registrar时段校验只接受14/15点，不能直接塞16:10；新增收盘任务或扩展可信任务类型并增加回归测试。
 
 ## 7. 可借鉴开源及明确取舍
 
@@ -161,12 +165,15 @@ Windows正式任务采用现有registrar扩展：绝对Python/代码/数据路�
 - 用现有deploy/compose与受审runbook，若必要新增精准local-display配置。重新确认服务器code/image/schema；部署前容量需覆盖当前运行+回滚镜像、一次新备份、上传/解包临时峰值并留余量。空间不足提出列明清理对象求授权，不能prune全部/删DB备份。
 - 新一致性备份/hash、不可变镜像code/tree标签，先部署receiver+认证preview，正常路径仍database，cloud旧计算继续。使用现有HTTPS入口；新producer signing secret由Jovi安全配置，不截图/回显。
 - 在本机真实run→网站HTTPS上传→hashreceipt→正常用户浏览preview总览/两只详情图表/forecasts；记录浏览器消费generation/part hash与本机一致。费用/网络无新需求则无需重复授权已允许部署，增加新权限按第10节确认。
+- 保留有界dual-read审计窗口（只后台比较，不双展示/不新触发cloud计算）。记录同源同截止输入的field差、missing、hash、timing；输入/时点不同标NOT_COMPARABLE，不把真实源差异当算法错误或只要求输出字节完全相等。私有数据不进入对比报告。窗口及旧结果仅在迁移过程中用于验收，不能成为永久cloudraw写入理由。
 - PASS：第9节公网/消费真实证据。失败立即撤回receiver或恢复镜像/配置，不伪装成Mock。
 
 ### F. 正常网站切换与云端增长停止
 
+- Migration contract：preview PASS + normal consumer PASS + public receipt identity PASS + rollback rehearsal PASS +执行范围授权记录齐全才允许停cloud目标任务。已获范围授权无需重复问；新增安全权限/网络/删除只按第10节确认。
+
 - 通过E后，先正常读开关local_bundle。确认账号/持仓/收藏正常，尚未迁移功能清楚空态；核实际网站消费hash。再精准停止A表列明的cloud采集/指标/forecast/board刷新、手工/admin触发和网页请求侧触发，不停auth维护、备份和必要私有作业。所有入口统一worker_role/display_only guard，不靠只停一个cron。
-- scheduler.py、TaskService/API手工任务准入、runtime状态按最小新增role修改；部署保持账户DB可写给私有事务，不能数据库全局只读。不把保留功能持续写行情隐瞒。
+- backend/app/scheduler.py、services/task_service.py、api/router.py的手工任务准入及runtime状态按最小新增role修改；部署保持账户DB可写给私有事务，不能数据库全局只读。不把保留功能持续写行情隐瞒。
 - 观察至少一个正常采集周期和两个交易日：已迁移raw market/compute历史表row-count/max-time/bytes无新增，本机相应持续增长；bundle/nonce/log大小有界，API RSS/磁盘斜率有记录。日志/镜像/备份也占盘，另有预算；本项目本轮不清旧资产。
 - 失败回滚顺序：先复旧source读配置和旧approved调度角色（有旧数据可用/状态真实），再镜像；不同时运行两个市场计算者造成重复。恢复旧计算是明确审计的回滚，不静默fallback。
 
@@ -204,10 +211,16 @@ Windows正式任务采用现有registrar扩展：绝对Python/代码/数据路�
 
 按本方案完成真实本地计算→公网网站消费，算法不扩展。先读AGENTS/STATUS/HANDOFF/tasks/lessons，fetch并核main/PR45/其他写入者和生产身份；保护Owner脏文件/配置/数据库。依据固定f514实施及0f8收据，在独立 `codex/local-live-to-website` 执行分支串行完成A–G；没有新增授权不做付费/秘密权限/网络/删除/电脑重启。先写失败测试，保留Mock路径和资格门禁，复用ProviderAdapter/现有算法/HMAC原子store。补live专用入口、完整forecast/detail展示合同和正常网站consumer，然后精确测试、网页GPT复审、备份/受控部署、实际公网验收，最后精确停云端迁移任务并验证行情增长停止。只把脱敏source/test receipts推GitHub。交付actual SHA/tree/image/schema、本机root/任务/停止命令、两个真实交易日记录、网站generation哈希证据、资源前后、PASS/FAIL/NOT_RUN与回滚。不得在Mock/本地TLS阶段宣布链路已完成；遇新授权只暂停相关动作，不停在计划层。
 
-## 12. 双方讨论记录（待复议）
+## 12. 双方讨论与合并裁决
 
 网页端独立提案已实际返回：认可本机计算/网站展示/ProviderAdapter/签名快照/权限域/真实公网consumer验收/Windows任务；建议拆SQLite+DuckDB、举例20GBstore、提出双读及先停cloud计划。
 
 Codex保留项：复用Adapter、独立live guard、scope白名单、公网hash回执、私有域不外泄、freshness与算法资格分开。
 
-Codex待网页复议调整：①首期保持现有SQLite，不为链路建立DuckDB双库；②云store沿用64MiB，20GB示例不适用；③有限K线/报价展示可传，否则网站无法画图，但禁止全历史/provider dump；④先preview/正常consumer切换成功，再精准停cloud所有采集入口；⑤现有预测1/3/5/10日，不能伪造20日/月预测；⑥7–14日soak后续，先做真实公网E2E和两个交易日调度证明；⑦不重复既有部署授权，只问新增权限/采购/删除/重启。
+网页端已针对固定草案f4d04b377a1ab3cf05a77e7d090813c59961c04b返回 PLAN_REVIEW_COMPLETE：接受Codex上述SQLite-first、64MiB云预算、必要OHLC/quote展示、preview成功后停cloud、1/3/5/10horizon及暂不平台化裁决，撤回首案DuckDB建议。
+
+已纳入网页修订：两交易日只算首验而非soak资格；ProviderAdapter存在不等于真实源许可/时间/复权可用，增加source admission合同；research-mock/research-live分离；后台dual-read对比窗口不双展示；显式generation identity/freshness/migration三个合同。
+
+Codex补充并待最终复核：按单标的内容对象读取以限制云端RSS，不每次读全包；所有大小计入64MiB；同输入可比才作dual-read数字比对；现有registrar不能直接接16:10，须单独收盘任务；不把普通部署已授权误作新授权；本轮不实施、不改生产。
+
+最终复核状态：待网页确认v2；若有具体阻断先改方案，不启动实现。执行交付顺序以本文件A–G为唯一主序列，避免再用远端编号Phase1–5制造第二套任务表。
