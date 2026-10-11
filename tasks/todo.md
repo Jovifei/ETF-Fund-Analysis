@@ -23,3 +23,16 @@
 - [ ] 方向形成后按总路线安排S4补缺与S5–S7价值顺序，不因一次修复扩大范围。
 
 资格保持UNKNOWN、actionable=false、calibration_status=not_calibrated；自动交易和运行时激活保持关闭。未修改业务数据或历史Git提交。
+# Owner-authorized local execution with remote review —2026-10-11
+Jovi explicitly authorizes local code implementation/tests; webGPT reviews actual fixed GitHub source and decides next stages. Previous receive-only rule replaced for this stage. Root/other AI work preserved; independent codex/local-execution-20261011 from e722ad5. No live providers, private data, production deployment or automatic trading here.
+- [x] Isolate source and clarify single writer to remote Chat.
+- [x] Failure-first sector evidence cutoff/mock/unit/source/freshness contract repair; old core/sector contract summary blocking.
+- [x] Disabled shadow local compute/export + bounded content-addressed atomic sync + scoped HMAC auth + expiry/replay/order gates + Windows scheduling implementation.
+- [x] Primary-source open-source assessment and existing-code reuse mapping; preserve licenses.
+- [x] Independent review and affected regression/static/frontend checks; inspect aggregate diff. Final fullf514 backend1851 PASS/23 SKIP/0 FAIL;198 Vue and exact PR-event CI workflows PASS.
+- [x] Commit phased actual source; GitHub PR45 delivery; webpage review accepts disabled1d boundary, no deploy recommendation.
+- [x] Publish final consolidated test receipt and fixed-SHA receiver instructions after final full test result.
+- [ ] Separately qualify long-lived scheduled jobs, public staging HTTPS and real provider/data rights before production cutover.
+Current tests frome722 baseline are55backend+197frontend PASS, not reused as new candidate result. Source transport6908544 is docs-only and not merged here.
+
+Review: fixed implementationf514a6e/treeba18dbfe, owner state preserved; one-time Windows offline task and actual local TLS/restart replay proof passed. Full120 affected backend and198 Vue passed, full1595 backend1825/23 recorded by exact identity. Detailed result boundaries and preserved failures: docs/audits/LOCAL_COMPUTE_IMPLEMENTATION_20261011.md. New architecture remains default disabled, Mock-only,1d-only; no production claim.
