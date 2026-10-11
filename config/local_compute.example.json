@@ -2,7 +2,7 @@
   "root_path": "F:\\ETF_Data\\ETF-Fund-Analysis",
   "database_path": "F:\\ETF_Data\\ETF-Fund-Analysis\\db\\research.sqlite3",
   "profile": "live",
-  "market_provider": "akshare",
+  "market_provider": "public_composite",
   "timezone": "Asia/Shanghai",
   "disk_min_free_gb": 2.0,
   "max_chart_bars": 250,
