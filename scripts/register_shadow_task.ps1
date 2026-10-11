@@ -12,7 +12,7 @@ if ($SyncUrl) {
     if (-not $uri.IsAbsoluteUri -or $uri.Scheme -ne 'https' -or -not $uri.Host -or $uri.UserInfo -or $uri.Query -or $uri.Fragment -or $uri.AbsolutePath -ne '/api/shadow/sync') { throw 'Exact HTTPS sync endpoint required' }
     $arguments += ' --sync-url "{0}"' -f $SyncUrl
 }
-$action = New-ScheduledTaskAction -Execute $resolvedPython -Argument $arguments
+$action = New-ScheduledTaskAction -Execute $resolvedPython -Argument $arguments -WorkingDirectory (Resolve-Path -LiteralPath $Workspace).Path
 $triggers = @($Slots | ForEach-Object { New-ScheduledTaskTrigger -Daily -At $_ })
 $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
 Register-ScheduledTask -TaskName 'ETF-Shadow-Local-Research' -Action $action -Trigger $triggers -Settings $settings -Description 'Offline local research; market-calendar gated; canonical production untouched'
