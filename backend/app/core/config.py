@@ -61,7 +61,7 @@ class Settings(BaseSettings):
         populate_by_name=True,
     )
 
-    # SHADOW only: never changes canonical providers, routes, users or DB.
+    # SHADOW & LOCAL_DISPLAY only: never changes canonical providers, routes, users or DB.
     shadow_sync_enabled: bool = False
     shadow_sync_root: str = str(PROJECT_ROOT / '.local' / 'shadow-store')
     shadow_sync_code_sha: str = ''
@@ -72,6 +72,10 @@ class Settings(BaseSettings):
     shadow_sync_max_bytes: int = Field(default=67108864, ge=1048576, le=268435456)
     shadow_sync_max_request_bytes: int = Field(default=16777216, ge=1024, le=33554432)
     shadow_sync_max_generations: int = Field(default=20, ge=2, le=100)
+
+    # Local compute display v2 switch
+    workspace_research_source: Literal["database", "local_bundle"] = "database"
+    local_display_v2_store_root: str = str(PROJECT_ROOT / '.local' / 'local-display-v2')
 
     app_name: str = "中国 ETF/LOF 私有决策看板"
     app_env: Literal["development", "test", "production"] = "development"

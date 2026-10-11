@@ -33,15 +33,28 @@ def search(db: DB, settings: Config, user: User, response: Response, q: str = Qu
     return read_model.search_instruments(db, settings, q, limit, user.id if user else None, offset=offset, sort=sort, min_scale=min_scale, include_unknown=include_unknown)
 
 
+def _local_reader(settings: Settings):
+    from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
+    store = LocalDisplayStore(settings.local_display_v2_store_root)
+    return LocalDisplayReader(store)
+
+
 @private_router.get("/workspace/overview")
-def overview(db: DB, settings: Config, user: User, horizon: int = Query(default=1), offset: int = Query(default=0, ge=0, le=10000), limit: int = Query(default=100, ge=1, le=500), theme: str | None = Query(default=None, max_length=128)) -> dict:
+def overview(db: DB, settings: Config, user: User, horizon: int = Query(default=1), offset: int = Query(default=0, ge=0, le=10000), limit: int = Query(default=100, ge=1, le=500), theme: str | None = Query(default=None, max_length=128), generation: str | None = Query(default=None)) -> dict:
     if horizon not in (1, 3, 5, 10):
         raise HTTPException(422, "horizon must be one of 1, 3, 5, 10")
+    if settings.workspace_research_source == "local_bundle":
+        return _local_reader(settings).read_overview(horizon, offset, limit, theme, generation=generation)
     return read_model.overview(db, settings, horizon, offset, limit, theme)
 
 
 @private_router.get("/workspace/instruments/{code}")
-def detail(code: str, db: DB, settings: Config, user: User) -> dict:
+def detail(code: str, db: DB, settings: Config, user: User, generation: str | None = Query(default=None)) -> dict:
+    if settings.workspace_research_source == "local_bundle":
+        res = _local_reader(settings).read_instrument_detail(code, user.id if user else None, generation=generation)
+        if res is None:
+            raise HTTPException(404, _instrument_missing_reason(db, code))
+        return res
     result = read_model.instrument_detail(db, settings, code.upper(), user.id if user else None)
     if result is None:
         raise HTTPException(404, _instrument_missing_reason(db, code))
@@ -58,11 +71,21 @@ def chan_evidence(code: str, db: DB, response: Response, interval: Literal["D", 
 
 
 @private_router.get("/workspace/instruments/{code}/chart")
-def chart(code: str, db: DB, settings: Config, user: User, interval: str = "1d", limit: int = Query(default=260, ge=30, le=1500), as_of: Annotated[datetime | None, Query()] = None) -> dict:
+def chart(code: str, db: DB, settings: Config, user: User, interval: str = "1d", limit: int = Query(default=260, ge=30, le=1500), as_of: Annotated[datetime | None, Query()] = None, generation: str | None = Query(default=None)) -> dict:
     if interval not in {"1d", "1w", "1mo", "30m", "60m"}:
         raise HTTPException(422, "unsupported_chart_interval")
     if as_of is not None and read_model.market_time(as_of) > read_model.market_time(datetime.now(read_model.SHANGHAI)):
         raise HTTPException(422, "as_of_in_future")
+    if settings.workspace_research_source == "local_bundle":
+        try:
+            res = _local_reader(settings).read_chart_data(code, interval, limit, generation=generation)
+            if res is None:
+                raise HTTPException(404, _instrument_missing_reason(db, code))
+            return res
+        except ValueError as exc:
+            if "unsupported_chart_interval" in str(exc):
+                raise HTTPException(422, "unsupported_chart_interval")
+            raise
     result = read_model.chart_data(db, settings, code.upper(), interval, limit, as_of=as_of)
     if result is None:
         raise HTTPException(404, _instrument_missing_reason(db, code))
@@ -77,7 +100,9 @@ def chart(code: str, db: DB, settings: Config, user: User, interval: str = "1d",
 
 
 @private_router.get("/workspace/sectors")
-def sectors(db: DB, settings: Config, user: User) -> dict:
+def sectors(db: DB, settings: Config, user: User, generation: str | None = Query(default=None)) -> dict:
+    if settings.workspace_research_source == "local_bundle":
+        return _local_reader(settings).read_sectors(generation=generation)
     return read_model.sector_overview(db, settings)
 
 
