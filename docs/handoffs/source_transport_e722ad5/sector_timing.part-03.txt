@@ -1,0 +1,107 @@
+        match = next((item for item in themes if item["theme_l1"] == theme_name), None)
+        if not match:
+            return theme_name
+        corr = match.get("market_corroboration") or {}
+        pct = corr.get("mean_pct_change")
+        align = corr.get("alignment")
+        if pct is None:
+            return theme_name
+        return f"{theme_name}(市{pct:+.2f}%/{align})"
+
+    add_part = "、".join(_theme_line(name) for name in add_themes) or "无"
+    reduce_part = "、".join(_theme_line(name) for name in reduce_themes) or "无"
+    headline = (
+        f"偏强观察: {add_part} | 偏弱观察: {reduce_part} | "
+        f"研究向不可操作 · calibration=not_calibrated"
+    )
+    corroboration_available = sum(
+        1 for item in themes if (item.get("market_corroboration") or {}).get("available")
+    )
+    return {
+        "field_path": DIGEST_FIELD_PATH,
+        "summary_field_path": SUMMARY_FIELD_PATH,
+        "api_read_path": API_READ_PATH,
+        "slot_hint": slot_hint,
+        "intended_slots": ["14:30", "14:45"],
+        "add_themes": list(add_themes),
+        "reduce_themes": list(reduce_themes),
+        "neutral_themes": list(neutral_themes),
+        "headline": headline,
+        "theme_count": len(themes),
+        "market_corroboration_theme_count": corroboration_available,
+        "research_only": True,
+        "actionable": False,
+        "calibration_status": "not_calibrated",
+        "usage_note": (
+            "Afternoon Bot routines should read sector_timing.digest.headline "
+            "or sector_timing.summary.add_observation_themes / "
+            "reduce_observation_themes from GET /api/decision-board. "
+            "This layer does not authorize orders."
+        ),
+    }
+
+
+def build_sector_timing_observation(
+    rows: list[dict[str, Any]] | None,
+    *,
+    slot_hint: str | None = None,
+    market_evidence: list[dict[str, Any]] | None = None,
+    taxonomy: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a research-only sector timing block from decision-board rows.
+
+    Parameters
+    ----------
+    rows:
+        Decision-board instrument rows.  Expected keys: theme_l1, grade,
+        return_5d, ts_code (optional for member lists).
+    slot_hint:
+        Optional afternoon slot label such as \"14:30\" or \"14:45\".
+    market_evidence:
+        Optional SectorSnapshot-like dicts for industry/concept corroboration.
+        Missing or unmapped evidence stays unavailable — never fabricated.
+    taxonomy:
+        Optional sector_taxonomy.json payload (exact + keyword_rules) used only
+        to map evidence sector_name → theme_l1.
+    """
+
+    evidence_by_theme = aggregate_market_evidence_by_theme(market_evidence, taxonomy)
+
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        theme = str(row.get("theme_l1") or "").strip()
+        if not theme:
+            continue
+        buckets.setdefault(theme, []).append(row)
+
+    themes: list[dict[str, Any]] = []
+    for theme, members in buckets.items():
+        grades = [str(member.get("grade") or "") for member in members]
+        add_count = sum(1 for grade in grades if grade in ADD_GRADES)
+        reduce_count = sum(1 for grade in grades if grade in REDUCE_GRADES)
+        watch_count = sum(1 for grade in grades if grade in NEUTRAL_GRADES)
+        returns = [_finite(member.get("return_5d")) for member in members]
+        finite_returns = [value for value in returns if value is not None]
+        mean_return_5d = _mean(finite_returns)
+        observation = _observation(add_count, reduce_count, mean_return_5d)
+        member_count = len(members)
+        themes.append(
+            {
+                "theme_l1": theme,
+                "observation": observation,
+                "member_count": member_count,
+                "add_grade_count": add_count,
+                "reduce_grade_count": reduce_count,
+                "watch_grade_count": watch_count,
+                "mean_return_5d": mean_return_5d,
+                "strength_score": _strength_score(
+                    observation, add_count, reduce_count, member_count, mean_return_5d
+                ),
+                "sample_codes": sorted(
+                    {
+                        str(member.get("ts_code") or "").strip().upper()
+                        for member in members
+                        if str(member.get("ts_code") or "").strip()
+                    }

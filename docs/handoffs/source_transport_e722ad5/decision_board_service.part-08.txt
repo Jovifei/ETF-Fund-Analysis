@@ -1,0 +1,67 @@
+        forecast_issues = {str(h): snapshot_issues(value, self.settings, expected_date, kind="forecast")
+                           for h, value in forecasts.items()}
+        if stale_history:
+            forecast_issues = {
+                horizon: (
+                    [issue for issue in issues if issue != "forecast_date_mismatch"]
+                    if forecasts.get(int(horizon)) is not None
+                    and forecasts[int(horizon)].as_of_date <= qualified_through
+                    else [*issues, "forecast_date_after_qualified_history"]
+                    if stale_history and forecasts.get(int(horizon)) is not None
+                    and forecasts[int(horizon)].as_of_date > qualified_through
+                    else issues
+                )
+                for horizon, issues in forecast_issues.items()
+            }
+        forecasts = {h: value for h, value in forecasts.items() if not forecast_issues[str(h)]}
+        if indicator_issues:
+            indicator = None
+        display_history = None
+        if (blocked and stale_history is None) or indicator is None:
+            from app.workspace.read_model import chart_data
+            display_history = chart_data(db, self.settings, instrument.ts_code, "1d", 60)
+            indicator = None
+            if blocked:
+                forecasts = {}
+            bars = (display_history or {}).get("bars") or []
+            price_values = dict(bars[-1]["indicators"]) if bars else {}
+            # Current/previous must come from one series and one formula/price basis.
+            previous_values = ({**dict(bars[-2]["indicators"]), "_as_of_date": bars[-2]["date"]}
+                               if len(bars) >= 2 else None)
+            comparison_basis = "adjacent_historical_bars_display_only"
+            grade_row = classify_row(price_values, pct_change=None, previous=None,
+                                     cfg=SignalGradeService(self.settings).config)
+            if independent_sector is not None:
+                grade_row["sector"] = independent_sector
+            grade_row.update(grade="数据异常", grade_reason="历史价格展示；完整量价/指标资格尚未通过，不生成当前动作")
+        elif stale_history:
+            qualified_through = stale_history["qualified_through"].isoformat()
+            grade_row["grade_reason"] = (
+                f"{grade_row.get('grade_reason', '基于历史快照')}；最后合格历史至 {qualified_through}，"
+                "当前行情源未通过量额/连续性门禁"
+            )
+        values = dict(indicator.values_json or {}) if indicator is not None else (price_values if display_history else {})
+        freshness, data_status = self._status(indicator, quote, generated_at)
+        if stale_history and indicator is not None:
+            freshness, data_status = "stale", "historical_price_only_stale"
+        source_verified = bool(quote and quote.timestamp_verified and quote.is_realtime and not quote.degraded_reason)
+        quote_source = quote.source if quote is not None else None
+        quote_is_mock = self.settings.market_provider == "mock" or "mock" in str(quote_source or "").lower()
+        # Missing settled indicators do not erase independently timestamped
+        # intraday research input. Incompatible history still fails closed.
+        provisional_status = ({"status": "blocked_history_contract",
+            "used_for_derived_values": False, "reason": blocked}
+            if blocked else self._provisional_status(db, instrument.id, provisional, generated_at))
+        forecast_map = {str(horizon): self._forecast_payload(forecasts.get(horizon)) for horizon in HORIZONS}
+        from app.services.return_observation import observed_returns
+        return_context = observed_returns(db, self.settings, instrument.id, quote, generated_at)
+        today_return = return_context["value"]
+        previous_confirmed_return = return_context["previous_return"]
+        if provisional_status["used_for_derived_values"]:
+            derived = provisional_status["derived"]
+            values = dict(derived["indicator_values"])
+            from types import SimpleNamespace
+            return_context = observed_returns(db, self.settings, instrument.id,
+                SimpleNamespace(quote_time=provisional.observed_at, pct_change=provisional.pct_change_percent_points,
+                                degraded_reason=None), generated_at)
+            return_context["basis"] = "provisional_research_observation"

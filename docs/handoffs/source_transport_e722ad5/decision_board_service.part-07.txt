@@ -1,0 +1,89 @@
+            taxonomy = None
+        try:
+            return build_sector_timing_observation(
+                rows,
+                slot_hint=slot_hint,
+                market_evidence=self._latest_sector_market_evidence(db),
+                taxonomy=taxonomy,
+            )
+        except Exception:
+            return empty_sector_timing_observation(slot_hint=slot_hint)
+
+    def _latest_sector_market_evidence(self, db: Session) -> list[dict]:
+        """Latest industry SectorSnapshot rows for optional theme corroboration.
+
+        Soft-fails to [] when the table is empty, schema is unavailable, or any
+        query error occurs. Never invents pct_change / breadth.
+        """
+        try:
+            from sqlalchemy import case, func
+
+            latest_date = db.scalar(
+                select(func.max(SectorSnapshot.trade_date)).where(
+                    SectorSnapshot.board_type == "industry"
+                )
+            )
+            if latest_date is None:
+                return []
+            rows = db.scalars(
+                select(SectorSnapshot)
+                .where(
+                    SectorSnapshot.board_type == "industry",
+                    SectorSnapshot.trade_date == latest_date,
+                )
+                .order_by(
+                    case((SectorSnapshot.source != "mock-sector", 0), else_=1),
+                    SectorSnapshot.fetched_at.desc(),
+                    SectorSnapshot.id.desc(),
+                )
+            ).all()
+            evidence: list[dict] = []
+            seen: set[str] = set()
+            for row in rows:
+                name = str(getattr(row, "sector_name", "") or "").strip()
+                if not name or name in seen:
+                    continue
+                seen.add(name)
+                trade_date = getattr(row, "trade_date", None)
+                evidence.append(
+                    {
+                        "sector_name": name,
+                        "board_type": getattr(row, "board_type", None),
+                        "pct_change": getattr(row, "pct_change", None),
+                        "up_count": getattr(row, "up_count", None),
+                        "down_count": getattr(row, "down_count", None),
+                        "flat_count": getattr(row, "flat_count", None),
+                        "total_count": getattr(row, "total_count", None),
+                        "trade_date": trade_date.isoformat() if trade_date is not None else None,
+                        "source": getattr(row, "source", None),
+                    }
+                )
+            return evidence
+        except Exception:
+            return []
+
+    def _row(self, db: Session, generated_at: datetime, instrument, grade_row, indicator, previous_values, quote, forecasts, provisional) -> dict:
+        grade_row = grade_row or {}
+        independent_sector = grade_row.get("sector")
+        comparison_basis = "previous_saved_confirmed_date_not_intraday_quote"
+        from app.providers.corporate_action_contract import research_history_rows
+        from app.providers.data_contract import history_issues, trailing_unverified_history
+        blocked = history_issues(db, self.settings, [instrument.id]).get(instrument.id)
+        history_rows = db.scalars(
+            select(DailyBar).where(DailyBar.instrument_id == instrument.id).order_by(DailyBar.trade_date)
+        ).all()
+        generated_market = generated_at.astimezone(SHANGHAI) if generated_at.tzinfo else generated_at.replace(tzinfo=SHANGHAI)
+        research_history = research_history_rows(
+            history_rows, instrument.ts_code, effective_through=generated_market.date(),
+        )
+        stale_history = trailing_unverified_history(research_history) if blocked else None
+        from app.services.settlement import settled_session
+        from app.services.snapshot_contract import snapshot_issues
+        expected_date = None if self.settings.market_provider == "mock" else settled_session(self.settings, generated_at)
+        indicator_issues = snapshot_issues(indicator, self.settings, expected_date, kind="indicator")
+        qualified_through = stale_history["qualified_through"] if stale_history else None
+        if stale_history and indicator is not None:
+            if indicator.as_of_date <= qualified_through:
+                indicator_issues = [issue for issue in indicator_issues if issue != "indicator_date_mismatch"]
+            else:
+                indicator_issues.append("indicator_date_after_qualified_history")

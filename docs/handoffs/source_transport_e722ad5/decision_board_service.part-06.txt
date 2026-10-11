@@ -1,0 +1,95 @@
+            build_sector_timing_observation,
+            empty_sector_timing_observation,
+            infer_afternoon_slot_hint,
+        )
+        ranks = theme_relative_ranks(rows)
+        for row in rows:
+            row["entry_exit_ref"] = entry_exit_reference(row.get("support_resistance"))
+            row["theme_relative_strength"] = ranks.get(row["ts_code"]) or {
+                "theme_l1": row.get("theme_l1"),
+                "peer_count": 0,
+                "rank": None,
+                "return_5d": row.get("return_5d"),
+                "label": "主题相对强弱不足",
+                "basis": "confirmed_5d_return_inside_theme_not_a_second_grade",
+                "research_only": True,
+                "actionable": False,
+            }
+        rows.sort(key=lambda row: (*health_sort_key(row["grade"], row["freshness"]), row["ts_code"]))
+        groups = {grade: [row for row in rows if row["grade"] == grade] for grade in GRADE_ORDER}
+        groups["数据异常"] = [row for row in rows if row["grade"] == "数据异常"]
+        counts = {grade: len(group) for grade, group in groups.items()}
+        if sum(counts.values()) != len(rows):
+            raise ValueError("decision_groups_do_not_partition_rows")
+        freshness = "fresh" if rows and all(row["freshness"] == "fresh" for row in rows) else "stale" if rows else "missing"
+        status_counts = {status: sum(row["data_status"] == status for row in rows) for status in sorted({row["data_status"] for row in rows})}
+        from app.services.settlement import settled_session
+        from app.utils.hashing import stable_hash
+        return {
+            "read_model_version": READ_MODEL_VERSION,
+            "config_hash": stable_hash(self.settings.load_strategy()),
+            "target_trade_date": settled_session(self.settings, generated_at).isoformat(),
+            "snapshot_id": uuid4().hex,
+            "generated_at": generated_at.isoformat(),
+            "next_refresh_at": next_decision_board_refresh(generated_at, self.calendar).isoformat(),
+            "selected_forecast_horizon": 1,
+            "selected_horizon": 1,
+            "forecast_horizons": list(HORIZONS),
+            "horizons": list(HORIZONS),
+            "freshness": freshness,
+            "data_status": {"freshness": freshness, "row_status_counts": status_counts},
+            "source_status": {
+                "basis": "persisted_confirmed_snapshots",
+                "freshness": freshness,
+                "actionable": False,
+                "research_only": True,
+                "source_time_verified": False,
+            },
+            "indicator_basis": {
+                "daily_history": "confirmed_daily_bars_only",
+                "td": "TD9 setup only; TD13 not implemented",
+                "chan": "overlap-zone approximation only; not full Chan/CZSC",
+            },
+            "indicator_status": {
+                "basis": "confirmed_daily_history_plus_explicit_provisional_state",
+                "forecast_basis": "persisted_settled_daily_snapshots",
+                "intraday_forecast_policy": "disabled_until_time_matched_intraday_history",
+                "td": "TD9 setup only; TD13 not implemented",
+                "chan": "overlap-zone approximation only; not full Chan/CZSC",
+            },
+            "groups": groups,
+            "counts": counts,
+            "rows": rows,
+            "flow_share_contract": FLOW_CONTRACT,
+            "flow_share_changes_grade": False,
+            "sector_timing": self._safe_sector_timing_observation(
+                db,
+                rows,
+                generated_at=generated_at,
+            ),
+            "research_only": True,
+            "automatic_orders": False,
+        }
+
+    def _safe_sector_timing_observation(
+        self,
+        db: Session,
+        rows: list[dict],
+        *,
+        generated_at: datetime,
+    ) -> dict:
+        """Build sector_timing or return an empty schema-stable block.
+
+        Failures here must never block snapshot refresh or rewrite five-grade
+        values into data-anomaly grades. Sector evidence is optional corroboration only.
+        """
+        from app.utils.sector_timing import (
+            build_sector_timing_observation,
+            empty_sector_timing_observation,
+            infer_afternoon_slot_hint,
+        )
+
+        slot_hint = infer_afternoon_slot_hint(generated_at.hour, generated_at.minute)
+        try:
+            taxonomy = self.settings.load_taxonomy()
+        except Exception:

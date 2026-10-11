@@ -1,0 +1,71 @@
+                )[:8],
+                "market_corroboration": _attach_corroboration(
+                    observation, theme, evidence_by_theme
+                ),
+                "research_only": True,
+                "actionable": False,
+            }
+        )
+
+    themes.sort(key=lambda item: (-item["strength_score"], item["theme_l1"]))
+    for rank, item in enumerate(themes, start=1):
+        item["rank"] = rank
+
+    add_themes = [item["theme_l1"] for item in themes if item["observation"] == OBSERVATION_ADD]
+    reduce_themes = [
+        item["theme_l1"] for item in themes if item["observation"] == OBSERVATION_REDUCE
+    ]
+    neutral_themes = [
+        item["theme_l1"] for item in themes if item["observation"] == OBSERVATION_NEUTRAL
+    ]
+
+    digest = _build_digest(
+        slot_hint=slot_hint,
+        add_themes=add_themes,
+        reduce_themes=reduce_themes,
+        neutral_themes=neutral_themes,
+        themes=themes,
+    )
+
+    return {
+        "version": "sector-timing-observation-v1",
+        "slot_hint": slot_hint,
+        "intended_slots": ["14:30", "14:45"],
+        "research_only": True,
+        "actionable": False,
+        "calibration_status": "not_calibrated",
+        "basis": _BASIS,
+        "field_paths": {
+            "api": API_READ_PATH,
+            "digest": DIGEST_FIELD_PATH,
+            "summary": SUMMARY_FIELD_PATH,
+            "themes": "sector_timing.themes",
+        },
+        "summary": {
+            "theme_count": len(themes),
+            "add_observation_themes": add_themes,
+            "reduce_observation_themes": reduce_themes,
+            "neutral_observation_themes": neutral_themes,
+            "market_corroboration_theme_count": digest["market_corroboration_theme_count"],
+        },
+        "digest": digest,
+        "themes": themes,
+    }
+
+
+def empty_sector_timing_observation(*, slot_hint: str | None = None) -> dict[str, Any]:
+    """Empty but schema-stable sector timing block for missing snapshots."""
+
+    return build_sector_timing_observation([], slot_hint=slot_hint)
+
+
+def infer_afternoon_slot_hint(generated_at_hour: int, generated_at_minute: int) -> str | None:
+    """Map a Shanghai clock to the nearest afternoon digest slot label."""
+
+    if generated_at_hour != 14:
+        return None
+    if 28 <= generated_at_minute <= 37:
+        return "14:30"
+    if 40 <= generated_at_minute <= 49:
+        return "14:45"
+    return None

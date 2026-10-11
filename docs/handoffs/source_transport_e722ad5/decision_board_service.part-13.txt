@@ -1,0 +1,84 @@
+                    "open": item.open,
+                    "high": item.high,
+                    "low": item.low,
+                    "close": item.close,
+                    "volume": item.volume,
+                    "amount": item.amount,
+                }
+                for item in research_rows
+            ]
+        )
+        try:
+            indicators = calculate_indicators(raw, self.settings.load_strategy()["indicator"])
+            support_resistance = build_support_resistance(raw)
+        except Exception:
+            # Source/history quality failure is represented to the read model,
+            # never hidden by overwriting confirmed indicators or forecasts.
+            return None
+        return {
+            "indicator_values": dict(indicators.values),
+            "support_resistance": support_resistance,
+            "td_basis": "TD9 setup only; TD13 not implemented",
+            "chan_basis": "overlap-zone approximation only; not full Chan/CZSC",
+        }
+
+    @staticmethod
+    def _forecast_payload(row) -> dict:
+        return {
+            "source": "persisted_forecast_snapshot" if row is not None else "unavailable",
+            "model_version": row.model_version if row is not None else None,
+            "feature_schema_version": row.feature_schema_version if row is not None else None,
+            "config_hash": row.config_hash if row is not None else None,
+            "input_hash": row.input_hash if row is not None else None,
+            "feature_basis": "settled_daily_bars" if row is not None else "unavailable",
+            "intraday_provisional_used": False,
+            "expected_return": finite_or_none(row.expected_return) if row is not None else None,
+            "q10": finite_or_none(row.q10) if row is not None else None,
+            "q50": finite_or_none(row.q50) if row is not None else None,
+            "q90": finite_or_none(row.q90) if row is not None else None,
+            "p_up": finite_or_none(row.p_up) if row is not None else None,
+            "confidence": finite_or_none(row.confidence) if row is not None else None,
+            "calibration_status": row.calibration_status if row is not None else "not_calibrated",
+            "as_of_date": row.as_of_date.isoformat() if row is not None else None,
+            "return_semantics": {"unit": "decimal_ratio", "no_unit_guessing": True},
+            "disclaimer": "FORECAST · 非实际结果",
+        }
+
+    @staticmethod
+    def _latest_by_instrument(db: Session, model, first_order, second_order) -> dict[int, object]:
+        from app.utils.snapshot_queries import latest_enabled
+        return {row.instrument_id: row for row in latest_enabled(db, model, first_order.desc(), second_order.desc())}
+
+    @staticmethod
+    def _latest_forecasts(db: Session) -> dict[int, dict[int, ForecastSnapshot]]:
+        from app.utils.snapshot_queries import latest_enabled
+        rows = latest_enabled(db, ForecastSnapshot, ForecastSnapshot.as_of_date.desc(), ForecastSnapshot.generated_at.desc(),
+                              partitions=[ForecastSnapshot.instrument_id, ForecastSnapshot.horizon],
+                              where=[ForecastSnapshot.horizon.in_(HORIZONS)])
+        latest: dict[int, dict[int, ForecastSnapshot]] = {}
+        for row in rows:
+            latest.setdefault(row.instrument_id, {})[row.horizon] = row
+        return latest
+
+    @staticmethod
+    def _previous_indicator_values(db: Session, latest: dict) -> dict:
+        from app.utils.indicator_history import previous_values
+        return {ident: values for ident, current in latest.items()
+                if (values := previous_values(db, current)) is not None}
+
+    @staticmethod
+    def _latest_provisional(db: Session) -> dict[int, DecisionBoardProvisionalInput]:
+        from app.utils.snapshot_queries import latest_enabled
+        return {row.instrument_id: row for row in latest_enabled(db, DecisionBoardProvisionalInput,
+            DecisionBoardProvisionalInput.observed_at.desc(), DecisionBoardProvisionalInput.id.desc())}
+
+    @staticmethod
+    def _select_horizon(payload: dict, horizon: int) -> dict:
+        selected = dict(payload)
+        selected["selected_forecast_horizon"] = horizon
+        selected["selected_horizon"] = horizon
+        rows = []
+        for row in selected.get("rows", []):
+            materialized = dict(row)
+            materialized["forecast"] = dict((row.get("forecasts") or {}).get(str(horizon), {}))
+            materialized["sort_keys"] = {

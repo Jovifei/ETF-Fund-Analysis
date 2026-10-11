@@ -1,0 +1,105 @@
+"""Persisted, provider-free ETF decision-board read model.
+
+This service only reads confirmed domain snapshots.  It intentionally does not
+fetch market data, write DailyBar, change signal grades, or claim a quote is
+actionable.  Intraday observations are stored separately so a later qualified
+derived-data implementation can consume them without corrupting daily history.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date, datetime, time, timedelta
+from math import isfinite
+from uuid import uuid4
+from zoneinfo import ZoneInfo
+
+import pandas as pd
+from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.core.config import Settings, get_settings
+from app.models import (
+    DailyBar,
+    DecisionBoardProvisionalInput,
+    DecisionBoardSnapshot,
+    EtfShareScale,
+    ForecastSnapshot,
+    IndicatorSnapshot,
+    Instrument,
+    QuoteSnapshot,
+    SectorSnapshot,
+    TaskRun,
+)
+from app.services.flow_share_research import (
+    FLOW_CONTRACT,
+    blocked_flow_share_view,
+    build_flow_share_view,
+    latest_share_scales,
+    saved_flow_share_valid,
+)
+from app.services.signal_grade_service import GRADE_ORDER, SignalGradeService, classify_row
+from app.services.support_resistance_service import SupportResistanceService
+from app.services.trading_calendar_service import TradingCalendarService
+from app.utils.indicators_v05 import calculate_indicators
+from app.utils.numbers import finite_or_none
+from app.utils.support_resistance import build_support_resistance
+
+READ_MODEL_VERSION = "decision-read-v110-flow-share-provenance"
+CURRENT_BOARD_READ_CONTRACT = "current-board-read-v1-temporal"
+HORIZONS = (1, 3, 5, 10)
+# Must match docs/INTRADAY_REFRESH_CADENCE.md and refresh_policy windows.
+# Lunch 11:31–12:59 is intentionally absent.  14:50–15:00 is every 2 minutes.
+SLOT_TIMES = (
+    "09:30", "10:30", "11:30", "13:00", "13:30", "14:00",
+    "14:30", "14:40", "14:50", "14:52", "14:54", "14:56", "14:58", "15:00",
+)
+_SLOT_CLOCKS = tuple(time.fromisoformat(value) for value in SLOT_TIMES)
+_GRADE_RANK = {grade: index for index, grade in enumerate(GRADE_ORDER)}
+_FRESHNESS_RANK = {"fresh": 0, "stale": 1, "degraded": 2, "missing": 3, "unknown": 4}
+SHANGHAI = ZoneInfo("Asia/Shanghai")
+
+
+class DecisionBoardRefreshBusy(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class SnapshotBuild:
+    snapshot: DecisionBoardSnapshot
+    payload: dict
+
+
+def percent_points_to_ratio(value: object) -> float | None:
+    """Convert the persisted provider contract (percentage points) deterministically."""
+
+    number = finite_or_none(value)
+    return round(number / 100.0, 12) if number is not None else None
+
+
+def health_sort_key(grade: str | None, freshness: str | None) -> tuple[int, int]:
+    """Display ordering only; it never participates in five-grade assignment."""
+
+    return (_GRADE_RANK.get(str(grade), len(GRADE_ORDER)), _FRESHNESS_RANK.get(str(freshness), 4))
+
+
+def semantic_sort_keys(
+    *,
+    volume: dict, ma: dict, macd: dict, kdj: dict, td: dict, rsi: dict,
+    chan: dict, forecasts: dict[str, dict], horizon: int, today_return: float | None,
+) -> dict[str, int | float | None]:
+    """Primitive ascending keys; lower is the documented higher-health priority."""
+
+    volume_kind = volume.get("kind")
+    volume_bucket = 0 if volume_kind == "expand" and (today_return or 0) > 0 else 1 if volume_kind == "flat" else 2 if volume_kind == "expand" else 3 if volume_kind == "contract" else 4
+    volume_direction = 0 if (today_return or 0) > 0 else 1 if (today_return or 0) == 0 else 2
+    volume_ratio = finite_or_none(volume.get("ratio"))
+    # bucket → direction → higher ratio first, packed as one primitive number.
+    volume_key = volume_bucket * 10_000_000_000 + volume_direction * 1_000_000_000 + (1_000_000_000 - min(1_000_000_000, round((volume_ratio or 0) * 1_000_000)))
+    ma_bucket = {"bull": 0, "mixed": 1, "bear": 2}.get(ma.get("kind"), 3)
+    up_arrows = sum(1 for arrow in (ma.get("arrows") or ()) if isinstance(arrow, dict) and arrow.get("dir") == "up")
+    ma_key = ma_bucket * 10 + (4 - min(4, up_arrows))
+    macd_key = {"gold": 0, "bull_cont": 1, "approach_gold": 2, "bear_cont": 3, "approach_death": 4, "death": 5}.get(macd.get("kind"), 6)
+    kdj_key = {"healthy": 0, "low": 1, "high": 2, "overbought": 3, "death": 4}.get(kdj.get("kind"), 5)
+    td_kind = td.get("kind")

@@ -1,0 +1,64 @@
+                **dict(row.get("sort_keys") or {}),
+                **semantic_sort_keys(
+                    volume=dict(row.get("volume") or {}),
+                    ma=dict(row.get("ma") or {}),
+                    macd=dict(row.get("macd") or {}),
+                    kdj=dict(row.get("kdj") or {}),
+                    td=dict(row.get("td") or {}),
+                    rsi=dict(row.get("rsi") or {}),
+                    chan=dict(row.get("chan") or {}),
+                    forecasts=dict(row.get("forecasts") or {}),
+                    horizon=horizon,
+                    today_return=finite_or_none((row.get("returns") or {}).get("today")),
+                ),
+            }
+            rows.append(materialized)
+        selected["rows"] = rows
+        selected["groups"] = {
+            grade: [row for row in rows if row.get("grade") == grade] for grade in GRADE_ORDER
+        }
+        selected["groups"]["数据异常"] = [row for row in rows if row.get("grade") == "数据异常"]
+        selected["counts"] = {grade: len(group) for grade, group in selected["groups"].items()}
+        return selected
+
+    @staticmethod
+    def _empty_payload(horizon: int) -> dict:
+        from app.utils.sector_timing import empty_sector_timing_observation
+        return {
+            "snapshot_id": None,
+            "generated_at": None,
+            "next_refresh_at": None,
+            "selected_forecast_horizon": horizon,
+            "selected_horizon": horizon,
+            "forecast_horizons": list(HORIZONS),
+            "horizons": list(HORIZONS),
+            "freshness": "missing",
+            "data_status": {"freshness": "missing", "row_status_counts": {}},
+            "source_status": {
+                "basis": "persisted_confirmed_snapshots",
+                "freshness": "missing",
+                "actionable": False,
+                "research_only": True,
+                "source_time_verified": False,
+            },
+            "indicator_basis": {
+                "daily_history": "confirmed_daily_bars_only",
+                "td": "TD9 setup only; TD13 not implemented",
+                "chan": "overlap-zone approximation only; not full Chan/CZSC",
+            },
+            "indicator_status": {
+                "basis": "confirmed_daily_history_plus_explicit_provisional_state",
+                "forecast_basis": "persisted_settled_daily_snapshots",
+                "intraday_forecast_policy": "disabled_until_time_matched_intraday_history",
+                "td": "TD9 setup only; TD13 not implemented",
+                "chan": "overlap-zone approximation only; not full Chan/CZSC",
+            },
+            "groups": {grade: [] for grade in (*GRADE_ORDER, "数据异常")},
+            "counts": {grade: 0 for grade in (*GRADE_ORDER, "数据异常")},
+            "rows": [],
+            "flow_share_contract": FLOW_CONTRACT,
+            "flow_share_changes_grade": False,
+            "sector_timing": empty_sector_timing_observation(),
+            "research_only": True,
+            "automatic_orders": False,
+        }

@@ -1,0 +1,113 @@
+{
+  "kind": "read_only_public_source_transport",
+  "source_sha": "e722ad5d351da05ad01abfb7d5d2d339a6b75773",
+  "instruction": "Concatenate chunks exactly in order; validate whole byte length/SHA256 and current target blob before modification. These are unmodified frozen source fragments, not a patch or implementation. Read through GitHub; code author owns changes.",
+  "files": [
+    {
+      "source_path": "backend/app/services/decision_board_service.py",
+      "git_blob_sha": "decc55352cce05b90644f934a312aea201d79759",
+      "bytes": 61163,
+      "sha256": "c8235a5ef89ff8edd07a7ae6e97b91538fce46eaf39907e7b12a434022f8db2a",
+      "chunks": [
+        {
+          "path": "docs/handoffs/source_transport_e722ad5/decision_board_service.part-01.txt",
+          "bytes": 4440,
+          "sha256": "09612f4d2e1570814a92790f74d3b7bffd3e30981c494699b87369643265a6ea"
+        },
+        {
+          "path": "docs/handoffs/source_transport_e722ad5/decision_board_service.part-02.txt",
+          "bytes": 4439,
+          "sha256": "f2552e1a0e2c1e12744eb0f5268c2418ec8b88eb181274c239d22b9a2e8fe182"
+        },
+        {
+          "path": "docs/handoffs/source_transport_e722ad5/decision_board_service.part-03.txt",
+          "bytes": 4455,
+          "sha256": "471991932b9962e83ad92ce7d2ca259c19e289e4943633d135b6474a6ea14d3a"
+        },
+        {
+          "path": "docs/handoffs/source_transport_e722ad5/decision_board_service.part-04.txt",
+          "bytes": 4464,
+          "sha256": "9ac7333f17dad780bea9ea9210b3477a20e0250ba4dc93bc42bb2dfe2f5f5ce8"
+        },
+        {
+          "path": "docs/handoffs/source_transport_e722ad5/decision_board_service.part-05.txt",
+          "bytes": 4482,
+          "sha256": "bd689e5e40b2e2fa421843dcdcbc0de31e9bf923970b95fb189f8befd8ff46b6"
+        },
+        {
+          "path": "docs/handoffs/source_transport_e722ad5/decision_board_service.part-06.txt",
+          "bytes": 4498,
+          "sha256": "66b380c3c9856ed0ae8be5b6d3e234034954f78e2e0bb89e20d5385d02be1d72"
+        },
+        {
+          "path": "docs/handoffs/source_transport_e722ad5/decision_board_service.part-07.txt",
+          "bytes": 4496,
+          "sha256": "fa7aa450ab8ee21b61c10993f91dafddf57fb6f30cde9977b620a44f05c4d881"
+        },
+        {
+          "path": "docs/handoffs/source_transport_e722ad5/decision_board_service.part-08.txt",
+          "bytes": 4500,
+          "sha256": "66c2bb373a3ac63b0908b96dfabc5d5553a0ae26ed32fad7f6404e8aa180f5f3"
+        },
+        {
+          "path": "docs/handoffs/source_transport_e722ad5/decision_board_service.part-09.txt",
+          "bytes": 4413,
+          "sha256": "4f07ef11e8bd9c32db24f035b9a033e47100351689caf571118700ffa1d4ddfd"
+        },
+        {
+          "path": "docs/handoffs/source_transport_e722ad5/decision_board_service.part-10.txt",
+          "bytes": 4478,
+          "sha256": "07b9e0054328ada16d179c0ea7b88d5e18eb37cae20691b89e161373c37ddb21"
+        },
+        {
+          "path": "docs/handoffs/source_transport_e722ad5/decision_board_service.part-11.txt",
+          "bytes": 4490,
+          "sha256": "bfc8c6966bd3eb05c8233c617529106caa6b9a9dbebc71142bb4fb662255b95b"
+        },
+        {
+          "path": "docs/handoffs/source_transport_e722ad5/decision_board_service.part-12.txt",
+          "bytes": 4473,
+          "sha256": "b0a81d7ae98ada36b6d227ea1513c3a17da10bcddd7bfc05ee8b14a4ec667f0a"
+        },
+        {
+          "path": "docs/handoffs/source_transport_e722ad5/decision_board_service.part-13.txt",
+          "bytes": 4483,
+          "sha256": "0d2877a88d57226eea54141e93f3c21e746bcf2d97b210525f6b3a04425457b6"
+        },
+        {
+          "path": "docs/handoffs/source_transport_e722ad5/decision_board_service.part-14.txt",
+          "bytes": 3052,
+          "sha256": "49e08fea4b8944e1cdd5422e6e03ed53237b755c7ccfde71bd6c035b85316c44"
+        }
+      ]
+    },
+    {
+      "source_path": "backend/app/utils/sector_timing.py",
+      "git_blob_sha": "079648212b899ed449dee1e790127c9dcf39a8e9",
+      "bytes": 15875,
+      "sha256": "c292e7d7ef293a5217a2438d99274bbce7e7325a1b4504571ec972839544500b",
+      "chunks": [
+        {
+          "path": "docs/handoffs/source_transport_e722ad5/sector_timing.part-01.txt",
+          "bytes": 4500,
+          "sha256": "9a33cae4dffba5cd618aec54f0d7ff531bd5e1b37fa50d304d250cf56c5762cf"
+        },
+        {
+          "path": "docs/handoffs/source_transport_e722ad5/sector_timing.part-02.txt",
+          "bytes": 4478,
+          "sha256": "e07dfe79de713eb515e2776dc3e6910f093319fccc7b15582ae4dfb672133e1b"
+        },
+        {
+          "path": "docs/handoffs/source_transport_e722ad5/sector_timing.part-03.txt",
+          "bytes": 4484,
+          "sha256": "a6d3b78630d07319f78264cbe51a6476b74470f73d624ba1178b05ce3b1551e2"
+        },
+        {
+          "path": "docs/handoffs/source_transport_e722ad5/sector_timing.part-04.txt",
+          "bytes": 2413,
+          "sha256": "848e270054de97cd4497df999a156232e0d7d987b7d1a05eeecaeb32cc1f2885"
+        }
+      ]
+    }
+  ]
+}

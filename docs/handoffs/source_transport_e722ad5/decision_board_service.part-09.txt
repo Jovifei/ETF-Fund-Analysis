@@ -1,0 +1,74 @@
+            today_return = percent_points_to_ratio(provisional.pct_change_percent_points)
+            previous_confirmed_return = return_context["previous_return"]
+            grade_row = {
+                **grade_row,
+                **classify_row(
+                    values,
+                    pct_change=today_return,
+                    previous=previous_values,
+                    cfg=SignalGradeService(self.settings).config,
+                ),
+            }
+            freshness, data_status = "stale", "provisional_unverified_research_only" if not provisional.timestamp_verified else "provisional_research_only"
+        indicator_as_of = (
+            provisional.observed_at.isoformat()
+            if provisional_status["used_for_derived_values"] and provisional is not None
+            else indicator.as_of_date.isoformat() if indicator is not None
+            else (display_history or {}).get("source_as_of")
+        )
+        indicator_display_basis = (
+            "intraday_provisional_research"
+            if provisional_status["used_for_derived_values"]
+            else "historical_price_only" if display_history else "persisted_snapshot"
+        )
+        history, confirmed_levels = self._history_and_levels(db, instrument.id)
+        if stale_history:
+            confirmed_levels = {}
+        if display_history:
+            history = [{**bar, "is_forecast": False} for bar in display_history.get("bars", [])]
+            confirmed_levels = {}
+            if not provisional_status["used_for_derived_values"]:
+                freshness, data_status = "stale", "historical_price_only"
+        if provisional_status["used_for_derived_values"]:
+            history = [
+                *history,
+                {
+                    "date": provisional.observed_at.date().isoformat(),
+                    "open": provisional.open_price,
+                    "high": provisional.high_price,
+                    "low": provisional.low_price,
+                    "close": provisional.last_price,
+                    "volume": provisional.volume,
+                    "is_forecast": False,
+                    "is_provisional": True,
+                    "timestamp_verified": bool(provisional.timestamp_verified),
+                },
+            ]
+        support_resistance = provisional_status.get("derived", {}).get("support_resistance", confirmed_levels)
+        scenario = self._forecast_scenario(history, forecast_map)
+        def metric(value, fallback):
+            return value if isinstance(value, dict) and value.get("label") else fallback
+        volume = metric(grade_row.get("volume"), {"label": "量能不足", "kind": "unknown", "status": "missing"})
+        ma = metric(grade_row.get("ma"), {"label": "均线不足", "kind": "unknown", "status": "missing"})
+        macd = metric(grade_row.get("macd"), {"label": "MACD不足", "kind": "unknown", "status": "missing"})
+        kdj = metric(grade_row.get("kdj"), {"label": "KDJ不足", "kind": "unknown", "status": "missing"})
+        td = metric(grade_row.get("td"), {"label": "TD9不足", "kind": "unknown", "status": "missing"})
+        rsi = metric(grade_row.get("rsi"), {"label": "RSI不足", "value": None, "status": "missing"})
+        current_price = finite_or_none((support_resistance or {}).get("current_price"))
+        support = finite_or_none(((support_resistance or {}).get("nearest_support") or {}).get("price"))
+        resistance = finite_or_none(((support_resistance or {}).get("nearest_resistance") or {}).get("price"))
+        chan_status = "upper_break" if current_price is not None and resistance is not None and current_price >= resistance else "lower_break" if current_price is not None and support is not None and current_price <= support else "inside" if current_price is not None else "missing"
+        chan = {
+            "label": "缠论近似",
+            "status": chan_status,
+            "detail": "重叠区近似，不是完整 Chan/CZSC",
+            "zone": support_resistance.get("chan_zone_approx") if isinstance(support_resistance, dict) else None,
+        }
+        return {
+            "instrument_id": instrument.id,
+            "ts_code": instrument.ts_code,
+            "name": instrument.name,
+            "kind": instrument.kind,
+            "theme_l1": instrument.theme_l1,
+            "theme_l2": instrument.theme_l2,
+            "grade": grade_row.get("grade", "数据异常"),

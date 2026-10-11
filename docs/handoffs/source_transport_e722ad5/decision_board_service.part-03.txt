@@ -1,0 +1,104 @@
+        latest = self._latest_by_instrument(db, QuoteSnapshot, QuoteSnapshot.quote_time, QuoteSnapshot.id)
+        inserted = 0
+        for instrument_id, quote in latest.items():
+            exists = db.scalar(
+                select(DecisionBoardProvisionalInput.id).where(
+                    DecisionBoardProvisionalInput.instrument_id == instrument_id,
+                    DecisionBoardProvisionalInput.observed_at == quote.quote_time,
+                    DecisionBoardProvisionalInput.source == quote.source,
+                )
+            )
+            if exists is not None:
+                continue
+            db.add(
+                DecisionBoardProvisionalInput(
+                    instrument_id=instrument_id,
+                    observed_at=quote.quote_time,
+                    source=quote.source,
+                    timestamp_verified=bool(quote.timestamp_verified),
+                    open_price=quote.open,
+                    high_price=quote.high,
+                    low_price=quote.low,
+                    last_price=quote.price,
+                    volume=quote.volume,
+                    amount=quote.amount,
+                    pct_change_percent_points=quote.pct_change,
+                )
+            )
+            inserted += 1
+        db.flush()
+        return inserted
+
+    def record_provisional_input(
+        self,
+        db: Session,
+        *,
+        ts_code: str,
+        observed_at: datetime,
+        source: str,
+        timestamp_verified: bool,
+        open_price: float | None,
+        high_price: float | None,
+        low_price: float | None,
+        last_price: float | None,
+        volume: float | None,
+        amount: float | None,
+        pct_change_percent_points: float | None,
+    ) -> DecisionBoardProvisionalInput:
+        instrument = db.scalar(select(Instrument).where(Instrument.ts_code == ts_code.strip().upper()))
+        if instrument is None:
+            raise KeyError("instrument not found")
+        row = DecisionBoardProvisionalInput(
+            instrument_id=instrument.id,
+            observed_at=observed_at,
+            source=str(source)[:32],
+            timestamp_verified=bool(timestamp_verified),
+            open_price=finite_or_none(open_price),
+            high_price=finite_or_none(high_price),
+            low_price=finite_or_none(low_price),
+            last_price=finite_or_none(last_price),
+            volume=finite_or_none(volume),
+            amount=finite_or_none(amount),
+            pct_change_percent_points=finite_or_none(pct_change_percent_points),
+        )
+        db.add(row)
+        db.flush()
+        return row
+
+    def refresh(self, db: Session, *, generated_at: datetime | None = None, demo: bool = False) -> SnapshotBuild:
+        generated_at = generated_at or datetime.now(self.settings.timezone)
+        generated_at = generated_at.astimezone(SHANGHAI) if generated_at.tzinfo else generated_at.replace(tzinfo=SHANGHAI)
+        if not demo:
+            # 统一刷新支撑压力快照（250 根 + 真实成交额口径），payload 构建全部读快照。
+            instruments = db.scalars(
+                select(Instrument).where(Instrument.enabled.is_(True), Instrument.kind.in_(("ETF", "LOF")))
+            ).all()
+            self.support_resistance.capture_for_instruments(db, list(instruments), computed_by="scheduled")
+        payload = self._build_payload(db, generated_at)
+        if demo:
+            ephemeral = DecisionBoardSnapshot(
+                snapshot_id=payload["snapshot_id"],
+                generated_at=generated_at,
+                next_refresh_at=next_decision_board_refresh(generated_at, self.calendar),
+                freshness=payload["freshness"],
+                payload_json=payload,
+            )
+            return SnapshotBuild(ephemeral, payload)
+        snapshot = DecisionBoardSnapshot(
+            snapshot_id=payload["snapshot_id"],
+            generated_at=generated_at,
+            next_refresh_at=next_decision_board_refresh(generated_at, self.calendar),
+            freshness=payload["freshness"],
+            payload_json=payload,
+        )
+        db.add(snapshot)
+        db.flush()
+        self._prune_snapshot_dates(db)
+        return SnapshotBuild(snapshot, payload)
+
+    def read_latest(
+        self, db: Session, *, horizon: int = 1, snapshot_id: str | None = None,
+        at: datetime | None = None,
+    ) -> dict | None:
+        self._validate_horizon(horizon)
+        snapshot = (

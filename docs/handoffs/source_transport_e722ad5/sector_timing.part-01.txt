@@ -1,0 +1,128 @@
+"""Afternoon sector add/reduce observation helpers (research-only).
+
+Aggregates decision-board rows by theme_l1 into an explicit observation layer for
+14:30 / 14:45 human review.  Optionally attaches AKShare SectorSnapshot market
+breadth/pct_change as corroboration via taxonomy theme_l1 mapping — never invents
+missing market rows, never overrides five-grade assignment, never flips
+actionable=true, and never claims calibrated forecasts.
+"""
+from __future__ import annotations
+
+from math import isfinite
+from typing import Any
+
+ADD_GRADES = frozenset({"可加仓", "可入场", "可试错"})
+REDUCE_GRADES = frozenset({"减仓"})
+NEUTRAL_GRADES = frozenset({"观望", "数据异常"})
+
+OBSERVATION_ADD = "偏强观察"
+OBSERVATION_REDUCE = "偏弱观察"
+OBSERVATION_NEUTRAL = "中性"
+
+_BASIS = (
+    "theme_grade_density_plus_confirmed_5d_return_observation_only;"
+    "optional_sectorsnapshot_corroboration_via_taxonomy;"
+    "does_not_override_five_grade_or_forecast_calibration"
+)
+
+# Bot / afternoon-routine field path (stable contract for digests).
+DIGEST_FIELD_PATH = "sector_timing.digest"
+SUMMARY_FIELD_PATH = "sector_timing.summary"
+API_READ_PATH = "GET /api/decision-board → payload.sector_timing"
+
+
+def _finite(value: object) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if isfinite(number) else None
+
+
+def _mean(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return round(sum(values) / len(values), 6)
+
+
+def _observation(add_count: int, reduce_count: int, mean_return_5d: float | None) -> str:
+    """Map grade density + optional return into a research observation label."""
+
+    if add_count == 0 and reduce_count == 0:
+        return OBSERVATION_NEUTRAL
+    if add_count > reduce_count and (mean_return_5d is None or mean_return_5d >= 0):
+        return OBSERVATION_ADD
+    if reduce_count > add_count and (mean_return_5d is None or mean_return_5d <= 0):
+        return OBSERVATION_REDUCE
+    if add_count > reduce_count:
+        return OBSERVATION_ADD
+    if reduce_count > add_count:
+        return OBSERVATION_REDUCE
+    if mean_return_5d is not None and mean_return_5d > 0:
+        return OBSERVATION_ADD
+    if mean_return_5d is not None and mean_return_5d < 0:
+        return OBSERVATION_REDUCE
+    return OBSERVATION_NEUTRAL
+
+
+def _strength_score(
+    observation: str,
+    add_count: int,
+    reduce_count: int,
+    member_count: int,
+    mean_return_5d: float | None,
+) -> float:
+    """Display ranking only; higher means stronger add-side observation."""
+
+    density = (add_count - reduce_count) / member_count if member_count else 0.0
+    ret = 0.0 if mean_return_5d is None else max(-0.2, min(0.2, mean_return_5d))
+    bias = {OBSERVATION_ADD: 1.0, OBSERVATION_REDUCE: -1.0, OBSERVATION_NEUTRAL: 0.0}[observation]
+    return round(100.0 * (0.55 * bias + 0.30 * density + 0.15 * (ret / 0.2)), 2)
+
+
+def map_sector_name_to_theme_l1(
+    sector_name: str,
+    taxonomy: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Map an AKShare/industry sector name onto theme_l1 via config taxonomy.
+
+    Uses exact keys first, then keyword_rules.  Returns None when no honest match
+    exists — callers must not invent a theme.
+    """
+
+    name = str(sector_name or "").strip()
+    if not name or not isinstance(taxonomy, dict):
+        return None
+
+    for exact, value in (taxonomy.get("exact") or {}).items():
+        if not isinstance(value, dict):
+            continue
+        exact_text = str(exact or "").strip()
+        if not exact_text:
+            continue
+        if exact_text == name or exact_text in name or name in exact_text:
+            theme = str(value.get("theme_l1") or "").strip()
+            if theme:
+                return {
+                    "theme_l1": theme,
+                    "match_kind": "exact",
+                    "matched_token": exact_text,
+                    "confidence": "high",
+                }
+
+    lowered = name.lower()
+    for rule in taxonomy.get("keyword_rules") or []:
+        if not isinstance(rule, dict):
+            continue
+        keywords = rule.get("keywords") or []
+        token = next(
+            (
+                str(item).strip()
+                for item in keywords
+                if str(item).strip() and str(item).strip().lower() in lowered
+            ),
+            None,
+        )
+        if not token:

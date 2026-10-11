@@ -1,0 +1,67 @@
+            db.scalar(select(DecisionBoardSnapshot).where(DecisionBoardSnapshot.snapshot_id == snapshot_id).limit(1))
+            if snapshot_id is not None
+            else db.scalar(select(DecisionBoardSnapshot).order_by(DecisionBoardSnapshot.generated_at.desc(), DecisionBoardSnapshot.id.desc()).limit(1))
+        )
+        if snapshot is None:
+            return None if snapshot_id is not None else self._empty_payload(horizon)
+        # Explicit snapshot IDs retain the historical inspection route. Current
+        # consumers must opt into the same reference even when resolving an ID.
+        # Validate the newest row, never silently substitute an older board.
+        if snapshot_id is None or at is not None:
+            reference = at or datetime.now(self.settings.timezone)
+            reference = (reference.replace(tzinfo=self.settings.timezone)
+                         if reference.tzinfo is None else reference.astimezone(self.settings.timezone))
+            generated = snapshot.generated_at
+            generated = (generated.replace(tzinfo=self.settings.timezone)
+                         if generated.tzinfo is None else generated.astimezone(self.settings.timezone))
+            if generated > reference:
+                blocked = self._empty_payload(horizon)
+                blocked.update(
+                    snapshot_id=snapshot.snapshot_id,
+                    generated_at=snapshot.generated_at,
+                    next_refresh_at=snapshot.next_refresh_at,
+                    freshness="blocked",
+                    read_contract="snapshot_after_read_time",
+                    current_board_read_contract=CURRENT_BOARD_READ_CONTRACT,
+                )
+                raw_payload = snapshot.payload_json if isinstance(snapshot.payload_json, dict) else {}
+                raw_rows = raw_payload.get("rows")
+                blocked["blocked_instrument_codes"] = sorted({
+                    row["ts_code"].strip().upper()
+                    for row in (raw_rows if isinstance(raw_rows, list) else [])
+                    if isinstance(row, dict) and isinstance(row.get("ts_code"), str)
+                    and row["ts_code"].strip()
+                })
+                blocked["data_status"].update(
+                    freshness="blocked", reason_code="snapshot_after_read_time"
+                )
+                blocked["source_status"].update(
+                    freshness="blocked", reason_code="snapshot_after_read_time"
+                )
+                return blocked
+        payload = self._select_horizon(dict(snapshot.payload_json or {}), horizon)
+        from app.utils.hashing import stable_hash
+        compatible = (payload.get("read_model_version") == READ_MODEL_VERSION
+                      and payload.get("config_hash") == stable_hash(self.settings.load_strategy()))
+        payload["current_board_read_contract"] = CURRENT_BOARD_READ_CONTRACT
+        payload["read_contract"] = "version_matched" if compatible else "legacy_snapshot_requires_rebuild"
+        if not compatible:
+            payload["freshness"] = "stale"
+            payload["data_status"] = {**payload.get("data_status", {}), "freshness": "stale"}
+            payload["source_status"] = {**payload.get("source_status", {}), "freshness": "stale", "actionable": False}
+            for row in payload.get("rows", []):
+                row["historical_grade"] = row.get("grade")
+                row.update(grade="数据异常", freshness="stale", data_status="legacy_snapshot_requires_rebuild",
+                           grade_reason="旧快照与当前读取合同不一致，请通过任务重算。", actionable=False,
+                           forecasts={}, forecast_scenario=[])
+            payload = self._select_horizon(payload, horizon)
+        # Optional research block: absent/broken sector_timing must not flip grades.
+        if not isinstance(payload.get("sector_timing"), dict):
+            from app.utils.sector_timing import empty_sector_timing_observation
+            payload["sector_timing"] = empty_sector_timing_observation()
+        payload["flow_share_projection_contract"] = FLOW_CONTRACT
+        for row in payload.get("rows", []):
+            flow = row.get("flow_share")
+            flow_compatible = (payload.get("flow_share_contract") == FLOW_CONTRACT
+                               and isinstance(flow, dict) and flow.get("contract") == FLOW_CONTRACT)
+            flow_valid = flow_compatible and saved_flow_share_valid(

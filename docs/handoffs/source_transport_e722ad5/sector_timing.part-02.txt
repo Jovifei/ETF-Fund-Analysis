@@ -1,0 +1,124 @@
+            continue
+        theme = str(rule.get("theme_l1") or "").strip()
+        if theme:
+            return {
+                "theme_l1": theme,
+                "match_kind": "keyword",
+                "matched_token": token,
+                "confidence": "medium",
+            }
+    return None
+
+
+def _empty_corroboration() -> dict[str, Any]:
+    return {
+        "available": False,
+        "matched_sectors": [],
+        "mean_pct_change": None,
+        "breadth_up": None,
+        "breadth_down": None,
+        "trade_date": None,
+        "alignment": "unavailable",
+        "research_only": True,
+        "actionable": False,
+        "note": "no_SectorSnapshot_match_for_theme; not invented",
+    }
+
+
+def _alignment(observation: str, mean_pct_change: float | None) -> str:
+    if mean_pct_change is None:
+        return "unavailable"
+    if mean_pct_change > 0 and observation == OBSERVATION_ADD:
+        return "supports_add"
+    if mean_pct_change < 0 and observation == OBSERVATION_REDUCE:
+        return "supports_reduce"
+    if mean_pct_change > 0 and observation == OBSERVATION_REDUCE:
+        return "mixed"
+    if mean_pct_change < 0 and observation == OBSERVATION_ADD:
+        return "mixed"
+    if mean_pct_change == 0:
+        return "mixed"
+    return "mixed"
+
+
+def aggregate_market_evidence_by_theme(
+    market_evidence: list[dict[str, Any]] | None,
+    taxonomy: dict[str, Any] | None,
+) -> dict[str, dict[str, Any]]:
+    """Group optional SectorSnapshot-like rows by mapped theme_l1.
+
+    Each evidence row may include: sector_name, board_type, pct_change,
+    up_count, down_count, flat_count, total_count, trade_date, source.
+    Unmapped or empty names are skipped (no fake theme assignment).
+    """
+
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    for row in market_evidence or []:
+        if not isinstance(row, dict):
+            continue
+        sector_name = str(row.get("sector_name") or "").strip()
+        if not sector_name:
+            continue
+        mapped = map_sector_name_to_theme_l1(sector_name, taxonomy)
+        if not mapped:
+            continue
+        theme = mapped["theme_l1"]
+        entry = {
+            "sector_name": sector_name,
+            "board_type": row.get("board_type"),
+            "pct_change": _finite(row.get("pct_change")),
+            "up_count": row.get("up_count"),
+            "down_count": row.get("down_count"),
+            "flat_count": row.get("flat_count"),
+            "total_count": row.get("total_count"),
+            "trade_date": row.get("trade_date"),
+            "source": row.get("source"),
+            "match_kind": mapped["match_kind"],
+            "matched_token": mapped["matched_token"],
+            "confidence": mapped["confidence"],
+        }
+        buckets.setdefault(theme, []).append(entry)
+
+    by_theme: dict[str, dict[str, Any]] = {}
+    for theme, members in buckets.items():
+        pcts = [item["pct_change"] for item in members if item["pct_change"] is not None]
+        ups = [int(item["up_count"]) for item in members if isinstance(item.get("up_count"), (int, float))]
+        downs = [int(item["down_count"]) for item in members if isinstance(item.get("down_count"), (int, float))]
+        dates = [str(item["trade_date"]) for item in members if item.get("trade_date")]
+        by_theme[theme] = {
+            "available": True,
+            "matched_sectors": members,
+            "mean_pct_change": _mean(pcts),
+            "breadth_up": sum(ups) if ups else None,
+            "breadth_down": sum(downs) if downs else None,
+            "trade_date": max(dates) if dates else None,
+            "research_only": True,
+            "actionable": False,
+            "note": "AKShare_SectorSnapshot_optional_corroboration_via_taxonomy",
+        }
+    return by_theme
+
+
+def _attach_corroboration(
+    observation: str,
+    theme: str,
+    by_theme: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    payload = dict(by_theme.get(theme) or _empty_corroboration())
+    payload["alignment"] = _alignment(observation, payload.get("mean_pct_change"))
+    payload["research_only"] = True
+    payload["actionable"] = False
+    return payload
+
+
+def _build_digest(
+    *,
+    slot_hint: str | None,
+    add_themes: list[str],
+    reduce_themes: list[str],
+    neutral_themes: list[str],
+    themes: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Compact block for 14:30/14:45 Bot digests — read from decision-board API."""
+
+    def _theme_line(theme_name: str) -> str:

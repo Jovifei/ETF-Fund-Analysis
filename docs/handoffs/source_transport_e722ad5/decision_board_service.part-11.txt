@@ -1,0 +1,78 @@
+        return latest_share_scales(db, as_of=as_of, instrument_ids=[instrument_id]).get(instrument_id)
+
+    @staticmethod
+    def _status(indicator, quote, generated_at: datetime) -> tuple[str, str]:
+        if indicator is None:
+            return "missing", "indicator_missing"
+        if quote is None:
+            return "stale", "quote_missing_using_confirmed_history"
+        quote_time = quote.quote_time
+        if quote_time is None or str(quote.degraded_reason or "").startswith("source_timestamp_missing"):
+            return "stale", "quote_source_time_missing"
+        quote_time = quote_time.astimezone(SHANGHAI) if quote_time.tzinfo else quote_time.replace(tzinfo=SHANGHAI)
+        target = generated_at.astimezone(SHANGHAI) if generated_at.tzinfo else generated_at.replace(tzinfo=SHANGHAI)
+        if quote_time > target:
+            return "stale", "quote_future_at_snapshot_generation"
+        if quote_time.date() != target.date() or (target - quote_time).total_seconds() > 8 * 60:
+            return "stale", "quote_stale_at_snapshot_generation"
+        if not quote.timestamp_verified or not quote.is_realtime or quote.degraded_reason:
+            return "stale", "quote_unverified_or_degraded"
+        return "fresh", "confirmed_indicator_with_verified_quote"
+
+    def _provisional_status(self, db: Session, instrument_id: int, row, generated_at: datetime) -> dict:
+        if row is None:
+            return {"status": "missing", "used_for_derived_values": False, "reason": "no_provisional_input"}
+        observed = row.observed_at.astimezone(SHANGHAI) if row.observed_at.tzinfo else row.observed_at.replace(tzinfo=SHANGHAI)
+        target = generated_at.astimezone(SHANGHAI) if generated_at.tzinfo else generated_at.replace(tzinfo=SHANGHAI)
+        if observed > target or observed.date() != target.date() or (target - observed).total_seconds() > 8 * 60:
+            return {"status": "stale", "used_for_derived_values": False, "reason": "provisional_outside_snapshot_window", "observed_at": observed.isoformat(), "source": row.source, "timestamp_verified": bool(row.timestamp_verified)}
+        complete = all(
+            value is not None and isfinite(float(value))
+            for value in (row.open_price, row.high_price, row.low_price, row.last_price, row.volume, row.amount)
+        )
+        if not complete:
+            return {
+                "status": "stale",
+                "used_for_derived_values": False,
+                "reason": "incomplete_provisional_input",
+                "source_time_verified": bool(row.timestamp_verified),
+                "observed_at": observed.isoformat(), "source": row.source, "timestamp_verified": bool(row.timestamp_verified),
+            }
+        derived = self._derive_provisional(db, instrument_id, row)
+        if derived is None:
+            return {
+                "status": "stale",
+                "used_for_derived_values": False,
+                "reason": "confirmed_history_insufficient_for_provisional_derivation",
+                "source_time_verified": bool(row.timestamp_verified),
+            }
+        return {
+            "status": "computed_research_only" if row.timestamp_verified else "computed_unverified_research_only",
+            "used_for_derived_values": True,
+            "reason": "temporary_confirmed_history_plus_complete_provisional_ohlcv",
+            "forecast_policy": "persisted_settled_daily_only",
+            "forecast_policy_reason": "no_time_matched_intraday_neighbor_history",
+            "source_time_verified": bool(row.timestamp_verified),
+            "observed_at": observed.isoformat(), "source": row.source, "timestamp_verified": bool(row.timestamp_verified),
+            "derived": derived,
+        }
+
+    def _history_and_levels(self, db: Session, instrument_id: int) -> tuple[list[dict], dict]:
+        bars = db.scalars(
+            select(DailyBar).where(DailyBar.instrument_id == instrument_id)
+            .order_by(DailyBar.trade_date.desc(), DailyBar.id.desc()).limit(160)
+        ).all()
+        history = [
+            {
+                "date": item.trade_date.isoformat(),
+                "open": item.open,
+                "high": item.high,
+                "low": item.low,
+                "close": item.close,
+                "volume": item.volume,
+                "is_forecast": False,
+            }
+            for item in reversed(bars)
+        ]
+        if not history:
+            return history, {"status": "missing", "label": "历史不足"}

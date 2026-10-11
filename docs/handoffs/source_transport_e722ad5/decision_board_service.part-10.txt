@@ -1,0 +1,85 @@
+            "grade_reason": grade_row.get("grade_reason", "核心指标缺失，停止分级"),
+            "display_sort_key": list(health_sort_key(grade_row.get("grade"), freshness)),
+            "sort_keys": {
+                "grade_health": health_sort_key(grade_row.get("grade"), freshness)[0] * 10 + health_sort_key(grade_row.get("grade"), freshness)[1],
+                "display_only": True,
+                **semantic_sort_keys(volume=volume, ma=ma, macd=macd, kdj=kdj, td=td, rsi=rsi, chan=chan, forecasts=forecast_map, horizon=1, today_return=today_return),
+            },
+            "freshness": freshness,
+            "data_status": data_status,
+            "return_1d": today_return,
+            "return_5d": finite_or_none(values.get("return_5d")),
+            "returns": {
+                "today": today_return,
+                "as_of_date": return_context["as_of_date"],
+                "basis": return_context["basis"],
+                "target_trade_date": return_context["target_trade_date"],
+                "previous_as_of_date": return_context["previous_as_of_date"],
+                "previous_confirmed_return": previous_confirmed_return,
+                "previous_day_delta": (
+                    round(today_return - previous_return, 12)
+                    if (
+                        today_return is not None
+                        and (previous_return := previous_confirmed_return) is not None
+                    )
+                    else None
+                ),
+                "week_1": finite_or_none(values.get("return_5d")),
+                "unit": "decimal_ratio",
+                "no_unit_guessing": True,
+            },
+            "return_semantics": {
+                "unit": "decimal_ratio",
+                "quote_source_unit": "percentage_points",
+                "indicator_source_unit": "decimal_ratio",
+                "no_unit_guessing": True,
+            },
+            "forecast": forecast_map["1"],
+            "forecasts": forecast_map,
+            "volume": volume,
+            "ma": ma,
+            "macd": macd,
+            "kdj": kdj,
+            "td": td,
+            "rsi": rsi,
+            "chan": chan,
+            "sector": metric(grade_row.get("sector"), {"label": "未验证 / 不可用", "status": "missing", "coverage_count": 0}),
+            "snapshot_issues": {"indicator": indicator_issues, "forecasts": forecast_issues},
+            "indicator_comparison": {
+                "as_of_date": indicator_as_of,
+                "previous_as_of_date": (previous_values or {}).get("_as_of_date"),
+                "basis": comparison_basis,
+                "values": {key: {"current": finite_or_none(values.get(key)), "previous": finite_or_none((previous_values or {}).get(key))}
+                           for key in ("volume_ratio", "ma20", "macd_dif", "kdj_j", "rsi14", "td_buy_setup", "td_sell_setup")},
+            },
+            "indicator": {
+                "version": indicator.version if indicator is not None else None,
+                "as_of_date": indicator_as_of,
+                "display_basis": indicator_display_basis,
+                "data_quality": indicator.data_quality if indicator is not None else None,
+                "td_label": (grade_row.get("td") or {}).get("label", "—"),
+                "td_basis": "TD9 setup only; TD13 not implemented",
+                "chan_basis": "approximation only; no full Chan/CZSC",
+            },
+            "quote": {
+                "source": quote_source,
+                "source_time": quote.quote_time.isoformat() if quote is not None else None,
+                "timestamp_verified": bool(quote.timestamp_verified) if quote is not None else False,
+                "is_realtime": source_verified,
+                "is_mock": quote_is_mock,
+                "status": "mock" if quote_is_mock else ("missing" if quote is None else freshness),
+                "actionable": False,
+            },
+            "flow_share": build_flow_share_view(
+                quote, self._latest_share_scale(db, instrument.id, as_of=generated_market), as_of=generated_market,
+            ),
+            "provisional": provisional_status,
+            "history": history,
+            "forecast_scenario": scenario,
+            "support_resistance": support_resistance,
+            "research_only": True,
+            "actionable": False,
+        }
+
+    @staticmethod
+    def _latest_share_scale(db: Session, instrument_id: int, *, as_of: datetime) -> EtfShareScale | None:

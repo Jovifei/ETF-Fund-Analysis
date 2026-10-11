@@ -1,0 +1,84 @@
+                flow, generated_at=snapshot.generated_at, payload_generated_at=payload.get("generated_at"),
+            )
+            if not compatible or not flow_valid:
+                row["flow_share"] = blocked_flow_share_view(
+                    flow, board_version=payload.get("read_model_version"),
+                    reason="legacy_snapshot_requires_rebuild" if not compatible else
+                    "flow_contract_unverified" if not flow_compatible else "saved_flow_contract_invalid",
+                )
+        return payload
+
+    def read_instrument(self, db: Session, ts_code: str, *, horizon: int = 1, snapshot_id: str | None = None) -> dict | None:
+        payload = self.read_latest(db, horizon=horizon, snapshot_id=snapshot_id)
+        return self.instrument_from_payload(payload, ts_code, horizon=horizon)
+
+    @staticmethod
+    def instrument_from_payload(payload: dict | None, ts_code: str, *, horizon: int = 1) -> dict | None:
+        """Project a checked board payload without another query or mutation."""
+        if payload is None:
+            return None
+        normalized = ts_code.strip().upper()
+        row = next((row for row in payload["rows"] if row["ts_code"] == normalized), None)
+        if row is None:
+            return None
+        detail = dict(row)
+        detail["snapshot_id"] = payload["snapshot_id"]
+        detail["generated_at"] = payload["generated_at"]
+        detail["selected_horizon"] = horizon
+        detail["sort_basis"] = row["sort_keys"]
+        return detail
+
+    @staticmethod
+    def _validate_horizon(horizon: int) -> None:
+        if horizon not in HORIZONS:
+            raise ValueError("horizon must be one of 1, 3, 5, 10")
+
+    def _prune_snapshot_dates(self, db: Session) -> None:
+        """Retain every snapshot on the latest 20 actual trading dates only."""
+
+        snapshots = db.execute(
+            select(DecisionBoardSnapshot.id, DecisionBoardSnapshot.generated_at).order_by(
+                DecisionBoardSnapshot.generated_at.desc(), DecisionBoardSnapshot.id.desc()
+            ).execution_options(yield_per=256)
+        )
+        kept_dates: list[date] = []
+        stale_ids: list[int] = []
+        for snapshot in snapshots:
+            generated = snapshot.generated_at
+            local_date = (
+                generated.astimezone(SHANGHAI) if generated.tzinfo else generated.replace(tzinfo=SHANGHAI)
+            ).date()
+            trade_date = (
+                self.calendar.effective_trade_date(local_date)
+                if hasattr(self.calendar, "effective_trade_date")
+                else local_date
+            )
+            if trade_date not in kept_dates and len(kept_dates) < 20:
+                kept_dates.append(trade_date)
+            elif trade_date not in kept_dates:
+                stale_ids.append(snapshot.id)
+        if stale_ids:
+            for start in range(0, len(stale_ids), 500):
+                db.execute(delete(DecisionBoardSnapshot).where(DecisionBoardSnapshot.id.in_(stale_ids[start:start+500])))
+            db.flush()
+
+    def _build_payload(self, db: Session, generated_at: datetime) -> dict:
+        generated_at = generated_at.astimezone(SHANGHAI) if generated_at.tzinfo else generated_at.replace(tzinfo=SHANGHAI)
+        grade_payload = SignalGradeService(self.settings).build(db, as_of=generated_at)
+        grades = {row["ts_code"]: row for row in grade_payload["rows"]}
+        instruments = db.scalars(
+            select(Instrument)
+            .where(Instrument.enabled.is_(True), Instrument.kind.in_(("ETF", "LOF")))
+            .order_by(Instrument.ts_code)
+        ).all()
+        indicators = self._latest_by_instrument(db, IndicatorSnapshot, IndicatorSnapshot.as_of_date, IndicatorSnapshot.generated_at)
+        previous_indicators = self._previous_indicator_values(db, indicators)
+        quotes = self._latest_by_instrument(db, QuoteSnapshot, QuoteSnapshot.quote_time, QuoteSnapshot.id)
+        forecasts = self._latest_forecasts(db)
+        provisional = self._latest_provisional(db)
+        rows = [
+            self._row(db, generated_at, instrument, grades.get(instrument.ts_code), indicators.get(instrument.id), previous_indicators.get(instrument.id), quotes.get(instrument.id), forecasts.get(instrument.id, {}), provisional.get(instrument.id))
+            for instrument in instruments
+        ]
+        from app.utils.decision_reference import entry_exit_reference, theme_relative_ranks
+        from app.utils.sector_timing import (
