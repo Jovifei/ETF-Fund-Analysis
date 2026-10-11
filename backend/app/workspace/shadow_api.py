@@ -25,11 +25,25 @@ async def sync(request:Request):
     except (ValueError,OSError):raise HTTPException(401,"request authentication rejected") from None
     try:
         import json
-        value=json.loads(body)
+        value = json.loads(body)
+        manifest = value.get('manifest', {})
+        contract = manifest.get('contract_version') or manifest.get('contract')
+        if contract == 'local-display-v2':
+            from app.workspace.local_display_read import LocalDisplayStore
+            store_v2 = LocalDisplayStore(settings.local_display_v2_store_root)
+            return store_v2.publish(value)
         return target.publish(value)
     except (ValueError,TypeError,KeyError,FileNotFoundError):raise HTTPException(409,'bundle rejected') from None
 @router.get('/bundle',dependencies=[Depends(require_private_access),Depends(require_current_user)])
 def bundle(response:Response,bundle_id:str|None=None):
     response.headers["Cache-Control"]="private, no-store"
+    settings = get_settings()
+    if getattr(settings, 'workspace_research_source', 'database') == 'local_bundle':
+        from app.workspace.local_display_read import LocalDisplayStore
+        store_v2 = LocalDisplayStore(settings.local_display_v2_store_root)
+        loaded = store_v2.load_bundle(generation=bundle_id)
+        if not loaded:
+            raise HTTPException(410, 'local display bundle unavailable or expired')
+        return loaded
     try:return store().read(bundle_id=bundle_id)
     except (ValueError,KeyError,FileNotFoundError):raise HTTPException(410,'shadow bundle unavailable or expired') from None
