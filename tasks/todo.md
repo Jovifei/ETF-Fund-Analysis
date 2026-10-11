@@ -5,7 +5,7 @@
 - [x] 核现有Mock-only与云端consumer缺口；保护Owner文件。
 - [x] 阅读主源开源参考，确定SQLite/现有Adapter/Windows优先，不新增重型平台。
 - [x] 网页端独立提案→Codex详细草案→网页实际复议，合并三个合同及迁移顺序。
-- [ ] v2最终复核、保存共同方案和执行Agent prompt交Jovi。
+- [x] v2最终复核、保存共同方案和执行Agent prompt交Jovi；网页结论APPROVED_FOR_EXECUTION_HANDOFF，未实施。
 - [ ] 另一个执行Agent按A–G实施并真实公网/网站验收；本轮不执行。
 
 方案：tasks/plans/2026-10-11-local-live-to-website.md；接力：docs/handoffs/LOCAL_LIVE_TO_WEBSITE_EXECUTOR_20261011.md。旧源码测试不是本计划新实现验收。

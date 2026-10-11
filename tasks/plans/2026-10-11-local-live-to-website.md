@@ -79,7 +79,7 @@ parts白名单至少覆盖实际正常页面：
 | sectors/index summaries | 页面实际使用且已迁移的必要投影；没有许可/数据就explicit unavailable |
 | source/status | generation、收发/最后成功时间、freshness per component、兼容性/拒绝原因、producer scope |
 
-Generation identity contract：`run_id, bundle_id, input_snapshot_hash, code_sha, config_hash, generated_at`在本机计算回执、upload receipt、正常页面metadata一致。parts按overview、单标的detail、单标的/周期chart、market小对象组织，manifest索引内容hash。服务端读取一张图/一页列表不得每次反序列化所有标的12–16MiB大包；接收端可按单对象落content-addressed blob，一次完整manifest才切指针，预算计所有blob/manifest/nonce/temp。缓存仅允许有界单代/对象，实测低内存服务器RSS峰值。不得通过另存完整大包+重复拆分副本绕过64MiB额度。
+Generation identity contract：`run_id, bundle_id, input_snapshot_hash, code_sha, config_hash, generated_at`在本机计算回执、upload receipt、正常页面metadata一致。parts按overview、单标的detail、单标的/周期chart、market小对象组织，manifest索引内容hash。所有单对象读取必须绑定symbol+generation+bundle_hash，不能只用symbol读最新代。服务端读取一张图/一页列表不得每次反序列化所有标的12–16MiB大包；接收端可按单对象落content-addressed blob，一次完整manifest才切指针，预算计所有blob/manifest/nonce/temp。缓存仅允许有界单代/对象，实测低内存服务器RSS峰值。不得通过另存完整大包+重复拆分副本绕过64MiB额度。
 
 逐项盘点Overview.vue/Detail.vue及其子组件实际API调用（news、indexes、Chan、Outlook不能忘）；建立endpoint→part→private-domain→迁移/空态表，不用一个大JSON“自认为完整”。目录搜索可用有界catalog或保留非行情metadataDB；缺标的/周期/新闻不能触发cloud采集。暂未迁移的页面功能应明显unsupported/unavailable，是否构成交付缺项由scope表决定，不能静默读旧云行情混代。
 
@@ -111,7 +111,7 @@ Freshness contract：`FRESH / DEGRADED / STALE / BLOCKED / UNKNOWN`逐组件表�
 
 Windows正式任务采用现有registrar扩展：绝对Python/代码/数据路径，固定WorkingDirectory，单实例/超时/退出码/轮转日志/上次成功marker。任务身份以Jovi已允许的用户上下文为首选，不创建高权限服务账号；如要注销后运行须选择受支持安全上下文，不能把登录密码放脚本或命令行。首次注册、持久凭据ACL及重启/注销操作需按第10节确认，Agent不擅自重启电脑。任务运行与Codex/浏览器/显卡状态无关。
 
-端到端首验至少跨两个交易日实际定时运行，并另测正常启动/睡眠/离线/恢复；这只叫链路首验/preview，不叫长期运行资格。7–14交易日真实运行观察为后续稳定性门槛，不阻挡最小真实链路修复与可回滚部署，不能把等Mock观察当下一步。现有shadow registrar时段校验只接受14/15点，不能直接塞16:10；新增收盘任务或扩展可信任务类型并增加回归测试。
+端到端首验至少跨两个交易日实际定时运行，并另测正常启动/睡眠/离线/恢复；这只叫链路首验/preview，不叫长期运行资格。7–14交易日真实运行观察为后续稳定性门槛，不阻挡最小真实链路修复与可回滚部署，不能把等Mock观察当下一步。现有shadow registrar时段校验只接受14/15点，不能直接塞16:10；新增独立settlement-refresh收盘任务合同并增加回归测试，不修改盘中slot含义或混淆quote/forecast时点。
 
 ## 7. 可借鉴开源及明确取舍
 
@@ -165,7 +165,7 @@ Windows正式任务采用现有registrar扩展：绝对Python/代码/数据路�
 - 用现有deploy/compose与受审runbook，若必要新增精准local-display配置。重新确认服务器code/image/schema；部署前容量需覆盖当前运行+回滚镜像、一次新备份、上传/解包临时峰值并留余量。空间不足提出列明清理对象求授权，不能prune全部/删DB备份。
 - 新一致性备份/hash、不可变镜像code/tree标签，先部署receiver+认证preview，正常路径仍database，cloud旧计算继续。使用现有HTTPS入口；新producer signing secret由Jovi安全配置，不截图/回显。
 - 在本机真实run→网站HTTPS上传→hashreceipt→正常用户浏览preview总览/两只详情图表/forecasts；记录浏览器消费generation/part hash与本机一致。费用/网络无新需求则无需重复授权已允许部署，增加新权限按第10节确认。
-- 保留有界dual-read审计窗口（只后台比较，不双展示/不新触发cloud计算）。记录同源同截止输入的field差、missing、hash、timing；输入/时点不同标NOT_COMPARABLE，不把真实源差异当算法错误或只要求输出字节完全相等。私有数据不进入对比报告。窗口及旧结果仅在迁移过程中用于验收，不能成为永久cloudraw写入理由。
+- 保留有界dual-read审计窗口（只后台比较，不双展示/不新触发cloud计算、不产生第三份混合结果）。禁止local price+cloud indicator+old forecast跨代拼装。记录同源同截止输入的field差、missing、hash、timing；输入/时点不同标NOT_COMPARABLE，不把真实源差异当算法错误或只要求输出字节完全相等。私有数据不进入对比报告。窗口及旧结果仅在迁移过程中用于验收，不能成为永久cloudraw写入理由。
 - PASS：第9节公网/消费真实证据。失败立即撤回receiver或恢复镜像/配置，不伪装成Mock。
 
 ### F. 正常网站切换与云端增长停止
@@ -223,4 +223,4 @@ Codex保留项：复用Adapter、独立live guard、scope白名单、公网hash�
 
 Codex补充并待最终复核：按单标的内容对象读取以限制云端RSS，不每次读全包；所有大小计入64MiB；同输入可比才作dual-read数字比对；现有registrar不能直接接16:10，须单独收盘任务；不把普通部署已授权误作新授权；本轮不实施、不改生产。
 
-最终复核状态：待网页确认v2；若有具体阻断先改方案，不启动实现。执行交付顺序以本文件A–G为唯一主序列，避免再用远端编号Phase1–5制造第二套任务表。
+最终复核：网页端曾误读旧f4d04b3导致handoff404；经精确ref纠正后，已重新读取8c980e4efbfa6a21941f73cc0ff247a52d7a6b42的v2及接力文档，返回 FINAL_PLAN_REVIEW_COMPLETE / APPROVED_FOR_EXECUTION_HANDOFF，无方案阻断。最终文档继承该已复核版本，只明确三项双方同意的文字边界（dual-read不融合、symbol+generation+bundle_hash、独立settlement-refresh）及本复核收据。执行交付顺序以本文件A–G为唯一主序列，避免再用远端编号Phase1–5制造第二套任务表。这是方案交接认可，不是测试/生产/算法资格验收；Jovi已有执行授权另按实际范围保持。
