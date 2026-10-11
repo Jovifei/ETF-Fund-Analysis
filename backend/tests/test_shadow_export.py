@@ -47,11 +47,13 @@ def test_export_https_transport_real_cookie_same_manifest(database,bootstrapped,
     from app.workspace.shadow_bundle import digest
     settings=get_settings();TaskService(settings).run(db_session,'refresh_decision_board');db_session.commit()
     value=export_local(settings,sequence=101,code_sha='a'*40)
-    receiver=settings.model_copy(update={'auth_enabled':True,'auth_cookie_secure':False,'shadow_sync_enabled':True,'shadow_sync_root':str(tmp_path/'remote'),'shadow_sync_code_sha':'a'*40,'shadow_sync_config_hash':value['manifest']['config_hash'],'shadow_sync_producer_token':SecretStr('z'*32)})
+    receiver=settings.model_copy(update={'auth_enabled':True,'auth_cookie_secure':False,'shadow_sync_enabled':True,'shadow_sync_root':str(tmp_path/'remote'),'shadow_sync_code_sha':'a'*40,'shadow_sync_config_hash':value['manifest']['config_hash'],'shadow_sync_producer_token':SecretStr('z'*32),'shadow_sync_active_key_id':'test-1','shadow_sync_signing_secret':SecretStr('s'*32)})
     AuthService().create_user(db_session,username='shadow-reader',email='shadow@example.test',password='offline synthetic strong password',role='member');db_session.commit()
     app.dependency_overrides[get_settings]=lambda:receiver
     monkeypatch.setattr(shadow_api,'get_settings',lambda:receiver)
     monkeypatch.setenv('SHADOW_PRODUCER_TOKEN','z'*32)
+    monkeypatch.setenv('SHADOW_SIGNING_KEY_ID','test-1')
+    monkeypatch.setenv('SHADOW_SIGNING_SECRET','s'*32)
     try:
         client=TestClient(app)
         class Response:
@@ -60,7 +62,7 @@ def test_export_https_transport_real_cookie_same_manifest(database,bootstrapped,
             def __exit__(self,*args):pass
             def read(self,size):return self.response.content[:size]
         def transport(request,**kwargs):
-            response=client.post('/api/shadow/sync',content=request.data,headers={'Authorization':request.get_header('Authorization'),'Content-Type':'application/json'})
+            response=client.post('/api/shadow/sync',content=request.data,headers=dict(request.header_items()))
             assert response.status_code==200,response.text
             return Response(response)
         receipt=upload_bundle('https://receiver.example/api/shadow/sync',value,opener=transport)

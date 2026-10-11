@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from app.core.config import get_settings
 from app.core.security import require_current_user, require_private_access
 from app.workspace.shadow_bundle import ShadowStore
+from app.workspace.shadow_auth import verify_request
 router=APIRouter(prefix='/api/shadow',tags=['shadow'])
 def store():
     settings=get_settings()
@@ -19,6 +20,9 @@ async def sync(request:Request):
     async for chunk in request.stream():
         body.extend(chunk)
         if len(body)>settings.shadow_sync_max_request_bytes:raise HTTPException(413,'bundle too large')
+    try:
+        verify_request(bytes(body),request.headers,settings.shadow_sync_root,settings.shadow_sync_active_key_id,settings.shadow_sync_signing_secret.get_secret_value())
+    except (ValueError,OSError):raise HTTPException(401,"request authentication rejected") from None
     try:
         import json
         value=json.loads(body)

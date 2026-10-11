@@ -67,6 +67,8 @@ class Settings(BaseSettings):
     shadow_sync_code_sha: str = ''
     shadow_sync_config_hash: str = ''
     shadow_sync_producer_token: SecretStr = SecretStr('')
+    shadow_sync_active_key_id: str = ''
+    shadow_sync_signing_secret: SecretStr = SecretStr('')
     shadow_sync_max_bytes: int = Field(default=33554432, ge=1048576, le=268435456)
     shadow_sync_max_request_bytes: int = Field(default=16777216, ge=1024, le=33554432)
     shadow_sync_max_generations: int = Field(default=20, ge=2, le=100)
