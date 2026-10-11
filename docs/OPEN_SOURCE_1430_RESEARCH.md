@@ -16,3 +16,7 @@
 | `BatuhanUsluel/Algorithmic-Support-and-Resistance` | 历史拐点聚类为区域 | 本项目采用确定性聚类，仍需真实触及率验证 |
 
 第三方许可证和 NOTICE 必须保留。外部仓库中的密钥、账户或历史配置不得复制。
+
+## sector-timing 因子短名单
+
+详见 docs/planning/OPEN_SOURCE_FACTOR_SHORTLIST_SECTOR_TIMING.md（研究向，不进生产五档）。

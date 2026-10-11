@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decisionRows, historicalClose, explainStatus } from '../src/lib/decisionSummary'
+import { decisionRows, historicalClose, explainStatus, sectorTimingDigest } from '../src/lib/decisionSummary'
 
 describe('responsive read projection, never a strategy', () => {
   it('keeps canonical grades and filters the same server rows', () => {
@@ -24,5 +24,27 @@ describe('responsive read projection, never a strategy', () => {
   it('rejects malformed row containers and identities', () => {
     expect(decisionRows({rows:{length:2}},'')).toEqual([])
     expect(decisionRows({rows:[null,{ts_code:'bad'},[]]},'')).toEqual([])
+  })
+
+  it('projects sector_timing digest without inventing actionable grades', () => {
+    const empty = sectorTimingDigest(null)
+    expect(empty.available).toBe(false)
+    expect(empty.actionable).toBe(false)
+    const board = {
+      sector_timing: {
+        calibration_status: 'not_calibrated',
+        digest: {
+          headline: '偏强观察: 红利 | 偏弱观察: 科技 | 研究向不可操作',
+          add_themes: ['红利'],
+          reduce_themes: ['科技'],
+        },
+      },
+    }
+    const digest = sectorTimingDigest(board)
+    expect(digest.available).toBe(true)
+    expect(digest.addThemes).toEqual(['红利'])
+    expect(digest.reduceThemes).toEqual(['科技'])
+    expect(digest.actionable).toBe(false)
+    expect(digest.calibrationStatus).toBe('not_calibrated')
   })
 })

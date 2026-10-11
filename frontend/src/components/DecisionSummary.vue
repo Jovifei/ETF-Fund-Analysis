@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { num, pct, record, stamp, grades } from '../lib/format'
-import { decisionRows, historicalClose, explainStatus } from '../lib/decisionSummary'
+import { decisionRows, historicalClose, explainStatus, sectorTimingDigest } from '../lib/decisionSummary'
 const props=defineProps<{board:Record<string,unknown>|null;filter:string;horizon:number}>()
 const emit=defineEmits<{controls:[value:{filter:string;horizon:number}]}>()
 const rows=computed(()=>decisionRows(props.board,props.filter))
+const sectorTiming=computed(()=>sectorTimingDigest(props.board))
 const groupNames=computed(()=>[...new Set([...grades,'数据异常',...rows.value.map(row=>String(row.grade??'未知分级'))])])
 const groups=computed(()=>groupNames.value.map(grade=>({grade,rows:rows.value.filter(r=>String(r.grade??'未知分级')===grade)})).filter(g=>g.rows.length))
 function forecast(row:Record<string,unknown>){return record(record(row.forecasts)[String(props.horizon)])}
@@ -13,6 +14,10 @@ function horizonInput(event:Event){emit('controls',{filter:props.filter,horizon:
 </script>
 <template>
   <section class="mobile-decision-board" data-testid="mobile-decision-board" aria-label="ETF 决策快照窄屏摘要">
+    <p v-if="sectorTiming.available" class="small-note" data-testid="sector-timing-strip" role="status">
+      板块观察（研究向）· {{ sectorTiming.headline }}
+      <span v-if="sectorTiming.calibrationStatus"> · {{ sectorTiming.calibrationStatus }}</span>
+    </p>
     <p class="small-note">与完整指标表使用同一快照；点标的查看完整指标。研究状态不是交易授权。</p>
     <div class="mobile-decision-controls">
       <label>筛选决策标的<input :value="filter" maxlength="128" aria-label="筛选决策标的" placeholder="代码、名称或分级" @input="filterInput"/></label>
