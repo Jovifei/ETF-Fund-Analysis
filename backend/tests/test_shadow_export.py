@@ -57,7 +57,7 @@ def test_export_https_transport_real_cookie_same_manifest(database,bootstrapped,
     try:
         client=TestClient(app)
         class Response:
-            def __init__(self,response):self.response=response
+            def __init__(self,response):self.response=response;self.status=response.status_code
             def __enter__(self):return self
             def __exit__(self,*args):pass
             def read(self,size):return self.response.content[:size]
