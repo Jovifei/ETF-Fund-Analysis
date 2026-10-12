@@ -5,6 +5,14 @@ from app.workspace.shadow_bundle import ShadowStore
 from app.workspace import shadow_schedule
 from app.workspace.shadow_client import upload_bundle
 
+@pytest.fixture(autouse=True)
+def isolate_decision_board_snapshots(db_session):
+    from app.models import DecisionBoardSnapshot
+    from sqlalchemy import delete
+    db_session.execute(delete(DecisionBoardSnapshot))
+    db_session.commit()
+    yield
+
 def test_db_guard_and_public_export(database,bootstrapped,db_session,tmp_path):
     from app.core.config import get_settings
     from app.services.task_service import TaskService

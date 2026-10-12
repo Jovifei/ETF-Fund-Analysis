@@ -2,13 +2,17 @@
 from __future__ import annotations
 
 import json
+import os
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from app.workspace.candle_periods import transform_chart
 from app.workspace.local_display_contract import (
     CONTRACT_VERSION,
-    compute_parts_hashes,
+    MAX_BUNDLE_BYTES,
+    _parse_iso,
     validate_bundle_manifest,
     verify_bundle_integrity,
 )
@@ -26,23 +30,41 @@ class LocalDisplayStore:
         manifest_dict = bundle.get("manifest", {})
         manifest = validate_bundle_manifest(manifest_dict)
         if not verify_bundle_integrity(bundle):
-            raise ValueError("bundle parts integrity verification failed")
+            raise ValueError("bundle parts integrity verification failed or bundle expired")
 
         bundle_id = digest(manifest_dict)
         target_file = self.store_dir / f"bundle_{manifest.sequence}_{bundle_id[:16]}.json"
 
-        # Check idempotence
-        if target_file.exists():
-            return {
-                "bundle_id": bundle_id,
-                "manifest_hash": digest(manifest_dict),
-                "status": "already_accepted",
-                "sequence": manifest.sequence,
-                "received_at": datetime.now(timezone.utc).isoformat(),
-            }
+        # Check existing sequence strictly: sequence must be greater than current latest
+        current_seq = None
+        if self.latest_link.exists():
+            try:
+                with open(self.latest_link, "r", encoding="utf-8") as f:
+                    ptr = json.load(f)
+                current_seq = ptr.get("sequence")
+            except Exception:
+                current_seq = None
 
-        # Write bundle file atomically via temp file
-        temp_file = self.store_dir / f"temp_{manifest.sequence}.tmp"
+        if current_seq is not None:
+            if manifest.sequence < current_seq:
+                raise ValueError(
+                    f"bundle sequence {manifest.sequence} is older than current sequence {current_seq}"
+                )
+            if manifest.sequence == current_seq:
+                if target_file.exists():
+                    return {
+                        "bundle_id": bundle_id,
+                        "manifest_hash": digest(manifest_dict),
+                        "status": "already_accepted",
+                        "sequence": manifest.sequence,
+                        "received_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                raise ValueError(
+                    f"bundle sequence {manifest.sequence} already matches current sequence {current_seq}"
+                )
+
+        # Atomic write of bundle file using unique temp file
+        temp_file = self.store_dir / f"temp_{manifest.sequence}_{uuid.uuid4().hex[:8]}.tmp"
         with open(temp_file, "w", encoding="utf-8") as f:
             json.dump(bundle, f, ensure_ascii=False)
         temp_file.replace(target_file)
@@ -50,30 +72,30 @@ class LocalDisplayStore:
         # Atomic rotation of previous and latest
         if self.latest_link.exists():
             try:
-                # Read current latest path
                 with open(self.latest_link, "r", encoding="utf-8") as f:
                     curr_latest = json.load(f)
-                with open(self.previous_link, "w", encoding="utf-8") as f:
+                temp_prev = self.store_dir / f"prev_{uuid.uuid4().hex[:8]}.tmp"
+                with open(temp_prev, "w", encoding="utf-8") as f:
                     json.dump(curr_latest, f, ensure_ascii=False)
+                temp_prev.replace(self.previous_link)
             except Exception:
                 pass
 
-        # Write pointer to latest
-        with open(self.latest_link, "w", encoding="utf-8") as f:
-            json.dump({
-                "bundle_file": target_file.name,
-                "bundle_id": bundle_id,
-                "sequence": manifest.sequence,
-                "generated_at": manifest.generated_at,
-            }, f, ensure_ascii=False)
+        # Atomic write of latest pointer
+        latest_ptr = {
+            "bundle_file": target_file.name,
+            "bundle_id": bundle_id,
+            "sequence": manifest.sequence,
+            "generated_at": manifest.generated_at,
+            "expires_at": manifest.expires_at,
+        }
+        temp_latest = self.store_dir / f"latest_{uuid.uuid4().hex[:8]}.tmp"
+        with open(temp_latest, "w", encoding="utf-8") as f:
+            json.dump(latest_ptr, f, ensure_ascii=False)
+        temp_latest.replace(self.latest_link)
 
-        # Bounded retention: remove old bundles keeping latest 3
-        bundles = sorted(self.store_dir.glob("bundle_*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
-        for old in bundles[3:]:
-            try:
-                old.unlink()
-            except OSError:
-                pass
+        # Enforce storage budget (MAX_BUNDLE_BYTES) and prune old bundles
+        self._enforce_budget(protected_files={target_file.name})
 
         return {
             "bundle_id": bundle_id,
@@ -83,12 +105,40 @@ class LocalDisplayStore:
             "received_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    def load_bundle(self, generation: str | None = None) -> dict[str, Any] | None:
-        if generation:
-            matches = list(self.store_dir.glob(f"bundle_*_{generation[:16]}.json"))
+    def _enforce_budget(self, protected_files: set[str]) -> None:
+        all_bundles = sorted(self.store_dir.glob("bundle_*.json"), key=lambda p: p.stat().st_mtime)
+        total_bytes = sum(b.stat().st_size for b in all_bundles)
+        
+        # Keep at most 5 bundles and ensure total size <= MAX_BUNDLE_BYTES
+        for b in all_bundles:
+            if len(all_bundles) <= 2 or (total_bytes <= MAX_BUNDLE_BYTES and len(all_bundles) <= 5):
+                break
+            if b.name in protected_files:
+                continue
+            try:
+                b_size = b.stat().st_size
+                b.unlink()
+                total_bytes -= b_size
+                all_bundles.remove(b)
+            except OSError:
+                pass
+
+    def load_bundle(self, generation: str | int | None = None) -> dict[str, Any] | None:
+        if generation is not None:
+            gen_str = str(generation)
+            # Try sequence pattern first
+            matches = list(self.store_dir.glob(f"bundle_{gen_str}_*.json"))
+            if not matches and len(gen_str) >= 8:
+                # Try hash prefix pattern
+                matches = list(self.store_dir.glob(f"bundle_*_{gen_str[:16]}.json"))
             if matches:
-                with open(matches[0], "r", encoding="utf-8") as f:
-                    return json.load(f)
+                try:
+                    with open(matches[0], "r", encoding="utf-8") as f:
+                        return json.load(f)
+                except Exception:
+                    return None
+            # If generation was explicitly requested but not found, DO NOT fallback to latest
+            return None
 
         if not self.latest_link.exists():
             return None
@@ -114,7 +164,7 @@ class LocalDisplayReader:
         offset: int = 0,
         limit: int = 100,
         theme: str | None = None,
-        generation: str | None = None,
+        generation: str | int | None = None,
     ) -> dict[str, Any]:
         bundle = self.store.load_bundle(generation)
         if not bundle:
@@ -123,10 +173,22 @@ class LocalDisplayReader:
                 "total": 0,
                 "as_of": datetime.now(timezone.utc).isoformat(),
                 "snapshot_id": None,
-                "read_model_version": "local-display-v2",
+                "read_model_version": CONTRACT_VERSION,
                 "contains_mock": False,
                 "is_stale": True,
             }
+
+        manifest = bundle.get("manifest", {})
+        expires_at_str = manifest.get("expires_at")
+        is_stale = False
+        if expires_at_str:
+            try:
+                exp_dt = _parse_iso(expires_at_str)
+                is_stale = datetime.now(timezone.utc) > exp_dt
+            except Exception:
+                is_stale = True
+        else:
+            is_stale = True
 
         ov_part = bundle.get("parts", {}).get("overview", {})
         rows = list(ov_part.get("rows", []))
@@ -144,15 +206,15 @@ class LocalDisplayReader:
             "read_model_version": CONTRACT_VERSION,
             "contains_mock": ov_part.get("contains_mock", False),
             "sector_timing": ov_part.get("sector_timing", {}),
-            "generation": bundle.get("manifest", {}).get("sequence"),
-            "is_stale": False,
+            "generation": manifest.get("sequence"),
+            "is_stale": is_stale,
         }
 
     def read_instrument_detail(
         self,
         code: str,
         user_id: int | None = None,
-        generation: str | None = None,
+        generation: str | int | None = None,
     ) -> dict[str, Any] | None:
         bundle = self.store.load_bundle(generation)
         if not bundle:
@@ -163,8 +225,10 @@ class LocalDisplayReader:
         if not detail:
             return None
 
+        # Clean detail of any private holding/avg_cost info before return
+        clean_detail = {k: v for k, v in detail.items() if k not in {"avg_cost", "trades", "account_id"}}
         return {
-            **detail,
+            **clean_detail,
             "generation": bundle.get("manifest", {}).get("sequence"),
             "read_model_version": CONTRACT_VERSION,
         }
@@ -174,7 +238,7 @@ class LocalDisplayReader:
         code: str,
         interval: str = "1d",
         limit: int = 250,
-        generation: str | None = None,
+        generation: str | int | None = None,
     ) -> dict[str, Any] | None:
         if interval not in {"1d", "1w", "1mo"}:
             raise ValueError("unsupported_chart_interval")
@@ -188,19 +252,32 @@ class LocalDisplayReader:
         if not chart:
             return None
 
-        # Return bars up to limit
-        bars = chart.get("bars", [])
+        chart_copy = dict(chart)
+        # If user requests 1w or 1mo, perform aggregation on the daily bars
+        if interval != "1d":
+            try:
+                aggregated = transform_chart(chart_copy, period=interval, config={}, limit=limit)
+                return {
+                    **aggregated,
+                    "generation": bundle.get("manifest", {}).get("sequence"),
+                    "read_model_version": CONTRACT_VERSION,
+                }
+            except Exception:
+                pass
+
+        bars = chart_copy.get("bars", [])
         if len(bars) > limit:
             bars = bars[-limit:]
 
         return {
-            **chart,
+            **chart_copy,
+            "interval": interval,
             "bars": bars,
             "generation": bundle.get("manifest", {}).get("sequence"),
             "read_model_version": CONTRACT_VERSION,
         }
 
-    def read_sectors(self, generation: str | None = None) -> dict[str, Any]:
+    def read_sectors(self, generation: str | int | None = None) -> dict[str, Any]:
         bundle = self.store.load_bundle(generation)
         if not bundle:
             return {"sectors": [], "available": False}

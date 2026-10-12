@@ -233,24 +233,45 @@ def export_local_v2(
 
             indicator_config = settings.load_strategy().get("indicator", {})
             for code in selected_codes:
-                # Detail
+                # Detail (Fix-2: provide complete consumer contract for Detail.vue)
                 det = instrument_detail(db, settings, code, user_id=None)
+                read_as_of_val = (det.get("read_as_of") if det else None) or generated.isoformat()
                 if det:
                     detail_parts[code] = {
                         "instrument": det.get("instrument"),
+                        "decision": det.get("decision"),
+                        "snapshot_id": det.get("snapshot_id"),
+                        "decision_time": det.get("decision_time"),
                         "quote": det.get("quote"),
-                        "indicators": det.get("indicators"),
-                        "forecasts": det.get("forecasts"),
                         "availability": det.get("availability"),
+                        "availability_contract_version": det.get("availability_contract_version"),
+                        "decision_explanation": det.get("decision_explanation"),
+                        "snapshot_issues": det.get("snapshot_issues"),
+                        "read_as_of": read_as_of_val,
+                        "daily_as_of": det.get("daily_as_of"),
+                        "target_trade_date": det.get("target_trade_date"),
+                        "history_issue": det.get("history_issue"),
+                        "indicator_basis": det.get("indicator_basis"),
+                        "indicator_input_hash": det.get("indicator_input_hash"),
+                        "chart_series_id": det.get("chart_series_id"),
+                        "indicator_values": det.get("indicator_values") or {},
+                        "indicator_version": det.get("indicator_version"),
+                        "indicator_as_of": det.get("indicator_as_of"),
+                        "forecasts": det.get("forecasts") or {},
+                        "support_resistance": det.get("support_resistance"),
+                        "forecast_scenario": det.get("forecast_scenario"),
+                        "holding": None,  # Public bundle strictly isolates private user holdings
                         "actionable": False,
                         "research_only": True,
                     }
 
-                # Chart (1d primary, max 250 bars)
+                # Chart (1d primary, max 250 bars; ensure as_of matches read_as_of for Detail.vue query match)
                 c_data = chart_data(db, settings, code, "1d", 250, as_of=generated) or {}
                 if c_data:
                     transformed = transform_chart(c_data, "1d", indicator_config, limit=250, now=generated)
-                    chart_parts[code] = project_chart(transformed)
+                    projected = project_chart(transformed)
+                    projected["as_of"] = read_as_of_val
+                    chart_parts[code] = projected
 
             # 3. Sectors part
             sector_snaps = []

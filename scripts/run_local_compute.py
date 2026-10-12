@@ -25,7 +25,12 @@ def get_current_git_sha() -> str:
     import subprocess
     try:
         res = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(PROJECT_ROOT), capture_output=True, text=True, check=True)
-        return res.stdout.strip()
+        sha = res.stdout.strip()
+        # Flag dirty working tree so bundles can be distinguished
+        dirty = subprocess.run(["git", "status", "--porcelain"], cwd=str(PROJECT_ROOT), capture_output=True, text=True)
+        if dirty.stdout.strip():
+            return sha + "-dirty"
+        return sha
     except Exception:
         return "0" * 40
 
@@ -39,8 +44,37 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
+    import time
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
     root = Path(args.root)
     database = Path(args.db) if args.db else root / "db" / "research.sqlite3"
+
+    # Fix-7: Trading day gate — skip cleanly on non-trading days (exit 0)
+    if not args.skip_trade_day_check:
+        try:
+            settings_for_check = local_settings(root, database, profile=args.profile, market_provider=args.provider)
+            from app.services.trading_calendar_service import TradingCalendarService
+            SHANGHAI = ZoneInfo("Asia/Shanghai")
+            today = datetime.now(SHANGHAI).date()
+            cal = TradingCalendarService(settings_for_check)
+            if not cal.decision(today).is_trade_day:
+                print(json.dumps({
+                    "status": "skipped",
+                    "reason": "non_trading_day",
+                    "date": today.isoformat(),
+                }, ensure_ascii=False))
+                return 0
+        except Exception as exc:
+            # Calendar service unavailable — log and skip rather than block
+            print(json.dumps({
+                "status": "skipped",
+                "reason": "trade_day_check_error",
+                "error": str(exc),
+            }, ensure_ascii=False))
+            return 0
+
     lock = LocalRunLock(root / ".run.lock")
     if not lock.acquire():
         print(json.dumps({"error": "another local compute task is currently running"}, ensure_ascii=False))
@@ -55,13 +89,22 @@ def cmd_run(args: argparse.Namespace) -> int:
                 universe = cfg.get("universe")
 
         results = compute_local(settings, universe=universe)
+
+        # Fix-6 (part 1): treat compute task failure as hard error
+        for task_result in results:
+            if task_result.get("status") not in {"succeeded", "partial"}:
+                print(json.dumps({"status": "compute_failed", "tasks": results}, indent=2, ensure_ascii=False))
+                return 1
+
         print(json.dumps({"status": "completed", "tasks": results}, indent=2, ensure_ascii=False))
 
         # Export v2 bundle
         outbox = root / "outbox"
         outbox.mkdir(parents=True, exist_ok=True)
         sha = get_current_git_sha()
-        bundle = export_local_v2(settings, sequence=int(os.environ.get("RUN_SEQUENCE", "1")), code_sha=sha, universe=universe)
+        # Fix-5: Unix millisecond timestamp — naturally monotonic, no persistent state needed
+        sequence = int(time.time() * 1000)
+        bundle = export_local_v2(settings, sequence=sequence, code_sha=sha, universe=universe)
 
         bundle_path = outbox / f"bundle_{bundle['manifest']['sequence']}.json"
         with open(bundle_path, "w", encoding="utf-8") as f:
@@ -74,23 +117,33 @@ def cmd_run(args: argparse.Namespace) -> int:
         }, indent=2, ensure_ascii=False))
 
         if not args.no_upload:
+            # Fix-6 (part 2): missing auth is a hard error — do not silently skip
             auth_file = root / "config" / "producer_auth.json"
-            if auth_file.exists():
-                with open(auth_file, "r", encoding="utf-8") as f:
-                    auth_data = json.load(f)
-                os.environ["SHADOW_PRODUCER_TOKEN"] = auth_data["producer_token"]
-                os.environ["SHADOW_SIGNING_KEY_ID"] = auth_data["key_id"]
-                os.environ["SHADOW_SIGNING_SECRET"] = auth_data["signing_secret"]
-                sync_url = getattr(args, "sync_url", None) or "https://etf.joviluma.com/api/shadow/sync"
-                from app.workspace.shadow_client import upload_bundle
-                try:
-                    receipt = upload_bundle(sync_url, bundle)
-                    receipt_path = outbox / f"bundle_{bundle['manifest']['sequence']}.receipt.json"
-                    with open(receipt_path, "w", encoding="utf-8") as rf:
-                        json.dump(receipt, rf, indent=2, ensure_ascii=False)
-                    print(json.dumps({"status": "uploaded", "receipt": receipt}, indent=2, ensure_ascii=False))
-                except Exception as exc:
-                    print(json.dumps({"status": "upload_failed", "error": str(exc)}, indent=2, ensure_ascii=False))
+            if not auth_file.exists():
+                print(json.dumps({
+                    "status": "upload_failed",
+                    "reason": "auth_file_missing",
+                    "path": str(auth_file),
+                }, ensure_ascii=False))
+                return 1
+
+            with open(auth_file, "r", encoding="utf-8") as f:
+                auth_data = json.load(f)
+            os.environ["SHADOW_PRODUCER_TOKEN"] = auth_data["producer_token"]
+            os.environ["SHADOW_SIGNING_KEY_ID"] = auth_data["key_id"]
+            os.environ["SHADOW_SIGNING_SECRET"] = auth_data["signing_secret"]
+            sync_url = getattr(args, "sync_url", None) or "https://etf.joviluma.com/api/shadow/sync"
+            from app.workspace.shadow_client import upload_bundle
+            try:
+                receipt = upload_bundle(sync_url, bundle)
+                receipt_path = outbox / f"bundle_{bundle['manifest']['sequence']}.receipt.json"
+                with open(receipt_path, "w", encoding="utf-8") as rf:
+                    json.dump(receipt, rf, indent=2, ensure_ascii=False)
+                print(json.dumps({"status": "uploaded", "receipt": receipt}, indent=2, ensure_ascii=False))
+            except Exception as exc:
+                # Fix-6: upload failure must exit non-zero so Windows Task Scheduler records it
+                print(json.dumps({"status": "upload_failed", "error": str(exc)}, ensure_ascii=False))
+                return 1
 
         return 0
     finally:
@@ -112,10 +165,11 @@ def main() -> int:
     p_run.add_argument("--root", required=True, help="Local root directory")
     p_run.add_argument("--db", default=None, help="SQLite database path")
     p_run.add_argument("--profile", default="live", choices=["live", "mock"], help="Execution profile")
-    p_run.add_argument("--provider", default="akshare", help="Market provider")
+    p_run.add_argument("--provider", default="public_composite", help="Market provider")
     p_run.add_argument("--config", default=None, help="Path to config json (universe, slots)")
     p_run.add_argument("--sync-url", default="https://etf.joviluma.com/api/shadow/sync", help="HTTPS upload endpoint")
     p_run.add_argument("--no-upload", action="store_true", help="Do not upload after export")
+    p_run.add_argument("--skip-trade-day-check", action="store_true", help="Bypass trading day gate (for testing/manual runs)")
 
     args = parser.parse_args()
     if args.command == "doctor":
