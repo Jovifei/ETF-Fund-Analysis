@@ -109,3 +109,127 @@ def test_sync_and_preview_local_display_v2(tmp_path, monkeypatch):
     assert preview.status_code == 200
     assert preview.json()['manifest']['contract_version'] == CONTRACT_VERSION
 
+
+def test_sync_with_gzip_payload(tmp_path, monkeypatch):
+    import gzip
+    from app.workspace.shadow_bundle import canonical
+    from app.workspace.shadow_auth import signed_headers
+    from app.workspace.local_display_contract import CONTRACT_VERSION, compute_parts_hashes
+
+    v2_root = tmp_path / "v2_store_gz"
+    settings = SimpleNamespace(
+        shadow_sync_enabled=True,
+        shadow_sync_root=str(tmp_path),
+        shadow_sync_code_sha='a'*40,
+        shadow_sync_config_hash='b'*64,
+        shadow_sync_producer_token=SecretStr('x'*32),
+        shadow_sync_active_key_id='test-1',
+        shadow_sync_signing_secret=SecretStr('s'*32),
+        shadow_sync_max_bytes=33554432,
+        shadow_sync_max_generations=20,
+        shadow_sync_max_request_bytes=65536,
+        workspace_research_source="local_bundle",
+        local_display_v2_store_root=str(v2_root),
+        local_display_v2_max_decompressed_bytes=67108864,
+    )
+    monkeypatch.setattr(shadow_api, 'get_settings', lambda: settings)
+
+    parts = {
+        "overview": {"rows": [{"ts_code": "510300.SH", "price": 4.12}]},
+        "details": {"510300.SH": {"quote": {"price": 4.12}}},
+        "charts": {"510300.SH": {"bars": []}},
+        "sectors": {"sectors": []},
+    }
+    v2_bundle = {
+        "manifest": {
+            "contract_version": CONTRACT_VERSION,
+            "code_sha": "a" * 40,
+            "config_hash": "c" * 64,
+            "sequence": 1,
+            "generated_at": "2026-10-12T06:30:00Z",
+            "expires_at": "2026-10-12T08:30:00Z",
+            "actionable": False,
+            "data_origin": "local_research",
+            "universe": ["510300.SH"],
+            "parts_hashes": compute_parts_hashes(parts),
+        },
+        "parts": parts,
+    }
+    raw_json = canonical(v2_bundle)
+    gz_body = gzip.compress(raw_json)
+    headers = {
+        **signed_headers(gz_body, 'test-1', 's'*32),
+        'Authorization': 'Bearer ' + 'x'*32,
+        'Content-Encoding': 'gzip',
+    }
+
+    app = FastAPI()
+    app.include_router(shadow_api.router)
+    client = TestClient(app)
+
+    # Ingestion via /api/shadow/sync with gzip
+    res = client.post('/api/shadow/sync', content=gz_body, headers=headers)
+    assert res.status_code == 200
+    assert res.json()['status'] == 'accepted'
+
+    # Preview via /api/shadow/bundle
+    app.dependency_overrides[require_current_user] = lambda: object()
+    preview = client.get('/api/shadow/bundle')
+    assert preview.status_code == 200
+    assert preview.json()['manifest']['contract_version'] == CONTRACT_VERSION
+
+    # Negative test 1: corrupt gzip body should return 400
+    corrupt_body = b"not-a-valid-gzip-stream"
+    corrupt_headers = {
+        **signed_headers(corrupt_body, 'test-1', 's'*32),
+        'Authorization': 'Bearer ' + 'x'*32,
+        'Content-Encoding': 'gzip',
+    }
+    assert client.post('/api/shadow/sync', content=corrupt_body, headers=corrupt_headers).status_code == 400
+
+    # Negative test 2: decompressed size exceeds quota should return 413
+    settings.local_display_v2_max_decompressed_bytes = 10
+    gz_bomb_headers = {
+        **signed_headers(gz_body, 'test-1', 's'*32),
+        'Authorization': 'Bearer ' + 'x'*32,
+        'Content-Encoding': 'gzip',
+    }
+    assert client.post('/api/shadow/sync', content=gz_body, headers=gz_bomb_headers).status_code == 413
+
+
+def test_upload_bundle_client_with_and_without_gzip(monkeypatch):
+    from unittest.mock import MagicMock
+    from io import BytesIO
+    from app.workspace.shadow_client import upload_bundle
+
+    monkeypatch.setenv("SHADOW_PRODUCER_TOKEN", "t" * 32)
+    monkeypatch.setenv("SHADOW_SIGNING_KEY_ID", "key-1")
+    monkeypatch.setenv("SHADOW_SIGNING_SECRET", "s" * 32)
+
+    captured_requests = []
+
+    def mock_transport(req, timeout=30, context=None):
+        captured_requests.append(req)
+        resp = MagicMock()
+        resp.read.return_value = b'{"status": "accepted", "bundle_id": "test"}'
+        resp.__enter__.return_value = resp
+        resp.__exit__.return_value = None
+        return resp
+
+    dummy_bundle = {"manifest": {"sequence": 1}, "parts": {}}
+    res = upload_bundle("https://etf.joviluma.com/api/shadow/sync", dummy_bundle, opener=mock_transport, compress=True)
+    assert res["status"] == "accepted"
+    req_gz = captured_requests[0]
+    assert req_gz.headers.get("Content-encoding") == "gzip"
+    import gzip
+    decompressed = gzip.decompress(req_gz.data)
+    assert b"manifest" in decompressed
+
+    res_raw = upload_bundle("https://etf.joviluma.com/api/shadow/sync", dummy_bundle, opener=mock_transport, compress=False)
+    assert res_raw["status"] == "accepted"
+    req_raw = captured_requests[1]
+    assert "Content-encoding" not in req_raw.headers
+    assert b"manifest" in req_raw.data
+
+
+

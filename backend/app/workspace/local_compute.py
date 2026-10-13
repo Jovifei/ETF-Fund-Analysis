@@ -37,7 +37,6 @@ ROW_FIELDS_V2 = {
     "actionable",
     "forecasts",
     "indicators",
-    "support_resistance",
 }
 
 BAR_FIELDS = {"date", "open", "high", "low", "close", "volume", "amount", "source"}

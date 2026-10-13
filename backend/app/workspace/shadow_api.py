@@ -24,8 +24,18 @@ async def sync(request:Request):
         verify_request(bytes(body),request.headers,settings.shadow_sync_root,settings.shadow_sync_active_key_id,settings.shadow_sync_signing_secret.get_secret_value())
     except (ValueError,OSError):raise HTTPException(401,"request authentication rejected") from None
     try:
+        raw_body = bytes(body)
+        if request.headers.get('content-encoding', '').lower() == 'gzip':
+            import gzip
+            try:
+                raw_body = gzip.decompress(raw_body)
+            except Exception:
+                raise HTTPException(400, 'invalid gzip payload')
+            max_decompressed = getattr(settings, 'local_display_v2_max_decompressed_bytes', 67108864)
+            if len(raw_body) > max_decompressed:
+                raise HTTPException(413, 'decompressed bundle too large')
         import json
-        value = json.loads(body)
+        value = json.loads(raw_body)
         manifest = value.get('manifest', {})
         contract = manifest.get('contract_version') or manifest.get('contract')
         if contract == 'local-display-v2':
@@ -33,6 +43,8 @@ async def sync(request:Request):
             store_v2 = LocalDisplayStore(settings.local_display_v2_store_root)
             return store_v2.publish(value)
         return target.publish(value)
+    except HTTPException:
+        raise
     except (ValueError,TypeError,KeyError,FileNotFoundError):raise HTTPException(409,'bundle rejected') from None
 @router.get('/bundle',dependencies=[Depends(require_private_access),Depends(require_current_user)])
 def bundle(response:Response,bundle_id:str|None=None):
