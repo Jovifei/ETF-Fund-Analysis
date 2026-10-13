@@ -252,6 +252,59 @@ class LocalDisplayReader:
             "is_stale": is_stale,
         }
 
+    def read_decision_board(
+        self,
+        horizon: int = 1,
+        snapshot_id: str | None = None,
+        generation: str | int | None = None,
+    ) -> dict[str, Any] | None:
+        bundle = self.store.load_bundle(generation)
+        if not bundle:
+            return None
+
+        manifest = bundle.get("manifest", {})
+        expires_at_str = manifest.get("expires_at")
+        is_stale = False
+        if expires_at_str:
+            try:
+                exp_dt = _parse_iso(expires_at_str)
+                is_stale = datetime.now(timezone.utc) > exp_dt
+            except Exception:
+                is_stale = True
+        else:
+            is_stale = True
+
+        ov_part = bundle.get("parts", {}).get("overview", {})
+        rows = list(ov_part.get("rows", []))
+        generated_at = ov_part.get("generated_at") or manifest.get("generated_at")
+        trade_date = ov_part.get("target_trade_date")
+        if not trade_date and generated_at:
+            trade_date = generated_at[:10]
+
+        counts: dict[str, int] = {}
+        for r in rows:
+            g = r.get("grade", "数据异常")
+            counts[g] = counts.get(g, 0) + 1
+
+        return {
+            "snapshot_id": ov_part.get("snapshot_id") or str(manifest.get("sequence")),
+            "generated_at": generated_at,
+            "target_trade_date": trade_date,
+            "as_of": generated_at,
+            "freshness": "stale" if is_stale else "fresh",
+            "data_status": {"freshness": "stale" if is_stale else "fresh"},
+            "source_status": {"freshness": "stale" if is_stale else "fresh", "actionable": False},
+            "read_model_version": CONTRACT_VERSION,
+            "current_board_read_contract": "local-display-v2",
+            "read_contract": "version_matched",
+            "counts": counts,
+            "rows": rows,
+            "sector_timing": ov_part.get("sector_timing", {}),
+            "research_only": True,
+            "actionable": False,
+            "automatic_orders": False,
+        }
+
     def read_instrument_detail(
         self,
         code: str,

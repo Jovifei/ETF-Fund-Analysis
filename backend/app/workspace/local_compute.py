@@ -37,6 +37,19 @@ ROW_FIELDS_V2 = {
     "actionable",
     "forecasts",
     "indicators",
+    "returns",
+    "return_1d",
+    "return_5d",
+    "volume",
+    "ma",
+    "macd",
+    "kdj",
+    "rsi",
+    "td",
+    "sector",
+    "chan",
+    "quote",
+    "support_resistance",
 }
 
 BAR_FIELDS = {"date", "open", "high", "low", "close", "volume", "amount", "source"}
@@ -215,10 +228,12 @@ def export_local_v2(
                 row_clean["actionable"] = False
                 rows.append(row_clean)
 
+            target_trade_date = original.get("target_trade_date") or view.get("target_trade_date") or generated.strftime("%Y-%m-%d")
             overview_part = {
                 "rows": rows,
                 "snapshot_id": view.get("snapshot_id"),
                 "generated_at": view.get("generated_at", generated.isoformat()),
+                "target_trade_date": target_trade_date,
                 "contains_mock": view.get("contains_mock", False),
                 "sector_timing": original.get("sector_timing", {}),
                 "actionable": False,

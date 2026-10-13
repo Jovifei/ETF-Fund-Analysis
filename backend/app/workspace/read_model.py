@@ -190,15 +190,31 @@ def overview(db: Session, settings: Settings, horizon: int = 1, offset: int = 0,
 def holdings_view(db: Session, settings: Settings, user_id: int | None) -> dict:
     pairs = db.execute(select(Holding, Instrument).join(Instrument, Holding.instrument_id == Instrument.id).where(Holding.user_id == user_id).order_by(Holding.id).limit(500)).all()
     quotes = latest_rows(db, QuoteSnapshot, [inst.id for _, inst in pairs], QuoteSnapshot.quote_time.desc())
-    board = DecisionBoardService(settings).read_latest(db) or {}
+
+    bundle_board = None
+    bundle_details = {}
+    if getattr(settings, "workspace_research_source", "database") == "local_bundle":
+        try:
+            from app.workspace.local_display_read import LocalDisplayStore
+            store = LocalDisplayStore(settings.local_display_v2_store_root)
+            bundle = store.load_bundle()
+            if bundle:
+                bundle_board = bundle.get("parts", {}).get("overview", {})
+                bundle_details = bundle.get("parts", {}).get("details", {})
+        except Exception:
+            pass
+
+    board = bundle_board or DecisionBoardService(settings).read_latest(db) or {}
     decisions = {row["ts_code"]: row for row in board.get("rows", [])}
     items = []
     for holding, inst in pairs:
-        quote = quote_view(quotes.get(inst.id), settings)
-        price = quote["price"]
+        det = bundle_details.get(inst.ts_code) or {}
+        bundle_quote = det.get("quote")
+        quote = bundle_quote if (bundle_quote and isinstance(bundle_quote, dict) and bundle_quote.get("price") is not None) else quote_view(quotes.get(inst.id), settings)
+        price = quote.get("price") if isinstance(quote, dict) else None
         shares, cost = float(holding.shares), float(holding.cost_price)
         market_value = shares * price if price is not None else None
-        decision = decisions.get(inst.ts_code) or {}
+        decision = decisions.get(inst.ts_code) or det.get("decision") or {}
         items.append({
             "ts_code": inst.ts_code, "name": inst.name, "kind": inst.kind, "theme": inst.theme_l1,
             "shares": shares, "cost_price": cost, "quote": quote,

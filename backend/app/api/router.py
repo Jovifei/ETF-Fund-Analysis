@@ -405,6 +405,12 @@ def decision_board(
     snapshot_id: str | None = Query(default=None, min_length=1, max_length=64),
 ) -> dict:
     response.headers["Cache-Control"] = "private, no-store"
+    if settings.workspace_research_source == "local_bundle":
+        from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
+        store = LocalDisplayStore(settings.local_display_v2_store_root)
+        payload = LocalDisplayReader(store).read_decision_board(horizon=horizon, snapshot_id=snapshot_id)
+        if payload is not None:
+            return payload
     try:
         payload = DecisionBoardService(settings).read_latest(db, horizon=horizon, snapshot_id=snapshot_id)
     except ValueError:
@@ -424,6 +430,20 @@ def decision_board_detail(
     snapshot_id: str | None = Query(default=None, min_length=1, max_length=64),
 ) -> dict:
     response.headers["Cache-Control"] = "private, no-store"
+    if settings.workspace_research_source == "local_bundle":
+        from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
+        store = LocalDisplayStore(settings.local_display_v2_store_root)
+        reader = LocalDisplayReader(store)
+        payload = reader.read_decision_board(horizon=horizon, snapshot_id=snapshot_id)
+        if payload is not None:
+            normalized = ts_code.strip().upper()
+            row = next((r for r in payload.get("rows", []) if r.get("ts_code") == normalized), None)
+            if row is not None:
+                detail = dict(row)
+                detail["snapshot_id"] = payload.get("snapshot_id")
+                detail["generated_at"] = payload.get("generated_at")
+                detail["selected_horizon"] = horizon
+                return detail
     try:
         row = DecisionBoardService(settings).read_instrument(
             db, ts_code, horizon=horizon, snapshot_id=snapshot_id
@@ -440,6 +460,12 @@ def queue_decision_board_refresh(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict:
+    if settings.workspace_research_source == "local_bundle":
+        return {
+            "status": "accepted",
+            "message": "服务端运行于 local_bundle 只读展示模式，数据由本地定时计算并自动同步",
+            "task_id": "bundle_sync",
+        }
     try:
         result = DecisionBoardService(settings).enqueue_refresh(db)
         db.commit()

@@ -56,6 +56,18 @@ _OFFICIAL_ACTIONS = {
     "588200.SH": (
         CorporateActionEvent("588200.SH", date(2026, 7, 20), date(2026, 7, 21), "1:3", "sse_588200_20260721"),
     ),
+    "159995.SZ": (
+        CorporateActionEvent("159995.SZ", date(2026, 7, 6), date(2026, 7, 7), "1:2", "szse_159995_20260707"),
+    ),
+    "512760.SH": (
+        CorporateActionEvent("512760.SH", date(2026, 3, 26), date(2026, 3, 27), "1:2", "sse_512760_20260327"),
+    ),
+    "515050.SH": (
+        CorporateActionEvent("515050.SH", date(2026, 5, 12), date(2026, 5, 13), "1:3", "sse_515050_20260513"),
+    ),
+    "516780.SH": (
+        CorporateActionEvent("516780.SH", date(2026, 5, 22), date(2026, 5, 25), "1:2", "sse_516780_20260525"),
+    ),
 }
 
 
