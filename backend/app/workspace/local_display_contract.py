@@ -1,6 +1,7 @@
 """Contracts and integrity checks for local-display-v2 bundles."""
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -11,6 +12,8 @@ CONTRACT_VERSION = "local-display-v2"
 MAX_BUNDLE_BYTES = 64 * 1024 * 1024  # 64 MiB bounded quota
 REQUIRED_PARTS = {"overview", "details", "charts", "sectors"}
 FORBIDDEN_PRIVATE_FIELDS = {"avg_cost", "holdings", "cost", "trades", "account_id", "user_id"}
+HEX_HASH_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
 
 
 @dataclass
@@ -36,6 +39,23 @@ def _parse_iso(ts_str: str) -> datetime:
     return dt
 
 
+def _scan_deep_privacy_and_actionable(obj: Any) -> bool:
+    """Recursively verify no forbidden fields exist and actionable is never truthy/non-False."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k in FORBIDDEN_PRIVATE_FIELDS:
+                return False
+            if k == "actionable" and v is not False:
+                return False
+            if not _scan_deep_privacy_and_actionable(v):
+                return False
+    elif isinstance(obj, (list, tuple, set)):
+        for item in obj:
+            if not _scan_deep_privacy_and_actionable(item):
+                return False
+    return True
+
+
 def validate_bundle_manifest(manifest_dict: dict[str, Any]) -> LocalDisplayManifest:
     if not isinstance(manifest_dict, dict):
         raise ValueError("manifest must be a dictionary")
@@ -44,12 +64,13 @@ def validate_bundle_manifest(manifest_dict: dict[str, Any]) -> LocalDisplayManif
     if manifest_dict.get("actionable") is not False:
         raise ValueError("actionable must be false in local display contract")
     code_sha = manifest_dict.get("code_sha")
-    if not isinstance(code_sha, str) or len(code_sha) < 7:
-        raise ValueError("valid code_sha is required")
-    if not isinstance(manifest_dict.get("config_hash"), str) or not manifest_dict.get("config_hash"):
-        raise ValueError("config_hash is required")
+    if not isinstance(code_sha, str) or not SHA_RE.match(code_sha) or set(code_sha) == {"0"}:
+        raise ValueError("valid non-zero code_sha is required")
+    config_hash = manifest_dict.get("config_hash")
+    if not isinstance(config_hash, str) or not HEX_HASH_RE.match(config_hash):
+        raise ValueError("valid 64-char hex config_hash is required")
     sequence = manifest_dict.get("sequence")
-    if not isinstance(sequence, int) or sequence <= 0:
+    if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence <= 0:
         raise ValueError("positive sequence integer is required")
     
     generated_at_str = manifest_dict.get("generated_at")
@@ -77,13 +98,13 @@ def validate_bundle_manifest(manifest_dict: dict[str, Any]) -> LocalDisplayManif
         raise ValueError(f"parts_hashes missing required parts: {missing_parts}")
 
     for part_name, phash in parts_hashes.items():
-        if not isinstance(phash, str) or len(phash) != 64:
+        if not isinstance(phash, str) or not HEX_HASH_RE.match(phash):
             raise ValueError(f"part {part_name} has invalid sha256 hash")
 
     return LocalDisplayManifest(
         contract_version=manifest_dict["contract_version"],
         code_sha=code_sha,
-        config_hash=manifest_dict["config_hash"],
+        config_hash=config_hash,
         sequence=sequence,
         generated_at=generated_at_str,
         expires_at=expires_at_str,
@@ -133,34 +154,8 @@ def verify_bundle_integrity(bundle: dict[str, Any], *, now: datetime | None = No
         if computed_hashes.get(part_name) != expected_hash:
             return False
 
-    # Validate privacy boundary and actionable flag across parts: reject actionable=True
-    ov = parts.get("overview", {})
-    if isinstance(ov, dict):
-        if ov.get("actionable") is True:
-            return False
-        for row in ov.get("rows", []):
-            if isinstance(row, dict):
-                if row.get("actionable") is True:
-                    return False
-                if any(field in row for field in FORBIDDEN_PRIVATE_FIELDS):
-                    return False
-
-    details = parts.get("details", {})
-    if isinstance(details, dict):
-        for code, det in details.items():
-            if isinstance(det, dict):
-                if det.get("actionable") is True:
-                    return False
-                if any(field in det for field in FORBIDDEN_PRIVATE_FIELDS):
-                    return False
-
-    charts = parts.get("charts", {})
-    if isinstance(charts, dict):
-        for code, ch in charts.items():
-            if isinstance(ch, dict):
-                if ch.get("actionable") is True:
-                    return False
-                if any(field in ch for field in FORBIDDEN_PRIVATE_FIELDS):
-                    return False
+    # Deep recursive scan for forbidden private fields and truthy actionable flags across all parts
+    if not _scan_deep_privacy_and_actionable(parts):
+        return False
 
     return True

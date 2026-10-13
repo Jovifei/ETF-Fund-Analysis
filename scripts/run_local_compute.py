@@ -23,16 +23,22 @@ from app.workspace.local_schedule import LocalRunLock
 
 def get_current_git_sha() -> str:
     import subprocess
-    try:
-        res = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(PROJECT_ROOT), capture_output=True, text=True, check=True)
-        sha = res.stdout.strip()
-        # Flag dirty working tree so bundles can be distinguished
-        dirty = subprocess.run(["git", "status", "--porcelain"], cwd=str(PROJECT_ROOT), capture_output=True, text=True)
-        if dirty.stdout.strip():
-            return sha + "-dirty"
-        return sha
-    except Exception:
-        return "0" * 40
+    # Hard gate: verify that tracked runtime code (backend, scripts, config) has NO uncommitted changes
+    status_proc = subprocess.run(
+        ["git", "status", "--porcelain", "backend/", "scripts/", "config/"],
+        cwd=str(PROJECT_ROOT),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    if status_proc.stdout.strip():
+        raise RuntimeError(f"uncommitted runtime modifications detected in repo:\n{status_proc.stdout.strip()}")
+
+    res = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(PROJECT_ROOT), capture_output=True, text=True, check=True)
+    sha = res.stdout.strip()
+    if not sha or len(sha) < 40 or set(sha) == {"0"}:
+        raise RuntimeError("git rev-parse HEAD failed to return a valid non-zero commit SHA")
+    return sha
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
@@ -51,27 +57,21 @@ def cmd_run(args: argparse.Namespace) -> int:
     root = Path(args.root)
     database = Path(args.db) if args.db else root / "db" / "research.sqlite3"
 
-    # Fix-7: Trading day gate — skip cleanly on non-trading days (exit 0)
+    # Fix-7: Trading day gate — check verified trade day
     if not args.skip_trade_day_check:
-        try:
-            settings_for_check = local_settings(root, database, profile=args.profile, market_provider=args.provider)
-            from app.services.trading_calendar_service import TradingCalendarService
-            SHANGHAI = ZoneInfo("Asia/Shanghai")
-            today = datetime.now(SHANGHAI).date()
-            cal = TradingCalendarService(settings_for_check)
-            if not cal.decision(today).is_trade_day:
-                print(json.dumps({
-                    "status": "skipped",
-                    "reason": "non_trading_day",
-                    "date": today.isoformat(),
-                }, ensure_ascii=False))
-                return 0
-        except Exception as exc:
-            # Calendar service unavailable — log and skip rather than block
+        settings_for_check = local_settings(root, database, profile=args.profile, market_provider=args.provider)
+        from app.services.trading_calendar_service import TradingCalendarService
+        SHANGHAI = ZoneInfo("Asia/Shanghai")
+        today = datetime.now(SHANGHAI).date()
+        cal = TradingCalendarService(settings_for_check)
+        decision = cal.decision(today)
+        if not decision.is_trade_day or not getattr(decision, "verified", True):
             print(json.dumps({
                 "status": "skipped",
-                "reason": "trade_day_check_error",
-                "error": str(exc),
+                "reason": "non_trading_day_or_unverified",
+                "date": today.isoformat(),
+                "is_trade_day": decision.is_trade_day,
+                "verified": getattr(decision, "verified", False),
             }, ensure_ascii=False))
             return 0
 
@@ -90,7 +90,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
         results = compute_local(settings, universe=universe)
 
-        # Fix-6 (part 1): treat compute task failure as hard error
+        # Check if any required task failed
         for task_result in results:
             if task_result.get("status") not in {"succeeded", "partial"}:
                 print(json.dumps({"status": "compute_failed", "tasks": results}, indent=2, ensure_ascii=False))
@@ -98,12 +98,22 @@ def cmd_run(args: argparse.Namespace) -> int:
 
         print(json.dumps({"status": "completed", "tasks": results}, indent=2, ensure_ascii=False))
 
-        # Export v2 bundle
+        # Export v2 bundle — monotonic sequence: max(current ms, previous max seq + 1)
         outbox = root / "outbox"
         outbox.mkdir(parents=True, exist_ok=True)
+        
+        highest_seq = 0
+        for bfile in outbox.glob("bundle_*.json"):
+            try:
+                s_part = bfile.stem.split("_")[1]
+                highest_seq = max(highest_seq, int(s_part))
+            except (IndexError, ValueError):
+                pass
+
+        now_ms = int(time.time() * 1000)
+        sequence = max(now_ms, highest_seq + 1)
+
         sha = get_current_git_sha()
-        # Fix-5: Unix millisecond timestamp — naturally monotonic, no persistent state needed
-        sequence = int(time.time() * 1000)
         bundle = export_local_v2(settings, sequence=sequence, code_sha=sha, universe=universe)
 
         bundle_path = outbox / f"bundle_{bundle['manifest']['sequence']}.json"

@@ -59,15 +59,21 @@ def bootstrap_universe(
 
     try:
         with Session(engine) as db:
-            adequate, missing = check_instrument_coverage(db, universe, min_bars=120)
-            report["already_adequate"] = adequate
-            print(f"[*] Universe status: {len(adequate)} adequate, {len(missing)} missing/incomplete.")
-
-            if dry_run or not missing:
-                return report
-
             service = TaskService(settings)
             try:
+                # 0. Sync instruments first so any newly declared universe items exist in DB
+                print("[*] Synchronizing instruments into local database...")
+                with Session(engine) as sync_db, sync_db.begin():
+                    sync_res = service.run(sync_db, "sync_instruments", codes=universe)
+                print(f"    -> Sync result: created={sync_res.get('created')}, updated={sync_res.get('updated')}")
+
+                adequate, missing = check_instrument_coverage(db, universe, min_bars=120)
+                report["already_adequate"] = adequate
+                print(f"[*] Universe status: {len(adequate)} adequate, {len(missing)} missing/incomplete.")
+
+                if dry_run or not missing:
+                    return report
+
                 for idx, code in enumerate(missing, 1):
                     print(f"[{idx}/{len(missing)}] Fetching history for {code} (lookback={lookback_days}d)...")
                     try:
