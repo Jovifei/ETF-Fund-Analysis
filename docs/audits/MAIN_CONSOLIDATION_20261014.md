@@ -33,10 +33,12 @@ Jovi授权把有效功能统一到main、核卡点及清理可重建残留；后
 | 真实锁定前端依赖 |Vitest4.1.11，200 PASS/25文件，typecheck/build通过 |
 | Node静态回归 |27 PASS/0FAIL，app.js语法检查通过 |
 | compileall/committed-secret/diff检查 |通过；未输出秘密 |
-| 实现888精确GitHub push CI |ci38592188985、workspace38592188499、audit38592188628均SUCCESS；PR重复主CI在最后收据观察时仍运行，另三项PR工作流已SUCCESS |
+| 实现888精确GitHub CI |push ci38592188985、workspace38592188499、audit38592188628均SUCCESS；PR ci38592198613随后亦SUCCESS，另三项PR工作流已SUCCESS |
 | 原目录依赖/构建 |发现旧node_modules实际Vitest3.2.7与lock不符；独立fresh install验证后，根目录npm ci按lock重装，typecheck/build通过，未改lock或升级依赖 |
 
 首次backtest新增测试有helper名引用错误，修正为现有_latest_observed_close，断言保持。旧持仓测试只给无成交当日、没有历史有效mark，新fail-closed门槛正确拒绝；给“保持持仓不交易”夹具增加此前observed close，另保留“无任何可靠mark必须拒绝”的负例。首次全量1失败、收集/聚焦失败XML与修正后的9项通过证据均保留在隔离验证目录。没有删失败用例或降低门禁。
+
+secret scan的PASS来自干净隔离源码树。根目录复跑会遍历被Git忽略的.local旧工作树，把其负例测试字符串报为命中；该根目录检查退出2，未冒称通过，也未删负例或旧工作树压掉报告。本轮没有扩改扫描器。
 
 ## 清理与保护
 
