@@ -386,3 +386,13 @@ class LocalDisplayReader:
             "available": True,
             "generation": bundle.get("manifest", {}).get("sequence"),
         }
+
+    def read_market_context(self, generation: str | int | None = None) -> list[dict[str, Any]] | None:
+        bundle = self.store.load_bundle(generation)
+        if not bundle:
+            return None
+        part = bundle.get("parts", {}).get("market_context")
+        if not part or not isinstance(part.get("items"), list) or not part["items"]:
+            return None
+        return list(part["items"])
+

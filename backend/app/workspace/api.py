@@ -218,12 +218,20 @@ def context_read_view(db: DB, settings: Config, response: Response, user: User) 
     from app.services.market_context_service import MarketContextService
     from app.workspace.display_freshness import context_display
     now = datetime.now(settings.timezone)
+    response.headers["Cache-Control"] = "private, no-store"
+    if settings.workspace_research_source == "local_bundle":
+        mc_items = _local_reader(settings).read_market_context()
+        if mc_items is not None:
+            result = [{**row, "display_time": context_display(
+                row.get("observation"), now=now, context_kind=row["context_kind"], timezone=settings.timezone
+            )} for row in mc_items]
+            return {"latest_view": result, "as_of": now.isoformat(), "provider_called": False}
     rows = MarketContextService(provider=None, settings=settings).latest_view(db)
     result = [{**row, "display_time": context_display(
         row.get("observation"), now=now, context_kind=row["context_kind"], timezone=settings.timezone
     )} for row in rows]
-    response.headers["Cache-Control"] = "private, no-store"
     return {"latest_view": result, "as_of": now.isoformat(), "provider_called": False}
+
 
 
 @private_router.get("/workspace/data-health")

@@ -35,7 +35,9 @@ def test_local_display_reader_overview_and_detail(tmp_path):
             }
         },
         "sectors": {"sectors": [{"sector_name": "半导体", "pct_change": 2.1}]},
+        "market_context": {"items": [{"context_id": "cn-csi300", "today_pct_change": 1.25, "actionable": False}]},
     }
+
     hashes = compute_parts_hashes(parts)
     bundle = {
         "manifest": {
@@ -81,6 +83,13 @@ def test_local_display_reader_overview_and_detail(tmp_path):
     assert chart is not None
     assert len(chart["bars"]) == 1
 
+    # Read market context
+    mc = reader.read_market_context()
+    assert mc is not None
+    assert len(mc) == 1
+    assert mc[0]["context_id"] == "cn-csi300"
+
     # Unsupported interval
     with pytest.raises(ValueError, match="unsupported_chart_interval"):
         reader.read_chart_data("510300.SH", interval="5m")
+
