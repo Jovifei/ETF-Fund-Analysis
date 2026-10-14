@@ -35,7 +35,7 @@ def search(db: DB, settings: Config, user: User, response: Response, q: str = Qu
 
 def _local_reader(settings: Settings):
     from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
-    store = LocalDisplayStore(settings.local_display_v2_store_root)
+    store = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=settings.local_display_v2_max_bytes)
     return LocalDisplayReader(store)
 
 

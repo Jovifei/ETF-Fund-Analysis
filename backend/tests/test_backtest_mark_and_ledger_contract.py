@@ -7,7 +7,7 @@ import pytest
 
 from app.services.backtest_service import Position, RotationBacktestService
 from app.services.crosscheck_engine import (
-    _last_observed_close,
+    _latest_observed_close,
     _trade_ledger_identity,
 )
 
@@ -45,8 +45,8 @@ def test_primary_mark_to_market_ignores_inactive_closes_and_uses_last_observed_t
     replay_frame = frame.copy()
     replay_frame.index = [d.isoformat() for d in days]
     for day in days:
-        assert _last_observed_close(replay_frame, day.isoformat()) == mark(frame, day)
-        assert _last_observed_close(replay_frame, day.isoformat(), before=True) == mark(
+        assert _latest_observed_close(replay_frame, day.isoformat()) == mark(frame, day)
+        assert _latest_observed_close(replay_frame, day.isoformat(), before=True) == mark(
             frame, day, before=True
         )
 
@@ -82,7 +82,7 @@ def test_unobservable_held_position_mark_fails_closed_instead_of_zero_or_cost():
     with pytest.raises(ValueError, match="unpriceable_held_position"):
         service._execute(days[1], 1, {}, {"TEST.SH": frame}, held, 10_000.0)
     assert held["TEST.SH"].shares == 100
-    assert _last_observed_close(
+    assert _latest_observed_close(
         frame.set_axis([d.isoformat() for d in days]), days[1].isoformat(), before=True
     ) is None
 

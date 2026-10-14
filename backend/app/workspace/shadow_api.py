@@ -28,7 +28,14 @@ async def sync(request:Request):
         if request.headers.get('content-encoding', '').lower() == 'gzip':
             import gzip
             try:
-                raw_body = gzip.decompress(raw_body)
+                from io import BytesIO
+                limit = getattr(settings, 'local_display_v2_max_decompressed_bytes', 67108864)
+                if type(limit) is not int or limit <= 0:
+                    raise HTTPException(413, 'invalid decompressed bundle limit')
+                with gzip.GzipFile(fileobj=BytesIO(raw_body)) as stream:
+                    raw_body = stream.read(limit + 1)
+            except HTTPException:
+                raise
             except Exception:
                 raise HTTPException(400, 'invalid gzip payload')
             max_decompressed = getattr(settings, 'local_display_v2_max_decompressed_bytes', 67108864)
@@ -36,23 +43,25 @@ async def sync(request:Request):
                 raise HTTPException(413, 'decompressed bundle too large')
         import json
         value = json.loads(raw_body)
+        if not isinstance(value, dict) or not isinstance(value.get('manifest'), dict):
+            raise ValueError('invalid bundle envelope')
         manifest = value.get('manifest', {})
         contract = manifest.get('contract_version') or manifest.get('contract')
         if contract == 'local-display-v2':
             from app.workspace.local_display_read import LocalDisplayStore
-            store_v2 = LocalDisplayStore(settings.local_display_v2_store_root)
+            store_v2 = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=getattr(settings, 'local_display_v2_max_bytes', 67108864))
             return store_v2.publish(value)
         return target.publish(value)
     except HTTPException:
         raise
-    except (ValueError,TypeError,KeyError,FileNotFoundError):raise HTTPException(409,'bundle rejected') from None
+    except (ValueError,TypeError,KeyError,FileNotFoundError,RecursionError):raise HTTPException(409,'bundle rejected') from None
 @router.get('/bundle',dependencies=[Depends(require_private_access),Depends(require_current_user)])
 def bundle(response:Response,bundle_id:str|None=None):
     response.headers["Cache-Control"]="private, no-store"
     settings = get_settings()
     if getattr(settings, 'workspace_research_source', 'database') == 'local_bundle':
         from app.workspace.local_display_read import LocalDisplayStore
-        store_v2 = LocalDisplayStore(settings.local_display_v2_store_root)
+        store_v2 = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=getattr(settings, 'local_display_v2_max_bytes', 67108864))
         loaded = store_v2.load_bundle(generation=bundle_id)
         if not loaded:
             raise HTTPException(410, 'local display bundle unavailable or expired')
