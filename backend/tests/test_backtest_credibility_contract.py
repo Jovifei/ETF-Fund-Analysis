@@ -133,12 +133,15 @@ def test_execute_requires_observed_trade_activity_even_with_positive_open():
     assert trades == []
     assert positions == {}
 
+    held_frame = blocked_frame.copy()
+    held_frame.loc[day - timedelta(days=1)] = [9.0, 9.0, 9.0, 9.0, 100.0, 900.0, True]
+    held_frame = held_frame.sort_index()
     positions = {"TEST.SH": Position(shares=100, average_cost=9.0, opened_index=0)}
     cash, trades = service._execute(
         day,
         1,
         {},
-        {"TEST.SH": blocked_frame},
+        {"TEST.SH": held_frame},
         positions,
         10_000.0,
     )
