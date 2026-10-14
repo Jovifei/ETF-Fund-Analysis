@@ -389,11 +389,19 @@ def bootstrap(
     user: Annotated[AuthUser | None, Depends(optional_current_user)],
 ) -> dict:
     response.headers["Cache-Control"] = "private, no-store"
-    return DashboardService(settings).bootstrap(
+    data = DashboardService(settings).bootstrap(
         db,
         user_id=user.id if user is not None else None,
         include_operational_details=user is None or user.role == "admin",
     )
+    if settings.workspace_research_source == "local_bundle":
+        from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
+        store = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=settings.local_display_v2_max_bytes)
+        mc_items = LocalDisplayReader(store).read_market_context()
+        if mc_items is not None:
+            data["market_context"] = mc_items
+    return data
+
 
 
 @private_router.get("/decision-board")
@@ -508,7 +516,14 @@ def market_context(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, Any]:
+    if settings.workspace_research_source == "local_bundle":
+        from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
+        store = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=settings.local_display_v2_max_bytes)
+        mc_items = LocalDisplayReader(store).read_market_context()
+        if mc_items is not None:
+            return {"latest_view": mc_items}
     return {"latest_view": MarketContextService(provider=None, settings=settings).latest_view(db)}
+
 
 
 @private_router.get("/market-context/{context_id}/history")

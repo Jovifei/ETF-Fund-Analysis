@@ -175,6 +175,7 @@ def compute_local(settings: Settings, universe: list[str] | None = None) -> list
     results = []
     try:
         task_names = [
+            "refresh_market_context",
             "refresh_bars",
             "refresh_quotes",
             "refresh_sector_snapshots",
@@ -183,6 +184,7 @@ def compute_local(settings: Settings, universe: list[str] | None = None) -> list
             "refresh_signals",
             "refresh_decision_board",
         ]
+
         for task in task_names:
             with Session(engine) as db, db.begin():
                 kwargs: dict[str, Any] = {}
@@ -302,13 +304,41 @@ def export_local_v2(
                 })
             sectors_part = {"sectors": sector_snaps}
 
+            # 4. Market context part
+            market_context_items = []
+            try:
+                from app.services.market_context_service import MarketContextService
+                mc_rows = MarketContextService(provider=None, settings=settings).latest_view(db)
+                for row in mc_rows:
+                    r_clean = dict(row)
+                    if isinstance(r_clean.get("source_timestamp"), datetime):
+                        r_clean["source_timestamp"] = r_clean["source_timestamp"].isoformat()
+                    if isinstance(r_clean.get("fetched_at"), datetime):
+                        r_clean["fetched_at"] = r_clean["fetched_at"].isoformat()
+                    obs = r_clean.get("observation")
+                    if isinstance(obs, dict):
+                        obs_clean = dict(obs)
+                        if isinstance(obs_clean.get("source_timestamp"), datetime):
+                            obs_clean["source_timestamp"] = obs_clean["source_timestamp"].isoformat()
+                        if isinstance(obs_clean.get("fetched_at"), datetime):
+                            obs_clean["fetched_at"] = obs_clean["fetched_at"].isoformat()
+                        obs_clean["actionable"] = False
+                        r_clean["observation"] = obs_clean
+                    r_clean["actionable"] = False
+                    market_context_items.append(r_clean)
+            except Exception:
+                market_context_items = []
+            market_context_part = {"items": market_context_items}
+
             # Construct parts dictionary
             parts = {
                 "overview": overview_part,
                 "details": detail_parts,
                 "charts": chart_parts,
                 "sectors": sectors_part,
+                "market_context": market_context_part,
             }
+
 
             # Parts hashes
             parts_hashes = {k: digest(v) for k, v in parts.items()}
