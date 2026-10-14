@@ -9,7 +9,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from app.workspace.candle_periods import transform_chart
 from app.workspace.local_display_contract import (
     CONTRACT_VERSION,
     MAX_BUNDLE_BYTES,
@@ -17,6 +16,7 @@ from app.workspace.local_display_contract import (
     validate_bundle_manifest,
     verify_bundle_integrity,
 )
+
 from app.workspace.local_schedule import LocalRunLock
 from app.workspace.shadow_bundle import digest, canonical
 
@@ -375,7 +375,9 @@ class LocalDisplayReader:
         # If user requests 1w or 1mo, perform aggregation on the daily bars
         if interval != "1d":
             try:
+                from app.workspace.candle_periods import transform_chart
                 aggregated = transform_chart(chart_copy, period=interval, config={}, limit=limit)
+
                 if not aggregated or not aggregated.get("bars"):
                     raise ValueError("chart_period_aggregation_failed")
                 return {
