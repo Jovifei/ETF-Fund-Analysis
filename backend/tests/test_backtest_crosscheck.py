@@ -36,6 +36,9 @@ def test_crosscheck_read_primary_and_verdict(bootstrapped, db_session):
     assert result["equity"]["primary_final"] > 0
     assert result["equity"]["crosscheck_final"] > 0
     assert all(result["checks"].values()), result["checks"]
+    assert result["checks"]["trade_ledger_identity_match"] is True
+    assert result["trades"]["ledger_identity_match"] is True
+    assert result["trades"]["ledger_mismatches"] == []
     assert result["equity"]["max_curve_difference_pct"] <= result["equity"]["threshold_pct"]
     assert result["slippage"]["primary_total"] >= 0
     assert result["slippage"]["crosscheck_total"] >= 0
