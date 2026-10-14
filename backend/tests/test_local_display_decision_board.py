@@ -42,14 +42,16 @@ def test_local_display_reader_decision_board(tmp_path):
         "charts": {"510300.SH": {"bars": []}},
         "sectors": {"sectors": []},
     }
+    from datetime import datetime, timezone, timedelta
+    now_utc = datetime.now(timezone.utc)
     bundle = {
         "manifest": {
             "contract_version": CONTRACT_VERSION,
             "code_sha": "a" * 40,
             "config_hash": "c" * 64,
             "sequence": 1791879195447,
-            "generated_at": "2026-10-13T08:12:57Z",
-            "expires_at": "2026-10-13T20:12:57Z",
+            "generated_at": now_utc.isoformat(),
+            "expires_at": (now_utc + timedelta(hours=2)).isoformat(),
             "actionable": False,
             "data_origin": "local_research",
             "universe": ["510300.SH"],
@@ -57,7 +59,7 @@ def test_local_display_reader_decision_board(tmp_path):
         },
         "parts": parts,
     }
-    store.publish(bundle)
+    store.publish(bundle, now=now_utc)
 
     # Read decision board
     board = reader.read_decision_board(horizon=1)
