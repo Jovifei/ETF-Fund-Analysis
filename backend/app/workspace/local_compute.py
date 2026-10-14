@@ -250,10 +250,12 @@ def export_local_v2(
             indicator_config = settings.load_strategy().get("indicator", {})
             for code in selected_codes:
                 # Detail (Fix-2: provide complete consumer contract for Detail.vue)
-                det = instrument_detail(db, settings, code, user_id=None)
-                read_as_of_val = (det.get("read_as_of") if det else None) or generated.isoformat()
+                det = instrument_detail(db, settings, code, user_id=None, as_of=generated)
+                read_as_of_val = generated.isoformat()
+
                 if det:
                     detail_parts[code] = {
+
                         "instrument": det.get("instrument"),
                         "decision": det.get("decision"),
                         "snapshot_id": det.get("snapshot_id"),
