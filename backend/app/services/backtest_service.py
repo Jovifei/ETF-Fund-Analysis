@@ -68,6 +68,24 @@ class RotationBacktestService:
         return stable_hash(records)
 
     @staticmethod
+    def _observed_close(
+        frame: pd.DataFrame, trade_date: date, *, before: bool = False
+    ) -> float | None:
+        """Last positive close on an actual observed-activity day, never an inactive mark."""
+        if frame.empty or "trade_activity_observed" not in frame:
+            return None
+        history = frame.loc[frame.index < trade_date if before else frame.index <= trade_date]
+        if history.empty:
+            return None
+        active = history["trade_activity_observed"].fillna(False).astype(bool)
+        observed = pd.to_numeric(history.loc[active, "close"], errors="coerce")
+        for raw in reversed(observed.tolist()):
+            value = float(raw)
+            if math.isfinite(value) and value > 0:
+                return value
+        return None
+
+    @staticmethod
     def _percentile_rank(values: pd.Series) -> pd.Series:
         # Missing factor evidence is not the bottom percentile. Preserve NaN so
         # strategies that positively weight the factor can fail closed.
@@ -341,6 +359,7 @@ class RotationBacktestService:
             for code, frame in frames.items()
             if (
                 trade_date in frame.index
+                and math.isfinite(float(frame.loc[trade_date, "open"]))
                 and float(frame.loc[trade_date, "open"]) > 0
                 and bool(frame.loc[trade_date, "trade_activity_observed"])
             )
@@ -350,9 +369,12 @@ class RotationBacktestService:
             if code in open_prices:
                 valuation_prices[code] = open_prices[code]
                 continue
-            history = frame.loc[frame.index < trade_date, "close"]
-            if not history.empty and float(history.iloc[-1]) > 0:
-                valuation_prices[code] = float(history.iloc[-1])
+            observed = self._observed_close(frame, trade_date, before=True)
+            if observed is not None:
+                valuation_prices[code] = observed
+        for code, position in positions.items():
+            if position.shares > 0 and code not in valuation_prices:
+                raise ValueError(f"unpriceable_held_position:{code}:{trade_date}")
         equity_at_open = cash + sum(
             position.shares * valuation_prices.get(code, 0.0)
             for code, position in positions.items()
@@ -531,9 +553,12 @@ class RotationBacktestService:
 
             close_values: dict[str, float] = {}
             for code, frame in frames.items():
-                history = frame.loc[frame.index <= trade_date, "close"]
-                if not history.empty and float(history.iloc[-1]) > 0:
-                    close_values[code] = float(history.iloc[-1])
+                observed = self._observed_close(frame, trade_date)
+                if observed is not None:
+                    close_values[code] = observed
+            for code, position in positions.items():
+                if position.shares > 0 and code not in close_values:
+                    raise ValueError(f"unpriceable_held_position:{code}:{trade_date}")
             equity = cash + sum(
                 position.shares * close_values.get(code, 0.0)
                 for code, position in positions.items()
@@ -580,14 +605,22 @@ class RotationBacktestService:
             raise ValueError("回测没有形成有效权益序列")
         equity_frame = pd.DataFrame(equity_records)
         equity_series = pd.Series(equity_frame["equity"].to_numpy(), index=pd.to_datetime(equity_frame["date"]))
-        benchmark_slice = benchmark.loc[
+        benchmark_window = benchmark.loc[
             (benchmark.index >= date.fromisoformat(equity_frame.iloc[0]["date"]))
-            & (benchmark.index <= date.fromisoformat(equity_frame.iloc[-1]["date"])),
-            "close",
+            & (benchmark.index <= date.fromisoformat(equity_frame.iloc[-1]["date"]))
         ]
+        benchmark_observed = pd.to_numeric(
+            benchmark_window["close"], errors="coerce"
+        ).where(benchmark_window["trade_activity_observed"].fillna(False).astype(bool))
+        benchmark_observed = benchmark_observed.where(
+            np.isfinite(benchmark_observed) & benchmark_observed.gt(0)
+        )
         benchmark_series = pd.Series(
-            benchmark_slice.to_numpy(dtype=float), index=pd.to_datetime(benchmark_slice.index)
+            benchmark_observed.to_numpy(dtype=float),
+            index=pd.to_datetime(benchmark_observed.index),
         ).reindex(equity_series.index).ffill().dropna()
+        if len(benchmark_series) < 2:
+            raise ValueError("benchmark_observed_trading_close_insufficient")
         aligned_equity = equity_series.reindex(benchmark_series.index)
         metrics = self._metrics(aligned_equity, benchmark_series, trades, exposures)
 
@@ -631,6 +664,8 @@ class RotationBacktestService:
                     "participation_cap_qualified": False,
                     "market_impact_model_qualified": False,
                     "price_limit_execution_qualified": False,
+                    "valuation_policy": "last_observed_positive_volume_close_v1",
+                    "trade_ledger_reconciliation_required": True,
                     "qualification": "UNKNOWN",
                 },
                 "input_hash_policy": "single_raw_basis_daily_rows_v3-activity",
@@ -658,6 +693,8 @@ class RotationBacktestService:
                 "historical_theme_constraint_applied": False,
                 "historical_theme_constraint_reason": "effective_dated_theme_history_unavailable",
                 "execution_requires_observed_trade_activity": True,
+                "valuation_policy": "last_observed_positive_volume_close_v1",
+                "trade_ledger_reconciliation_required": True,
                 "participation_cap_qualified": False,
                 "market_impact_model_qualified": False,
                 "price_limit_execution_qualified": False,

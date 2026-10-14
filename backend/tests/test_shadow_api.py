@@ -207,16 +207,22 @@ def test_upload_bundle_client_with_and_without_gzip(monkeypatch):
     monkeypatch.setenv("SHADOW_SIGNING_SECRET", "s" * 32)
 
     captured_requests = []
+    from test_receiver_safety import v2
+    from app.workspace.shadow_bundle import canonical, digest
+    dummy_bundle = v2()
+    identity = digest(dummy_bundle['manifest'])
+    valid_receipt = {'status': 'accepted', 'bundle_id': identity, 'manifest_hash': identity,
+                     'sequence': 1, 'received_at': NOW.isoformat()}
 
     def mock_transport(req, timeout=30, context=None):
         captured_requests.append(req)
         resp = MagicMock()
-        resp.read.return_value = b'{"status": "accepted", "bundle_id": "test"}'
+        resp.status = 200
+        resp.read.return_value = canonical(valid_receipt)
         resp.__enter__.return_value = resp
         resp.__exit__.return_value = None
         return resp
 
-    dummy_bundle = {"manifest": {"sequence": 1}, "parts": {}}
     res = upload_bundle("https://etf.joviluma.com/api/shadow/sync", dummy_bundle, opener=mock_transport, compress=True)
     assert res["status"] == "accepted"
     req_gz = captured_requests[0]

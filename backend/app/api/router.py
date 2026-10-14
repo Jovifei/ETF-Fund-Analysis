@@ -396,7 +396,7 @@ def bootstrap(
     )
     if settings.workspace_research_source == "local_bundle":
         from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
-        store = LocalDisplayStore(settings.local_display_v2_store_root)
+        store = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=settings.local_display_v2_max_bytes)
         mc_items = LocalDisplayReader(store).read_market_context()
         if mc_items is not None:
             data["market_context"] = mc_items
@@ -415,7 +415,7 @@ def decision_board(
     response.headers["Cache-Control"] = "private, no-store"
     if settings.workspace_research_source == "local_bundle":
         from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
-        store = LocalDisplayStore(settings.local_display_v2_store_root)
+        store = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=settings.local_display_v2_max_bytes)
         payload = LocalDisplayReader(store).read_decision_board(horizon=horizon, snapshot_id=snapshot_id)
         if payload is not None:
             return payload
@@ -440,7 +440,7 @@ def decision_board_detail(
     response.headers["Cache-Control"] = "private, no-store"
     if settings.workspace_research_source == "local_bundle":
         from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
-        store = LocalDisplayStore(settings.local_display_v2_store_root)
+        store = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=settings.local_display_v2_max_bytes)
         reader = LocalDisplayReader(store)
         payload = reader.read_decision_board(horizon=horizon, snapshot_id=snapshot_id)
         if payload is not None:
@@ -518,7 +518,7 @@ def market_context(
 ) -> dict[str, Any]:
     if settings.workspace_research_source == "local_bundle":
         from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
-        store = LocalDisplayStore(settings.local_display_v2_store_root)
+        store = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=settings.local_display_v2_max_bytes)
         mc_items = LocalDisplayReader(store).read_market_context()
         if mc_items is not None:
             return {"latest_view": mc_items}

@@ -67,8 +67,8 @@ class ShadowStore:
         if len(codes)!=len(rows) or len(set(codes))!=len(codes) or any(not isinstance(code,str) or not re.fullmatch(r'[0-9]{6}\.(SH|SZ|BJ)',code) for code in codes):raise ValueError('invalid board universe')
         if set(blobs['charts'])!=set(codes):raise ValueError('chart universe mismatch')
         from app.workspace.shadow_projection import validate_public_chart
-        for chart in blobs['charts'].values():
-            validate_public_chart(chart)
+        for code,chart in blobs['charts'].items():
+            validate_public_chart(chart,code=code,generated_at=generated)
             shanghai_date = (generated.astimezone(timezone(timedelta(hours=8))) if generated.tzinfo else generated).date().isoformat()
             for bar in chart.get('bars',[])+chart.get('research_bars',[]):
                 if not isinstance(bar.get('date'),str) or bar['date'][:10]>shanghai_date:raise ValueError('chart from future')

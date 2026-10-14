@@ -76,6 +76,8 @@ class Settings(BaseSettings):
     # Local compute display v2 switch
     workspace_research_source: Literal["database", "local_bundle"] = "database"
     local_display_v2_store_root: str = str(PROJECT_ROOT / '.local' / 'local-display-v2')
+    local_display_v2_max_bytes: int = Field(default=67108864, ge=1024, le=67108864)
+    local_display_v2_max_decompressed_bytes: int = Field(default=67108864, ge=1024, le=67108864)
 
     app_name: str = "中国 ETF/LOF 私有决策看板"
     app_env: Literal["development", "test", "production"] = "development"

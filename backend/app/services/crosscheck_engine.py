@@ -68,6 +68,40 @@ def _frame_input_hash(frame: pd.DataFrame) -> str:
     return stable_hash(records)
 
 
+def _latest_observed_close(
+    frame: pd.DataFrame | None, day: str, *, before: bool = False
+) -> float | None:
+    """Independent replay mark: use only closes backed by observed trade activity."""
+    if frame is None or frame.empty or "trade_activity_observed" not in frame:
+        return None
+    rows = frame.loc[frame.index < day if before else frame.index <= day]
+    if rows.empty:
+        return None
+    for _, row in rows.iloc[::-1].iterrows():
+        if not bool(row["trade_activity_observed"]):
+            continue
+        value = float(row["close"])
+        if math.isfinite(value) and value > 0:
+            return value
+    return None
+
+
+def _trade_ledger_identity(trades: list[dict[str, Any]]) -> list[tuple]:
+    """Match per-fill identity, not merely aggregate transaction counts and fees."""
+    return [
+        (
+            str(item["date"]),
+            str(item["ts_code"]).upper(),
+            str(item["side"]),
+            int(item["shares"]),
+            round(float(item["price"]), 6),
+            round(float(item["gross"]), 2),
+            round(float(item["commission"]), 2),
+        )
+        for item in trades
+    ]
+
+
 def _filter_bars_from_primary_listing(
     bars: list[DailyBar], code: str, universe_contract: dict[str, Any]
 ) -> list[DailyBar]:
@@ -195,6 +229,12 @@ class CrosscheckEngine:
             or tradability.get("policy") != "raw_positive_volume_presence_v1"
         ):
             return {"status": "skipped", "reason": "primary_execution_tradability_contract_missing"}
+        if (
+            tradability.get("valuation_policy")
+            != "last_observed_positive_volume_close_v1"
+            or tradability.get("trade_ledger_reconciliation_required") is not True
+        ):
+            return {"status": "skipped", "reason": "primary_valuation_contract_unsupported"}
         if data_contract.get("input_hash_policy") != "single_raw_basis_daily_rows_v3-activity":
             return {"status": "skipped", "reason": "primary_input_hash_policy_unsupported"}
         expected_hashes = data_contract.get("input_hashes")
@@ -246,15 +286,8 @@ class CrosscheckEngine:
         crosscheck_equity: list[dict[str, Any]] = []
         crosscheck_trades: list[dict[str, Any]] = []
 
-        def latest_close(code: str, day: str, *, before: bool = False) -> float | None:
-            frame = bar_frames.get(code)
-            if frame is None or frame.empty:
-                return None
-            history = frame.loc[frame.index < day if before else frame.index <= day, "close"]
-            if history.empty:
-                return None
-            value = float(history.iloc[-1])
-            return value if math.isfinite(value) and value > 0 else None
+        # The replay independently checks observed trade activity, including
+        # valuation; a zero/unknown-volume close is not treated as a traded mark.
 
         for day in all_dates:
             open_prices: dict[str, float] = {}
@@ -269,9 +302,20 @@ class CrosscheckEngine:
             open_value = 0.0
             for code, pos in positions.items():
                 raw_open = open_prices.get(code)
-                value = raw_open if raw_open is not None else latest_close(code, day, before=True)
-                if value is not None:
-                    open_value += pos.shares * value
+                value = (
+                    raw_open
+                    if raw_open is not None
+                    else _latest_observed_close(bar_frames.get(code), day, before=True)
+                )
+                if value is None:
+                    return {
+                        "status": "fail",
+                        "reason": "unpriceable_held_position",
+                        "ts_code": code,
+                        "date": day,
+                        "actionable": False,
+                    }
+                open_value += pos.shares * value
             equity_at_open = cash + open_value
 
             if day in decision_map:
@@ -347,9 +391,15 @@ class CrosscheckEngine:
             # Revalue the POST-trade portfolio at the execution day's close.
             market_value = 0.0
             for code, pos in positions.items():
-                price = latest_close(code, day)
+                price = _latest_observed_close(bar_frames.get(code), day)
                 if price is None:
-                    price = pos.avg_cost
+                    return {
+                        "status": "fail",
+                        "reason": "unpriceable_held_position",
+                        "ts_code": code,
+                        "date": day,
+                        "actionable": False,
+                    }
                 market_value += pos.shares * price
             crosscheck_equity.append({"date": day, "equity": round(cash + market_value, 2)})
 
@@ -371,6 +421,16 @@ class CrosscheckEngine:
         max_curve_diff_pct = max(curve_diffs, default=1.0)
 
         trades_count_match = len(crosscheck_trades) == len(trades_primary)
+        primary_ledger = _trade_ledger_identity(trades_primary)
+        replay_ledger = _trade_ledger_identity(crosscheck_trades)
+        trade_ledger_match = primary_ledger == replay_ledger
+        ledger_mismatches = [
+            {"index": index, "primary": primary, "crosscheck": replay}
+            for index, (primary, replay) in enumerate(
+                zip(primary_ledger, replay_ledger)
+            )
+            if primary != replay
+        ][:3]
         total_commission_cc = sum(float(t["commission"]) for t in crosscheck_trades)
         total_commission_primary = sum(float(t.get("commission", 0)) for t in trades_primary)
         total_slippage_cc = sum(float(t.get("slippage_cost", 0)) for t in crosscheck_trades)
@@ -392,6 +452,7 @@ class CrosscheckEngine:
             "final_equity_within_threshold": bool(equity_diff_pct <= EQUITY_THRESHOLD),
             "equity_curve_within_threshold": bool(max_curve_diff_pct <= EQUITY_THRESHOLD),
             "trade_count_match": bool(trades_count_match),
+            "trade_ledger_identity_match": bool(trade_ledger_match),
             "commission_within_tolerance": bool(
                 abs(total_commission_cc - total_commission_primary)
                 <= COMMISSION_TOLERANCE * len(trades_primary) + 1.0
@@ -419,6 +480,8 @@ class CrosscheckEngine:
                 "primary_count": len(trades_primary),
                 "crosscheck_count": len(crosscheck_trades),
                 "match": trades_count_match,
+                "ledger_identity_match": trade_ledger_match,
+                "ledger_mismatches": ledger_mismatches,
             },
             "commission": {
                 "primary_total": round(total_commission_primary, 2),

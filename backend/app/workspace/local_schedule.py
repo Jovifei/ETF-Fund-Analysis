@@ -43,7 +43,7 @@ class LocalRunLock:
         self.lock_path = Path(lock_path)
         self._fd: int | None = None
 
-    def acquire(self) -> bool:
+    def acquire(self, *, reclaim_stale: bool = True) -> bool:
         self.lock_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             # Atomic creation with O_EXCL
@@ -55,7 +55,7 @@ class LocalRunLock:
             try:
                 # If file exists, check mtime
                 mtime = self.lock_path.stat().st_mtime
-                if datetime.now().timestamp() - mtime > 7200:  # 2 hours stale lock
+                if reclaim_stale and datetime.now().timestamp() - mtime > 7200:
                     try:
                         self.lock_path.unlink()
                         self._fd = os.open(str(self.lock_path), os.O_CREAT | os.O_EXCL | os.O_RDWR)
@@ -70,14 +70,22 @@ class LocalRunLock:
             return False
 
     def release(self) -> None:
-        if self._fd is not None:
+        if self._fd is None:
+            return
+        fd, self._fd = self._fd, None
+        try:
+            owned = os.fstat(fd)
+        except OSError:
+            owned = None
+        finally:
             try:
-                os.close(self._fd)
+                os.close(fd)
             except OSError:
                 pass
-            self._fd = None
-        if self.lock_path.exists():
+        if owned is not None:
             try:
-                self.lock_path.unlink()
+                current = self.lock_path.stat()
+                if (current.st_dev, current.st_ino) == (owned.st_dev, owned.st_ino):
+                    self.lock_path.unlink()
             except OSError:
                 pass

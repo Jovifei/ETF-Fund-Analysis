@@ -92,4 +92,3 @@ def test_local_display_reader_overview_and_detail(tmp_path):
     # Unsupported interval
     with pytest.raises(ValueError, match="unsupported_chart_interval"):
         reader.read_chart_data("510300.SH", interval="5m")
-

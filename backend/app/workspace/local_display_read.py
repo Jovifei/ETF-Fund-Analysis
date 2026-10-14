@@ -18,182 +18,206 @@ from app.workspace.local_display_contract import (
     verify_bundle_integrity,
 )
 from app.workspace.local_schedule import LocalRunLock
-from app.workspace.shadow_bundle import digest
+from app.workspace.shadow_bundle import digest, canonical
 
 GEN_SEQ_RE = re.compile(r"^[0-9]+$")
 GEN_HASH_RE = re.compile(r"^[0-9a-fA-F]{16,64}$")
 
 
 class LocalDisplayStore:
-    def __init__(self, store_dir: Path | str):
+    """Immutable v2 generations with validation on every read and bounded publication."""
+    FILE_RE = re.compile(r"bundle_([1-9][0-9]*)_([0-9a-f]{16})\.json")
+
+    def __init__(self, store_dir: Path | str, *, max_bytes: int | None = None):
         self.store_dir = Path(store_dir)
+        if self.store_dir.is_symlink():
+            raise ValueError("symlink store rejected")
+        self.max_bytes = MAX_BUNDLE_BYTES if max_bytes is None else max_bytes
+        if type(self.max_bytes) is not int or self.max_bytes <= 0:
+            raise ValueError("invalid store budget")
         self.store_dir.mkdir(parents=True, exist_ok=True)
         self.latest_link = self.store_dir / "latest.json"
         self.previous_link = self.store_dir / "previous.json"
         self.lock_file = self.store_dir / ".publish.lock"
 
+    def _load_file(self, path: Path, *, expected_id: str | None = None) -> dict[str, Any] | None:
+        match = self.FILE_RE.fullmatch(path.name)
+        if not match or path.parent != self.store_dir or path.is_symlink():
+            return None
+        try:
+            if path.stat().st_size > self.max_bytes:
+                return None
+            value = json.loads(path.read_bytes())
+            if not verify_bundle_integrity(value):
+                return None
+            manifest = value["manifest"]
+            identity = digest(manifest)
+            if str(manifest["sequence"]) != match[1] or identity[:16] != match[2]:
+                return None
+            if expected_id is not None and identity != expected_id:
+                return None
+            return value
+        except (OSError, ValueError, TypeError, KeyError, RecursionError):
+            return None
+
+    def _load_pointer(self, path: Path) -> dict[str, Any] | None:
+        try:
+            if path.is_symlink() or path.stat().st_size > 65536:
+                return None
+            pointer = json.loads(path.read_bytes())
+            if not isinstance(pointer, dict):
+                return None
+            name = pointer.get("bundle_file")
+            identity = pointer.get("bundle_id")
+            if not isinstance(name, str) or not self.FILE_RE.fullmatch(name):
+                return None
+            if not isinstance(identity, str) or not re.fullmatch(r"[0-9a-f]{64}", identity):
+                return None
+            value = self._load_file(self.store_dir / name, expected_id=identity)
+            if value is None:
+                return None
+            manifest = value["manifest"]
+            if any(pointer.get(key) != manifest[key] for key in ("sequence", "generated_at", "expires_at")):
+                return None
+            return pointer
+        except (OSError, ValueError, TypeError, KeyError):
+            return None
+
+    def _atomic(self, path: Path, data: bytes) -> None:
+        temp = self.store_dir / f".pending-{uuid.uuid4().hex}"
+        try:
+            with temp.open("xb") as handle:
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temp, path)
+        finally:
+            temp.unlink(missing_ok=True)
+
+    def _budget_plan(self, target: Path, size: int, current: dict | None) -> list[Path]:
+        files = [p for p in self.store_dir.glob("bundle_*.json") if self.FILE_RE.fullmatch(p.name)]
+        if any(p.is_symlink() for p in files):
+            raise ValueError("symlink generation rejected")
+        files.sort(key=lambda p: (p.stat().st_mtime_ns, p.name))
+        used = sum(p.stat().st_size for p in files)
+        if size > self.max_bytes or used > self.max_bytes:
+            raise ValueError("store capacity exceeded")
+        protected = {target.name}
+        if current is not None:
+            protected.add(current["bundle_file"])
+        total = used + (0 if target.exists() else size)
+        count = len(files) + (0 if target.exists() else 1)
+        evict = []
+        for path in files:
+            if total <= self.max_bytes and count <= 5:
+                break
+            if path.name in protected:
+                continue
+            total -= path.stat().st_size
+            count -= 1
+            evict.append(path)
+        if total > self.max_bytes:
+            raise ValueError("store capacity exceeded")
+        return evict
+
+    @staticmethod
+    def _receipt(manifest: dict, identity: str, status: str) -> dict[str, Any]:
+        return {"bundle_id": identity, "manifest_hash": identity, "status": status,
+                "sequence": manifest["sequence"], "received_at": datetime.now(timezone.utc).isoformat()}
+
     def publish(self, bundle: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
-        manifest_dict = bundle.get("manifest", {})
-        manifest = validate_bundle_manifest(manifest_dict)
+        if not isinstance(bundle, dict):
+            raise ValueError("invalid bundle")
+        manifest = validate_bundle_manifest(bundle.get("manifest", {}))
         if not verify_bundle_integrity(bundle, now=now):
             raise ValueError("bundle parts integrity verification failed or bundle expired")
-
-        bundle_id = digest(manifest_dict)
-        target_file = self.store_dir / f"bundle_{manifest.sequence}_{bundle_id[:16]}.json"
-
-        # Acquire publication lock to ensure concurrency safety and prevent inverted latest overwrite
+        manifest_dict = bundle["manifest"]
+        identity = digest(manifest_dict)
+        data = canonical(bundle)
+        target = self.store_dir / f"bundle_{manifest.sequence}_{identity[:16]}.json"
         lock = LocalRunLock(self.lock_file)
-        if not lock.acquire():
-            # Retry briefly
+        if not lock.acquire(reclaim_stale=False):
             import time
             for _ in range(20):
                 time.sleep(0.05)
-                if lock.acquire():
+                if lock.acquire(reclaim_stale=False):
                     break
             else:
-                raise RuntimeError("publish lock contention timeout")
-
+                raise ValueError("publish lock contention timeout")
         try:
-            # Check existing sequence strictly: sequence must be greater than current latest
-            current_seq = None
-            if self.latest_link.exists():
-                try:
-                    with open(self.latest_link, "r", encoding="utf-8") as f:
-                        ptr = json.load(f)
-                    current_seq = ptr.get("sequence")
-                except Exception:
-                    current_seq = None
-
-            if current_seq is not None:
-                if manifest.sequence < current_seq:
-                    raise ValueError(
-                        f"bundle sequence {manifest.sequence} is older than current sequence {current_seq}"
-                    )
-                if manifest.sequence == current_seq:
-                    if target_file.exists():
-                        return {
-                            "bundle_id": bundle_id,
-                            "manifest_hash": digest(manifest_dict),
-                            "status": "already_accepted",
-                            "sequence": manifest.sequence,
-                            "received_at": datetime.now(timezone.utc).isoformat(),
-                        }
-                    raise ValueError(
-                        f"bundle sequence {manifest.sequence} already matches current sequence {current_seq}"
-                    )
-
-            # Atomic write of bundle file using unique temp file
-            temp_file = self.store_dir / f"temp_{manifest.sequence}_{uuid.uuid4().hex[:8]}.tmp"
-            with open(temp_file, "w", encoding="utf-8") as f:
-                json.dump(bundle, f, ensure_ascii=False)
-            temp_file.replace(target_file)
-
-            # Determine files to protect from cleanup
-            protected_files = {target_file.name}
-
-            # Atomic rotation of previous and latest
-            if self.latest_link.exists():
-                try:
-                    with open(self.latest_link, "r", encoding="utf-8") as f:
-                        curr_latest = json.load(f)
-                    if curr_latest.get("bundle_file"):
-                        protected_files.add(curr_latest["bundle_file"])
-                    temp_prev = self.store_dir / f"prev_{uuid.uuid4().hex[:8]}.tmp"
-                    with open(temp_prev, "w", encoding="utf-8") as f:
-                        json.dump(curr_latest, f, ensure_ascii=False)
-                    temp_prev.replace(self.previous_link)
-                except Exception:
-                    pass
-
-            # Atomic write of latest pointer
-            latest_ptr = {
-                "bundle_file": target_file.name,
-                "bundle_id": bundle_id,
-                "sequence": manifest.sequence,
-                "generated_at": manifest.generated_at,
-                "expires_at": manifest.expires_at,
-            }
-            temp_latest = self.store_dir / f"latest_{uuid.uuid4().hex[:8]}.tmp"
-            with open(temp_latest, "w", encoding="utf-8") as f:
-                json.dump(latest_ptr, f, ensure_ascii=False)
-            temp_latest.replace(self.latest_link)
-
-            # Enforce storage budget (MAX_BUNDLE_BYTES) and prune old bundles
-            self._enforce_budget(protected_files=protected_files)
-
-            return {
-                "bundle_id": bundle_id,
-                "manifest_hash": digest(manifest_dict),
-                "status": "accepted",
-                "sequence": manifest.sequence,
-                "received_at": datetime.now(timezone.utc).isoformat(),
-            }
+            if any(path.is_symlink() for path in (target, self.latest_link, self.previous_link)):
+                raise ValueError("symlink publication path rejected")
+            current = self._load_pointer(self.latest_link) if self.latest_link.exists() else None
+            if self.latest_link.exists() and current is None:
+                raise ValueError("invalid latest generation pointer")
+            if current is not None:
+                if manifest.sequence < current["sequence"]:
+                    raise ValueError("bundle sequence older than current sequence")
+                if manifest.sequence == current["sequence"]:
+                    if identity == current["bundle_id"]:
+                        return self._receipt(manifest_dict, identity, "already_accepted")
+                    raise ValueError("bundle sequence already accepted with different identity")
+            if target.exists() and target.read_bytes() != data:
+                raise ValueError("immutable bundle collision")
+            evict = self._budget_plan(target, len(data), current)
+            # Preflight completes before any generation/pointer mutation. Keep rollback bytes bounded
+            # by the already-validated total store budget if a subsequent filesystem operation fails.
+            backups = {p: p.read_bytes() for p in evict}
+            old_latest = self.latest_link.read_bytes() if self.latest_link.exists() else None
+            old_previous = self.previous_link.read_bytes() if self.previous_link.exists() else None
+            created = not target.exists()
+            pointer = {"bundle_file": target.name, "bundle_id": identity, "sequence": manifest.sequence,
+                       "generated_at": manifest.generated_at, "expires_at": manifest.expires_at}
+            try:
+                if created:
+                    self._atomic(target, data)
+                if current is not None:
+                    self._atomic(self.previous_link, canonical(current))
+                self._atomic(self.latest_link, canonical(pointer))
+                for path in evict:
+                    path.unlink()
+            except OSError:
+                for path, payload in backups.items():
+                    if not path.exists():
+                        self._atomic(path, payload)
+                for path, payload in ((self.previous_link, old_previous), (self.latest_link, old_latest)):
+                    if payload is None:
+                        path.unlink(missing_ok=True)
+                    elif not path.exists() or path.read_bytes() != payload:
+                        self._atomic(path, payload)
+                if created:
+                    target.unlink(missing_ok=True)
+                raise
+            return self._receipt(manifest_dict, identity, "accepted")
         finally:
             lock.release()
 
-    def _enforce_budget(self, protected_files: set[str]) -> None:
-        # Also clean up any lingering stale tmp files
-        for tmp in self.store_dir.glob("*.tmp"):
-            try:
-                tmp.unlink()
-            except OSError:
-                pass
-
-        all_bundles = sorted(self.store_dir.glob("bundle_*.json"), key=lambda p: p.stat().st_mtime)
-        total_bytes = sum(b.stat().st_size for b in all_bundles)
-        
-        for b in list(all_bundles):
-            if len(all_bundles) <= 2 or (total_bytes <= MAX_BUNDLE_BYTES and len(all_bundles) <= 5):
-                break
-            if b.name in protected_files:
-                continue
-            try:
-                b_size = b.stat().st_size
-                b.unlink()
-                total_bytes -= b_size
-                all_bundles.remove(b)
-            except OSError:
-                pass
-
     def load_bundle(self, generation: str | int | None = None) -> dict[str, Any] | None:
-        if generation is not None:
-            gen_str = str(generation).strip()
-            # Strictly validate generation string format: only integer or hex hash, NO WILDCARDS
-            if GEN_SEQ_RE.match(gen_str):
-                # Match bundle_{gen_str}_*.json strictly without glob wildcards
-                for f in self.store_dir.glob("bundle_*.json"):
-                    parts = f.stem.split("_")
-                    if len(parts) >= 3 and parts[1] == gen_str:
-                        try:
-                            with open(f, "r", encoding="utf-8") as fp:
-                                return json.load(fp)
-                        except Exception:
-                            return None
-            elif GEN_HASH_RE.match(gen_str):
-                prefix = gen_str[:16].lower()
-                for f in self.store_dir.glob("bundle_*.json"):
-                    parts = f.stem.split("_")
-                    if len(parts) >= 3 and parts[2].lower().startswith(prefix):
-                        try:
-                            with open(f, "r", encoding="utf-8") as fp:
-                                return json.load(fp)
-                        except Exception:
-                            return None
-            # If generation was explicitly requested but not matched, NEVER fallback to latest
+        if generation is None:
+            pointer = self._load_pointer(self.latest_link)
+            return self._load_file(self.store_dir / pointer["bundle_file"], expected_id=pointer["bundle_id"]) if pointer else None
+        text = str(generation).strip()
+        if not GEN_SEQ_RE.fullmatch(text) and not GEN_HASH_RE.fullmatch(text):
             return None
-
-        if not self.latest_link.exists():
-            return None
-        try:
-            with open(self.latest_link, "r", encoding="utf-8") as f:
-                ptr = json.load(f)
-            bundle_file = self.store_dir / ptr["bundle_file"]
-            if bundle_file.exists():
-                with open(bundle_file, "r", encoding="utf-8") as f:
-                    return json.load(f)
-        except Exception:
-            return None
-        return None
+        explicit_sequence = type(generation) is int
+        full_id = not explicit_sequence and len(text) == 64 and GEN_HASH_RE.fullmatch(text)
+        matches = []
+        for path in self.store_dir.glob("bundle_*.json"):
+            value = self._load_file(path)
+            if value is None:
+                continue
+            manifest = value["manifest"]
+            identity = digest(manifest)
+            if full_id:
+                matched = identity == text.lower()
+            elif explicit_sequence:
+                matched = str(manifest["sequence"]) == text
+            else:
+                matched = (bool(GEN_SEQ_RE.fullmatch(text)) and str(manifest["sequence"]) == text) or (bool(GEN_HASH_RE.fullmatch(text)) and identity.startswith(text.lower()))
+            if matched:
+                matches.append(value)
+        # Sequence and short hash aliases must be unambiguous. No fallback to latest.
+        return matches[0] if len(matches) == 1 else None
 
 
 class LocalDisplayReader:
@@ -395,4 +419,3 @@ class LocalDisplayReader:
         if not part or not isinstance(part.get("items"), list) or not part["items"]:
             return None
         return list(part["items"])
-
