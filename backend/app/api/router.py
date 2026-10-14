@@ -89,7 +89,7 @@ from app.services.review_service import CandidateNotFoundError, ReviewService
 from app.services.runtime_service import RuntimeService
 from app.services.signal_center_service import SignalCenterService
 from app.services.signal_grade_service import SignalGradeService
-from app.services.task_service import TaskBusyError, TaskExecutionError, TaskService, UnknownTaskError
+from app.services.task_service import DisplayOnlyTaskRejected, TaskBusyError, TaskExecutionError, TaskService, UnknownTaskError
 
 router = APIRouter(prefix="/api")
 private_router = APIRouter(dependencies=[Depends(require_private_access)])
@@ -1110,6 +1110,12 @@ def run_task(
     except TaskBusyError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except DisplayOnlyTaskRejected as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=423,
+            detail={"code": "display_only_mode", "task_name": exc.task_name, "message": str(exc)},
+        ) from exc
     except TaskExecutionError as exc:
         db.rollback()
         raise HTTPException(
