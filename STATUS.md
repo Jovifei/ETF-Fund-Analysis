@@ -6,7 +6,7 @@
 
 本轮Jovi授权源码整合与可重建缓存清理，未授权本轮另行部署或删除数据。整合基于a2adee5，接收独立回测d013e48、未推91f7447及389f7d0上的接收安全候选，保留新版gzip、V1/V2回执、决策板/持仓接口。回测版本升级至0.5.8-observed-mark-ledger；strategy config_hash相应变化，不能复用旧生产包身份。
 
-整合源码与验证身份以docs/audits/MAIN_CONSOLIDATION_20261014.md为准。前端200项/typecheck/build、Node27项及静态/secret检查已通过；全量后端曾发现旧夹具缺估值历史，已修正且相关9项通过，最终全量和精确CI结果待收据补齐。没有删除原失败或降低断言。
+整合源码与验证身份以docs/audits/MAIN_CONSOLIDATION_20261014.md为准。PR46已合main，根目录已快进对齐。整合基础完整后端1960通过/23跳过，追加市场上下文152项通过；前端200项/typecheck/build、Node27与静态/secret通过，888实现的三组push CI成功。后继收据仅改文档，不冒作重新执行的源码结果。原失败保持，未降门槛。
 
 ## 当前未完成项
 
