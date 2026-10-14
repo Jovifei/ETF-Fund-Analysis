@@ -5,7 +5,22 @@ from app.workspace.shadow_bundle import ShadowStore, make_bundle
 
 NOW = datetime(2026, 10, 11, 6, 30, tzinfo=timezone.utc)
 def bundle(sequence=1):
-    return make_bundle({'rows': [{'ts_code': '510300.SH'}]}, {'510300.SH': {'bars': []}}, {'references': []}, sequence=sequence, generated_at=NOW, expires_at=NOW+timedelta(hours=1), code_sha='a'*40, config_hash='b'*64)
+    chart = {
+        'ts_code': '510300.SH',
+        'as_of': NOW.isoformat(),
+        'source_as_of': None,
+        'interval': '1d',
+        'available': False,
+        'qualification': 'UNKNOWN',
+        'research_only': True,
+        'actionable': False,
+        'cost_overlay_allowed': False,
+        'research_cost_overlay_allowed': False,
+        'unsupported_intervals': ['1w', '1mo', '5m', '15m'],
+        'bars': [],
+        'research_bars': [],
+    }
+    return make_bundle({'rows': [{'ts_code': '510300.SH'}]}, {'510300.SH': chart}, {'references': []}, sequence=sequence, generated_at=NOW, expires_at=NOW+timedelta(hours=1), code_sha='a'*40, config_hash='b'*64)
 
 def test_complete_generation_and_replay(tmp_path):
     store=ShadowStore(tmp_path, code_sha='a'*40, config_hash='b'*64)
@@ -62,11 +77,12 @@ def test_concurrent_writer_busy(tmp_path):
 def test_out_of_order_and_source_contract(tmp_path):
     from app.workspace.shadow_bundle import digest
     store=ShadowStore(tmp_path,code_sha='a'*40,config_hash='b'*64);store.publish(bundle(),now=NOW)
-    value=bundle(2);value['manifest']['generated_at']=(NOW-timedelta(minutes=1)).isoformat();value['manifest']['source_snapshot_time']=value['manifest']['generated_at']
+    value=bundle(2);value['manifest']['generated_at']=(NOW-timedelta(minutes=1)).isoformat();value['manifest']['source_snapshot_time']=value['manifest']['generated_at'];value['blobs']['charts']['510300.SH']['as_of']=value['manifest']['generated_at'];value['manifest']['parts']['charts']=digest(value['blobs']['charts'])
     with pytest.raises(ValueError,match='order'):store.publish(value,now=NOW)
     value=bundle(2);value['manifest']['permission_scope']='ADMIN'
     with pytest.raises(ValueError,match='producer'):store.publish(value,now=NOW)
-    value=bundle(2);value['blobs']['charts']['510300.SH']['bars']=[{'date':'2026-10-12','open':10,'high':11,'low':9,'close':10}];value['manifest']['parts']['charts']=digest(value['blobs']['charts'])
+    value=bundle(2);future_bar={'date':'2026-10-12','open':10,'high':11,'low':9,'close':10,'source':'fixture','indicators':{}}
+    chart=value['blobs']['charts']['510300.SH'];chart['bars']=[future_bar];chart['research_bars']=[future_bar.copy()];chart['source_as_of']='2026-10-12';value['manifest']['parts']['charts']=digest(value['blobs']['charts'])
     with pytest.raises(ValueError,match='future'):store.publish(value,now=NOW)
 
 def test_private_cost_whitelist_rejected_even_with_valid_hash(tmp_path):

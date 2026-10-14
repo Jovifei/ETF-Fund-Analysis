@@ -19,9 +19,24 @@ NOW = datetime(2026, 10, 11, 6, 30, tzinfo=timezone.utc)
 
 
 def candidate(sequence):
+    chart = {
+        "ts_code": "510300.SH",
+        "as_of": NOW.isoformat(),
+        "source_as_of": None,
+        "interval": "1d",
+        "available": False,
+        "qualification": "UNKNOWN",
+        "research_only": True,
+        "actionable": False,
+        "cost_overlay_allowed": False,
+        "research_cost_overlay_allowed": False,
+        "unsupported_intervals": ["1w", "1mo", "5m", "15m"],
+        "bars": [],
+        "research_bars": [],
+    }
     return make_bundle(
         {"rows": [{"ts_code": "510300.SH", "price": float(sequence)}]},
-        {"510300.SH": {"bars": []}}, {"references": []},
+        {"510300.SH": chart}, {"references": []},
         sequence=sequence, generated_at=NOW, expires_at=NOW + timedelta(hours=1),
         code_sha="a" * 40, config_hash="b" * 64,
     )
