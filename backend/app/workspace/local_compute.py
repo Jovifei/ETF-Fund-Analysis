@@ -22,6 +22,8 @@ from app.workspace.shadow_bundle import digest, make_bundle, timestamp
 from app.workspace.shadow_projection import project_chart
 
 CONTRACT_VERSION = "local-display-v2"
+ADMISSION_POLICY_VERSION = "private-research-execution-v1"
+OPTIONAL_TASK_PARTS = {"refresh_market_context": "market_context", "refresh_sector_snapshots": "sectors"}
 
 ROW_FIELDS_V2 = {
     "ts_code",
@@ -126,7 +128,7 @@ def load_local_config(root: Path, config: Path | None = None) -> dict:
 
 def validate_provider_admission(
     market_provider: str, profile: str = "live", *, evidence: dict | None = None,
-    purpose: str = "export", now: datetime | None = None,
+    purpose: str = "export", now: datetime | None = None, private_research: bool = False,
 ) -> dict[str, Any]:
     if profile == "live" and market_provider == "mock":
         raise ValueError("mock provider not permitted in live profile")
@@ -136,6 +138,15 @@ def validate_provider_admission(
     now = now or datetime.now(timezone.utc)
     evidence = evidence if isinstance(evidence, dict) else {}
     issues = []
+    def explicitly_restricted(value):
+        if isinstance(value, dict):
+            return any((key in {"status", "license_status"} and isinstance(item, str)
+                        and item.strip().upper() in {"DENIED", "REVOKED", "EXPIRED"})
+                       or explicitly_restricted(item) for key, item in value.items())
+        if isinstance(value, list):
+            return any(explicitly_restricted(item) for item in value)
+        return False
+    restricted = explicitly_restricted(evidence)
     if evidence.get("schema") != "provider-admission-evidence-v1" or evidence.get("provider") != market_provider:
         issues.append("provider_evidence_missing_or_mismatched")
     rows = evidence.get("interfaces") or []
@@ -151,6 +162,8 @@ def validate_provider_admission(
             expiry = None
         if expiry is None or expiry <= now:
             issues.append(f"{name}:evidence_expired_or_missing")
+        if expiry is not None and expiry <= now:
+            restricted = True
         for permission in (("acquire", "store", "display") if purpose == "export" else ("acquire", "store")):
             item = row.get(permission) or {}
             if (not isinstance(item, dict) or item.get("status") != "VERIFIED"
@@ -172,11 +185,18 @@ def validate_provider_admission(
             if not (isinstance(source_time, dict) and source_time.get("status") == "VERIFIED"
                     and source_time.get("evidence_ref")):
                 issues.append(f"{name}:source_time_UNKNOWN")
-    admitted = not issues and market_provider != "mock"
+    admitted = not issues and market_provider != "mock" and not restricted and not private_research
+    owner_scope = (private_research is True and profile == "live"
+                   and market_provider in {"public_composite", "akshare"} and not restricted)
     return {
         "provider": market_provider,
         "profile": profile,
         "admitted": admitted,
+        "operation_permitted": admitted or owner_scope,
+        "usage_scope": "owner_private_research" if owner_scope else "documented_provider_use",
+        "admission_policy_version": ADMISSION_POLICY_VERSION,
+        "source_qualification": "UNKNOWN",
+        "restrictions_present": restricted,
         "license_status": "evidence_verified" if admitted else "UNKNOWN",
         "source_timestamp_quality": "evidence_verified" if admitted and purpose == "export" else "UNKNOWN",
         "purpose": purpose,
@@ -224,16 +244,19 @@ def doctor_check(root: Path | str, database: Path | str, profile: str = "live") 
     }
 
 
-def compute_local(settings: Settings, universe: list[str] | None = None, *, admission: dict | None = None) -> list[dict[str, Any]]:
+def compute_local(settings: Settings, universe: list[str] | None = None, *, admission: dict | None = None,
+                  private_research: bool = False) -> list[dict[str, Any]]:
     if settings.market_provider == "mock" and settings.app_env == "local_research":
         raise ValueError("live profile rejects mock provider")
 
     if settings.market_provider != "mock" and not validate_provider_admission(
-        settings.market_provider, evidence=admission, purpose="compute"
-    )["admitted"]:
+        settings.market_provider, evidence=admission, purpose="compute", private_research=private_research
+    )["operation_permitted"]:
         raise ValueError("provider acquisition/storage admission UNKNOWN")
     from app.services.task_service import TaskService
 
+    if private_research:
+        settings = settings.model_copy(update={"tushare_token": "", "ftshare_enabled": False})
     engine = create_engine(settings.database_url)
     service = TaskService(settings)
     results = []
@@ -250,17 +273,25 @@ def compute_local(settings: Settings, universe: list[str] | None = None, *, admi
         ]
 
         for task in task_names:
-            with Session(engine) as db, db.begin():
-                kwargs: dict[str, Any] = {}
-                if task == "refresh_bars":
-                    kwargs["lookback_days"] = 420
-                if universe:
-                    kwargs["codes"] = universe
-                result = service.run(db, task, **kwargs)
-                result = {**result, "task_name": task}
-                results.append(result)
-                if result.get("status") != "succeeded":
-                    break
+            required = task not in OPTIONAL_TASK_PARTS
+            try:
+                with Session(engine) as db, db.begin():
+                    kwargs: dict[str, Any] = {}
+                    if task == "refresh_bars":
+                        kwargs["lookback_days"] = 420
+                    if universe:
+                        kwargs["codes"] = universe
+                    result = service.run(db, task, **kwargs)
+            except Exception as exc:
+                if required:
+                    raise
+                result = {"status": "unavailable", "error_type": type(exc).__name__}
+            result = {**result, "task_name": task, "required": required}
+            if not required and result.get("status") != "succeeded":
+                result["availability"] = "unavailable"
+            results.append(result)
+            if required and result.get("status") != "succeeded":
+                break
     finally:
         service.close()
         engine.dispose()
@@ -309,11 +340,13 @@ def export_local_v2(
     universe: list[str] | None = None,
     now: datetime | None = None,
     admission: dict | None = None,
+    private_research: bool = False,
+    unavailable_parts: list[str] | None = None,
 ) -> dict[str, Any]:
     now = now or datetime.now(timezone.utc)
     if settings.market_provider != "mock" and not validate_provider_admission(
-        settings.market_provider, evidence=admission, now=now
-    )["admitted"]:
+        settings.market_provider, evidence=admission, now=now, private_research=private_research
+    )["operation_permitted"]:
         raise ValueError("provider display/quality admission UNKNOWN")
     engine = create_engine(settings.database_url)
     try:
@@ -403,8 +436,16 @@ def export_local_v2(
                         chart_periods[code][period] = periodic
 
             # 3. Sectors part
+            unavailable = set(unavailable_parts or ())
             sector_snaps = []
-            for s in db.scalars(select(SectorSnapshot).order_by(SectorSnapshot.fetched_at.desc()).limit(100)).all():
+            try:
+                with db.begin_nested():
+                    sector_rows = [] if "sectors" in unavailable else db.scalars(
+                        select(SectorSnapshot).order_by(SectorSnapshot.fetched_at.desc()).limit(100)).all()
+            except Exception:
+                sector_rows = []
+                unavailable.add("sectors")
+            for s in sector_rows:
                 sector_snaps.append({
                     "sector_name": s.sector_name,
                     "board_type": s.board_type,
@@ -426,7 +467,8 @@ def export_local_v2(
             market_context_items = []
             try:
                 from app.services.market_context_service import MarketContextService
-                mc_rows = MarketContextService(provider=None, settings=settings).latest_view(db)
+                with db.begin_nested():
+                    mc_rows = [] if "market_context" in unavailable else MarketContextService(provider=None, settings=settings).latest_view(db)
                 for row in mc_rows:
                     r_clean = dict(row)
                     if isinstance(r_clean.get("source_timestamp"), datetime):
@@ -446,7 +488,12 @@ def export_local_v2(
                     market_context_items.append(r_clean)
             except Exception:
                 market_context_items = []
+                unavailable.add("market_context")
             market_context_part = {"items": market_context_items}
+            if "sectors" in unavailable:
+                sectors_part = {"sectors": [], "availability": "unavailable", "reason": "optional_refresh_failed"}
+            if "market_context" in unavailable:
+                market_context_part = {"items": [], "availability": "unavailable", "reason": "optional_refresh_failed"}
 
             # Construct parts dictionary
             parts = {
@@ -472,10 +519,26 @@ def export_local_v2(
                 "expires_at": (generated + timedelta(hours=2)).isoformat(),
                 "actionable": False,
                 "data_origin": "local_research",
+                "research_only": True,
                 "universe": list(selected_codes),
                 "parts_hashes": parts_hashes,
+                "usage_scope": "owner_private_research" if private_research else "documented_provider_use",
+                "source_qualification": "UNKNOWN",
+                "license_status": "UNKNOWN",
+                "calibration_status": "not_calibrated",
+                "admission_policy_version": ADMISSION_POLICY_VERSION,
             }
 
+            if private_research:
+                def unqualified_copy(value):
+                    if isinstance(value, dict):
+                        return {key: "not_calibrated" if key == "calibration_status" else unqualified_copy(item)
+                                for key, item in value.items()}
+                    if isinstance(value, list):
+                        return [unqualified_copy(item) for item in value]
+                    return value
+                parts = unqualified_copy(parts)
+                manifest["parts_hashes"] = {key: digest(value) for key, value in parts.items()}
             return {
                 "manifest": manifest,
                 "parts": parts,

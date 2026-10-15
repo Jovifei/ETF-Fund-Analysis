@@ -99,29 +99,38 @@ class LocalDisplayStore:
         finally:
             temp.unlink(missing_ok=True)
 
-    def _budget_plan(self, target: Path, size: int, current: dict | None) -> list[Path]:
+    def _budget_plan(self, target: Path, size: int, current: dict | None, extra: int) -> list[Path]:
         files = [p for p in self.store_dir.glob("bundle_*.json") if self.FILE_RE.fullmatch(p.name)]
         if any(p.is_symlink() for p in files):
             raise ValueError("symlink generation rejected")
-        files.sort(key=lambda p: (p.stat().st_mtime_ns, p.name))
-        used = sum(p.stat().st_size for p in files)
-        if size > self.max_bytes or used > self.max_bytes:
-            raise ValueError("store capacity exceeded")
+        previous = self._load_pointer(self.previous_link) if self.previous_link.exists() else None
+        if self.previous_link.exists() and previous is None:
+            raise ValueError("invalid previous generation pointer")
         protected = {target.name}
-        if current is not None:
-            protected.add(current["bundle_file"])
-        total = used + (0 if target.exists() else size)
-        count = len(files) + (0 if target.exists() else 1)
-        evict = []
+        for pointer in (current, previous):
+            if pointer:
+                protected.add(pointer["bundle_file"])
+        cutoff = min((p["sequence"] for p in (current, previous) if p), default=0)
+        # Only complete, validated cache generations older than BOTH rollback pointers
+        # are reclaimable. Unknown files, orphan future candidates and evidence remain.
+        reclaimable = []
         for path in files:
-            if total <= self.max_bytes and count <= 5:
-                break
             if path.name in protected:
                 continue
+            value = self._load_file(path)
+            if value is not None and value["manifest"]["sequence"] < cutoff:
+                reclaimable.append(path)
+        reclaimable.sort(key=lambda p: int(self.FILE_RE.fullmatch(p.name)[1]))
+        total = self.domain.used_bytes() + self.domain.held_bytes + extra
+        count = len(files) + (0 if target.exists() else 1)
+        evict = []
+        for path in reclaimable:
+            if total <= self.domain.max_bytes and count <= 5:
+                break
             total -= path.stat().st_size
             count -= 1
             evict.append(path)
-        if total > self.max_bytes:
+        if size > self.max_bytes or total > self.domain.max_bytes:
             raise ValueError("store capacity exceeded")
         return evict
 
@@ -175,29 +184,27 @@ class LocalDisplayStore:
                 raise ValueError("bundle expired or generated in future")
             if target.exists() and target.read_bytes() != data:
                 raise ValueError("immutable bundle collision")
-            evict = self._budget_plan(target, len(data), current)
-            # Preflight completes before any generation/pointer mutation. Keep rollback bytes bounded
-            # by the already-validated total store budget if a subsequent filesystem operation fails.
-            backups = {p: p.read_bytes() for p in evict}
             old_latest = self.latest_link.read_bytes() if self.latest_link.exists() else None
             old_previous = self.previous_link.read_bytes() if self.previous_link.exists() else None
             created = not target.exists()
             pointer = {"bundle_file": target.name, "bundle_id": identity, "sequence": manifest.sequence,
                        "generated_at": manifest.generated_at, "expires_at": manifest.expires_at}
-            self.domain.reserve((len(data) if created else 0) + len(canonical(pointer))
-                                + (len(canonical(current)) if current else 0))
+            extra = ((len(data) if created else 0) + len(canonical(pointer))
+                     + (len(canonical(current)) if current else 0))
+            evict = self._budget_plan(target, len(data), current, extra)
+            # GC precedes the new temporary file: no transient budget overdraft.
+            # On later publication failure only obsolete caches may be gone; the
+            # pre-existing current/previous pair remains intact and recoverable.
+            for path in evict:
+                path.unlink()
+            self.domain.reserve(extra)
             try:
                 if created:
                     self._atomic(target, data)
                 if current is not None:
                     self._atomic(self.previous_link, canonical(current))
                 self._atomic(self.latest_link, canonical(pointer))
-                for path in evict:
-                    path.unlink()
             except OSError:
-                for path, payload in backups.items():
-                    if not path.exists():
-                        self._atomic(path, payload)
                 for path, payload in ((self.previous_link, old_previous), (self.latest_link, old_latest)):
                     if payload is None:
                         path.unlink(missing_ok=True)

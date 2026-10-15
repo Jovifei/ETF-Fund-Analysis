@@ -7,7 +7,8 @@ param(
     [string]$Provider = "public_composite",
     [string[]]$Slots = @("14:20", "14:30", "14:45", "14:50", "14:55", "15:00", "15:15", "16:10"),
     [string]$TaskName = "ETF-Local-Live-Compute",
-    [switch]$Apply
+    [switch]$Apply,
+    [switch]$PrivateResearch
 )
 $ErrorActionPreference = 'Stop'
 foreach ($val in @($Python, $Workspace, $LocalRoot, $Config, $Provider, $TaskName)) {
@@ -27,6 +28,7 @@ if ($LASTEXITCODE -ne 0 -or $sha -notmatch '^[0-9a-f]{40}$') { throw "Cannot ide
 $dirty = (& git -C $resolvedTree status --porcelain backend scripts config frontend pyproject.toml)
 if ($LASTEXITCODE -ne 0 -or $dirty) { throw "Worktree runtime identity is not clean" }
 $arguments = '"{0}" run --root "{1}" --profile live --provider "{2}" --config "{3}" --expected-sha {4}' -f $scriptPath, $LocalRoot, $Provider, $Config, $sha
+if ($PrivateResearch) { $arguments += ' --private-research' }
 $action = New-ScheduledTaskAction -Execute $resolvedPython -Argument $arguments -WorkingDirectory $resolvedTree
 $triggers = @($Slots | ForEach-Object { New-ScheduledTaskTrigger -Daily -At ([TimeSpan]::Parse($_).ToString()) })
 $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 20)

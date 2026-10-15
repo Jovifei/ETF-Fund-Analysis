@@ -10,7 +10,7 @@ from app.workspace.shadow_bundle import digest
 from app.workspace.shadow_projection import CODE_RE, validate_public_chart
 
 CONTRACT_VERSION = "local-display-v2"
-VALIDATION_VERSION = "local-display-validation-v2.2"
+VALIDATION_VERSION = "local-display-validation-v2.3"
 MAX_BUNDLE_BYTES = 64 * 1024 * 1024  # 64 MiB bounded quota
 REQUIRED_PARTS = {"overview", "details", "charts", "sectors"}
 OPTIONAL_PARTS = {"market_context", "chart_periods"}
@@ -56,6 +56,18 @@ def _scan_deep_privacy_and_actionable(obj: Any) -> bool:
         for item in obj:
             if not _scan_deep_privacy_and_actionable(item):
                 return False
+    return True
+
+
+def _private_research_flags(obj: Any) -> bool:
+    if isinstance(obj, dict):
+        if "calibration_status" in obj and obj["calibration_status"] != "not_calibrated":
+            return False
+        if "research_only" in obj and obj["research_only"] is not True:
+            return False
+        return all(_private_research_flags(value) for value in obj.values())
+    if isinstance(obj, list):
+        return all(_private_research_flags(value) for value in obj)
     return True
 
 
@@ -132,6 +144,12 @@ def verify_bundle_integrity(bundle: dict[str, Any], *, now: datetime | None = No
         if not isinstance(manifest_dict, dict) or not isinstance(parts, dict):
             return False
         manifest = validate_bundle_manifest(manifest_dict)
+        if manifest_dict.get("usage_scope") == "owner_private_research":
+            required = {"source_qualification": "UNKNOWN", "license_status": "UNKNOWN",
+                        "research_only": True, "calibration_status": "not_calibrated"}
+            if any(type(manifest_dict.get(key)) is not type(value) or manifest_dict.get(key) != value
+                   for key, value in required.items()) or not _private_research_flags(bundle):
+                return False
         if now is not None and not (_parse_iso(manifest.generated_at) <= now < _parse_iso(manifest.expires_at)):
             return False
         if REQUIRED_PARTS - set(parts) or any(not isinstance(parts[key], dict) for key in REQUIRED_PARTS):

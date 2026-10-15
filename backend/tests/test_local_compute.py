@@ -74,7 +74,15 @@ def test_doctor_check_detects_disk_and_structure(tmp_path):
     assert status["marker_exists"] is True
 
 
-def test_export_local_v2_bundle_contract(database, bootstrapped, db_session, tmp_path):
+def test_export_local_v2_bundle_contract(database, bootstrapped, db_session, tmp_path, monkeypatch):
+    from app.workspace import local_compute
+    original_detail = local_compute.instrument_detail
+    def legacy_detail(*args, **kwargs):
+        detail = original_detail(*args, **kwargs)
+        if detail:
+            detail = {**detail, "forecasts": {"1": {"calibration_status": "calibrated", "q50": 0.125}}}
+        return detail
+    monkeypatch.setattr(local_compute, "instrument_detail", legacy_detail)
     settings = get_settings()
     TaskService(settings).run(db_session, "refresh_decision_board")
     db_session.commit()
@@ -84,6 +92,8 @@ def test_export_local_v2_bundle_contract(database, bootstrapped, db_session, tmp
         sequence=1,
         code_sha="b" * 40,
         universe=["510300.SH", "512480.SH"],
+        private_research=True,
+        unavailable_parts=["sectors", "market_context"],
     )
 
     manifest = bundle["manifest"]
@@ -94,3 +104,11 @@ def test_export_local_v2_bundle_contract(database, bootstrapped, db_session, tmp
     assert "charts" in bundle["parts"]
     assert bundle["manifest"]["actionable"] is False
     assert bundle["manifest"]["data_origin"] == "local_research"
+    assert manifest["usage_scope"] == "owner_private_research"
+    assert manifest["license_status"] == manifest["source_qualification"] == "UNKNOWN"
+    assert manifest["research_only"] is True and manifest["calibration_status"] == "not_calibrated"
+    forecast = bundle["parts"]["details"]["510300.SH"]["forecasts"]["1"]
+    assert forecast == {"calibration_status": "not_calibrated", "q50": 0.125}
+    assert bundle["parts"]["sectors"]["sectors"] == []
+    assert bundle["parts"]["sectors"]["availability"] == "unavailable"
+    assert bundle["parts"]["market_context"]["items"] == []

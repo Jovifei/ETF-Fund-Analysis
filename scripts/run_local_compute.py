@@ -20,6 +20,7 @@ from app.workspace.local_compute import (
     local_settings,
     load_local_config,
     validate_provider_admission,
+    OPTIONAL_TASK_PARTS,
 )
 from app.workspace.local_schedule import LocalRunLock
 from app.workspace.local_atomic import write_json_atomic
@@ -73,10 +74,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     settings = local_settings(root, database, profile=args.profile, market_provider=args.provider)
     universe = cfg["universe"]
     admission = cfg.get("provider_admission")
+    private_research = getattr(args, "private_research", False)
     if args.profile == "live":
         required = "compute" if getattr(args, "compute_only", False) else "export"
-        check = validate_provider_admission(args.provider, evidence=admission, purpose=required)
-        if not check["admitted"]:
+        check = validate_provider_admission(args.provider, evidence=admission, purpose=required,
+                                            private_research=private_research)
+        if not check["operation_permitted"]:
             print(json.dumps({"status": "admission_blocked", "admission": check}, ensure_ascii=False))
             return 1
     original_config = config_path.read_bytes()
@@ -111,14 +114,14 @@ def cmd_run(args: argparse.Namespace) -> int:
             # Local refresh-then-sync: no market fetch, rebuild board from stored rows, then export + upload.
             results = compute_board_only(settings, universe=universe)
         else:
-            results = compute_local(settings, universe=universe, admission=admission)
+            results = compute_local(settings, universe=universe, admission=admission, private_research=private_research)
 
         # Check if any required task failed
         if not results:
             print(json.dumps({"status": "compute_failed", "reason": "no_task_results"}))
             return 1
         for task_result in results:
-            if task_result.get("status") != "succeeded":
+            if task_result.get("required", True) and task_result.get("status") != "succeeded":
                 print(json.dumps({"status": "compute_failed", "tasks": results}, indent=2, ensure_ascii=False))
                 return 1
 
@@ -129,7 +132,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         # Export v2 bundle — monotonic sequence: max(current ms, previous max seq + 1)
         if get_current_git_sha() != sha or config_path.read_bytes() != original_config:
             raise ValueError("code/config identity changed during compute")
-        if args.profile == "live" and not validate_provider_admission(args.provider, evidence=admission)["admitted"]:
+        if args.profile == "live" and not validate_provider_admission(
+            args.provider, evidence=admission, private_research=private_research
+        )["operation_permitted"]:
             print(json.dumps({"status": "export_blocked", "reason": "display_or_quality_UNKNOWN"}))
             return 1
         outbox = root / "outbox"
@@ -146,7 +151,10 @@ def cmd_run(args: argparse.Namespace) -> int:
         now_ms = int(time.time() * 1000)
         sequence = max(now_ms, highest_seq + 1)
 
-        bundle = export_local_v2(settings, sequence=sequence, code_sha=sha, universe=universe, admission=admission)
+        unavailable = [OPTIONAL_TASK_PARTS[item["task_name"]] for item in results
+                       if item.get("task_name") in OPTIONAL_TASK_PARTS and item.get("status") != "succeeded"]
+        bundle = export_local_v2(settings, sequence=sequence, code_sha=sha, universe=universe,
+                                 admission=admission, private_research=private_research, unavailable_parts=unavailable)
 
         bundle_path = outbox / f"bundle_{bundle['manifest']['sequence']}.json"
         write_json_atomic(bundle_path, bundle)
@@ -235,6 +243,7 @@ def main() -> int:
     p_run.add_argument("--sync-url", default="https://etf.joviluma.com/api/shadow/sync", help="HTTPS upload endpoint")
     p_run.add_argument("--no-upload", action="store_true", help="Do not upload after export")
     p_run.add_argument("--compute-only", action="store_true", help="Local compute only; no display export or upload")
+    p_run.add_argument("--private-research", action="store_true", help="Explicit owner-private research execution scope; does not certify data rights or quality")
     p_run.add_argument("--skip-trade-day-check", action="store_true", help="Bypass trading day gate (for testing/manual runs)")
 
     p_run.add_argument("--board-only", action="store_true", help="Local refresh-then-sync: rebuild decision board from stored local rows, no market fetch")

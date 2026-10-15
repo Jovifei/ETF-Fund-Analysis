@@ -1,6 +1,8 @@
 # Local producer admission and reconciliation
 
-This is a fail-closed runtime contract, not a grant of upstream rights. No
+Execution policy: `private-research-execution-v1`. This changes execution scope,
+not indicator formulas, forecast values, data normalization or calibration.
+This is a runtime contract, not a grant of upstream rights. No
 provider name, installed library, personal-use claim or owner consent establishes
 the upstream permission or observed units. Keep credentials in the existing
 private credential store; the following configuration contains no credentials.
@@ -10,7 +12,40 @@ codes. Real execution requires `--expected-sha <full clean approved SHA>`. A
 changed code/config identity, absent local ownership marker or missing existing
 dedicated `research.sqlite3` stops before collection. Mock execution cannot upload.
 
-Embed a `provider_admission` object using `provider-admission-evidence-v1`, with
+## Explicit owner-private execution
+
+Jovi's authorized existing personal research route may use `--private-research`
+with only the existing `public_composite` or `akshare` provider. This permits the
+operation while keeping `admitted=false`, upstream `license_status=UNKNOWN`,
+`source_qualification=UNKNOWN`, and `source_timestamp_quality=UNKNOWN`. This is
+distinct from an upstream license or a certified dataset, and does not enable
+commercial/public redistribution or other paid sources. Explicit DENIED,
+REVOKED, EXPIRED or dated-expired evidence still refuses execution. The private
+compute settings copy disables Tushare/FTShare fallback; credentials/configs are
+not changed. The Windows registration helper has an optional `-PrivateResearch`
+switch, default false, which adds the explicit CLI flag to the pinned task.
+
+The manifest records `usage_scope=owner_private_research`, UNKNOWN source/license
+qualification, `research_only=true`, `actionable=false`, `not_calibrated` and the
+execution policy version, never private permission documents. Exported forecast
+calibration labels are conservatively not_calibrated; stored rows and numeric
+outputs are unchanged. Existing ProviderAdapter quality checks still apply:
+unknown quantity fields remain null and dependent indicators cannot acquire
+qualification through this execution flag. Optional market-context/sector
+refresh failures are required=false/unavailable and export explicit empty parts;
+core bars/quotes and derived required tasks still reject partial/failure.
+
+AKShare describes public-source local collection for academic research; this
+does not establish a separate verified license for each upstream. Its Sina
+history documentation and decoder do not establish a uniformly normalized
+volume/amount contract; current price-only quarantine remains unchanged.
+Sources: [official project overview](https://akshare.akfamily.xyz/introduction.html),
+[official ETF interface documentation](https://akshare.akfamily.xyz/data/fund/fund_public.html#fund-etf-hist-sina),
+[Sina decoder source](https://github.com/akfamily/akshare/blob/main/akshare/fund/fund_etf_sina.py).
+
+## Optional documented-evidence route
+
+Without that explicit owner scope, embed a `provider_admission` object using `provider-admission-evidence-v1`, with
 the exact selected provider and unique interfaces named `daily_bars`, `quotes`,
 `sector_snapshots`, `market_context`. Each interface needs:
 
