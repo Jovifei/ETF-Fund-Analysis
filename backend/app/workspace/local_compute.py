@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import json
 import re
+from math import isfinite
 import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -18,11 +19,13 @@ from app.services.decision_board_service import DecisionBoardService
 from app.utils.hashing import stable_hash
 from app.workspace.candle_periods import transform_chart
 from app.workspace.read_model import chart_data, instrument_detail, overview
-from app.workspace.shadow_bundle import digest, make_bundle, timestamp
-from app.workspace.shadow_projection import project_chart
+from app.workspace.shadow_bundle import canonical, digest, make_bundle, timestamp
+from app.workspace.shadow_projection import levels, project_chart, studies
 
 CONTRACT_VERSION = "local-display-v2"
 ADMISSION_POLICY_VERSION = "private-research-execution-v1"
+EXPORT_PROJECTION_VERSION = "local-display-projection-v1"
+EXPORT_MAX_BYTES = 16 * 1024 * 1024
 OPTIONAL_TASK_PARTS = {"refresh_market_context": "market_context", "refresh_sector_snapshots": "sectors"}
 
 ROW_FIELDS_V2 = {
@@ -54,9 +57,65 @@ ROW_FIELDS_V2 = {
     "chan",
     "quote",
     "support_resistance",
+    "entry_exit_ref",
+    "theme_relative_strength",
 }
 
 BAR_FIELDS = {"date", "open", "high", "low", "close", "volume", "amount", "source"}
+
+
+def _display_level(value):
+    if type(value) in (int, float):
+        if not isfinite(value):
+            raise ValueError("non-finite display support level")
+        return value
+    projected = levels(value)
+    if projected is not None:
+        projected.update({key: value[key] for key in ("zone_low", "zone_high") if key in value})
+    return projected
+
+
+def _display_sr(value):
+    if value is None:
+        return None
+    def study_level(item):
+        item = _display_level(item)
+        if type(item) in (int, float):
+            return {"price": item}
+        return item
+    normalized = {**value, "levels": [study_level(item) for item in value.get("levels", [])]}
+    for key in ("nearest_support", "nearest_resistance"):
+        normalized[key] = study_level(value.get(key))
+    projected = studies(normalized)
+    projected["levels"] = [_display_level(item) for item in value.get("levels", [])]
+    for key in ("nearest_support", "nearest_resistance"):
+        projected[key] = _display_level(value.get(key))
+    metadata = ("source_as_of_date", "snapshot_as_of_date", "as_of_date", "computed_at", "computed_by",
+                "version", "indicator_version", "input_hash", "config_hash", "interval", "price_basis",
+                "price_basis_id", "source", "evidence_time", "source_time", "snapshot_id", "method_version",
+                "revision_id", "snapshot_source", "generated_at")
+    projected.update({key: value[key] for key in metadata if key in value})
+    return projected
+
+
+def _display_row(row, *, history_source=None):
+    if row is None:
+        return None
+    projected = {key: value for key, value in row.items() if key in ROW_FIELDS_V2}
+    projected.update(research_only=True, actionable=False)
+    projected["support_resistance"] = _display_sr(row.get("support_resistance"))
+    history = (history_source or row).get("history") or []
+    confirmed = [item for item in history if isinstance(item, dict)
+                 and not any(item.get(flag) for flag in ("is_forecast", "is_provisional", "not_actual", "is_partial"))]
+    projected["history"] = [{key: value for key, value in confirmed[-1].items()
+                             if key in BAR_FIELDS | {"is_forecast", "is_provisional", "adjust"}}] if confirmed else []
+    return projected
+
+
+def _checked_export(bundle):
+    if len(canonical(bundle)) > EXPORT_MAX_BYTES:
+        raise ValueError("producer export budget exceeded (canonical 16 MiB); no scope or bar truncation applied")
+    return bundle
 
 
 def local_settings(
@@ -357,13 +416,13 @@ def export_local_v2(
 
             # 1. Overview part
             view = overview(db, settings, limit=1000)
+            original_rows = {row["ts_code"]: row for row in original.get("rows", [])
+                             if isinstance(row, dict) and row.get("ts_code")}
             rows = []
             for row in view.get("rows", []):
                 if universe and row.get("ts_code") not in universe:
                     continue
-                row_clean = {k: v for k, v in row.items() if k in ROW_FIELDS_V2}
-                row_clean["research_only"] = True
-                row_clean["actionable"] = False
+                row_clean = _display_row(row, history_source=original_rows.get(row.get("ts_code")))
                 rows.append(row_clean)
 
             target_trade_date = original.get("target_trade_date") or view.get("target_trade_date") or generated.strftime("%Y-%m-%d")
@@ -394,7 +453,7 @@ def export_local_v2(
                     detail_parts[code] = {
 
                         "instrument": det.get("instrument"),
-                        "decision": det.get("decision"),
+                        "decision": _display_row(det.get("decision")),
                         "snapshot_id": det.get("snapshot_id"),
                         "decision_time": det.get("decision_time"),
                         "quote": det.get("quote"),
@@ -413,7 +472,7 @@ def export_local_v2(
                         "indicator_version": det.get("indicator_version"),
                         "indicator_as_of": det.get("indicator_as_of"),
                         "forecasts": det.get("forecasts") or {},
-                        "support_resistance": det.get("support_resistance"),
+                        "support_resistance": _display_sr(det.get("support_resistance")),
                         "forecast_scenario": det.get("forecast_scenario"),
                         "holding": None,  # Public bundle strictly isolates private user holdings
                         "actionable": False,
@@ -527,6 +586,7 @@ def export_local_v2(
                 "license_status": "UNKNOWN",
                 "calibration_status": "not_calibrated",
                 "admission_policy_version": ADMISSION_POLICY_VERSION,
+                "export_projection_version": EXPORT_PROJECTION_VERSION,
             }
 
             if private_research:
@@ -539,9 +599,9 @@ def export_local_v2(
                     return value
                 parts = unqualified_copy(parts)
                 manifest["parts_hashes"] = {key: digest(value) for key, value in parts.items()}
-            return {
+            return _checked_export({
                 "manifest": manifest,
                 "parts": parts,
-            }
+            })
     finally:
         engine.dispose()

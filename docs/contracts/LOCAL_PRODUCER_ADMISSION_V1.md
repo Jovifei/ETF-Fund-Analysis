@@ -79,6 +79,18 @@ unique temporary files, flush/fsync and atomic replacement. Optional hashed
 `chart_periods` holds locally derived `1w`/`1mo` charts keyed by ETF and period;
 these keep the daily input generation and cutoff and never imply intraday support.
 
+`export_projection_version=local-display-projection-v1` projects board rows and
+detail decisions through the same display fields. SR levels, nearest levels,
+zone bounds, methods/groups/strength and evidence identity/time/version remain;
+large internal structures and raw references are omitted. History contains only
+the last confirmed non-provisional/non-forecast record already produced by the
+board; no quote is converted into a daily close. Forecast values and all chart
+bars are unchanged. The official producer rejects canonical JSON larger than
+16 MiB before writing/uploading; it never reduces the universe or truncates bars
+to fit. This is a projection/transport budget, not a change to calculations or the
+receiver's conservative shared 64 MiB storage contract. Actual 34-code fit must
+be measured on the final export, not inferred from this budget or pretty JSON.
+
 Windows task registration previews by default and creates only a new disabled
 task with a pinned SHA. It never overwrites a task. OS file locking prevents
 concurrent compute and releases ownership on process exit; an old mtime cannot

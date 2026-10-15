@@ -59,6 +59,7 @@ export function errorText(error: unknown): string {
     if (error.code === 'ai_endpoint_not_in_admin_allowlist') return '该模型服务地址尚未由管理员加入 HTTPS 域名白名单。'
     if (error.code === 'ai_profile_revision_changed') return '模型配置已变更，本次旧任务没有使用新密钥执行。请检查配置后重新提交。'
     if (error.status === 403) return '没有权限，或会话校验失败。请刷新后重试。'
+    if (error.code === 'cloud_research_writes_disabled') return '网站只展示计算结果，请在本机更新后重新读取。'
     if (error.status === 409) return `数据状态已变化，请刷新核对后重试（${error.code}）。`
     if (error.status === 429) return '任务或调用频率已达到上限，请稍后重试。'
     if (error.status === 503) return `服务尚未就绪，请检查配置和数据状态（${error.code}）。`

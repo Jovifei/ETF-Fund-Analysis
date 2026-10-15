@@ -9,6 +9,7 @@ describe('same-origin API boundary', () => {
   it('explains missing ETF catalog entries and unsupported chart periods', () => {
     expect(errorText(new ApiError(404, 'instrument_not_in_catalog'))).toContain('不在已同步证券目录')
     expect(errorText(new ApiError(422, 'unsupported_chart_interval'))).toContain('该图表周期暂不支持')
+    expect(errorText(new ApiError(409, 'cloud_research_writes_disabled'))).toContain('本机更新')
   })
   it('keeps authentication, server and timeout errors distinguishable', () => {
     expect(errorText(new ApiError(401, 'session_expired'))).toContain('登录已失效')
