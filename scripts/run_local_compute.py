@@ -13,6 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "backend"))
 
 from app.workspace.local_compute import (
+    compute_board_only,
     compute_local,
     doctor_check,
     export_local_v2,
@@ -88,7 +89,11 @@ def cmd_run(args: argparse.Namespace) -> int:
                 cfg = json.load(f)
                 universe = cfg.get("universe")
 
-        results = compute_local(settings, universe=universe)
+        if getattr(args, "board_only", False):
+            # Local refresh-then-sync: no market fetch, rebuild board from stored rows, then export + upload.
+            results = compute_board_only(settings, universe=universe)
+        else:
+            results = compute_local(settings, universe=universe)
 
         # Check if any required task failed
         for task_result in results:
@@ -143,9 +148,10 @@ def cmd_run(args: argparse.Namespace) -> int:
             os.environ["SHADOW_SIGNING_KEY_ID"] = auth_data["key_id"]
             os.environ["SHADOW_SIGNING_SECRET"] = auth_data["signing_secret"]
             sync_url = getattr(args, "sync_url", None) or "https://etf.joviluma.com/api/shadow/sync"
-            from app.workspace.shadow_client import upload_bundle
+            from app.workspace.shadow_client import upload_bundle_auto
             try:
-                receipt = upload_bundle(sync_url, bundle)
+                # <=16 MiB per request (wire and decoded); larger bundles go chunked + atomic commit.
+                receipt = upload_bundle_auto(sync_url, bundle)
                 receipt_path = outbox / f"bundle_{bundle['manifest']['sequence']}.receipt.json"
                 with open(receipt_path, "w", encoding="utf-8") as rf:
                     json.dump(receipt, rf, indent=2, ensure_ascii=False)
@@ -158,6 +164,27 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 0
     finally:
         lock.release()
+
+
+def cmd_reconcile(args: argparse.Namespace) -> int:
+    from datetime import date, datetime
+    from zoneinfo import ZoneInfo
+    from app.workspace.local_compute import local_session
+    from app.workspace.local_reconcile import recent_base_days, run_reconcile
+
+    root = Path(args.root)
+    database = Path(args.db) if args.db else root / "db" / "research.sqlite3"
+    session = date.fromisoformat(args.session) if args.session else datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    settings = local_settings(root, database, profile=args.profile, market_provider=args.provider)
+    with local_session(settings) as db:
+        report = run_reconcile(root, session=session, db=db, outcome_base_days=recent_base_days(db, session, args.lookback))
+    print(json.dumps({"status": "reconciled", "report_file": report["report_file"],
+                      "delivery_counts": report["delivery"]["counts"],
+                      "consumer_identity": report["consumer_identity"]["state"],
+                      "outcomes": [{"base": o["base_trade_date"], **o["summary"]} for o in report["outcomes"]]},
+                     indent=2, ensure_ascii=False))
+    bad = {k: v for k, v in report["delivery"]["counts"].items() if k != "MATCHED"}
+    return 1 if bad else 0
 
 
 def main() -> int:
@@ -181,11 +208,24 @@ def main() -> int:
     p_run.add_argument("--no-upload", action="store_true", help="Do not upload after export")
     p_run.add_argument("--skip-trade-day-check", action="store_true", help="Bypass trading day gate (for testing/manual runs)")
 
+    p_run.add_argument("--board-only", action="store_true", help="Local refresh-then-sync: rebuild decision board from stored local rows, no market fetch")
+
+    # Reconcile (16:30): local outbox vs receipts + matured T+1/T+5 outcomes; read-only, results stay local
+    p_rec = subparsers.add_parser("reconcile", help="Reconcile local bundles with receipts and summarise matured T+1/T+5 outcomes")
+    p_rec.add_argument("--root", required=True, help="Local root directory")
+    p_rec.add_argument("--db", default=None, help="SQLite database path")
+    p_rec.add_argument("--profile", default="live", choices=["live", "mock"], help="Execution profile")
+    p_rec.add_argument("--provider", default="public_composite", help="Market provider (no network use in reconcile)")
+    p_rec.add_argument("--session", default=None, help="Session date YYYY-MM-DD (default: today Asia/Shanghai)")
+    p_rec.add_argument("--lookback", type=int, default=6, help="Number of recent trade days used as outcome bases")
+
     args = parser.parse_args()
     if args.command == "doctor":
         return cmd_doctor(args)
     elif args.command == "run":
         return cmd_run(args)
+    elif args.command == "reconcile":
+        return cmd_reconcile(args)
     return 1
 
 

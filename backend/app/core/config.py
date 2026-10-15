@@ -75,6 +75,8 @@ class Settings(BaseSettings):
 
     # Local compute display v2 switch
     workspace_research_source: Literal["database", "local_bundle"] = "database"
+    # Audited maintenance exceptions in local_bundle mode; only refresh_decision_board is honoured.
+    display_only_allowed_tasks: list[str] = Field(default_factory=list)
     local_display_v2_store_root: str = str(PROJECT_ROOT / '.local' / 'local-display-v2')
     local_display_v2_max_bytes: int = Field(default=67108864, ge=1024, le=67108864)
     local_display_v2_max_decompressed_bytes: int = Field(default=67108864, ge=1024, le=67108864)

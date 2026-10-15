@@ -203,6 +203,40 @@ def compute_local(settings: Settings, universe: list[str] | None = None) -> list
     return results
 
 
+from contextlib import contextmanager
+
+
+@contextmanager
+def local_session(settings: Settings):
+    """Short-lived session on the owned local research DB only."""
+    engine = create_engine(settings.database_url)
+    try:
+        with Session(engine) as db:
+            yield db
+    finally:
+        engine.dispose()
+
+
+def compute_board_only(settings: Settings, universe: list[str] | None = None) -> list[dict[str, Any]]:
+    """Local refresh-then-sync target path: rebuild only the decision board from
+    stored local rows (no market collection), so a READ_MODEL change can be
+    published without any cloud-side compute."""
+    from app.services.task_service import TaskService
+
+    if getattr(settings, "workspace_research_source", "database") != "database":
+        raise ValueError("local refresh requires the local database research source")
+    engine = create_engine(settings.database_url)
+    service = TaskService(settings)
+    try:
+        with Session(engine) as db, db.begin():
+            kwargs: dict[str, Any] = {"codes": universe} if universe else {}
+            result = service.run(db, "refresh_decision_board", **kwargs)
+            return [{**result, "task_name": "refresh_decision_board"}]
+    finally:
+        service.close()
+        engine.dispose()
+
+
 def export_local_v2(
     settings: Settings,
     *,
