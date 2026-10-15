@@ -25,7 +25,7 @@ const detail = {
 }
 const chart = { ts_code: '510300.SH', interval: '1d', available: true, bars: [], reason: 'fixture', adjust: 'none', display_price_basis: 'source_adjustment:none', research_price_basis: 'source_adjustment:none', input_hash: 'input-fixture', series_id: 'series-fixture', indicator_basis: 'fixture-basis', computed_at: '2026-09-23T10:00:02+08:00', source_as_of: '2026-09-23', as_of: '2026-09-23T10:00:01+08:00' }
 
-async function openDetail(pageStateStub = true) {
+async function openDetail(pageStateStub = true, path = '/etf/510300.SH') {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -33,7 +33,7 @@ async function openDetail(pageStateStub = true) {
       { path: '/holdings', component: { template: '<div />' } },
     ],
   })
-  await router.push('/etf/510300.SH')
+  await router.push(path)
   await router.isReady()
   const stubs = {
     PageState: pageStateStub ? { template: '<div><slot /></div>' } : false,
@@ -71,6 +71,32 @@ afterEach(() => {
 })
 
 describe('detail data refresh lifecycle', () => {
+  it('moves a retired pinned generation to latest only after an explicit click', async () => {
+    vi.mocked(api).mockImplementation(async (path: string) => {
+      const url = new URL(path, 'http://localhost')
+      if (url.searchParams.get('generation') === '7') throw new Error('generation retired')
+      return path.includes('/chart?') ? { ...chart, generation: 8 } : { ...detail, generation: 8 }
+    })
+    const wrapper = await openDetail(false, '/etf/510300.SH?generation=7&tab=chart&mode=1430')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+    await vi.advanceTimersByTimeAsync(60_000)
+    await flushPromises()
+    expect(vi.mocked(api).mock.calls.every(([path]) => new URL(path, 'http://localhost').searchParams.get('generation') === '7')).toBe(true)
+    const latest = wrapper.get('[data-testid="read-latest-generation"]')
+    const href = new URL(latest.attributes('href')!, 'http://localhost')
+    expect(href.searchParams.has('generation')).toBe(false)
+    expect(href.searchParams.get('tab')).toBe('chart')
+    expect(href.searchParams.get('mode')).toBe('1430')
+    await latest.trigger('click')
+    await flushPromises()
+    const paths = vi.mocked(api).mock.calls.map(([path]) => String(path))
+    const chartRequest = paths.find(path => path.includes('/chart?'))!
+    expect(new URL(chartRequest, 'http://localhost').searchParams.get('generation')).toBe('8')
+    expect(new URL(chartRequest, 'http://localhost').searchParams.get('as_of')).toBe(detail.read_as_of)
+    expect(wrapper.find('[data-testid="chart-as-of"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="read-latest-generation"]').exists()).toBe(false)
+  })
+
   it('visibly labels expired local bundles instead of inheriting fresh quote status', async () => {
     vi.mocked(api).mockImplementation(async (path: string) => path.includes('/chart?')
       ? chart : { ...detail, generation: 7, is_stale: true })
