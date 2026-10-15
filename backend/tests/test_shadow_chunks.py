@@ -1,6 +1,7 @@
 """Chunked local-display-v2 delivery: each request <=chunk limit, atomic commit, fail-closed."""
 import gzip
 import hashlib
+from datetime import datetime, timedelta, timezone
 from contextlib import contextmanager
 from types import SimpleNamespace
 
@@ -27,7 +28,8 @@ def _bundle(seq=1, pad=10000):
     return {
         "manifest": {
             "contract_version": CONTRACT_VERSION, "code_sha": "a" * 40, "config_hash": "c" * 64,
-            "sequence": seq, "generated_at": "2026-10-12T06:30:00Z", "expires_at": "2026-10-12T08:30:00Z",
+            "sequence": seq, "generated_at": (datetime.now(timezone.utc)-timedelta(seconds=1)).isoformat(),
+            "expires_at": (datetime.now(timezone.utc)+timedelta(hours=1)).isoformat(),
             "actionable": False, "data_origin": "local_research", "universe": ["510300.SH"],
             "parts_hashes": compute_parts_hashes(parts),
         },
@@ -42,7 +44,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(shadow_chunks, "MAX_TOTAL_DECODED_BYTES", CHUNK * 4)
     settings = SimpleNamespace(
         shadow_sync_enabled=True, shadow_sync_root=str(tmp_path / "sync"), shadow_sync_code_sha="a" * 40,
-        shadow_sync_config_hash="b" * 64, shadow_sync_producer_token=SecretStr("x" * 32),
+        shadow_sync_config_hash="c" * 64, shadow_sync_producer_token=SecretStr("x" * 32),
         shadow_sync_active_key_id="test-1", shadow_sync_signing_secret=SecretStr("s" * 32),
         shadow_sync_max_bytes=33554432, shadow_sync_max_generations=20, shadow_sync_max_request_bytes=CHUNK,
         workspace_research_source="local_bundle", local_display_v2_store_root=str(tmp_path / "v2"),
@@ -92,7 +94,7 @@ def test_chunked_upload_every_request_bounded_and_receipt_v2(env):
     chunk_posts = [s for s in env.sent if s[0] == "/api/shadow/sync/chunk"]
     assert len(chunk_posts) >= 2 and all(size <= CHUNK for _, size in chunk_posts)
     assert env.sent[-1][0] == "/api/shadow/sync/commit"
-    assert not any((env.tmp / "sync" / "chunks").iterdir())  # staging cleaned after commit
+    assert not list((env.tmp / "sync" / "chunks").glob("*/*.part"))  # only bounded retry receipt retained
     # Duplicate delivery of the same immutable bundle with new nonces does not re-activate.
     again = upload_bundle_auto("https://etf.example/api/shadow/sync", bundle, opener=env.opener, chunk_size=CHUNK)
     assert again["bundle_id"] == receipt["bundle_id"] and again["status"] in {"accepted", "already_accepted"}
@@ -119,7 +121,7 @@ def test_out_of_order_chunks_commit_atomically_and_nothing_visible_before_commit
     assert r.status_code == 200 and r.json()["sequence"] == 2
 
 
-def test_interrupted_upload_missing_chunk_rejected_and_staging_dropped(env):
+def test_interrupted_upload_missing_chunk_rejected_and_staging_retained(env):
     body = canonical(_bundle(seq=3))
     parts = shadow_chunks.split_canonical(body, chunk_size=CHUNK)
     uid = hashlib.sha256(body).hexdigest()
@@ -127,7 +129,8 @@ def test_interrupted_upload_missing_chunk_rejected_and_staging_dropped(env):
     assert env.client.post("/api/shadow/sync/chunk", content=wire, headers=_chunk_headers(uid, 0, len(parts), parts[0], wire)).status_code == 200
     cbody = shadow_chunks.commit_body(uid, len(parts))
     assert env.client.post("/api/shadow/sync/commit", content=cbody, headers=_commit_headers(cbody)).status_code == 422
-    assert not (env.tmp / "sync" / "chunks" / uid).exists()
+    assert (env.tmp / "sync" / "chunks" / uid / "0.part").exists()
+    assert not (env.tmp / "v2" / "latest.json").exists()
 
 
 def test_corrupt_tampered_oversized_and_busy_chunks_rejected(env):

@@ -1,5 +1,6 @@
 """Read-only market discovery status and deduplicated, opt-in low-frequency jobs."""
 from datetime import UTC, datetime, timedelta
+from app.core.config import get_settings
 from sqlalchemy import func, select
 
 from app.models import Instrument, SectorSnapshot
@@ -29,6 +30,8 @@ def state(db):
 
 
 def enqueue(db, user_id=None, *, manual=False, now=None):
+    from app.services.research_write_guard import require_research_write
+    require_research_write(get_settings(), "discovery")
     now = now or datetime.now(UTC)
     lock_owner(db,'workspace-market-discovery')
     submitted = []

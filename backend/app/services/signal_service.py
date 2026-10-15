@@ -362,6 +362,8 @@ class SignalService:
             item.reasons = list(dict.fromkeys(item.reasons))[:10]
 
     def refresh_all(self, db: Session, run_id: str | None = None) -> dict:
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "SignalService.refresh_all")
         run_id = run_id or uuid4().hex
         now = datetime.now(self.settings.timezone)
         instruments = db.scalars(select(Instrument).where(Instrument.enabled.is_(True))).all()

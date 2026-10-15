@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -58,7 +58,7 @@ def test_sync_and_preview_local_display_v2(tmp_path, monkeypatch):
         shadow_sync_enabled=True,
         shadow_sync_root=str(tmp_path),
         shadow_sync_code_sha='a'*40,
-        shadow_sync_config_hash='b'*64,
+        shadow_sync_config_hash='c'*64,
         shadow_sync_producer_token=SecretStr('x'*32),
         shadow_sync_active_key_id='test-1',
         shadow_sync_signing_secret=SecretStr('s'*32),
@@ -82,8 +82,8 @@ def test_sync_and_preview_local_display_v2(tmp_path, monkeypatch):
             "code_sha": "a" * 40,
             "config_hash": "c" * 64,
             "sequence": 1,
-            "generated_at": "2026-10-12T06:30:00Z",
-            "expires_at": "2026-10-12T08:30:00Z",
+            "generated_at": (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(),
+            "expires_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
             "actionable": False,
             "data_origin": "local_research",
             "universe": ["510300.SH"],
@@ -121,7 +121,7 @@ def test_sync_with_gzip_payload(tmp_path, monkeypatch):
         shadow_sync_enabled=True,
         shadow_sync_root=str(tmp_path),
         shadow_sync_code_sha='a'*40,
-        shadow_sync_config_hash='b'*64,
+        shadow_sync_config_hash='c'*64,
         shadow_sync_producer_token=SecretStr('x'*32),
         shadow_sync_active_key_id='test-1',
         shadow_sync_signing_secret=SecretStr('s'*32),
@@ -146,8 +146,8 @@ def test_sync_with_gzip_payload(tmp_path, monkeypatch):
             "code_sha": "a" * 40,
             "config_hash": "c" * 64,
             "sequence": 1,
-            "generated_at": "2026-10-12T06:30:00Z",
-            "expires_at": "2026-10-12T08:30:00Z",
+            "generated_at": (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(),
+            "expires_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
             "actionable": False,
             "data_origin": "local_research",
             "universe": ["510300.SH"],

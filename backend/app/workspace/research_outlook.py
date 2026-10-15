@@ -100,6 +100,8 @@ def input_rows(db, instrument_id):
 
 
 def refresh(db, settings, codes):
+    from app.services.research_write_guard import require_research_write
+    require_research_write(settings, "research_outlook")
     query = select(Instrument).where(Instrument.kind.in_(('ETF', 'LOF')))
     query = query.where(Instrument.ts_code.in_(codes)) if codes else query.where(Instrument.enabled.is_(True))
     requested = db.scalar(select(func.count()).select_from(query.subquery())) or 0

@@ -266,6 +266,8 @@ class SupportResistanceService:
     def compute(self, db: Session, instrument_id: int, *, computed_by: str = "scheduled",
                 as_of: datetime | None = None) -> dict[str, Any]:
         """显式任务计算并落库；页面读取不触发本方法。"""
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "support_resistance.compute")
         frame = self._sr_frame(db, instrument_id, as_of=as_of)
         bars = len(frame)
         issue = frame.attrs.get("history_issue")
@@ -315,6 +317,8 @@ class SupportResistanceService:
 
     def capture_for_instruments(self, db: Session, instruments: list[Instrument], *, computed_by: str = "scheduled") -> int:
         """为一批标的刷新快照；单标的失败用 SAVEPOINT 隔离，不污染调用方事务。"""
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "support_resistance.capture")
         captured = 0
         for instrument in instruments:
             try:

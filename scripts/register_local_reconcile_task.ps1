@@ -19,28 +19,35 @@ $ErrorActionPreference = 'Stop'
 foreach ($val in @($Python, $Worktree, $LocalRoot, $TaskName, $At)) {
     if ([string]::IsNullOrWhiteSpace($val) -or $val -match '["`\r\n]') { throw "Unsafe or empty task parameter" }
 }
+if ($TaskName -match '[*?\[\]]') { throw "Task name must be literal" }
 if ((Get-TimeZone).Id -ne 'China Standard Time') { throw "Requires China Standard Time; this script never changes the system timezone" }
 if ($ValidDays -lt 1 -or $ValidDays -gt 60) { throw "ValidDays must be 1..60" }
 
 $existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-if ($Enable) {
-    if (-not $existing) { throw "Task $TaskName not found" }
-    if ($existing.Description -notlike '*owner=bot/local-live-phase1-closure*') { throw "Task $TaskName is not owned by this phase; refusing" }
-    Enable-ScheduledTask -TaskName $TaskName | Out-Null
-    Write-Output "Enabled: $TaskName"
-    return
-}
 
 $resolvedPython = (Resolve-Path -LiteralPath $Python).Path
 $resolvedTree = (Resolve-Path -LiteralPath $Worktree).Path
 $script = Join-Path $resolvedTree "scripts\run_local_compute.py"
 if (-not (Test-Path -LiteralPath $script)) { throw "run_local_compute.py not found in worktree" }
 if (-not (Test-Path -LiteralPath (Join-Path $LocalRoot '.local-live'))) { throw "Local root owner marker missing" }
+if (-not (Test-Path -LiteralPath (Join-Path $LocalRoot 'db\research.sqlite3') -PathType Leaf)) { throw "Local database missing" }
 $sha = (& git -C $resolvedTree rev-parse HEAD).Trim()
-$dirty = (& git -C $resolvedTree status --porcelain backend scripts config)
-if ($dirty) { throw "Worktree has uncommitted runtime changes; refusing" }
+if ($LASTEXITCODE -ne 0 -or $sha -notmatch '^[0-9a-f]{40}$') { throw "Cannot identify worktree" }
+$dirty = (& git -C $resolvedTree status --porcelain backend scripts config frontend pyproject.toml)
+if ($LASTEXITCODE -ne 0 -or $dirty) { throw "Worktree has uncommitted runtime changes; refusing" }
 
-$arguments = '"{0}" reconcile --root "{1}" --profile live' -f $script, $LocalRoot
+$arguments = '"{0}" reconcile --root "{1}" --profile live --expected-sha {2}' -f $script, $LocalRoot, $sha
+if ($Enable) {
+    if (-not $existing -or $existing.Description -ne "ETF 16:30 local reconcile (read-only). owner=bot/local-live-phase1-closure code=$sha" -or
+        @($existing.Actions).Count -ne 1 -or $existing.Actions[0].Execute -ne $resolvedPython -or
+        $existing.Actions[0].Arguments -ne $arguments -or $existing.Actions[0].WorkingDirectory -ne $resolvedTree) {
+        throw "Existing task identity does not match; refusing to enable"
+    }
+    if (-not $Apply) { Write-Output 'PREVIEW ONLY; -Apply -Enable required'; return }
+    Enable-ScheduledTask -TaskName $TaskName | Out-Null
+    Write-Output "Enabled: $TaskName"
+    return
+}
 $start = (Get-Date).Date.Add([TimeSpan]::Parse($At))
 if ($start -lt (Get-Date)) { $start = $start.AddDays(1) }
 $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday, Tuesday, Wednesday, Thursday, Friday -At $start
@@ -59,8 +66,9 @@ Write-Output "DefinitionSha256: $defHash"
 if ($existing) { throw "Task $TaskName already exists (owner unknown); refusing to overwrite" }
 if (-not $Apply) { Write-Output "PREVIEW ONLY (pass -Apply to register disabled)"; return }
 
-Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Description $description | Out-Null
-Disable-ScheduledTask -TaskName $TaskName | Out-Null
+$definition = New-ScheduledTask -Action $action -Trigger $trigger -Settings $settings -Description $description
+$definition.Settings.Enabled = $false
+Register-ScheduledTask -TaskName $TaskName -InputObject $definition | Out-Null
 Write-Output "Registered DISABLED: $TaskName"
 Write-Output "Manual verify (task stays disabled): & '$resolvedPython' $arguments ; then re-run with -Enable"
 Write-Output "Stop: Disable-ScheduledTask -TaskName '$TaskName'; Unregister: Unregister-ScheduledTask -TaskName '$TaskName' -Confirm:`$false"

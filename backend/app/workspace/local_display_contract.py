@@ -10,9 +10,10 @@ from app.workspace.shadow_bundle import digest
 from app.workspace.shadow_projection import CODE_RE, validate_public_chart
 
 CONTRACT_VERSION = "local-display-v2"
-VALIDATION_VERSION = "local-display-validation-v2.1"
+VALIDATION_VERSION = "local-display-validation-v2.2"
 MAX_BUNDLE_BYTES = 64 * 1024 * 1024  # 64 MiB bounded quota
 REQUIRED_PARTS = {"overview", "details", "charts", "sectors"}
+OPTIONAL_PARTS = {"market_context", "chart_periods"}
 FORBIDDEN_PRIVATE_FIELDS = {"avg_cost", "holdings", "cost", "trades", "account_id", "user_id", "accounts", "cookie", "cookies", "token", "password", "authorization"}
 HEX_HASH_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
@@ -37,8 +38,8 @@ def _parse_iso(ts_str: str) -> datetime:
         raise ValueError("invalid timestamp string")
     dt = datetime.fromisoformat(ts_str)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt
+        raise ValueError("timestamp timezone required")
+    return dt.astimezone(timezone.utc)
 
 
 def _scan_deep_privacy_and_actionable(obj: Any) -> bool:
@@ -131,9 +132,11 @@ def verify_bundle_integrity(bundle: dict[str, Any], *, now: datetime | None = No
         if not isinstance(manifest_dict, dict) or not isinstance(parts, dict):
             return False
         manifest = validate_bundle_manifest(manifest_dict)
-        if now is not None and _parse_iso(manifest.expires_at) <= now:
+        if now is not None and not (_parse_iso(manifest.generated_at) <= now < _parse_iso(manifest.expires_at)):
             return False
         if REQUIRED_PARTS - set(parts) or any(not isinstance(parts[key], dict) for key in REQUIRED_PARTS):
+            return False
+        if set(parts) - REQUIRED_PARTS - OPTIONAL_PARTS:
             return False
         if compute_parts_hashes(parts) != manifest.parts_hashes:
             return False
@@ -145,6 +148,20 @@ def verify_bundle_integrity(bundle: dict[str, Any], *, now: datetime | None = No
             if code not in universe:
                 return False
             validate_public_chart(chart, code=code, generated_at=generated, partial=True)
+        period_charts = parts.get("chart_periods", {})
+        if not isinstance(period_charts, dict):
+            return False
+        for code, intervals in period_charts.items():
+            if code not in universe or not isinstance(intervals, dict) or set(intervals) - {"1w", "1mo"}:
+                return False
+            for interval, chart in intervals.items():
+                if not isinstance(chart, dict) or chart.get("interval") != interval:
+                    return False
+                validate_public_chart(chart, code=code, generated_at=generated, partial=True,
+                                      expected_interval=interval)
+        if "market_context" in parts and (not isinstance(parts["market_context"], dict)
+                or not isinstance(parts["market_context"].get("items"), list)):
+            return False
         for code, detail in parts["details"].items():
             if code not in universe or not isinstance(detail, dict):
                 return False

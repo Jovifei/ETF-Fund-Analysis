@@ -19,6 +19,8 @@ MAX_ROWS = 1500
 
 
 def refresh(db, settings, provider, run_id, lookback_days=1200):
+    from app.services.research_write_guard import require_research_write
+    require_research_write(settings, "refresh_index_history")
     now = datetime.now(settings.timezone)
     from app.services.settlement import settled_session
     end = settled_session(settings, now)

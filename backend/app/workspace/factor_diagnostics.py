@@ -29,6 +29,8 @@ def correlation_summary(panel, fields):
 
 
 def run(db, settings, *, selected=None):
+    from app.services.research_write_guard import require_research_write
+    require_research_write(settings, "factor_diagnostics")
     from app.models import Instrument
     from app.providers.data_contract import history_issues
     # The shared signal engine still requires complete, current history. This

@@ -208,6 +208,8 @@ def settled_pipeline_tasks(db, settings, now):
 
 def tick() -> dict:
     settings = get_settings()
+    from app.services.research_write_guard import require_research_write
+    require_research_write(settings, "scheduler_tick")
     provider = create_provider(settings)
     task_holder: list[object | None] = [None]
     try:

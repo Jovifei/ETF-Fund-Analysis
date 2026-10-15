@@ -48,6 +48,8 @@ class MarketBarService:
         window_days: int = 30,
         run_id: str | None = None,
     ) -> dict[str, Any]:
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "refresh_minute_bars")
         run_id = run_id or uuid4().hex
         if interval not in SUPPORTED_MINUTE_INTERVALS:
             raise ValueError(f"不支持的分钟周期：{interval}")

@@ -49,6 +49,8 @@ class IndicatorService:
         return {instrument_id: round(float(ranks.get(instrument_id, 50.0)), 2) for instrument_id in results}
 
     def refresh_all(self, db: Session, run_id: str | None = None) -> dict:
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "IndicatorService.refresh_all")
         run_id = run_id or uuid4().hex
         instruments = db.scalars(select(Instrument).where(Instrument.enabled.is_(True))).all()
         from app.providers.data_contract import history_issues, trailing_unverified_history

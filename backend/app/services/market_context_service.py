@@ -193,6 +193,8 @@ class MarketContextService:
         run_id: str | None = None,
     ) -> dict[str, Any]:
         """Upsert config rows while retaining historical rows that have snapshots."""
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "MarketContextService.sync_registry")
         del run_id  # Reserved for the task-layer audit/event boundary in B2b.
         registry = self._config(config)
         configured = {item.context_id: item for item in registry.items}
@@ -472,6 +474,8 @@ class MarketContextService:
         config: RegistryConfig | Iterable[MarketContextItem] | None = None,
         run_id: str | None = None,
     ) -> dict[str, Any]:
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "MarketContextService.refresh")
         run_id = run_id or uuid4().hex
         registry = self._config(config)
         self.sync_registry(db, config=registry, run_id=run_id)

@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
+from app.core.config import get_settings
 from app.models import Instrument
 from app.workspace.config import workspace_settings
 from app.workspace.jobs import WorkspaceError, lock_owner, owner_scope
@@ -136,6 +137,8 @@ def preview(packet: ExternalPacket) -> dict:
 
 
 def import_packet(db: Session, packet: ExternalPacket, expected_hash: str, user_id: int | None):
+    from app.services.research_write_guard import require_research_write
+    require_research_write(get_settings(), "external_research_import")
     digest, scope = packet.digest(), owner_scope(user_id)
     if digest != expected_hash:
         raise WorkspaceError(409, 'external_preview_changed')

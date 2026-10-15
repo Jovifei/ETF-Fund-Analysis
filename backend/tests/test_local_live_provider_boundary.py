@@ -18,17 +18,15 @@ def test_provider_boundary_rejects_mock_in_live(tmp_path):
         validate_provider_admission(market_provider="mock", profile="live")
 
 
-def test_provider_boundary_admits_akshare_and_tushare():
-    # akshare is valid
+def test_provider_name_alone_is_not_permission_or_quality_evidence():
     res_ak = validate_provider_admission(market_provider="akshare", profile="live")
-    assert res_ak["admitted"] is True
-    assert res_ak["adjustment_policy"] == "qfq"
+    assert res_ak["admitted"] is False
+    assert res_ak["source_timestamp_quality"] == "UNKNOWN"
     assert res_ak["actionable"] is False
 
-    # tushare is valid
     res_tu = validate_provider_admission(market_provider="tushare", profile="live")
-    assert res_tu["admitted"] is True
-    assert res_tu["adjustment_policy"] == "qfq"
+    assert res_tu["admitted"] is False
+    assert res_tu["license_status"] == "UNKNOWN"
     assert res_tu["actionable"] is False
 
 

@@ -28,7 +28,7 @@ class LocalDisplayStore:
     """Immutable v2 generations with validation on every read and bounded publication."""
     FILE_RE = re.compile(r"bundle_([1-9][0-9]*)_([0-9a-f]{16})\.json")
 
-    def __init__(self, store_dir: Path | str, *, max_bytes: int | None = None):
+    def __init__(self, store_dir: Path | str, *, max_bytes: int | None = None, domain=None):
         self.store_dir = Path(store_dir)
         if self.store_dir.is_symlink():
             raise ValueError("symlink store rejected")
@@ -39,6 +39,9 @@ class LocalDisplayStore:
         self.latest_link = self.store_dir / "latest.json"
         self.previous_link = self.store_dir / "previous.json"
         self.lock_file = self.store_dir / ".publish.lock"
+        from app.workspace.sync_domain import SyncDomain
+        self._own_domain = domain is None
+        self.domain = domain or SyncDomain(self.store_dir, max_bytes=self.max_bytes)
 
     def _load_file(self, path: Path, *, expected_id: str | None = None) -> dict[str, Any] | None:
         match = self.FILE_RE.fullmatch(path.name)
@@ -84,6 +87,8 @@ class LocalDisplayStore:
             return None
 
     def _atomic(self, path: Path, data: bytes) -> None:
+        if self.domain is not None:
+            self.domain.reserve(len(data))
         temp = self.store_dir / f".pending-{uuid.uuid4().hex}"
         try:
             with temp.open("xb") as handle:
@@ -126,11 +131,17 @@ class LocalDisplayStore:
                 "sequence": manifest["sequence"], "received_at": datetime.now(timezone.utc).isoformat()}
 
     def publish(self, bundle: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
+        if self._own_domain:
+            self.domain.max_bytes = self.max_bytes
+        with self.domain.locked():
+            return self._publish(bundle, now=now)
+
+    def _publish(self, bundle: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
         if not isinstance(bundle, dict):
             raise ValueError("invalid bundle")
         manifest = validate_bundle_manifest(bundle.get("manifest", {}))
-        if not verify_bundle_integrity(bundle, now=now):
-            raise ValueError("bundle parts integrity verification failed or bundle expired")
+        if not verify_bundle_integrity(bundle):
+            raise ValueError("bundle parts integrity verification failed")
         manifest_dict = bundle["manifest"]
         identity = digest(manifest_dict)
         data = canonical(bundle)
@@ -157,6 +168,11 @@ class LocalDisplayStore:
                     if identity == current["bundle_id"]:
                         return self._receipt(manifest_dict, identity, "already_accepted")
                     raise ValueError("bundle sequence already accepted with different identity")
+            # A same-identity retry above is only a receipt lookup. Every new activation
+            # uses receiver time; stored expired generations remain readable as STALE.
+            activation_time = now or datetime.now(timezone.utc)
+            if not verify_bundle_integrity(bundle, now=activation_time):
+                raise ValueError("bundle expired or generated in future")
             if target.exists() and target.read_bytes() != data:
                 raise ValueError("immutable bundle collision")
             evict = self._budget_plan(target, len(data), current)
@@ -168,6 +184,8 @@ class LocalDisplayStore:
             created = not target.exists()
             pointer = {"bundle_file": target.name, "bundle_id": identity, "sequence": manifest.sequence,
                        "generated_at": manifest.generated_at, "expires_at": manifest.expires_at}
+            self.domain.reserve((len(data) if created else 0) + len(canonical(pointer))
+                                + (len(canonical(current)) if current else 0))
             try:
                 if created:
                     self._atomic(target, data)
@@ -221,8 +239,21 @@ class LocalDisplayStore:
 
 
 class LocalDisplayReader:
-    def __init__(self, store: LocalDisplayStore):
+    def __init__(self, store: LocalDisplayStore, *, code_sha: str | None = None, config_hash: str | None = None):
         self.store = store
+        self.code_sha, self.config_hash = code_sha, config_hash
+
+    def _bundle(self, generation):
+        bundle = self.store.load_bundle(generation)
+        if bundle is not None and self.code_sha is not None:
+            manifest = bundle.get("manifest", {})
+            matched = (manifest.get("code_sha") == self.code_sha and manifest.get("config_hash") == self.config_hash
+                       and bool(self.code_sha) and bool(self.config_hash))
+            if not matched:
+                if generation is None:
+                    return None
+                bundle = {**bundle, "historical_identity": True}
+        return bundle
 
     def read_overview(
         self,
@@ -232,7 +263,9 @@ class LocalDisplayReader:
         theme: str | None = None,
         generation: str | int | None = None,
     ) -> dict[str, Any]:
-        bundle = self.store.load_bundle(generation)
+        if horizon not in (1, 3, 5, 10):
+            raise ValueError("unsupported horizon")
+        bundle = self._bundle(generation)
         if not bundle:
             return {
                 "rows": [],
@@ -250,7 +283,7 @@ class LocalDisplayReader:
         if expires_at_str:
             try:
                 exp_dt = _parse_iso(expires_at_str)
-                is_stale = datetime.now(timezone.utc) > exp_dt
+                is_stale = bool(bundle.get("historical_identity")) or datetime.now(timezone.utc) >= exp_dt
             except Exception:
                 is_stale = True
         else:
@@ -268,6 +301,10 @@ class LocalDisplayReader:
             "rows": sliced_rows,
             "total": total,
             "as_of": ov_part.get("generated_at"),
+            "generated_at": manifest.get("generated_at"),
+            "offset": offset,
+            "limit": limit,
+            "themes": sorted({str(row["theme_l1"]) for row in rows if row.get("theme_l1")}),
             "snapshot_id": ov_part.get("snapshot_id"),
             "read_model_version": CONTRACT_VERSION,
             "contains_mock": ov_part.get("contains_mock", False),
@@ -282,7 +319,9 @@ class LocalDisplayReader:
         snapshot_id: str | None = None,
         generation: str | int | None = None,
     ) -> dict[str, Any] | None:
-        bundle = self.store.load_bundle(generation)
+        if horizon not in (1, 3, 5, 10):
+            raise ValueError("unsupported horizon")
+        bundle = self._bundle(generation)
         if not bundle:
             return None
 
@@ -292,14 +331,20 @@ class LocalDisplayReader:
         if expires_at_str:
             try:
                 exp_dt = _parse_iso(expires_at_str)
-                is_stale = datetime.now(timezone.utc) > exp_dt
+                is_stale = bool(bundle.get("historical_identity")) or datetime.now(timezone.utc) >= exp_dt
             except Exception:
                 is_stale = True
         else:
             is_stale = True
 
         ov_part = bundle.get("parts", {}).get("overview", {})
-        rows = list(ov_part.get("rows", []))
+        if snapshot_id is not None and str(ov_part.get("snapshot_id")) != snapshot_id:
+            return None
+        captured_horizon = ov_part.get("horizon", 1)
+        rows = [{**row, "forecast": (row.get("forecasts") or {}).get(str(horizon)),
+                 "grade": row.get("grade", "数据异常") if horizon == captured_horizon else "数据异常",
+                 "grade_reason": row.get("grade_reason") if horizon == captured_horizon else "selected_horizon_grade_not_published"}
+                for row in ov_part.get("rows", [])]
         generated_at = ov_part.get("generated_at") or manifest.get("generated_at")
         trade_date = ov_part.get("target_trade_date")
         if not trade_date and generated_at:
@@ -314,13 +359,16 @@ class LocalDisplayReader:
             "snapshot_id": ov_part.get("snapshot_id") or str(manifest.get("sequence")),
             "generated_at": generated_at,
             "target_trade_date": trade_date,
+            "generation": manifest.get("sequence"),
+            "selected_horizon": horizon,
+            "decision_horizon": captured_horizon,
             "as_of": generated_at,
             "freshness": "stale" if is_stale else "fresh",
             "data_status": {"freshness": "stale" if is_stale else "fresh"},
             "source_status": {"freshness": "stale" if is_stale else "fresh", "actionable": False},
             "read_model_version": CONTRACT_VERSION,
             "current_board_read_contract": "local-display-v2",
-            "read_contract": "version_matched",
+            "read_contract": "historical_identity" if bundle.get("historical_identity") else "version_matched",
             "counts": counts,
             "rows": rows,
             "sector_timing": ov_part.get("sector_timing", {}),
@@ -335,7 +383,7 @@ class LocalDisplayReader:
         user_id: int | None = None,
         generation: str | int | None = None,
     ) -> dict[str, Any] | None:
-        bundle = self.store.load_bundle(generation)
+        bundle = self._bundle(generation)
         if not bundle:
             return None
 
@@ -349,6 +397,7 @@ class LocalDisplayReader:
         return {
             **clean_detail,
             "generation": bundle.get("manifest", {}).get("sequence"),
+            "is_stale": bool(bundle.get("historical_identity")) or datetime.now(timezone.utc) >= _parse_iso(bundle["manifest"]["expires_at"]),
             "read_model_version": CONTRACT_VERSION,
         }
 
@@ -358,11 +407,12 @@ class LocalDisplayReader:
         interval: str = "1d",
         limit: int = 250,
         generation: str | int | None = None,
+        as_of: str | datetime | None = None,
     ) -> dict[str, Any] | None:
         if interval not in {"1d", "1w", "1mo"}:
             raise ValueError("unsupported_chart_interval")
 
-        bundle = self.store.load_bundle(generation)
+        bundle = self._bundle(generation)
         if not bundle:
             return None
 
@@ -372,22 +422,13 @@ class LocalDisplayReader:
             return None
 
         chart_copy = dict(chart)
-        # If user requests 1w or 1mo, perform aggregation on the daily bars
+        captured_at = bundle.get("manifest", {}).get("generated_at")
+        if as_of is not None and _parse_iso(str(as_of)) != _parse_iso(captured_at):
+            raise ValueError("generation_time_mismatch")
+        # Aggregation belongs to the producer; absent periods are explicitly unavailable.
         if interval != "1d":
-            try:
-                from app.workspace.candle_periods import transform_chart
-                aggregated = transform_chart(chart_copy, period=interval, config={}, limit=limit)
-
-                if not aggregated or not aggregated.get("bars"):
-                    raise ValueError("chart_period_aggregation_failed")
-                return {
-                    **aggregated,
-                    "interval": interval,
-                    "generation": bundle.get("manifest", {}).get("sequence"),
-                    "read_model_version": CONTRACT_VERSION,
-                }
-            except Exception:
-                # Never disguise daily bars as weekly/monthly; return None on failure
+            chart_copy = bundle.get("parts", {}).get("chart_periods", {}).get(code.upper(), {}).get(interval)
+            if not isinstance(chart_copy, dict):
                 return None
 
         bars = chart_copy.get("bars", [])
@@ -403,18 +444,19 @@ class LocalDisplayReader:
         }
 
     def read_sectors(self, generation: str | int | None = None) -> dict[str, Any]:
-        bundle = self.store.load_bundle(generation)
+        bundle = self._bundle(generation)
         if not bundle:
             return {"sectors": [], "available": False}
         sectors_part = bundle.get("parts", {}).get("sectors", {})
         return {
             "sectors": sectors_part.get("sectors", []),
+            "boards": [{**row, "sector_pct_change": row.get("pct_change")} for row in sectors_part.get("sectors", [])],
             "available": True,
             "generation": bundle.get("manifest", {}).get("sequence"),
         }
 
     def read_market_context(self, generation: str | int | None = None) -> list[dict[str, Any]] | None:
-        bundle = self.store.load_bundle(generation)
+        bundle = self._bundle(generation)
         if not bundle:
             return None
         part = bundle.get("parts", {}).get("market_context")

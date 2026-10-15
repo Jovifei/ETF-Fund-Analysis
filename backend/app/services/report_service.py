@@ -33,6 +33,8 @@ class ReportService:
         return owner is not None and owner.role == "admin" and owner.status == "active"
 
     def generate(self, db: Session, run_id: str | None = None, *, user_id: int | None = None) -> dict:
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "ReportService.generate")
         run_id = run_id or uuid4().hex
         now = datetime.now(self.settings.timezone)
         payload = self.dashboard.bootstrap(

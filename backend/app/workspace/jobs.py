@@ -119,6 +119,8 @@ def build_bundle(db: Session, settings: Settings, request: ResearchRequest, user
 
 
 def enqueue(db: Session, settings: Settings, request: ResearchRequest, user_id: int | None) -> tuple[WorkspaceResearchJob, bool]:
+    from app.services.research_write_guard import require_research_write
+    require_research_write(settings, "research_jobs")
     scope = owner_scope(user_id)
     lock_owner(db, scope)
     base_request = request.model_dump(exclude={"request_key"})

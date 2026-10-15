@@ -95,6 +95,8 @@ class WatchlistService:
         if existing is not None:
             return existing
 
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "watchlist_catalog_lookup")
         record = self.provider.resolve_instrument(cleaned) if self.provider is not None else None
         if record is None:
             raise WatchlistError(

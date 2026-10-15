@@ -28,6 +28,7 @@ from app.providers.catalog import catalog_records
 from app.services.audit_service import AuditTimer, record_provider_audit
 from app.services.decision_board_service import DecisionBoardService
 from app.services.task_service import TaskService
+from app.services.research_write_guard import display_only, require_research_write
 from app.services.trading_calendar_service import TradingCalendarService
 from app.services.watchlist_service import WatchlistService, classify_theme
 from app.workspace import data_jobs, factor_diagnostics, jobs
@@ -51,7 +52,8 @@ def _stop(*_):
     STOP = True
 
 
-def sync_catalog(db, provider, *, enable_codes=()):
+def sync_catalog(db, provider, *, enable_codes=(), settings=None):
+    require_research_write(settings or get_settings(), "sync_catalog")
     wanted = set(enable_codes)
     known = {row.ts_code: row for row in db.scalars(select(Instrument))}
     if wanted and wanted.issubset(known):
@@ -160,6 +162,9 @@ def task_sequence(kind: str, codes: list[str], lookback: int) -> list[tuple[str,
 def execute(job_id: str) -> int:
     # A data job cannot silently bill a model via the legacy news enrichment path.
     settings = get_settings().model_copy(update={"analysis_enabled": False, "llm_enabled": False})
+    if display_only(settings):
+        logger.warning("workspace research job rejected: display_only_mode")
+        return 1
     steps = []
     with session_scope() as db:
         row = db.get(WorkspaceDataJob, job_id)
@@ -244,7 +249,7 @@ def execute(job_id: str) -> int:
         if kind in {"catalog", "onboard", "prepare_history"}:
             try:
                 with session_scope() as db:
-                    outcome = sync_catalog(db, tasks.provider, enable_codes=request.get("codes", []) if kind in {"onboard", "prepare_history"} else ())
+                    outcome = sync_catalog(db, tasks.provider, settings=settings, enable_codes=request.get("codes", []) if kind in {"onboard", "prepare_history"} else ())
                     if kind == "onboard":
                         for code in request["codes"]:
                             WatchlistService(settings).add(db, code=code, user_id=owner_id)
@@ -315,6 +320,8 @@ def heartbeat():
 
 def enqueue_daily_reviews():
     cfg, settings = workspace_settings(), get_settings()
+    if display_only(settings):
+        return 0
     if not cfg.daily_review_enabled or settings.market_provider == "mock":
         return 0
     now = datetime.now(ZoneInfo("Asia/Shanghai"))
@@ -383,6 +390,8 @@ def monitor_job(process, *, seconds=1800):
 
 
 def run_once() -> bool:
+    if display_only(get_settings()):
+        return False
     heartbeat()
     enqueue_daily_reviews()
     if workspace_settings().discovery_enabled and get_settings().market_provider != "mock":

@@ -11,43 +11,51 @@ def store():
     settings=get_settings()
     if not settings.shadow_sync_enabled:raise HTTPException(404,'shadow disabled')
     return ShadowStore(settings.shadow_sync_root,code_sha=settings.shadow_sync_code_sha,config_hash=settings.shadow_sync_config_hash,max_bytes=settings.shadow_sync_max_bytes,max_generations=settings.shadow_sync_max_generations)
+def sync_domain(settings):
+    from app.workspace.sync_domain import SyncDomain
+    return SyncDomain(settings.shadow_sync_root,
+                      roots=(getattr(settings, 'local_display_v2_store_root', settings.shadow_sync_root),),
+                      max_bytes=getattr(settings, 'local_display_v2_max_bytes', 67108864))
+
+
+def _verify(body, request, settings, domain, *, path='/api/shadow/sync'):
+    try:
+        verify_request(body,request.headers,settings.shadow_sync_root,settings.shadow_sync_active_key_id,
+                       settings.shadow_sync_signing_secret.get_secret_value(),path=path,domain=domain)
+    except (ValueError,OSError):
+        raise HTTPException(401, 'request authentication rejected') from None
+
+
 @router.post('/sync')
-async def sync(request:Request):
-    target=store();settings=get_settings();secret=settings.shadow_sync_producer_token.get_secret_value()
-    supplied=request.headers.get('Authorization','')
-    if len(secret)<32 or not hmac.compare_digest(supplied.encode('utf-8'),('Bearer '+secret).encode('utf-8')):raise HTTPException(401,'producer credential required')
-    body=bytearray()
-    async for chunk in request.stream():
-        body.extend(chunk)
-        if len(body)>settings.shadow_sync_max_request_bytes:raise HTTPException(413,'bundle too large')
+async def sync(request: Request):
+    target=store();settings=get_settings();_producer_auth(request,settings)
+    raw=await _read_bounded(request,settings.shadow_sync_max_request_bytes)
+    domain=sync_domain(settings)
     try:
-        verify_request(bytes(body),request.headers,settings.shadow_sync_root,settings.shadow_sync_active_key_id,settings.shadow_sync_signing_secret.get_secret_value())
-    except (ValueError,OSError):raise HTTPException(401,"request authentication rejected") from None
-    try:
-        raw_body = bytes(body)
-        if request.headers.get('content-encoding', '').lower() == 'gzip':
-            import gzip
-            try:
+        with domain.locked():
+            _verify(raw,request,settings,domain)
+            if request.headers.get('content-encoding','').lower() == 'gzip':
+                import gzip
                 from io import BytesIO
-                limit = getattr(settings, 'local_display_v2_max_decompressed_bytes', 67108864)
+                limit=min(getattr(settings,'local_display_v2_max_decompressed_bytes',67108864),
+                          settings.shadow_sync_max_request_bytes)
                 if type(limit) is not int or limit <= 0:
-                    raise HTTPException(413, 'invalid decompressed bundle limit')
-                with gzip.GzipFile(fileobj=BytesIO(raw_body)) as stream:
-                    raw_body = stream.read(limit + 1)
-            except HTTPException:
-                raise
-            except Exception:
-                raise HTTPException(400, 'invalid gzip payload')
-            max_decompressed = getattr(settings, 'local_display_v2_max_decompressed_bytes', 67108864)
-            if len(raw_body) > max_decompressed:
-                raise HTTPException(413, 'decompressed bundle too large')
-        return _publish_decoded(raw_body,target,settings)
+                    raise HTTPException(413,'invalid decompressed bundle limit')
+                try:
+                    with gzip.GzipFile(fileobj=BytesIO(raw)) as stream:
+                        raw=stream.read(limit+1)
+                except Exception:
+                    raise HTTPException(400,'invalid gzip payload') from None
+                if len(raw)>limit:
+                    raise HTTPException(413,'decompressed bundle too large')
+            return _publish_decoded(raw,target,settings,domain)
     except HTTPException:
         raise
-    except (ValueError,TypeError,KeyError,FileNotFoundError,RecursionError):raise HTTPException(409,'bundle rejected') from None
+    except (ValueError,TypeError,KeyError,OSError,RecursionError):
+        raise HTTPException(409,'bundle rejected') from None
 
 
-def _publish_decoded(raw_body,target,settings):
+def _publish_decoded(raw_body,target,settings,domain=None):
     """Shared atomic publish for single-request and reassembled chunked bundles."""
     import json
     value = json.loads(raw_body)
@@ -56,9 +64,20 @@ def _publish_decoded(raw_body,target,settings):
     manifest = value.get('manifest', {})
     contract = manifest.get('contract_version') or manifest.get('contract')
     if contract == 'local-display-v2':
+        import re
+        approved_sha = getattr(settings, 'shadow_sync_code_sha', '')
+        approved_config = getattr(settings, 'shadow_sync_config_hash', '')
+        if not re.fullmatch(r'[0-9a-f]{40}', approved_sha) or not re.fullmatch(r'[0-9a-f]{64}', approved_config):
+            raise ValueError('approved runtime identity unavailable')
+        if manifest.get('code_sha') != approved_sha or manifest.get('config_hash') != approved_config:
+            raise ValueError('runtime identity mismatch')
         from app.workspace.local_display_read import LocalDisplayStore
-        store_v2 = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=getattr(settings, 'local_display_v2_max_bytes', 67108864))
+        store_v2 = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=getattr(settings, 'local_display_v2_max_bytes', 67108864),domain=domain)
         return store_v2.publish(value)
+    if domain is not None:
+        # V1 retains its own exact receipt/validation contract, but shares the disk
+        # domain. This conservative peak allowance covers blobs, manifest and pointers.
+        domain.reserve(2 * len(raw_body) + 4096)
     return target.publish(value)
 
 
@@ -84,13 +103,20 @@ async def sync_chunk(request:Request):
     h=request.headers
     try:
         upload_id=h.get('X-Chunk-Upload-Id','');index=int(h.get('X-Chunk-Index',''));total=int(h.get('X-Chunk-Total',''));chunk_sha=h.get('X-Chunk-Sha256','')
-    except ValueError:raise HTTPException(400,'invalid chunk headers') from None
+        signed=chunk_meta(upload_id,index,total,chunk_sha)+b'\n'+wire
+    except (ValueError,UnicodeError):
+        raise HTTPException(400,'invalid chunk headers') from None
+    domain=sync_domain(settings)
     try:
-        verify_request(chunk_meta(upload_id,index,total,chunk_sha)+b'\n'+wire,h,settings.shadow_sync_root,settings.shadow_sync_active_key_id,settings.shadow_sync_signing_secret.get_secret_value(),path='/api/shadow/sync/chunk')
-    except (ValueError,OSError):raise HTTPException(401,'request authentication rejected') from None
-    try:return ChunkStaging(settings.shadow_sync_root).put(upload_id,index,total,chunk_sha,wire)
-    except ChunkBusy:raise HTTPException(409,'chunk staging busy') from None
-    except ChunkRejected as exc:raise HTTPException(422,str(exc)) from None
+        with domain.locked():
+            _verify(signed,request,settings,domain,path='/api/shadow/sync/chunk')
+            return ChunkStaging(settings.shadow_sync_root,domain=domain).put(upload_id,index,total,chunk_sha,wire)
+    except ChunkBusy:
+        raise HTTPException(409,'chunk staging busy') from None
+    except ChunkRejected as exc:
+        raise HTTPException(422,str(exc)) from None
+    except (ValueError,OSError):
+        raise HTTPException(409,'sync domain rejected') from None
 
 
 @router.post('/sync/commit')
@@ -99,18 +125,21 @@ async def sync_commit(request:Request):
     from app.workspace.shadow_chunks import ChunkRejected, ChunkStaging
     target=store();settings=get_settings();_producer_auth(request,settings)
     body=await _read_bounded(request,512)
+    domain=sync_domain(settings)
     try:
-        verify_request(body,request.headers,settings.shadow_sync_root,settings.shadow_sync_active_key_id,settings.shadow_sync_signing_secret.get_secret_value(),path='/api/shadow/sync/commit')
-    except (ValueError,OSError):raise HTTPException(401,'request authentication rejected') from None
-    try:
-        spec=json.loads(body)
-        if not isinstance(spec,dict) or set(spec)!={'upload_id','total'}:raise ValueError('invalid commit')
-        raw=ChunkStaging(settings.shadow_sync_root).assemble(spec['upload_id'],spec['total'])
-    except ChunkRejected as exc:raise HTTPException(422,str(exc)) from None
-    except (ValueError,TypeError):raise HTTPException(400,'invalid commit') from None
-    try:return _publish_decoded(raw,target,settings)
-    except HTTPException:raise
-    except (ValueError,TypeError,KeyError,FileNotFoundError,RecursionError):raise HTTPException(409,'bundle rejected') from None
+        with domain.locked():
+            _verify(body,request,settings,domain,path='/api/shadow/sync/commit')
+            spec=json.loads(body)
+            if not isinstance(spec,dict) or set(spec)!={'upload_id','total'}:
+                raise HTTPException(400,'invalid commit')
+            return ChunkStaging(settings.shadow_sync_root,domain=domain).commit(
+                spec['upload_id'],spec['total'],lambda raw:_publish_decoded(raw,target,settings,domain))
+    except ChunkRejected as exc:
+        raise HTTPException(422,str(exc)) from None
+    except HTTPException:
+        raise
+    except (ValueError,TypeError,KeyError,OSError,RecursionError):
+        raise HTTPException(409,'bundle rejected') from None
 
 
 @router.get('/bundle',dependencies=[Depends(require_private_access),Depends(require_current_user)])

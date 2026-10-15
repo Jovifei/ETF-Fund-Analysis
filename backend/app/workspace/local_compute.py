@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import os
+import json
+import re
 import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -71,6 +73,8 @@ def local_settings(
     marker_name = ".local-live" if profile == "live" else ".shadow-local"
     if not (root_resolved / marker_name).is_file():
         raise ValueError(f"local ownership marker required: {marker_name}")
+    if any((root_resolved / child).is_symlink() for child in (marker_name, "outbox", "receipts", "config")):
+        raise ValueError("symlink local output/config path rejected")
     if db_resolved.name != "research.sqlite3":
         raise ValueError("dedicated existing local SQLite database required")
     if (
@@ -99,27 +103,84 @@ def local_settings(
         llm_enabled=False,
         analysis_enabled=False,
         ocr_mode="disabled",
+        workspace_research_source="database",
+        scheduler_enabled=False,
     )
 
 
-def validate_provider_admission(market_provider: str, profile: str = "live") -> dict[str, Any]:
+def load_local_config(root: Path, config: Path | None = None) -> dict:
+    path = config or root / "config" / "live.json"
+    if not path.is_file() or path.is_symlink():
+        raise ValueError("local config file required")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        raise ValueError("invalid local config JSON") from None
+    universe = value.get("universe") if isinstance(value, dict) else None
+    if (not isinstance(universe, list) or not universe
+            or any(not isinstance(code, str) or not re.fullmatch(r"\d{6}\.(SH|SZ)", code) for code in universe)
+            or len(set(universe)) != len(universe)):
+        raise ValueError("config requires a nonempty unique ETF universe")
+    return value
+
+
+def validate_provider_admission(
+    market_provider: str, profile: str = "live", *, evidence: dict | None = None,
+    purpose: str = "export", now: datetime | None = None,
+) -> dict[str, Any]:
     if profile == "live" and market_provider == "mock":
         raise ValueError("mock provider not permitted in live profile")
 
-    # Safe admission contract
-    admitted = market_provider in {"akshare", "tushare", "composite", "public_composite"}
-    token_present = bool(os.environ.get("TUSHARE_TOKEN"))
-
+    if purpose not in {"compute", "export"}:
+        raise ValueError("unknown admission purpose")
+    now = now or datetime.now(timezone.utc)
+    evidence = evidence if isinstance(evidence, dict) else {}
+    issues = []
+    if evidence.get("schema") != "provider-admission-evidence-v1" or evidence.get("provider") != market_provider:
+        issues.append("provider_evidence_missing_or_mismatched")
+    rows = evidence.get("interfaces") or []
+    rows = rows if isinstance(rows, list) else []
+    by_name = {r.get("name"): r for r in rows if isinstance(r, dict)}
+    if len(by_name) != len(rows):
+        issues.append("invalid_or_duplicate_interfaces")
+    for name in ("daily_bars", "quotes", "sector_snapshots", "market_context"):
+        row = by_name.get(name, {})
+        try:
+            expiry = timestamp(row.get("valid_until"))
+        except ValueError:
+            expiry = None
+        if expiry is None or expiry <= now:
+            issues.append(f"{name}:evidence_expired_or_missing")
+        for permission in (("acquire", "store", "display") if purpose == "export" else ("acquire", "store")):
+            item = row.get(permission) or {}
+            if (not isinstance(item, dict) or item.get("status") != "VERIFIED"
+                    or item.get("evidence_type") != "upstream_terms_or_license"
+                    or not isinstance(item.get("evidence_ref"), str) or not item["evidence_ref"].strip()
+                    or item["evidence_ref"].lower().startswith("owner-approval:")):
+                issues.append(f"{name}:{permission}_UNKNOWN")
+        if purpose == "export":
+            units = row.get("units") or {}
+            adjustment = row.get("adjustment_basis") or {}
+            source_time = row.get("source_timestamp_quality") or {}
+            if not (isinstance(units, dict) and units.get("volume") == "shares"
+                    and units.get("amount") == "CNY" and units.get("return") == "fraction"
+                    and units.get("evidence_ref")):
+                issues.append(f"{name}:units_UNKNOWN")
+            if not (isinstance(adjustment, dict) and adjustment.get("value") in {"raw", "qfq"}
+                    and adjustment.get("evidence_ref")):
+                issues.append(f"{name}:adjustment_UNKNOWN")
+            if not (isinstance(source_time, dict) and source_time.get("status") == "VERIFIED"
+                    and source_time.get("evidence_ref")):
+                issues.append(f"{name}:source_time_UNKNOWN")
+    admitted = not issues and market_provider != "mock"
     return {
         "provider": market_provider,
         "profile": profile,
         "admitted": admitted,
-        "license_status": "personal_research_only",
-        "quota_status": "metered" if market_provider == "tushare" else "rate_limited",
-        "tushare_token_configured": token_present,
-        "source_timestamp_quality": "verified_exchange_session",
-        "adjustment_policy": "qfq",
-        "unit_policy": "volume_hands_amount_yuan",
+        "license_status": "evidence_verified" if admitted else "UNKNOWN",
+        "source_timestamp_quality": "evidence_verified" if admitted and purpose == "export" else "UNKNOWN",
+        "purpose": purpose,
+        "issues": issues,
         "actionable": False,
         "research_only": True,
         "checked_at": datetime.now(timezone.utc).isoformat(),
@@ -163,11 +224,14 @@ def doctor_check(root: Path | str, database: Path | str, profile: str = "live") 
     }
 
 
-def compute_local(settings: Settings, universe: list[str] | None = None) -> list[dict[str, Any]]:
+def compute_local(settings: Settings, universe: list[str] | None = None, *, admission: dict | None = None) -> list[dict[str, Any]]:
     if settings.market_provider == "mock" and settings.app_env == "local_research":
         raise ValueError("live profile rejects mock provider")
 
-    from app.services.settlement import settled_session
+    if settings.market_provider != "mock" and not validate_provider_admission(
+        settings.market_provider, evidence=admission, purpose="compute"
+    )["admitted"]:
+        raise ValueError("provider acquisition/storage admission UNKNOWN")
     from app.services.task_service import TaskService
 
     engine = create_engine(settings.database_url)
@@ -195,7 +259,7 @@ def compute_local(settings: Settings, universe: list[str] | None = None) -> list
                 result = service.run(db, task, **kwargs)
                 result = {**result, "task_name": task}
                 results.append(result)
-                if result.get("status") not in {"succeeded", "partial"}:
+                if result.get("status") != "succeeded":
                     break
     finally:
         service.close()
@@ -244,8 +308,13 @@ def export_local_v2(
     code_sha: str,
     universe: list[str] | None = None,
     now: datetime | None = None,
+    admission: dict | None = None,
 ) -> dict[str, Any]:
     now = now or datetime.now(timezone.utc)
+    if settings.market_provider != "mock" and not validate_provider_admission(
+        settings.market_provider, evidence=admission, now=now
+    )["admitted"]:
+        raise ValueError("provider display/quality admission UNKNOWN")
     engine = create_engine(settings.database_url)
     try:
         with Session(engine) as db, db.begin():
@@ -279,6 +348,7 @@ def export_local_v2(
             # 2. Detail & Chart parts
             detail_parts: dict[str, Any] = {}
             chart_parts: dict[str, Any] = {}
+            chart_periods: dict[str, Any] = {}
             selected_codes = universe or [r["ts_code"] for r in rows[:100]]
 
             indicator_config = settings.load_strategy().get("indicator", {})
@@ -324,6 +394,13 @@ def export_local_v2(
                     projected = project_chart(transformed)
                     projected["as_of"] = read_as_of_val
                     chart_parts[code] = projected
+                    chart_periods[code] = {}
+                    for period in ("1w", "1mo"):
+                        periodic = project_chart(transform_chart(c_data, period, indicator_config, limit=250, now=generated))
+                        periodic["as_of"] = read_as_of_val
+                        periodic["interval"] = period
+                        periodic["unsupported_intervals"] = ["5m", "15m"]
+                        chart_periods[code][period] = periodic
 
             # 3. Sectors part
             sector_snaps = []
@@ -339,6 +416,11 @@ def export_local_v2(
                     "total_count": s.total_count,
                 })
             sectors_part = {"sectors": sector_snaps}
+
+            if universe and (set(selected_codes) != {r["ts_code"] for r in rows}
+                    or set(detail_parts) != set(selected_codes) or set(chart_parts) != set(selected_codes)
+                    or any(not chart_parts[code].get("bars") for code in selected_codes)):
+                raise ValueError("required universe display coverage incomplete")
 
             # 4. Market context part
             market_context_items = []
@@ -373,6 +455,7 @@ def export_local_v2(
                 "charts": chart_parts,
                 "sectors": sectors_part,
                 "market_context": market_context_part,
+                "chart_periods": chart_periods,
             }
 
 

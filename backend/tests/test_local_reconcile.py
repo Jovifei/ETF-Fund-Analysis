@@ -46,14 +46,17 @@ def test_reconcile_outcomes_mature_or_pending_and_report_local(tmp_path, bootstr
                            "received_at": "2026-10-14T06:31:00+00:00"}
     _write(outbox, _seq(session, 14), [inst.ts_code], ok)
     bases = recent_base_days(db_session, session, 6)
-    report = run_reconcile(tmp_path, session=session, db=db_session, outcome_base_days=bases)
+    cutoff = datetime(session.year, session.month, session.day, 16, 30, tzinfo=SHANGHAI)
+    report = run_reconcile(tmp_path, session=session, db=db_session, outcome_base_days=bases, as_of=cutoff)
     assert report["consumer_identity"]["state"] == "NOT_RUN"
     assert report["actionable"] is False and report["calibration"] == "not_calibrated"
     by_base = {o["base_trade_date"]: o["rows"][0] for o in report["outcomes"]}
     newest = by_base[session.isoformat()]
     assert newest["t1"]["state"] == "PENDING_OUTCOME" and newest["t5"]["state"] == "PENDING_OUTCOME"
     oldest = by_base[bases[0].isoformat()]
-    assert oldest["t1"]["state"] == "MATURED"
+    # Bootstrapped bars are mock and have no same-vintage comparable price proof.
+    assert oldest["t1"]["state"] == "UNKNOWN"
+    assert report["state"] == "INCOMPLETE"
     saved = json.loads((tmp_path / "receipts" / "reconcile" / f"reconcile_{session.isoformat()}.json").read_text())
     assert saved["delivery"]["counts"] == {"MATCHED": 1}
 

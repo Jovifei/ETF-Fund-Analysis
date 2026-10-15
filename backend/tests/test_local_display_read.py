@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import json
 import pytest
 from app.workspace.local_display_read import LocalDisplayStore, LocalDisplayReader
@@ -56,7 +57,7 @@ def test_local_display_reader_overview_and_detail(tmp_path):
     }
 
     # Publish bundle to store
-    receipt = store.publish(bundle)
+    receipt = store.publish(bundle, now=datetime(2026, 10, 12, 7, tzinfo=timezone.utc))
     assert receipt["status"] == "accepted"
 
     reader = LocalDisplayReader(store)

@@ -161,6 +161,8 @@ class DecisionBoardService:
         self.support_resistance = SupportResistanceService(self.settings)
 
     def enqueue_refresh(self, db: Session) -> dict:
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "enqueue_decision_board")
         active = db.scalar(
             select(TaskRun)
             .where(
@@ -200,6 +202,8 @@ class DecisionBoardService:
     def capture_latest_quotes(self, db: Session) -> int:
         """Copy current OHLCV observations into the isolated provisional table."""
 
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "capture_latest_quotes")
         latest = self._latest_by_instrument(db, QuoteSnapshot, QuoteSnapshot.quote_time, QuoteSnapshot.id)
         inserted = 0
         for instrument_id, quote in latest.items():
@@ -247,6 +251,8 @@ class DecisionBoardService:
         amount: float | None,
         pct_change_percent_points: float | None,
     ) -> DecisionBoardProvisionalInput:
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "record_provisional_input")
         instrument = db.scalar(select(Instrument).where(Instrument.ts_code == ts_code.strip().upper()))
         if instrument is None:
             raise KeyError("instrument not found")
@@ -268,6 +274,8 @@ class DecisionBoardService:
         return row
 
     def refresh(self, db: Session, *, generated_at: datetime | None = None, demo: bool = False) -> SnapshotBuild:
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "refresh_decision_board")
         generated_at = generated_at or datetime.now(self.settings.timezone)
         generated_at = generated_at.astimezone(SHANGHAI) if generated_at.tzinfo else generated_at.replace(tzinfo=SHANGHAI)
         if not demo:

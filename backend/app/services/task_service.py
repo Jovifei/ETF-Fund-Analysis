@@ -30,6 +30,9 @@ from app.services.market_service import MarketService
 from app.services.news_service import NewsService
 from app.services.portfolio_optimization_service import PortfolioOptimizationService
 from app.services.report_service import ReportService
+from app.services.research_write_guard import (
+    DISPLAY_ONLY_EXCEPTION_TASKS, DisplayOnlyTaskRejected, board_maintenance_scope, require_task_write,
+)
 from app.services.runtime_service import RuntimeService
 from app.services.shadow_run_audit_service import ShadowRunAuditService
 from app.services.signal_v05_service import SignalV05Service
@@ -46,9 +49,6 @@ class TaskBusyError(RuntimeError):
     pass
 
 
-DISPLAY_ONLY_EXCEPTION_TASKS = frozenset({"refresh_decision_board"})
-
-
 def _audit_display_only_exception(db, task_name: str, kwargs: dict) -> None:
     """Every display-only exception run leaves a log line and a durable event."""
     logger.warning(
@@ -59,26 +59,9 @@ def _audit_display_only_exception(db, task_name: str, kwargs: dict) -> None:
     if db is not None:
         try:
             emit_event(db, "task.display_only_exception", {"task_name": task_name, "workspace_research_source": "local_bundle"})
-        except Exception:  # audit must not mask the task outcome; log line above remains
+        except Exception:
             logger.error("display_only_exception audit event could not be written for %s", task_name)
-
-
-class DisplayOnlyTaskRejected(RuntimeError):
-    """Raised when a cloud research write task is invoked in display-only mode.
-
-    When ``WORKSPACE_RESEARCH_SOURCE=local_bundle`` the server only receives and
-    displays bundles computed on the owner's machine.  Every entry point that
-    reaches ``TaskService.run`` (scheduler, CLI ``run-task``/``bootstrap``,
-    admin API) must therefore refuse market/indicator/forecast/signal writes
-    instead of relying on the scheduler being switched off.
-    """
-
-    def __init__(self, task_name: str):
-        self.task_name = task_name
-        super().__init__(
-            f"task {task_name!r} rejected: server runs in local_bundle display-only mode; "
-            "research data is computed locally and synced as display bundles"
-        )
+            raise  # An unaudited maintenance exception must not perform research writes.
 
 
 class TaskExecutionError(RuntimeError):
@@ -571,16 +554,14 @@ class TaskService:
     def run(self, db: Session, task_name: str, **kwargs) -> dict:
         if task_name not in self.task_names:
             raise UnknownTaskError(task_name)
+        require_task_write(self.settings, task_name, **kwargs)
         if getattr(self.settings, "workspace_research_source", "database") == "local_bundle":
             # Unified display-only guard: no cloud research raw/derived writes.
             # Single audited maintenance exception (owner-approved 2026-10-15):
             # refresh_decision_board may rebuild the read model from already
             # stored rows, never with refresh_input (that would fetch market data).
-            allowed = set(getattr(self.settings, "display_only_allowed_tasks", ()) or ()) & DISPLAY_ONLY_EXCEPTION_TASKS
-            if task_name not in allowed or bool(kwargs.get("refresh_input", False)):
-                raise DisplayOnlyTaskRejected(task_name)
             _audit_display_only_exception(db, task_name, kwargs)
-        with _task_lock(db):
+        with board_maintenance_scope(self.settings, task_name), _task_lock(db):
             requested_run_id = kwargs.pop("run_id", None)
             run_id = requested_run_id or uuid4().hex
             started = datetime.now(self.settings.timezone)

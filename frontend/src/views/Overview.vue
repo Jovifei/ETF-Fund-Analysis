@@ -3,6 +3,7 @@ import { computed, onActivated, onDeactivated, ref, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { RefreshCw } from 'lucide-vue-next'
 import { useQuery } from '../lib/query'
+import {withGeneration} from '../lib/generation'
 import { useVisibleRefresh } from '../lib/useVisibleRefresh'
 import { api, errorText } from '../lib/api'
 import { num, pct, direction, stamp, record, numeric } from '../lib/format'
@@ -20,10 +21,13 @@ type IndexChart = ChartData & {summary?:{price:number|null;change_ratio:number|n
 // Keep this list aligned with the bounded index-history provider contract.
 const INDEX_HISTORY_CONTEXTS = new Set(['cn-shanghai-composite', 'cn-csi300', 'cn-csi-all'])
 const route = useRoute(), router = useRouter(), session = useSession(), board = ref<InstanceType<typeof OriginalDecisionBoard> | null>(null)
-const market = useQuery<Record<string, unknown>>('/api/workspace/market-context')
-const sectors = useQuery<Record<string, unknown>>('/api/workspace/sectors')
+const snapshot=useQuery<{generation?:string|number}>('/api/workspace/overview?limit=1')
+const generation=computed(()=>snapshot.data.value?.generation)
+const captured=(path:string)=>snapshot.data.value?withGeneration(path,generation.value):null
+const market = useQuery<Record<string, unknown>>(()=>captured('/api/workspace/market-context'))
+const sectors = useQuery<Record<string, unknown>>(()=>captured('/api/workspace/sectors'))
 const discovery = useQuery<Record<string, unknown>>('/api/workspace/discovery')
-const indexCache=useQuery<{items:Record<string,unknown>[]}>('/api/workspace/indexes')
+const indexCache=useQuery<{items:Record<string,unknown>[]}>(()=>captured('/api/workspace/indexes'))
 const contextCards = computed(() => {
   const items=(Array.isArray(market.data.value?.latest_view)?market.data.value!.latest_view:[]).map(record).filter(x=>['index','tradable_proxy'].includes(String(x.context_kind)))
   for(const cached of indexCache.data.value?.items??[]){
@@ -44,7 +48,7 @@ function displayStatus(item:Record<string,unknown>){
 }
 function openContext(item: Record<string, unknown>) {
   const code = String(item.display_code ?? '').trim()
-  if (item.is_tradable_proxy && code) { void router.push(`/etf/${encodeURIComponent(code)}`); return }
+  if (item.is_tradable_proxy && code) { void router.push(withGeneration(`/etf/${encodeURIComponent(code)}`,generation.value)); return }
   selectedContextId.value = String(item.context_id ?? '')
 }
 async function syncIndex() {
@@ -71,8 +75,8 @@ async function syncDiscovery() {
   try { const result=await api<{jobs:{job_id:string;created:boolean}[]}>('/api/workspace/discovery/refresh', { method: 'POST' });activeTasks.value=result.jobs.map(j=>j.job_id); notice.value = result.jobs.some(j=>j.created)?'目录与板块已受理，下面显示进度；完成后自动重新读取。':'已找到现有任务（运行中或5分钟防重复窗口）；显示其实际状态，未重复发起采集。'; await discovery.reload() }
   catch (e) { error.value = errorText(e) } finally { busy.value = false }
 }
-async function reload() { await Promise.all([market.reload(), sectors.reload(), discovery.reload(), board.value?.reload(), contextHistory.reload(), indexCache.reload(), dataHealth.value?.reload()]) }
-function refreshVisible() { return Promise.all([market.refresh(), sectors.refresh(), discovery.refresh(), board.value?.refresh(), contextHistory.refresh(), indexCache.refresh(), dataHealth.value?.reload()]) }
+async function reload() { await snapshot.reload(); await Promise.all([market.reload(), sectors.reload(), discovery.reload(), board.value?.reload(), contextHistory.reload(), indexCache.reload(), dataHealth.value?.reload()]) }
+async function refreshVisible() { await snapshot.refresh(); return Promise.all([market.refresh(), sectors.refresh(), discovery.refresh(), board.value?.refresh(), contextHistory.refresh(), indexCache.refresh(), dataHealth.value?.reload()]) }
 useVisibleRefresh(refreshVisible)
 let scrollY = 0
 onActivated(async () => {
@@ -85,7 +89,7 @@ async function recompute(){if(busy.value)return;busy.value=true;error.value='';t
 <template><section>
   <div class="page-heading"><div><p class="eyebrow">MARKET OVERVIEW / ETF</p><h1>市场总览</h1><p>A 股市场 → 行业 / 概念板块 → ETF 决策快照。所有分析都在同一工作站。</p></div>
     <button class="button" @click="reload"><RefreshCw :size="14"/>重新读取</button></div>
-  <nav class="section-tabs" aria-label="总览内容"><a href="#market-boards">行业与概念</a><a href="#etf-decisions">ETF 决策快照</a><RouterLink to="/analysis">搜索全部 ETF / LOF</RouterLink></nav>
+  <p v-if="snapshot.error.value" class="notice" role="alert">{{snapshot.error.value}}</p><nav class="section-tabs" aria-label="总览内容"><a href="#market-boards">行业与概念</a><a href="#etf-decisions">ETF 决策快照</a><RouterLink to="/analysis">搜索全部 ETF / LOF</RouterLink></nav>
   <div v-if="route.query.mode === '1430'" class="notice warning-notice">14:30 为同一总览的研究模式，不是另一套动作。历史分钟验证尚未取得资格。</div>
   <DataHealth v-if="canSync" ref="dataHealth"/>
   <div class="cards market-context-cards"><article v-for="item in contextCards" :key="String(item.context_id)" class="stat-card market-context-card" role="button" tabindex="0" :aria-label="`查看${item.label}历史数据`" @click="openContext(item)" @keydown.enter="openContext(item)"><div class="label">{{ item.label }}</div><div class="value">{{ num(item.observed_value) }} <span class="delta" :class="direction(numeric(item.today_pct_change))">{{ pct(numeric(item.today_pct_change) == null ? null : Number(item.today_pct_change)/100) }}</span></div><small>{{item.freshness==='historical'?(item.is_partial?'盘中日线未收盘':'最近历史收盘'):'最近观测'}} · {{ item.source ?? '尚未取得指数数据' }} · {{ record(item.display_time).precision === 'date_assumed' ? record(item.display_time).date_label : item.freshness === 'historical' && item.source_timestamp ? String(item.source_timestamp).slice(0,10) : stamp(item.source_timestamp) }} · {{ displayStatus(item) }}<small v-if="record(item.display_time).note">{{record(item.display_time).note}}</small></small><span class="small-note">{{ item.is_tradable_proxy && item.display_code ? '打开对应 ETF K 线' : '查看指数 K 线' }}</span></article>
@@ -101,7 +105,7 @@ async function recompute(){if(busy.value)return;busy.value=true;error.value='';t
     <div class="card-body"><span v-for="job in (Array.isArray(discovery.data.value?.jobs)?discovery.data.value!.jobs:[])" :key="String(record(job).task)" class="small-note">{{ record(job).task }}：<Badge :value="String(record(job).status)"/> {{ stamp(record(job).finished_at ?? record(job).created_at) }}　</span><RouterLink to="/settings">查看采集步骤和失败原因</RouterLink></div>
   </section>
   <div class="toolbar"><button v-if="canSync" class="button" :disabled="busy" @click="recompute">重算已存历史指标</button><span class="small-note">已有 K 线但决策快照为空：可先离线重算。单只基金数据不全，不影响其他标的；无历史时在 ETF 详情补齐。</span></div>
-  <details v-if="canSync" class="card section"><summary class="card-header">优先准备 ETF 历史与存储检查</summary><div class="card-body"><p>目录可搜索不等于历史已下载。先预览最多30只，再确认加入研究池；按已知市场市值/成交额优先，未知规模排后。不会下载所有市场基金。</p><div class="toolbar"><label>每批 <input v-model.number="prepareLimit" type="number" min="1" max="30" style="width:80px"/></label><label>已知市值至少 <input v-model.number="prepareScale" type="number" min="0" max="1000" style="width:90px"/>亿元</label><button class="button" @click="previewHistory">预览历史准备清单</button></div><div v-if="plan"><p>{{plan.note}}</p><p v-for="item in plan.items" :key="item.ts_code">{{item.name}} {{item.ts_code}} · 已存 {{item.bars}} 根 · {{item.market_cap_cny==null?'市值未知':num(item.market_cap_cny/1e8)+'亿元'}}</p><button class="button primary" :disabled="!plan.codes.length" @click="prepareHistory">确认准备 {{plan.codes.length}} 只历史</button></div><p>当前数据库 {{bytes(storage.data.value?.database_bytes)}} · 已存日线 {{storage.data.value?.daily_bar_rows??'—'}} 条 · 应用所在文件系统可用 {{bytes(storage.data.value?.application_disk_free_bytes)}}</p><small>{{storage.data.value?.note}}。E盘归档使用 docs/HISTORY_STORAGE_V103.md 中的只读导出流程；不会同步正在运行的SQLite文件。</small></div></details><OriginalDecisionBoard ref="board"/><details class="card section"><summary class="card-header">日／周／月预测的计算与边界</summary><div class="card-body"><OutlookPanel/></div></details>
+  <details v-if="canSync" class="card section"><summary class="card-header">优先准备 ETF 历史与存储检查</summary><div class="card-body"><p>目录可搜索不等于历史已下载。先预览最多30只，再确认加入研究池；按已知市场市值/成交额优先，未知规模排后。不会下载所有市场基金。</p><div class="toolbar"><label>每批 <input v-model.number="prepareLimit" type="number" min="1" max="30" style="width:80px"/></label><label>已知市值至少 <input v-model.number="prepareScale" type="number" min="0" max="1000" style="width:90px"/>亿元</label><button class="button" @click="previewHistory">预览历史准备清单</button></div><div v-if="plan"><p>{{plan.note}}</p><p v-for="item in plan.items" :key="item.ts_code">{{item.name}} {{item.ts_code}} · 已存 {{item.bars}} 根 · {{item.market_cap_cny==null?'市值未知':num(item.market_cap_cny/1e8)+'亿元'}}</p><button class="button primary" :disabled="!plan.codes.length" @click="prepareHistory">确认准备 {{plan.codes.length}} 只历史</button></div><p>当前数据库 {{bytes(storage.data.value?.database_bytes)}} · 已存日线 {{storage.data.value?.daily_bar_rows??'—'}} 条 · 应用所在文件系统可用 {{bytes(storage.data.value?.application_disk_free_bytes)}}</p><small>{{storage.data.value?.note}}。E盘归档使用 docs/HISTORY_STORAGE_V103.md 中的只读导出流程；不会同步正在运行的SQLite文件。</small></div></details><OriginalDecisionBoard ref="board" :generation="generation" :ready="snapshot.data.value!=null"/><details class="card section"><summary class="card-header">日／周／月预测的计算与边界</summary><div class="card-body"><OutlookPanel/></div></details>
 </section></template>
 <style scoped>
 .market-context-card { cursor: pointer; }

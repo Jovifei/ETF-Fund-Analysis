@@ -17,6 +17,7 @@ from typing import Literal
 import httpx
 from pydantic import Field, SecretStr, field_validator
 from sqlalchemy import func, select, update
+from app.core.config import get_settings
 from app.models import AuthUser
 from app.workspace.jobs import WorkspaceError,lock_owner,owned_job,owner_scope,utc,accept_result
 from app.workspace.models import WorkspacePreference,WorkspaceDataJob,WorkspaceResearchJob
@@ -139,6 +140,8 @@ def remove(db,user_id,profile_id):
 
 
 def enqueue(db,user_id,profile_id,*,research_id=None,request_key):
+    from app.services.research_write_guard import require_research_write
+    require_research_write(get_settings(), "api_research")
     enabled();ai_secrets.master()
     from app.workspace.memberships import check_feature,plan_for
     user=db.get(AuthUser,user_id)
@@ -200,6 +203,9 @@ def completion(value:dict,key:str,messages:list[dict],*,test=False):
 
 
 def execute_ticket(job_id):
+    from app.services.research_write_guard import display_only
+    if display_only(get_settings()):
+        return 1
     from app.db.session import session_scope
     started=time.monotonic();called=False;request={};owner=None
     try:

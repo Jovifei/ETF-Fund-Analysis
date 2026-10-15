@@ -76,6 +76,8 @@ class MarketService:
         return False, "quote source timestamp is stale"
 
     def sync_instruments(self, db: Session, codes: list[str] | None = None, run_id: str | None = None) -> dict:
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "MarketService.sync_instruments")
         run_id = run_id or uuid4().hex
         timer = AuditTimer()
         error: Exception | None = None
@@ -127,6 +129,8 @@ class MarketService:
         run_id: str | None = None,
         mock_settled_date: date | None = None,
     ) -> dict:
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "MarketService.refresh_daily_bars")
         if mock_settled_date is not None:
             from app.services.settlement import settled_session
             from app.services.trading_calendar_service import TradingCalendarService
@@ -283,6 +287,8 @@ class MarketService:
         codes: list[str] | None = None,
         run_id: str | None = None,
     ) -> dict:
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "MarketService.refresh_quotes")
         run_id = run_id or uuid4().hex
         instruments = db.scalars(
             select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code)
@@ -435,6 +441,8 @@ class MarketService:
         return list(seen.values())
 
     def purge_old_quotes(self, db: Session, keep_days: int = 45) -> int:
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "MarketService.purge_old_quotes")
         cutoff = datetime.now(self.settings.timezone) - timedelta(days=keep_days)
         result = db.execute(delete(QuoteSnapshot).where(QuoteSnapshot.quote_time < cutoff))
         return int(result.rowcount or 0)
@@ -450,6 +458,8 @@ class MarketService:
         任一类接口不可达（如网络受限）时仅该类别降级为空并告警，不抛出阻断主流程；
         由调用方在消费侧决定对应列显示 "—"。
         """
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "MarketService.refresh_sector_snapshots")
         run_id = run_id or uuid4().hex
         timer = AuditTimer()
 

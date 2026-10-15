@@ -36,7 +36,7 @@ def search(db: DB, settings: Config, user: User, response: Response, q: str = Qu
 def _local_reader(settings: Settings):
     from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
     store = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=settings.local_display_v2_max_bytes)
-    return LocalDisplayReader(store)
+    return LocalDisplayReader(store, code_sha=settings.shadow_sync_code_sha, config_hash=settings.shadow_sync_config_hash)
 
 
 @private_router.get("/workspace/overview")
@@ -78,11 +78,13 @@ def chart(code: str, db: DB, settings: Config, user: User, interval: str = "1d",
         raise HTTPException(422, "as_of_in_future")
     if settings.workspace_research_source == "local_bundle":
         try:
-            res = _local_reader(settings).read_chart_data(code, interval, limit, generation=generation)
+            res = _local_reader(settings).read_chart_data(code, interval, limit, generation=generation, as_of=as_of)
             if res is None:
                 raise HTTPException(404, _instrument_missing_reason(db, code))
             return res
         except ValueError as exc:
+            if "generation_time_mismatch" in str(exc):
+                raise HTTPException(409, "generation_time_mismatch") from None
             if "unsupported_chart_interval" in str(exc):
                 raise HTTPException(422, "unsupported_chart_interval")
             raise
@@ -152,7 +154,10 @@ def discovery_refresh(db: DB, admin: Annotated[AuthUser | None, Depends(require_
 
 
 @private_router.get("/workspace/indexes")
-def index_summaries(db: DB, settings: Config, user: User) -> dict:
+def index_summaries(db: DB, settings: Config, user: User, generation: str | None = Query(default=None)) -> dict:
+    if settings.workspace_research_source == "local_bundle":
+        items = _local_reader(settings).read_market_context(generation=generation) or []
+        return {"items": [row for row in items if row.get("context_kind") == "index"], "provider_called": False, "actionable": False}
     from sqlalchemy import select
 
     from app.models import MarketContextRegistry
@@ -172,6 +177,8 @@ def index_summaries(db: DB, settings: Config, user: User) -> dict:
 @private_router.get("/workspace/indexes/{context_id}/chart")
 def index_chart(context_id: str, db: DB, settings: Config, user: User,
                 limit: int = Query(default=500, ge=30, le=1500), interval: Literal["1d","1w","1mo"]="1d"):
+    if settings.workspace_research_source == "local_bundle":
+        raise HTTPException(404, "index_chart_not_published_in_local_bundle")
     from app.workspace.index_history import read
     result = read(db, settings, context_id, 1500)
     if result is None:
@@ -192,6 +199,9 @@ def history_preparation(db: DB, admin: Annotated[AuthUser | None, Depends(requir
 
 @private_router.get("/workspace/research-outlook")
 def research_outlook(db: DB, settings: Config, user: User, code: str|None=Query(default=None,pattern=r"^\d{6}\.(SH|SZ|BJ)$")):
+    if settings.workspace_research_source == "local_bundle":
+        return {"items": {}, "horizons": [], "provider_called": False, "actionable": False,
+                "reason": "outlook_not_published_in_local_bundle"}
     from sqlalchemy import select
 
     from app.models import Instrument
@@ -212,7 +222,7 @@ private_router.include_router(ai_router)
 private_router.include_router(member_router)
 
 @private_router.get("/workspace/market-context")
-def context_read_view(db: DB, settings: Config, response: Response, user: User) -> dict:
+def context_read_view(db: DB, settings: Config, response: Response, user: User, generation: str | None = Query(default=None)) -> dict:
     from datetime import datetime
 
     from app.services.market_context_service import MarketContextService
@@ -220,12 +230,11 @@ def context_read_view(db: DB, settings: Config, response: Response, user: User) 
     now = datetime.now(settings.timezone)
     response.headers["Cache-Control"] = "private, no-store"
     if settings.workspace_research_source == "local_bundle":
-        mc_items = _local_reader(settings).read_market_context()
-        if mc_items is not None:
-            result = [{**row, "display_time": context_display(
-                row.get("observation"), now=now, context_kind=row["context_kind"], timezone=settings.timezone
-            )} for row in mc_items]
-            return {"latest_view": result, "as_of": now.isoformat(), "provider_called": False}
+        mc_items = _local_reader(settings).read_market_context(generation=generation) or []
+        result = [{**row, "display_time": context_display(
+            row.get("observation"), now=now, context_kind=row["context_kind"], timezone=settings.timezone
+        )} for row in mc_items]
+        return {"latest_view": result, "as_of": now.isoformat(), "provider_called": False}
     rows = MarketContextService(provider=None, settings=settings).latest_view(db)
     result = [{**row, "display_time": context_display(
         row.get("observation"), now=now, context_kind=row["context_kind"], timezone=settings.timezone

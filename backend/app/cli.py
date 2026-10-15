@@ -21,6 +21,7 @@ from app.services.auth_service import (
 from app.services.dashboard_service import DashboardService
 from app.services.holding_service import HoldingService
 from app.services.task_service import TaskService
+from app.services.research_write_guard import require_task_write
 
 app = typer.Typer(no_args_is_help=True, help="中国 ETF/LOF 私有决策看板管理命令")
 
@@ -40,7 +41,9 @@ def run_task(
     since_hours: int = typer.Option(72, min=1, max=720),
 ) -> None:
     """Run a deterministic pipeline task in the foreground."""
-    service = TaskService()
+    settings = get_settings()
+    require_task_write(settings, task_name)
+    service = TaskService(settings)
     try:
         with session_scope() as db:
             result = service.run(
@@ -59,7 +62,9 @@ def bootstrap(
     lookback_days: int = typer.Option(900, min=180, max=5000),
 ) -> None:
     """Build instruments, bars, indicators, forecasts, quotes, news, signals and an HTML report."""
-    service = TaskService()
+    settings = get_settings()
+    require_task_write(settings, "bootstrap")
+    service = TaskService(settings)
     try:
         with session_scope() as db:
             result = service.run(db, "bootstrap", lookback_days=lookback_days, report=True)

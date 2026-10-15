@@ -17,6 +17,9 @@ import os
 import re
 import shutil
 import time
+import uuid
+
+from app.workspace.sync_domain import SyncDomain
 from io import BytesIO
 from pathlib import Path
 
@@ -65,29 +68,43 @@ def _validate_ids(upload_id: str, index: int, total: int) -> None:
 
 
 class ChunkStaging:
-    def __init__(self, root: str | Path, *, now=time.time):
+    def __init__(self, root: str | Path, *, now=time.time, domain=None):
         self.root = Path(root) / "chunks"
         self.now = now
+        self.domain = domain or SyncDomain(root)
 
     def _prepare(self) -> None:
         if self.root.is_symlink() or (self.root.parent.exists() and self.root.parent.is_symlink()):
             raise ChunkRejected("unsafe staging root")
         self.root.mkdir(parents=True, exist_ok=True)
 
-    def gc(self) -> None:
+    def _gc(self) -> None:
         self._prepare()
         cutoff = self.now() - STAGING_TTL_SECONDS
         for entry in self.root.iterdir():
             if entry.is_symlink():
-                continue
+                raise ChunkRejected("unsafe staging path")
             if entry.is_dir() and _HEX64.fullmatch(entry.name) and entry.stat().st_mtime < cutoff:
-                shutil.rmtree(entry, ignore_errors=True)
+                shutil.rmtree(entry)
+
+    def gc(self) -> None:
+        with self.domain.locked():
+            self._gc()
 
     def staged_bytes(self) -> int:
-        total = 0
-        for entry in self.root.glob("*/*.part"):
-            total += entry.stat().st_size
-        return total
+        return sum(p.stat().st_size for p in self.root.glob("*/*.part"))
+
+    def _atomic(self, path, data):
+        self.domain.reserve(len(data))
+        tmp = path.with_name(".pending-" + uuid.uuid4().hex)
+        try:
+            with tmp.open("xb") as handle:
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp, path)
+        finally:
+            tmp.unlink(missing_ok=True)
 
     def put(self, upload_id: str, index: int, total: int, chunk_sha256: str, wire: bytes) -> dict:
         _validate_ids(upload_id, index, total)
@@ -104,48 +121,84 @@ class ChunkStaging:
             raise ChunkRejected("chunk decoded too large")
         if hashlib.sha256(decoded).hexdigest() != chunk_sha256:
             raise ChunkRejected("chunk digest mismatch")
-        self.gc()
-        active = [p for p in self.root.iterdir() if p.is_dir() and not p.is_symlink() and p.name != upload_id]
-        if active:
-            raise ChunkBusy("another upload is staging")
-        if self.staged_bytes() + len(decoded) > MAX_TOTAL_DECODED_BYTES:
-            raise ChunkRejected("staging budget exhausted")
-        directory = self.root / upload_id
-        directory.mkdir(exist_ok=True)
-        meta_path = directory / "total"
-        if meta_path.exists():
-            if meta_path.read_text() != str(total):
+        with self.domain.locked():
+            self._gc()
+            active = [p for p in self.root.iterdir() if p.is_dir() and p.name != upload_id
+                      and not (p / "receipt.json").exists()]
+            if active:
+                raise ChunkBusy("another upload is staging")
+            directory = self.root / upload_id
+            directory.mkdir(exist_ok=True)
+            meta_path = directory / "total"
+            if directory.is_symlink() or meta_path.is_symlink():
+                raise ChunkRejected("unsafe staging path")
+            if meta_path.exists() and meta_path.read_text() != str(total):
                 raise ChunkRejected("chunk total changed")
-        else:
-            meta_path.write_text(str(total))
-        target = directory / f"{index}.part"
-        tmp = directory / f".{index}.{os.getpid()}.tmp"
-        with open(tmp, "wb") as handle:
-            handle.write(decoded)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(tmp, target)
-        return {"upload_id": upload_id, "index": index, "status": "staged"}
+            target = directory / f"{index}.part"
+            if target.exists():
+                if target.is_symlink() or target.read_bytes() != decoded:
+                    raise ChunkRejected("immutable chunk collision")
+                os.utime(directory, (self.now(), self.now()))
+                return {"upload_id": upload_id, "index": index, "status": "staged"}
+            if (directory / "receipt.json").exists():
+                # A completed upload is already durable; no need to stage its bytes again.
+                return {"upload_id": upload_id, "index": index, "status": "staged"}
+            if self.staged_bytes() + len(decoded) > MAX_TOTAL_DECODED_BYTES:
+                raise ChunkRejected("staging budget exhausted")
+            self.domain.reserve(len(decoded) + (len(str(total)) if not meta_path.exists() else 0))
+            if not meta_path.exists():
+                self._atomic(meta_path, str(total).encode("ascii"))
+            self._atomic(target, decoded)
+            os.utime(directory, (self.now(), self.now()))
+            return {"upload_id": upload_id, "index": index, "status": "staged"}
 
-    def assemble(self, upload_id: str, total: int) -> bytes:
+    def _assemble(self, upload_id: str, total: int) -> bytes:
         _validate_ids(upload_id, 0, total)
         directory = self.root / upload_id
         if not directory.is_dir() or directory.is_symlink():
             raise ChunkRejected("unknown upload")
-        try:
-            if (directory / "total").read_text() != str(total):
-                raise ChunkRejected("chunk total mismatch")
-            buffer = bytearray()
-            for index in range(total):
-                part = directory / f"{index}.part"
-                if not part.is_file() or part.is_symlink():
-                    raise ChunkRejected("missing chunk")
-                buffer.extend(part.read_bytes())
-                if len(buffer) > MAX_TOTAL_DECODED_BYTES:
-                    raise ChunkRejected("assembled bundle too large")
-            if hashlib.sha256(bytes(buffer)).hexdigest() != upload_id:
-                raise ChunkRejected("assembled digest mismatch")
-            return bytes(buffer)
-        finally:
-            # One commit attempt per staging: success publishes, failure needs a clean re-send.
-            shutil.rmtree(directory, ignore_errors=True)
+        if (directory / "total").is_symlink():
+            raise ChunkRejected("unsafe staging metadata")
+        if (directory / "total").read_text() != str(total):
+            raise ChunkRejected("chunk total mismatch")
+        buffer = bytearray()
+        for index in range(total):
+            part = directory / f"{index}.part"
+            if not part.is_file() or part.is_symlink():
+                raise ChunkRejected("missing chunk")
+            if part.stat().st_size > CHUNK_MAX_DECODED_BYTES:
+                raise ChunkRejected("stored chunk too large")
+            buffer.extend(part.read_bytes())
+            if len(buffer) > MAX_TOTAL_DECODED_BYTES:
+                raise ChunkRejected("assembled bundle too large")
+        if hashlib.sha256(buffer).hexdigest() != upload_id:
+            raise ChunkRejected("assembled digest mismatch")
+        return bytes(buffer)
+
+    def assemble(self, upload_id: str, total: int) -> bytes:
+        with self.domain.locked():
+            return self._assemble(upload_id, total)
+
+    def commit(self, upload_id: str, total: int, publish):
+        _validate_ids(upload_id, 0, total)
+        with self.domain.locked():
+            directory = self.root / upload_id
+            receipt_path = directory / "receipt.json"
+            if receipt_path.is_symlink() or directory.is_symlink():
+                raise ChunkRejected("unsafe staging receipt")
+            if receipt_path.exists():
+                if (directory / "total").is_symlink() or (directory / "total").read_text() != str(total) or receipt_path.stat().st_size > 1024:
+                    raise ChunkRejected("invalid completed upload")
+                return json.loads(receipt_path.read_bytes())
+            body = self._assemble(upload_id, total)
+            # Leave room for the receipt while publication writes its temporary files.
+            with self.domain.hold(1024):
+                receipt = publish(body)
+            payload = json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            if len(payload) > 1024:
+                raise ChunkRejected("invalid publish receipt")
+            self._atomic(receipt_path, payload)
+            for part in directory.glob("*.part"):
+                part.unlink()
+            os.utime(directory, (self.now(), self.now()))
+            return receipt

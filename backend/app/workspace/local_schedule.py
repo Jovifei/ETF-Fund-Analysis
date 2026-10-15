@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, time, timedelta
+from datetime import datetime, time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from app.core.clock import MarketClock
 from app.core.config import get_settings
 from app.services.trading_calendar_service import TradingCalendarService
 
@@ -23,7 +22,8 @@ def due_slot_local(
 ) -> str | None:
     settings = settings or get_settings()
     local = now.astimezone(SHANGHAI) if now.tzinfo is not None else now.replace(tzinfo=SHANGHAI)
-    if not TradingCalendarService(settings).decision(local.date()).is_trade_day:
+    decision = TradingCalendarService(settings).decision(local.date())
+    if not decision.verified or not decision.is_trade_day:
         return None
     for slot_text in slots:
         parsed = time.fromisoformat(slot_text)
@@ -44,48 +44,31 @@ class LocalRunLock:
         self._fd: int | None = None
 
     def acquire(self, *, reclaim_stale: bool = True) -> bool:
-        self.lock_path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            # Atomic creation with O_EXCL
-            self._fd = os.open(str(self.lock_path), os.O_CREAT | os.O_EXCL | os.O_RDWR)
-            os.write(self._fd, f"{os.getpid()}\n".encode("utf-8"))
-            return True
-        except FileExistsError:
-            # Check if existing lock is stale (e.g. process terminated)
-            try:
-                # If file exists, check mtime
-                mtime = self.lock_path.stat().st_mtime
-                if reclaim_stale and datetime.now().timestamp() - mtime > 7200:
-                    try:
-                        self.lock_path.unlink()
-                        self._fd = os.open(str(self.lock_path), os.O_CREAT | os.O_EXCL | os.O_RDWR)
-                        os.write(self._fd, f"{os.getpid()}\n".encode("utf-8"))
-                        return True
-                    except OSError:
-                        return False
-            except OSError:
-                return False
+        # OS ownership expires when the process exits. Age never proves an owner
+        # dead; keep the inode in place so a third process cannot lock a replacement.
+        if self._fd is not None:
             return False
+        self.lock_path.parent.mkdir(parents=True, exist_ok=True)
+        fd = None
+        try:
+            fd = os.open(str(self.lock_path), os.O_CREAT | os.O_RDWR, 0o600)
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            os.ftruncate(fd, 0)
+            os.write(fd, f"{os.getpid()}\n".encode("utf-8"))
+            self._fd = fd
+            return True
         except OSError:
+            if fd is not None:
+                os.close(fd)
             return False
 
     def release(self) -> None:
         if self._fd is None:
             return
         fd, self._fd = self._fd, None
-        try:
-            owned = os.fstat(fd)
-        except OSError:
-            owned = None
-        finally:
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-        if owned is not None:
-            try:
-                current = self.lock_path.stat()
-                if (current.st_dev, current.st_ino) == (owned.st_dev, owned.st_ino):
-                    self.lock_path.unlink()
-            except OSError:
-                pass
+        os.close(fd)

@@ -16,7 +16,7 @@ def signed_headers(body,key_id,secret,*,now=None,nonce=None,path='/api/shadow/sy
     if not re.fullmatch('[a-zA-Z0-9_-]{1,32}',key_id) or not re.fullmatch('[a-f0-9]{32}',nonce) or len(secret)<32:raise ValueError('signing configuration unavailable')
     signature=hmac.new(secret.encode('utf-8'),message(body,key_id,stamp,nonce,path),hashlib.sha256).hexdigest()
     return {'X-Shadow-Key-Id':key_id,'X-Shadow-Timestamp':stamp,'X-Shadow-Nonce':nonce,'X-Shadow-Signature':signature}
-def verify_request(body,headers,root,active_key_id,secret,*,now=None,max_nonces=3000,path='/api/shadow/sync'):
+def verify_request(body,headers,root,active_key_id,secret,*,now=None,max_nonces=3000,path='/api/shadow/sync',domain=None):
     now=now or datetime.now(timezone.utc)
     key=headers.get('X-Shadow-Key-Id','');stamp=headers.get('X-Shadow-Timestamp','');nonce=headers.get('X-Shadow-Nonce','');signature=headers.get('X-Shadow-Signature','')
     if key!=active_key_id or not re.fullmatch('[a-zA-Z0-9_-]{1,32}',key) or len(secret)<32 or not re.fullmatch('[a-f0-9]{32}',nonce) or not re.fullmatch('[a-f0-9]{64}',signature):raise ValueError('request authentication rejected')
@@ -39,6 +39,7 @@ def verify_request(body,headers,root,active_key_id,secret,*,now=None,max_nonces=
                 expiry=float(path.read_text())
                 if expiry<now.timestamp():path.unlink()
         if len(list(directory.iterdir()))-1>=max_nonces:raise ValueError('replay budget exhausted')
+        if domain is not None:domain.reserve(64)
         identity=hashlib.sha256((key+'\x00'+nonce).encode('ascii')).hexdigest();path=directory/identity
         try:fd=os.open(path,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
         except FileExistsError:raise ValueError('request replay rejected') from None

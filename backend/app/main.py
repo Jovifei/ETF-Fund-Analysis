@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.router import router as api_router
@@ -62,6 +62,13 @@ app = FastAPI(
     docs_url="/docs" if settings.app_env != "production" else None,
     redoc_url=None,
 )
+
+from app.services.research_write_guard import DisplayOnlyTaskRejected
+
+
+@app.exception_handler(DisplayOnlyTaskRejected)
+async def display_only_rejected(request: Request, exc: DisplayOnlyTaskRejected):
+    return JSONResponse(status_code=409, content={"detail": "cloud_research_writes_disabled"})
 
 if settings.cors_origin_list:
     app.add_middleware(

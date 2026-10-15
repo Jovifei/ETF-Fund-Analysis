@@ -397,9 +397,8 @@ def bootstrap(
     if settings.workspace_research_source == "local_bundle":
         from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
         store = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=settings.local_display_v2_max_bytes)
-        mc_items = LocalDisplayReader(store).read_market_context()
-        if mc_items is not None:
-            data["market_context"] = mc_items
+        mc_items = LocalDisplayReader(store, code_sha=settings.shadow_sync_code_sha, config_hash=settings.shadow_sync_config_hash).read_market_context()
+        data["market_context"] = mc_items or []
     return data
 
 
@@ -411,14 +410,19 @@ def decision_board(
     response: Response,
     horizon: int = Query(default=1),
     snapshot_id: str | None = Query(default=None, min_length=1, max_length=64),
+    generation: str | None = Query(default=None, max_length=64),
 ) -> dict:
     response.headers["Cache-Control"] = "private, no-store"
     if settings.workspace_research_source == "local_bundle":
         from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
         store = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=settings.local_display_v2_max_bytes)
-        payload = LocalDisplayReader(store).read_decision_board(horizon=horizon, snapshot_id=snapshot_id)
-        if payload is not None:
-            return payload
+        try:
+            payload = LocalDisplayReader(store, code_sha=settings.shadow_sync_code_sha, config_hash=settings.shadow_sync_config_hash).read_decision_board(horizon=horizon, snapshot_id=snapshot_id, generation=generation)
+        except ValueError:
+            raise HTTPException(422, "unsupported horizon") from None
+        if payload is None:
+            raise HTTPException(404, "local decision-board generation not found")
+        return payload
     try:
         payload = DecisionBoardService(settings).read_latest(db, horizon=horizon, snapshot_id=snapshot_id)
     except ValueError:
@@ -436,13 +440,17 @@ def decision_board_detail(
     response: Response,
     horizon: int = Query(default=1),
     snapshot_id: str | None = Query(default=None, min_length=1, max_length=64),
+    generation: str | None = Query(default=None, max_length=64),
 ) -> dict:
     response.headers["Cache-Control"] = "private, no-store"
     if settings.workspace_research_source == "local_bundle":
         from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
         store = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=settings.local_display_v2_max_bytes)
-        reader = LocalDisplayReader(store)
-        payload = reader.read_decision_board(horizon=horizon, snapshot_id=snapshot_id)
+        reader = LocalDisplayReader(store, code_sha=settings.shadow_sync_code_sha, config_hash=settings.shadow_sync_config_hash)
+        try:
+            payload = reader.read_decision_board(horizon=horizon, snapshot_id=snapshot_id, generation=generation)
+        except ValueError:
+            raise HTTPException(422, "unsupported horizon") from None
         if payload is not None:
             normalized = ts_code.strip().upper()
             row = next((r for r in payload.get("rows", []) if r.get("ts_code") == normalized), None)
@@ -451,7 +459,9 @@ def decision_board_detail(
                 detail["snapshot_id"] = payload.get("snapshot_id")
                 detail["generated_at"] = payload.get("generated_at")
                 detail["selected_horizon"] = horizon
+                detail["generation"] = payload.get("generation")
                 return detail
+        raise HTTPException(404, "local decision-board instrument/generation not found")
     try:
         row = DecisionBoardService(settings).read_instrument(
             db, ts_code, horizon=horizon, snapshot_id=snapshot_id
@@ -519,7 +529,7 @@ def market_context(
     if settings.workspace_research_source == "local_bundle":
         from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
         store = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=settings.local_display_v2_max_bytes)
-        mc_items = LocalDisplayReader(store).read_market_context()
+        mc_items = LocalDisplayReader(store, code_sha=settings.shadow_sync_code_sha, config_hash=settings.shadow_sync_config_hash).read_market_context()
         if mc_items is not None:
             return {"latest_view": mc_items}
     return {"latest_view": MarketContextService(provider=None, settings=settings).latest_view(db)}

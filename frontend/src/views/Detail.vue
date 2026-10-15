@@ -15,10 +15,11 @@ import HistoryLoader from '../components/HistoryLoader.vue'
 import IndicatorReadings from '../components/IndicatorReadings.vue'
 import AvailabilityMatrix from '../components/AvailabilityMatrix.vue'
 import { availabilityReason } from '../lib/availability'
+import {withGeneration} from '../lib/generation'
 const route=useRoute(),code=computed(()=>String(route.params.code??'').toUpperCase()),interval=ref('1d'),tab=ref(route.query.tab==='ai'?'ai':'chart')
-const q=useQuery<Detail>(()=>'/api/workspace/instruments/'+encodeURIComponent(code.value))
-const chartUrl=computed(()=>q.data.value?.read_as_of?'/api/workspace/instruments/'+encodeURIComponent(code.value)+'/chart?interval='+interval.value+'&limit=500&as_of='+encodeURIComponent(q.data.value.read_as_of):null)
-const chartQuery=useQuery<ChartData>(chartUrl),chartView=computed(()=>chartQuery.data.value?.as_of===q.data.value?.read_as_of?chartQuery.data.value:null)
+const q=useQuery<Detail>(()=>withGeneration('/api/workspace/instruments/'+encodeURIComponent(code.value),typeof route.query.generation==='string'?route.query.generation:undefined))
+const chartUrl=computed(()=>q.data.value?.read_as_of?withGeneration('/api/workspace/instruments/'+encodeURIComponent(code.value)+'/chart?interval='+interval.value+'&limit=500&as_of='+encodeURIComponent(q.data.value.read_as_of),q.data.value.generation):null)
+const chartQuery=useQuery<ChartData>(chartUrl),chartView=computed(()=>chartQuery.data.value?.as_of===q.data.value?.read_as_of&&(q.data.value?.generation==null||chartQuery.data.value?.generation===q.data.value.generation)?chartQuery.data.value:null)
 const chart={...chartQuery,data:chartView}
 useVisibleRefresh(()=>q.refresh())
 const sr=computed(()=>chart.data.value?.support_resistance??q.data.value?.support_resistance)

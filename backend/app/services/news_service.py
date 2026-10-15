@@ -228,6 +228,8 @@ class NewsService:
         return counters
 
     def refresh(self, db: Session, since_hours: int = 30, run_id: str | None = None) -> dict[str, Any]:
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "NewsService.refresh")
         run_id = run_id or uuid4().hex
         timer = AuditTimer()
         try:
@@ -308,6 +310,8 @@ class NewsService:
         force: bool = False,
         run_id: str | None = None,
     ) -> dict[str, Any]:
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "NewsService.analyze_existing")
         run_id = run_id or uuid4().hex
         bounded_limit = max(0, min(int(limit), 1000))
         rows = db.scalars(

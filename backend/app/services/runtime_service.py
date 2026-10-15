@@ -50,9 +50,10 @@ class RuntimeService:
         return "usable"
 
     def _raw_settings(self, db: Session) -> dict[str, Any]:
-        self.ensure_defaults(db)
+        if self.settings.workspace_research_source != "local_bundle":
+            self.ensure_defaults(db)
         rows = db.scalars(select(RuntimeSetting)).all()
-        return {row.key: row.value_json for row in rows}
+        return {**self._defaults(), **{row.key: row.value_json for row in rows}}
 
     def _stored_token(self, db: Session) -> str:
         raw = self._raw_settings(db).get("tushare_token")
@@ -93,8 +94,8 @@ class RuntimeService:
         if row:
             db.delete(row)
 
-    def ensure_defaults(self, db: Session) -> None:
-        values = {
+    def _defaults(self) -> dict[str, Any]:
+        return {
             "quote_refresh_minutes": self.settings.quote_refresh_minutes,
             "signal_refresh_minutes": self.settings.signal_refresh_minutes,
             "news_refresh_minutes": self.settings.news_refresh_minutes,
@@ -102,7 +103,11 @@ class RuntimeService:
             "signal_center_coefficient": self._default_coefficient(),
             "market_data_tier": self._default_tier(),
         }
-        for key, value in values.items():
+
+    def ensure_defaults(self, db: Session) -> None:
+        if self.settings.workspace_research_source == "local_bundle":
+            return
+        for key, value in self._defaults().items():
             existing = db.get(RuntimeSetting, key)
             if not existing:
                 db.add(RuntimeSetting(key=key, value_json=value, description=DEFAULT_KEYS[key]))

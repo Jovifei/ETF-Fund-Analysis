@@ -5,11 +5,13 @@ import { useQuery } from '../lib/query'
 import { useFavorites } from '../stores/favorites'
 import { errorText } from '../lib/api'
 import DecisionSummary from './DecisionSummary.vue'
+import {withGeneration} from '../lib/generation'
+const props=defineProps<{generation?:string|number|null;ready?:boolean}>()
 const favorites=useFavorites(), favoriteError=ref('')
 const router = useRouter(), frame = ref<HTMLIFrameElement | null>(null), height = ref(900)
 const horizon = ref(1), filter = ref(''), revision = ref(0), ready = ref(false)
 const outlook=useQuery<{items:Record<string,{forecasts:Record<string,unknown>}>}>('/api/workspace/research-outlook')
-const q = useQuery<Record<string, unknown>>(() => `/api/decision-board?horizon=${horizon.value===20?1:horizon.value}`)
+const q = useQuery<Record<string, unknown>>(() => props.ready===false?null:withGeneration(`/api/decision-board?horizon=${horizon.value===20?1:horizon.value}`,props.generation))
 const displayed=computed(()=>q.data.value?{...q.data.value,rows:((q.data.value.rows??[]) as Record<string,unknown>[]).map(row=>({...row,forecasts:{...(outlook.data.value?.items[String(row.ts_code)]?.forecasts??{}),...((row.forecasts??{}) as Record<string,unknown>)}}))}:null)
 function mobileControls(value:{filter:string;horizon:number}) {
   if (![1,3,5,10,20].includes(value.horizon)) return
@@ -28,7 +30,7 @@ function receive(event: MessageEvent) {
     revision.value = value.revision; horizon.value = value.horizon; filter.value = String(value.filter ?? '').slice(0,128)
   }
   if(value?.type==='etf-board:favorite' && typeof value.code==='string' && /^\d{6}\.(SH|SZ|BJ)$/.test(value.code)){ favoriteError.value=''; favorites.toggle(value.code).catch(e=>{favoriteError.value=errorText(e)}) }
-  if (value?.type === 'etf-board:navigate' && typeof value.code === 'string' && /^\d{6}\.(SH|SZ|BJ)$/.test(value.code)) void router.push(`/etf/${value.code}`)
+  if (value?.type === 'etf-board:navigate' && typeof value.code === 'string' && /^\d{6}\.(SH|SZ|BJ)$/.test(value.code)) void router.push(withGeneration(`/etf/${value.code}`,q.data.value?.generation as string|number|undefined))
 }
 watch([q.data,outlook.data, q.error, horizon, filter, revision, () => favorites.entries, () => favorites.busy], deliver)
 onMounted(() => {window.addEventListener('message', receive);favorites.ensure().catch(e=>{favoriteError.value=errorText(e)})})

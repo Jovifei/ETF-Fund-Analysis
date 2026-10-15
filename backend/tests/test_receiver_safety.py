@@ -18,6 +18,14 @@ from app.workspace.shadow_bundle import canonical, digest
 from app.workspace.shadow_client import upload_bundle
 from test_shadow_bundle import NOW, bundle
 
+
+@pytest.fixture(autouse=True)
+def publish_at_fixture_time(monkeypatch):
+    """Historical safety fixtures are admitted at their explicit receiver cutoff."""
+    native = LocalDisplayStore.publish
+    monkeypatch.setattr(LocalDisplayStore, "publish", lambda self, value, *, now=None:
+                        native(self, value, now=NOW if now is None else now))
+
 def v2(sequence=1):
     bar={"date":"2026-10-11","open":1.0,"high":1.1,"low":0.9,"close":1.0,"indicators":{}}
     parts={"overview":{"rows":[{"ts_code":"510300.SH","actionable":False}]},
@@ -116,7 +124,7 @@ def test_v2_chart_rules_survive_recomputed_hashes(mutation):
 
 @pytest.mark.parametrize("mutation",["manifest","parts","rehashed-actionable"])
 def test_cached_bundle_must_be_revalidated(tmp_path,mutation):
-    store=LocalDisplayStore(tmp_path);value=v2();store.publish(value)
+    store=LocalDisplayStore(tmp_path);value=v2();store.publish(value,now=NOW)
     path=next(tmp_path.glob("bundle_*.json"))
     altered=json.loads(path.read_text(encoding="utf-8"))
     if mutation=="manifest":altered["manifest"]["code_sha"]="c"*40
@@ -132,7 +140,7 @@ def test_cached_bundle_must_be_revalidated(tmp_path,mutation):
     assert LocalDisplayReader(store).read_instrument_detail("510300.SH") is None
 
 def test_full_id_cannot_match_only_prefix(tmp_path):
-    store=LocalDisplayStore(tmp_path);result=store.publish(v2())
+    store=LocalDisplayStore(tmp_path);result=store.publish(v2(),now=NOW)
     wrong=result["bundle_id"][:16]+("0"*48 if result["bundle_id"][16:]!="0"*48 else "1"*48)
     assert store.load_bundle(wrong) is None
     assert store.load_bundle(result["bundle_id"]) is not None
@@ -141,7 +149,7 @@ def test_numeric_full_hash_is_not_a_sequence(tmp_path,monkeypatch):
     import app.workspace.local_display_read as module
     original=module.digest
     monkeypatch.setattr(module,"digest",lambda value:"1"*64 if isinstance(value,dict) and "contract_version" in value else original(value))
-    store=LocalDisplayStore(tmp_path);store.publish(v2())
+    store=LocalDisplayStore(tmp_path);store.publish(v2(),now=NOW)
     assert store.load_bundle("1"*64)["manifest"]["sequence"]==1
 
 def test_numeric_short_alias_rejects_sequence_hash_ambiguity(tmp_path,monkeypatch):
@@ -152,7 +160,7 @@ def test_numeric_short_alias_rejects_sequence_hash_ambiguity(tmp_path,monkeypatc
             return prefix+"a"*48 if value["sequence"]==1 else "b"*64
         return original(value)
     monkeypatch.setattr(module,"digest",identities)
-    store=LocalDisplayStore(tmp_path);store.publish(v2(1));store.publish(v2(int(prefix)))
+    store=LocalDisplayStore(tmp_path);store.publish(v2(1),now=NOW);store.publish(v2(int(prefix)),now=NOW)
     assert store.load_bundle(prefix) is None
     assert store.load_bundle(int(prefix))["manifest"]["sequence"]==int(prefix)
 
@@ -165,7 +173,7 @@ def test_short_alias_rejects_ambiguity(tmp_path,monkeypatch):
         return original(value)
     monkeypatch.setattr(module,"digest",collision)
     store=LocalDisplayStore(tmp_path)
-    first=store.publish(v2(1));second=store.publish(v2(2))
+    first=store.publish(v2(1),now=NOW);second=store.publish(v2(2),now=NOW)
     assert store.load_bundle("a"*16) is None
     assert store.load_bundle(first["bundle_id"])["manifest"]["sequence"]==1
     assert store.load_bundle(second["bundle_id"])["manifest"]["sequence"]==2
@@ -174,12 +182,12 @@ def snapshot(root):
     return {p.name:p.read_bytes() for p in root.iterdir() if p.is_file()}
 
 def test_budget_rejection_preserves_every_original_file(tmp_path):
-    store=LocalDisplayStore(tmp_path);store.publish(v2(1));store.publish(v2(2))
+    store=LocalDisplayStore(tmp_path);store.publish(v2(1),now=NOW);store.publish(v2(2),now=NOW)
     before=snapshot(tmp_path);usage=sum(p.stat().st_size for p in tmp_path.glob("bundle_*.json"))
     store.max_bytes=usage
     value=v2(3);value["parts"]["overview"]["description"]="x"*4096;rehash(value)
     with pytest.raises(ValueError,match="capacity|budget"):
-        store.publish(value)
+        store.publish(value,now=NOW)
     assert snapshot(tmp_path)==before
 
 def receiver_settings(tmp_path):
@@ -223,7 +231,7 @@ def test_real_route_delivery_matrix(tmp_path,monkeypatch,version,compress):
 def test_gzip_limit_rejection_preserves_generation_files(tmp_path,monkeypatch):
     from app.workspace import shadow_api
     from app.workspace.shadow_auth import signed_headers
-    store=LocalDisplayStore(tmp_path/"v2");store.publish(v2(1));store.publish(v2(2))
+    store=LocalDisplayStore(tmp_path/"v2");store.publish(v2(1),now=NOW);store.publish(v2(2),now=NOW)
     before=snapshot(tmp_path/"v2")
     settings=receiver_settings(tmp_path);settings.local_display_v2_max_decompressed_bytes=10
     monkeypatch.setattr(shadow_api,"get_settings",lambda:settings)
@@ -234,17 +242,19 @@ def test_gzip_limit_rejection_preserves_generation_files(tmp_path,monkeypatch):
     assert snapshot(tmp_path/"v2")==before
     assert store.load_bundle()["manifest"]["sequence"]==2
 
-def test_pruning_can_reserve_space_before_publication(tmp_path):
-    store=LocalDisplayStore(tmp_path);store.publish(v2(1));store.publish(v2(2))
+def test_full_current_previous_budget_rejects_peak_without_deleting_rollback(tmp_path):
+    store=LocalDisplayStore(tmp_path);store.publish(v2(1),now=NOW);store.publish(v2(2),now=NOW)
     store.max_bytes=sum(p.stat().st_size for p in tmp_path.glob("bundle_*.json"))
-    store.publish(v2(3))
-    assert sum(p.stat().st_size for p in tmp_path.glob("bundle_*.json"))<=store.max_bytes
-    assert store.load_bundle()["manifest"]["sequence"]==3
-    assert json.loads((tmp_path/"previous.json").read_text())["sequence"]==2
+    before=snapshot(tmp_path)
+    with pytest.raises(ValueError,match="capacity"):
+        store.publish(v2(3),now=NOW)
+    assert snapshot(tmp_path)==before
+    assert store.load_bundle()["manifest"]["sequence"]==2
+    assert json.loads((tmp_path/"previous.json").read_text())["sequence"]==1
 
 def test_concurrent_same_bundle_is_idempotent(tmp_path):
     value=v2()
-    def publish(_):return LocalDisplayStore(tmp_path).publish(value)
+    def publish(_):return LocalDisplayStore(tmp_path).publish(value,now=NOW)
     with ThreadPoolExecutor(max_workers=6) as pool:results=list(pool.map(publish,range(6)))
     assert sum(r["status"]=="accepted" for r in results)==1
     assert sum(r["status"]=="already_accepted" for r in results)==5
@@ -272,10 +282,10 @@ def test_safety_scan_covers_entire_envelope(section):
 def test_pruning_never_deletes_unknown_user_files(tmp_path):
     import os
     store=LocalDisplayStore(tmp_path)
-    for sequence in range(1,6):store.publish(v2(sequence))
+    for sequence in range(1,6):store.publish(v2(sequence),now=NOW)
     note=tmp_path/"bundle_notes.json";note.write_text("synthetic retained note",encoding="utf-8")
     os.utime(note,(1,1))
-    store.publish(v2(6))
+    store.publish(v2(6),now=NOW)
     assert note.read_text(encoding="utf-8")=="synthetic retained note"
     assert len([p for p in tmp_path.glob("bundle_*.json") if store.FILE_RE.fullmatch(p.name)])<=5
 
@@ -288,7 +298,7 @@ def test_manifest_hex_fields_use_entire_string(field):
 
 def test_short_source_sha_and_historical_reads_remain_compatible(tmp_path):
     value=v2();value["manifest"]["code_sha"]="abcdef1"
-    store=LocalDisplayStore(tmp_path);store.publish(value)
+    store=LocalDisplayStore(tmp_path);store.publish(value,now=NOW)
     assert store.load_bundle() is not None
     assert LocalDisplayReader(store).read_overview()["is_stale"] is True
 
@@ -299,7 +309,7 @@ def test_invalid_cache_pointer_cannot_escape_store(tmp_path):
 
 @pytest.mark.parametrize("which",["target","previous"])
 def test_publication_never_reads_symlink_paths(tmp_path,monkeypatch,which):
-    store=LocalDisplayStore(tmp_path);store.publish(v2(1))
+    store=LocalDisplayStore(tmp_path);store.publish(v2(1),now=NOW)
     value=v2(2)
     guarded=store.previous_link if which=="previous" else tmp_path/f"bundle_2_{digest(value['manifest'])[:16]}.json"
     guarded.write_text("synthetic foreign content",encoding="utf-8")
@@ -309,8 +319,8 @@ def test_publication_never_reads_symlink_paths(tmp_path,monkeypatch,which):
         if path==guarded:raise AssertionError("publication must not follow symlink")
         return native_read(path)
     monkeypatch.setattr(Path,"read_bytes",forbid_read)
-    with pytest.raises(ValueError,match="symlink"):
-        store.publish(value)
+    with pytest.raises(ValueError,match="symlink|unsafe"):
+        store.publish(value,now=NOW)
 
 def test_gzip_path_does_not_use_unbounded_decompress(tmp_path,monkeypatch):
     from app.workspace import shadow_api
@@ -342,11 +352,11 @@ def test_publisher_does_not_steal_aged_active_lock(tmp_path,monkeypatch):
     monkeypatch.setattr(Path,"unlink",tracked_unlink)
     try:
         with pytest.raises(ValueError,match="lock"):
-            store.publish(v2())
+            store.publish(v2(),now=NOW)
         assert attempts==[], "must not try to delete an active publication lock"
     finally:
         owner.release()
-    assert store.publish(v2())["status"]=="accepted"
+    assert store.publish(v2(),now=NOW)["status"]=="accepted"
 
 def test_failed_lock_owner_cannot_release_another_lock(tmp_path,monkeypatch):
     from app.workspace.local_schedule import LocalRunLock
@@ -365,27 +375,29 @@ def test_failed_lock_owner_cannot_release_another_lock(tmp_path,monkeypatch):
         assert attempts==[], "a failed acquirer must not attempt another owner's unlink"
     finally:
         owner.release()
-    assert not path.exists()
+    # OS-backed locks intentionally retain their inode after release.
+    assert other.acquire() is True
+    other.release()
 
 def test_publication_failure_restores_files_and_both_pointers(tmp_path,monkeypatch):
-    store=LocalDisplayStore(tmp_path);store.publish(v2(1));store.publish(v2(2))
+    store=LocalDisplayStore(tmp_path);store.publish(v2(1),now=NOW);store.publish(v2(2),now=NOW)
     before=snapshot(tmp_path);original=store._atomic
     def fail_latest(path,data):
         if path==store.latest_link:raise OSError("synthetic interrupted pointer")
         return original(path,data)
     monkeypatch.setattr(store,"_atomic",fail_latest)
     with pytest.raises(OSError):
-        store.publish(v2(3))
+        store.publish(v2(3),now=NOW)
     assert snapshot(tmp_path)==before
     assert store.load_bundle()["manifest"]["sequence"]==2
 
 def test_same_sequence_different_existing_bundle_is_rejected(tmp_path):
-    store=LocalDisplayStore(tmp_path);store.publish(v2(1))
+    store=LocalDisplayStore(tmp_path);store.publish(v2(1),now=NOW)
     value=v2(1);value["parts"]["overview"]["description"]="different";rehash(value)
     identity=digest(value["manifest"])
     (tmp_path/f"bundle_1_{identity[:16]}.json").write_bytes(canonical(value))
     before=snapshot(tmp_path)
     with pytest.raises(ValueError,match="sequence"):
-        store.publish(value)
+        store.publish(value,now=NOW)
     assert snapshot(tmp_path)==before
 

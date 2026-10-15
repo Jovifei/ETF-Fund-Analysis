@@ -71,6 +71,24 @@ afterEach(() => {
 })
 
 describe('detail data refresh lifecycle', () => {
+  it('pins local chart requests to the returned generation', async () => {
+    vi.mocked(api).mockImplementation(async (path: string) => path.includes('/chart?')
+      ? { ...chart, generation: 7 }
+      : { ...detail, generation: 7 })
+    const wrapper = await openDetail()
+    const request = vi.mocked(api).mock.calls.map(([path]) => String(path)).find(path => path.includes('/chart?'))!
+    expect(new URL(request, 'http://localhost').searchParams.get('generation')).toBe('7')
+    expect(wrapper.find('[data-testid="chart-as-of"]').exists()).toBe(true)
+  })
+
+  it('rejects another generation even when capture timestamps happen to match', async () => {
+    vi.mocked(api).mockImplementation(async (path: string) => path.includes('/chart?')
+      ? { ...chart, generation: 8 }
+      : { ...detail, generation: 7 })
+    const wrapper = await openDetail()
+    expect(wrapper.find('[data-testid="chart-as-of"]').exists()).toBe(false)
+  })
+
   it('shows source, fetch, calculation and snapshot times as separate fields', async () => {
     const wrapper = await openDetail()
     const freshness = wrapper.get('[data-testid="detail-freshness"]')

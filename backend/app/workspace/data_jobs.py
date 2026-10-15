@@ -6,6 +6,9 @@ from uuid import uuid4
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
+from app.services.research_write_guard import display_only, require_research_write
+
 from app.workspace.jobs import WorkspaceError, lock_owner, owner_scope
 from app.workspace.models import WorkspaceDataJob
 from app.workspace.protocol import ChanStructuresJobRequest, ChanStructuresRequest, DataRequest, content_hash
@@ -16,6 +19,8 @@ def view(row: WorkspaceDataJob) -> dict:
 
 
 def enqueue(db: Session, payload: DataRequest, user_id: int | None) -> tuple[WorkspaceDataJob, bool]:
+    from app.services.research_write_guard import require_research_write
+    require_research_write(get_settings(), "workspace_data_job")
     if user_id and payload.task in {"factors", "research_outlook"}:
         from app.models import AuthUser
         from app.workspace.memberships import check_feature
@@ -46,6 +51,7 @@ def enqueue_chan_structures(
 ) -> tuple[WorkspaceDataJob, bool]:
     """Queue an internal, bounded Chan request without exposing a public task."""
 
+    require_research_write(get_settings(), "chan_structures")
     request = ChanStructuresRequest.model_validate(payload)
     scope = owner_scope(None)
     lock_owner(db, "workspace-data-queue")
@@ -82,6 +88,8 @@ def enqueue_chan_structures(
 
 
 def claim(db: Session) -> str | None:
+    if display_only(get_settings()):
+        return None
     lock_owner(db, "workspace-data-queue")
     now = datetime.now(UTC)
     from app.workspace.models import WorkspaceResearchJob

@@ -166,7 +166,7 @@ def project_chart(source):
     result.update(interval="1d",unsupported_intervals=["1w","1mo","5m","15m"],qualification="UNKNOWN",research_only=True,actionable=False,cost_overlay_allowed=False,research_cost_overlay_allowed=False)
     return result
 
-def validate_public_chart(chart, *, code=None, generated_at=None, partial=False):
+def validate_public_chart(chart, *, code=None, generated_at=None, partial=False, expected_interval="1d"):
     """Sparse legacy charts inherit identity/cutoff from their enclosing manifest."""
     if not isinstance(chart,dict) or set(chart)-CHART:
         raise ValueError("nonpublic chart fields")
@@ -177,7 +177,7 @@ def validate_public_chart(chart, *, code=None, generated_at=None, partial=False)
             raise ValueError("invalid chart code")
         if code is not None and chart["ts_code"]!=code:
             raise ValueError("chart code mismatch")
-    if chart.get("interval","1d")!="1d":
+    if expected_interval not in {"1d", "1w", "1mo"} or chart.get("interval","1d") != expected_interval:
         raise ValueError("chart scope violation")
     for key,expected in (("actionable",False),("research_only",True),("cost_overlay_allowed",False),("research_cost_overlay_allowed",False)):
         if key in chart and chart[key] is not expected:

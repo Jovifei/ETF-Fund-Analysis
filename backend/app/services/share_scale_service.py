@@ -103,6 +103,8 @@ class ShareScaleService:
         as_of: date | None = None,
         run_id: str,
     ) -> dict[str, Any]:
+        from app.services.research_write_guard import require_research_write
+        require_research_write(self.settings, "ShareScaleService.refresh")
         instruments = self._instruments(db, codes)
         requested = [item.ts_code for item in instruments]
         if getattr(self.provider, "name", "") == "mock":

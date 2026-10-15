@@ -5,6 +5,8 @@ from app.models import Instrument
 
 
 def seed_configured_universe(db, settings):
+    from app.services.research_write_guard import require_research_write
+    require_research_write(settings, "seed_configured_universe")
     items = settings.load_watchlist().get("instruments", [])
     if len(items) > 200:
         raise ValueError("configured universe exceeds 200")
