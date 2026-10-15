@@ -59,3 +59,15 @@ Jovi explicitly authorizes local code implementation/tests; webGPT reviews actua
 Current tests frome722 baseline are55backend+197frontend PASS, not reused as new candidate result. Source transport6908544 is docs-only and not merged here.
 
 Review: fixed implementationf514a6e/treeba18dbfe, owner state preserved; one-time Windows offline task and actual local TLS/restart replay proof passed. Full120 affected backend and198 Vue passed, full1595 backend1825/23 recorded by exact identity. Detailed result boundaries and preserved failures: docs/audits/LOCAL_COMPUTE_IMPLEMENTATION_20261011.md. New architecture remains default disabled, Mock-only,1d-only; no production claim.
+
+## 2026-10-15 一期发布继续执行（本地决策）
+
+Jovi已明确暂不使用不可用网页GPT，由本地独立复审和执行。保护原目录、F盘原库、生产账户持仓与回滚资产；不伪造网页批准或资格。
+
+- [x] 固定1d6739a中间源码：后端2134通过/23跳过、Vue205/类型/构建、真实Chrome隔离Mock7通过；旧失败保留。
+- [x] 独立只读交叉复审未发现新增P0/P1；34只实际展示投影低于16MiB，原数据不搬云端。
+- [x] 真实全量抓取复现新阻断：34/34日线成功，但夜间报价全部仅因20分钟实时窗partial；未导出/上传，退出1证据保留。
+- [ ] 失败优先补closed-session-input-v1：显式private闭市研究、verified交易日和本次完整同日收盘数据；不把报价标实时，不放行任意required partial。
+- [ ] 最终完整/专项/精确CI通过，重新冻结SHA/tree，独立复审并ff-only合main。
+- [ ] 新一致备份完成CRC/hash、精确源码层镜像验证、独立store预装并受控切换，失败回滚原16链。
+- [ ] 真本地计算→HMAC公网回执→同代消费核验，迁移原有任务到固定源码/单写者，正常登录与两真实交易日观察独立记录。

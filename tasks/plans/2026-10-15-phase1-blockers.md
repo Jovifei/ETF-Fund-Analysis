@@ -32,3 +32,7 @@ SOURCE_TESTED、WEB_REVIEW_APPROVED、DEPLOYED、NORMAL_CONSUMER_PASS、CLOUD_WR
 - [ ] 修复发布迁移兼容性并验证；独立复审后合main与原目录ff-only，保护现有任务/配置。
 - [ ] 本机构建固定源码不可变镜像、新一致备份、核资源峰值，受控切换和回滚验收。
 - [ ] 验证实际本地执行→签名上传→网站同代读取，记录真实结果及剩余两交易日门槛。
+
+### 新发现R8：收盘任务输入语义（执行中）
+
+1d6739a夜间真实34只抓取日线完整，quotes34只均收到但因源收盘时间超过20分钟实时窗使required partial，CLI正确退出1。现16:10slot同样受影响。先保存失败，再以明确closed-session-input-v1实现闭市材料核验：仅private、verified当日交易日、16:00后、本次完整同日15:00–16:00源时点、无其他降级或Mock才可研究计算；原realtime/partial/UNKNOWN不提升。盘中/旧日/未知日历/缺项继续阻断。最终源码重新完整测试/CI/独立复审后才合并部署。

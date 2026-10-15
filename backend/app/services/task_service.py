@@ -251,6 +251,8 @@ class TaskService:
         runtime = getattr(self, "runtime", None)
         if settings is None or runtime is None or settings.market_provider == "mock":
             return
+        if not self.execution_policy.resolve_runtime_provider:
+            return
         resolved = self.runtime.resolve_settings(db)
         if (
             resolved.market_provider == self.settings.market_provider

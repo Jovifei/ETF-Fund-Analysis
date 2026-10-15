@@ -21,6 +21,7 @@ from app.workspace.local_compute import (
     load_local_config,
     validate_provider_admission,
     OPTIONAL_TASK_PARTS,
+    closed_session_result_accepted,
 )
 from app.workspace.local_schedule import LocalRunLock
 from app.workspace.local_atomic import write_json_atomic
@@ -75,6 +76,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     universe = cfg["universe"]
     admission = cfg.get("provider_admission")
     private_research = getattr(args, "private_research", False)
+    closed_session_research = getattr(args, "closed_session_research", False)
+    if closed_session_research and (not private_research or args.profile != "live"):
+        raise ValueError("closed-session research requires explicit live private research scope")
     if args.profile == "live":
         required = "compute" if getattr(args, "compute_only", False) else "export"
         check = validate_provider_admission(args.provider, evidence=admission, purpose=required,
@@ -114,14 +118,16 @@ def cmd_run(args: argparse.Namespace) -> int:
             # Local refresh-then-sync: no market fetch, rebuild board from stored rows, then export + upload.
             results = compute_board_only(settings, universe=universe)
         else:
-            results = compute_local(settings, universe=universe, admission=admission, private_research=private_research)
+            results = compute_local(settings, universe=universe, admission=admission, private_research=private_research,
+                                    closed_session_research=closed_session_research)
 
         # Check if any required task failed
         if not results:
             print(json.dumps({"status": "compute_failed", "reason": "no_task_results"}))
             return 1
         for task_result in results:
-            if task_result.get("required", True) and task_result.get("status") != "succeeded":
+            closed_accepted = closed_session_research and private_research and closed_session_result_accepted(task_result)
+            if task_result.get("required", True) and task_result.get("status") != "succeeded" and not closed_accepted:
                 print(json.dumps({"status": "compute_failed", "tasks": results}, indent=2, ensure_ascii=False))
                 return 1
 
@@ -154,7 +160,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         unavailable = [OPTIONAL_TASK_PARTS[item["task_name"]] for item in results
                        if item.get("task_name") in OPTIONAL_TASK_PARTS and item.get("status") != "succeeded"]
         bundle = export_local_v2(settings, sequence=sequence, code_sha=sha, universe=universe,
-                                 admission=admission, private_research=private_research, unavailable_parts=unavailable)
+                                 admission=admission, private_research=private_research, unavailable_parts=unavailable,
+                                 closed_session_result=next((item for item in results if closed_session_result_accepted(item)), None))
 
         bundle_path = outbox / f"bundle_{bundle['manifest']['sequence']}.json"
         write_json_atomic(bundle_path, bundle)
@@ -244,6 +251,7 @@ def main() -> int:
     p_run.add_argument("--no-upload", action="store_true", help="Do not upload after export")
     p_run.add_argument("--compute-only", action="store_true", help="Local compute only; no display export or upload")
     p_run.add_argument("--private-research", action="store_true", help="Explicit owner-private research execution scope; does not certify data rights or quality")
+    p_run.add_argument("--closed-session-research", action="store_true", help="After 16:00 only: validate newly fetched same-session stale quotes as non-realtime private research inputs")
     p_run.add_argument("--skip-trade-day-check", action="store_true", help="Bypass trading day gate (for testing/manual runs)")
 
     p_run.add_argument("--board-only", action="store_true", help="Local refresh-then-sync: rebuild decision board from stored local rows, no market fetch")

@@ -16,6 +16,7 @@ class TaskExecutionPolicy:
 
     persist_task_runs: bool = True
     persist_provider_audits: bool = True
+    resolve_runtime_provider: bool = True
 
     @classmethod
     def isolated_demo(cls) -> "TaskExecutionPolicy":

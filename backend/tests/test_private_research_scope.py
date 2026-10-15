@@ -47,8 +47,10 @@ def test_optional_failure_continues_but_core_partial_stops_without_paid_fallback
 
     seen = []
     class StubTasks:
-        def __init__(self, settings):
+        def __init__(self, settings, *, execution_policy=None):
             assert settings.tushare_token == "" and settings.ftshare_enabled is False
+            assert execution_policy.resolve_runtime_provider is False
+            assert execution_policy.persist_task_runs is True and execution_policy.persist_provider_audits is True
         def run(self, db, task, **kwargs):
             seen.append(task)
             if task == "refresh_market_context":

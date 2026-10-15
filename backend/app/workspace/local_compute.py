@@ -6,19 +6,19 @@ import json
 import re
 from math import isfinite
 import shutil
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.models import Instrument, MarketContextSnapshot, SectorSnapshot
+from app.models import Instrument, MarketContextSnapshot, QuoteSnapshot, SectorSnapshot, TaskRun
 from app.services.decision_board_service import DecisionBoardService
 from app.utils.hashing import stable_hash
 from app.workspace.candle_periods import transform_chart
-from app.workspace.read_model import chart_data, instrument_detail, overview
+from app.workspace.read_model import chart_data, instrument_detail, latest_rows, market_time, overview, quote_view
 from app.workspace.shadow_bundle import canonical, digest, make_bundle, timestamp
 from app.workspace.shadow_projection import levels, project_chart, studies
 
@@ -26,6 +26,7 @@ CONTRACT_VERSION = "local-display-v2"
 ADMISSION_POLICY_VERSION = "private-research-execution-v1"
 EXPORT_PROJECTION_VERSION = "local-display-projection-v1"
 EXPORT_MAX_BYTES = 16 * 1024 * 1024
+CLOSED_SESSION_INPUT_VERSION = "closed-session-input-v2"
 OPTIONAL_TASK_PARTS = {"refresh_market_context": "market_context", "refresh_sector_snapshots": "sectors"}
 
 ROW_FIELDS_V2 = {
@@ -116,6 +117,122 @@ def _checked_export(bundle):
     if len(canonical(bundle)) > EXPORT_MAX_BYTES:
         raise ValueError("producer export budget exceeded (canonical 16 MiB); no scope or bar truncation applied")
     return bundle
+
+
+class _ClosedSessionQuoteResult(dict):
+    """In-process proof type: a JSON accepted flag alone cannot open the gate."""
+    def __init__(self, result, evidence, *, origin, capture):
+        super().__init__({**result, "accepted_for_closed_research": True, "closed_session_research": evidence})
+        self.evidence_hash = digest(evidence)
+        self.origin = origin
+        self.capture = capture
+
+
+def closed_session_result_accepted(result):
+    return (type(result) is _ClosedSessionQuoteResult and result.get("status") == "partial"
+            and result.get("accepted_for_closed_research") is True
+            and digest(result.get("closed_session_research")) == result.evidence_hash)
+
+
+def _closed_database_identity(db):
+    if db.get_bind().dialect.name != "sqlite":
+        raise ValueError("closed-session evidence requires owned SQLite")
+    database = next(row[2] for row in db.connection().exec_driver_sql("PRAGMA database_list") if row[1] == "main")
+    if not database:
+        return ("sqlite-memory", db.connection().connection.dbapi_connection)
+    path = Path(database).resolve()
+    stat = path.stat()
+    return ("sqlite-file", os.path.normcase(str(path)), stat.st_dev, stat.st_ino)
+
+
+def _revalidate_closed_session_capture(db, settings, result, universe, now):
+    from app.services.snapshot_contract import _normalize_time
+    error = "closed-session evidence database/scope/captured input mismatch"
+    if (not closed_session_result_accepted(result) or result.origin != _closed_database_identity(db)
+            or tuple(sorted(universe or ())) != result.capture["universe"]
+            or settings.market_provider != result.capture["provider"]
+            or _normalize_time(now, settings) < result.capture["finished_at"]
+            or _normalize_time(now, settings).date().isoformat() != result["closed_session_research"]["source_session"]):
+        raise ValueError(error)
+    fresh = _closed_session_quote_result(db, settings, universe=universe, result=dict(result),
+        after_id=result.capture["after_id"], started_at=result.capture["started_at"],
+        finished_at=result.capture["finished_at"], private_research=True, enabled=True)
+    if (not closed_session_result_accepted(fresh) or fresh.evidence_hash != result.evidence_hash
+            or fresh.capture["quote_ids"] != result.capture["quote_ids"]):
+        raise ValueError(error)
+    instruments = list(db.scalars(select(Instrument).where(Instrument.ts_code.in_(universe))))
+    # This is the exact selector used by instrument_detail: source time, then ID.
+    selected = latest_rows(db, QuoteSnapshot, [row.id for row in instruments], QuoteSnapshot.quote_time.desc())
+    if {quote.id for quote in selected.values()} != set(result.capture["quote_ids"]):
+        raise ValueError("closed-session evidence is not the actual detail quote selection")
+    return {row.ts_code: selected[row.id] for row in instruments}
+
+
+def _closed_session_quote_result(db, settings, *, universe, result, after_id, started_at,
+                                 finished_at, private_research, enabled, calendar=None):
+    """Validate only this newly fetched batch; never update quote or task status."""
+    from app.services.snapshot_contract import _normalize_time
+    from app.services.trading_calendar_service import TradingCalendarService
+    if not enabled:
+        return result
+    def reject(reason):
+        return {**result, "accepted_for_closed_research": False, "closed_session_research": {
+            "contract_version": CLOSED_SESSION_INPUT_VERSION, "accepted": False, "reason": reason}}
+    if not private_research or settings.market_provider not in {"public_composite", "akshare"}:
+        return reject("private_public_source_scope_required")
+    start, end = _normalize_time(started_at, settings), _normalize_time(finished_at, settings)
+    if (settings.timezone_name != "Asia/Shanghai" or start is None or end is None or start > end
+            or start.date() != end.date() or start.time().replace(tzinfo=None) < time(16)):
+        return reject("closed_session_window_required")
+    decision = (calendar or TradingCalendarService(settings)).decision(end.date())
+    if not decision.verified or not decision.is_trade_day:
+        return reject("verified_current_trade_session_required")
+    size = len(universe or [])
+    expected_counts = {"requested": size, "received": size, "inserted": size, "realtime": 0,
+                       "raw_realtime": size, "degraded": size, "missing": 0}
+    if (not size or len(set(universe)) != size or type(after_id) is not int or after_id < 0
+            or result.get("status") != "partial" or result.get("coverage_complete") is not False
+            or result.get("missing_codes") != [] or not isinstance(result.get("run_id"), str) or not result["run_id"]
+            or any(type(result.get(key)) is not int or result[key] != value for key, value in expected_counts.items())):
+        return reject("complete_current_quote_batch_required")
+    run = db.scalar(select(TaskRun).where(TaskRun.run_id == result["run_id"], TaskRun.task_name == "refresh_quotes"))
+    if (run is None or run.status != "partial" or run.finished_at is None
+            or not start <= _normalize_time(run.started_at, settings) <= _normalize_time(run.finished_at, settings) <= end
+            or any((run.result_json or {}).get(key) != result.get(key) for key in expected_counts)):
+        return reject("current_quote_task_identity_mismatch")
+    rows = db.execute(select(QuoteSnapshot, Instrument.ts_code).join(
+        Instrument, Instrument.id == QuoteSnapshot.instrument_id).where(QuoteSnapshot.id > after_id)).all()
+    if len(rows) != size or {code for _, code in rows} != set(universe):
+        return reject("new_quote_scope_mismatch")
+    identities = []
+    source_times = []
+    for quote, code in rows:
+        if (quote.source != "sina:hq_sinajs:v1" or quote.is_realtime is not False
+                or quote.timestamp_verified is not False
+                or quote.degraded_reason != "quote source timestamp is stale"
+                or isinstance(quote.price, bool) or not isinstance(quote.price, (float, int))
+                or not isfinite(quote.price) or quote.price <= 0
+                or not isinstance(quote.quality_hash, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", quote.quality_hash)
+                or not isinstance(quote.quote_time, datetime) or not isinstance(quote.fetched_at, datetime)):
+            return reject("only_stale_timestamp_closing_quotes_allowed")
+        source, fetched = _normalize_time(quote.quote_time, settings), _normalize_time(quote.fetched_at, settings)
+        if (source.date() != end.date() or not time(15) <= source.time().replace(tzinfo=None) <= time(16)
+                or not start <= fetched <= end or source > fetched):
+            return reject("quote_source_or_fetch_window_mismatch")
+        source_times.append(source.isoformat())
+        identity = {column.name: getattr(quote, column.name) for column in QuoteSnapshot.__table__.columns}
+        identity.update(ts_code=code, quote_time=source.isoformat(), fetched_at=fetched.isoformat())
+        identities.append(identity)
+    evidence = {"contract_version": CLOSED_SESSION_INPUT_VERSION, "accepted": True,
+        "mode": "closed_session_nonrealtime", "source_session": end.date().isoformat(),
+        "quote_count": size, "run_id": result["run_id"], "source_time_min": min(source_times),
+        "source_time_max": max(source_times), "fetch_window_start": start.isoformat(),
+        "fetch_window_end": end.isoformat(), "input_hash": stable_hash(sorted(identities, key=lambda row: row["ts_code"])),
+        "is_realtime": False, "actionable": False, "research_only": True,
+        "qualification": "UNKNOWN", "calibration_status": "not_calibrated"}
+    capture = {"universe": tuple(sorted(universe)), "quote_ids": tuple(sorted(quote.id for quote, _ in rows)),
+               "after_id": after_id, "started_at": start, "finished_at": end, "provider": settings.market_provider}
+    return _ClosedSessionQuoteResult(result, evidence, origin=_closed_database_identity(db), capture=capture)
 
 
 def local_settings(
@@ -304,7 +421,7 @@ def doctor_check(root: Path | str, database: Path | str, profile: str = "live") 
 
 
 def compute_local(settings: Settings, universe: list[str] | None = None, *, admission: dict | None = None,
-                  private_research: bool = False) -> list[dict[str, Any]]:
+                  private_research: bool = False, closed_session_research: bool = False) -> list[dict[str, Any]]:
     if settings.market_provider == "mock" and settings.app_env == "local_research":
         raise ValueError("live profile rejects mock provider")
 
@@ -313,11 +430,13 @@ def compute_local(settings: Settings, universe: list[str] | None = None, *, admi
     )["operation_permitted"]:
         raise ValueError("provider acquisition/storage admission UNKNOWN")
     from app.services.task_service import TaskService
+    from app.services.execution_policy import TaskExecutionPolicy
 
     if private_research:
         settings = settings.model_copy(update={"tushare_token": "", "ftshare_enabled": False})
     engine = create_engine(settings.database_url)
-    service = TaskService(settings)
+    service = (TaskService(settings, execution_policy=TaskExecutionPolicy(resolve_runtime_provider=False))
+               if private_research else TaskService(settings))
     results = []
     try:
         task_names = [
@@ -340,16 +459,23 @@ def compute_local(settings: Settings, universe: list[str] | None = None, *, admi
                         kwargs["lookback_days"] = 420
                     if universe:
                         kwargs["codes"] = universe
-                    result = service.run(db, task, **kwargs)
+                    before_quote_id = ((db.scalar(select(func.max(QuoteSnapshot.id))) or 0)
+                                       if task == "refresh_quotes" and closed_session_research else 0)
+                    started = datetime.now(settings.timezone)
+                    result = dict(service.run(db, task, **kwargs))
+                    if task == "refresh_quotes":
+                        result = _closed_session_quote_result(db, settings, universe=universe, result=result,
+                            after_id=before_quote_id, started_at=started, finished_at=datetime.now(settings.timezone),
+                            private_research=private_research, enabled=closed_session_research)
             except Exception as exc:
                 if required:
                     raise
                 result = {"status": "unavailable", "error_type": type(exc).__name__}
-            result = {**result, "task_name": task, "required": required}
+            result.update(task_name=task, required=required)
             if not required and result.get("status") != "succeeded":
                 result["availability"] = "unavailable"
             results.append(result)
-            if required and result.get("status") != "succeeded":
+            if required and result.get("status") != "succeeded" and not closed_session_result_accepted(result):
                 break
     finally:
         service.close()
@@ -401,8 +527,11 @@ def export_local_v2(
     admission: dict | None = None,
     private_research: bool = False,
     unavailable_parts: list[str] | None = None,
+    closed_session_result: dict | None = None,
 ) -> dict[str, Any]:
     now = now or datetime.now(timezone.utc)
+    if closed_session_result is not None and (not private_research or not closed_session_result_accepted(closed_session_result)):
+        raise ValueError("validated in-process closed-session evidence required")
     if settings.market_provider != "mock" and not validate_provider_admission(
         settings.market_provider, evidence=admission, now=now, private_research=private_research
     )["operation_permitted"]:
@@ -411,8 +540,15 @@ def export_local_v2(
     try:
         with Session(engine) as db, db.begin():
             db.connection().exec_driver_sql("BEGIN")
+            captured_quotes = (_revalidate_closed_session_capture(db, settings, closed_session_result, universe, now)
+                               if closed_session_result is not None else None)
             original = DecisionBoardService(settings).read_latest(db) or {}
             generated = timestamp(original.get("generated_at")) or now
+            if captured_quotes is not None:
+                from app.services.snapshot_contract import _normalize_time
+                if (generated.astimezone(settings.timezone).date().isoformat() != closed_session_result["closed_session_research"]["source_session"]
+                        or generated < closed_session_result.capture["finished_at"] or generated > now):
+                    raise ValueError("closed-session evidence does not match board generation")
 
             # 1. Overview part
             view = overview(db, settings, limit=1000)
@@ -423,6 +559,13 @@ def export_local_v2(
                 if universe and row.get("ts_code") not in universe:
                     continue
                 row_clean = _display_row(row, history_source=original_rows.get(row.get("ts_code")))
+                if captured_quotes is not None:
+                    captured = captured_quotes.get(row["ts_code"])
+                    observed = row_clean.get("quote") or {}
+                    if (captured is None or observed.get("source") != captured.source
+                            or _normalize_time(market_time(observed.get("source_time")), settings)
+                                != _normalize_time(captured.quote_time, settings)):
+                        raise ValueError("closed-session evidence does not match overview quote")
                 rows.append(row_clean)
 
             target_trade_date = original.get("target_trade_date") or view.get("target_trade_date") or generated.strftime("%Y-%m-%d")
@@ -448,6 +591,8 @@ def export_local_v2(
                 # Detail (Fix-2: provide complete consumer contract for Detail.vue)
                 det = instrument_detail(db, settings, code, user_id=None, as_of=generated)
                 read_as_of_val = generated.isoformat()
+                if captured_quotes is not None and (not det or det.get("quote") != quote_view(captured_quotes[code], settings, as_of=generated)):
+                    raise ValueError("closed-session evidence does not match actual detail quote")
 
                 if det:
                     detail_parts[code] = {
@@ -588,6 +733,8 @@ def export_local_v2(
                 "admission_policy_version": ADMISSION_POLICY_VERSION,
                 "export_projection_version": EXPORT_PROJECTION_VERSION,
             }
+            if closed_session_result is not None:
+                manifest["input_observation"] = dict(closed_session_result["closed_session_research"])
 
             if private_research:
                 def unqualified_copy(value):

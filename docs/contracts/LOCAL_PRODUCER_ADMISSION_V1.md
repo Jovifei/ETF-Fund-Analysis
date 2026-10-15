@@ -22,7 +22,10 @@ distinct from an upstream license or a certified dataset, and does not enable
 commercial/public redistribution or other paid sources. Explicit DENIED,
 REVOKED, EXPIRED or dated-expired evidence still refuses execution. The private
 compute settings copy disables Tushare/FTShare fallback; credentials/configs are
-not changed. The Windows registration helper has an optional `-PrivateResearch`
+not changed. Its TaskExecutionPolicy also disables runtime-provider resolution,
+so a stored runtime token cannot restore a paid fallback; operational task/audit
+history remains enabled. Normal executions keep the existing default resolution.
+The Windows registration helper has an optional `-PrivateResearch`
 switch, default false, which adds the explicit CLI flag to the pinned task.
 
 The manifest records `usage_scope=owner_private_research`, UNKNOWN source/license
@@ -72,6 +75,39 @@ rights, normalized `volume=shares`, `amount=CNY`, `return=fraction` with evidenc
 documented `raw` or `qfq` adjustment, and verified source-time evidence. All four
 interfaces must qualify. Expired, absent or incompatible evidence is UNKNOWN.
 The existing planning JSON is not automatically imported or upgraded to permission.
+
+## Explicit closed-session research inputs
+
+`--closed-session-research` additionally requires `--private-research` and the
+live profile. The registration helper accepts `-ClosedSessionResearch` only
+with `-PrivateResearch`. The 16:10 slot requires this explicit input contract;
+intraday slots keep the existing strict behavior even when the flag is present.
+`--skip-trade-day-check` cannot bypass the helper's independent verified calendar.
+
+`closed-session-input-v2` accepts only a complete newly fetched Sina quote batch
+after 16:00 on the current verified trading day. It binds the exact universe,
+pre-fetch quote ID boundary, actual task run/status/counts and fetch start/end
+window. Every new row must have finite positive price, a quality hash, a source
+time on that day within 15:00..16:00, fetched within the current same-day window,
+and the sole existing degradation `quote source timestamp is stale`. Missing,
+extra/duplicate, old-session, future, non-Sina/Mock, invalid-price, other-degraded,
+unverified-calendar or cross-midnight inputs refuse. SQLite naive dates follow
+the existing snapshot-contract settings.timezone convention, never a guessed UTC.
+
+Acceptance is an in-process typed result plus bound evidence hash, not a Boolean
+read from external JSON. Its private provenance binds the canonical owned SQLite
+file identity, exact universe, captured row IDs and original fetch boundaries.
+Export revalidates the actual task and all captured quote columns in its own
+transaction, then uses instrument_detail's exact source-time/ID selector and
+checks its exported quote DTO. Another DB, a changed payload/session/scope or a
+different winning quote refuses; a new engine on the same SQLite file is valid.
+No database path or credentials enter the public manifest.
+Original QuoteSnapshot flags/reason and TaskRun status
+remain false/stale/partial. Only local research may continue; nothing is marked
+realtime, actionable or calibrated. The signed manifest's `input_observation`
+records the contract, `closed_session_nonrealtime`, source session/time range,
+batch hash/count and non-realtime UNKNOWN qualification, with no account data.
+This changes orchestration input acceptance, not formulas or strategy thresholds.
 
 Required task partial/failure stops the pipeline. An incomplete required ETF
 overview/detail/chart universe cannot export. Outbox bundles and receipts use
