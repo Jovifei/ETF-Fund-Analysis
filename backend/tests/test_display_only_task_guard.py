@@ -38,3 +38,48 @@ def test_database_mode_not_blocked_by_guard():
         assert not isinstance(info.value, DisplayOnlyTaskRejected)
     finally:
         service.close()
+
+
+def _allow_service(allowed):
+    return TaskService(Settings(_env_file=None, market_provider="mock", analysis_enabled=False,
+                                workspace_research_source="local_bundle", display_only_allowed_tasks=allowed))
+
+
+def test_audited_exception_lets_only_refresh_decision_board_past_guard(caplog):
+    service = _allow_service(["refresh_decision_board", "refresh_bars"])
+    try:
+        with caplog.at_level("WARNING"):
+            with pytest.raises(Exception) as info:
+                service.run(None, "refresh_decision_board")  # passes guard, then fails on db=None
+        assert not isinstance(info.value, DisplayOnlyTaskRejected)
+        assert any("display_only_exception task=refresh_decision_board" in r.message for r in caplog.records)
+        # refresh_bars is not an honoured exception even if configured
+        with pytest.raises(DisplayOnlyTaskRejected):
+            service.run(None, "refresh_bars")
+        # refresh_input would fetch market data in the cloud -> still rejected
+        with pytest.raises(DisplayOnlyTaskRejected):
+            service.run(None, "refresh_decision_board", refresh_input=True)
+    finally:
+        service.close()
+
+
+def test_exception_disabled_by_default():
+    service = _service("local_bundle")
+    try:
+        with pytest.raises(DisplayOnlyTaskRejected):
+            service.run(None, "refresh_decision_board")
+    finally:
+        service.close()
+
+
+def test_audited_exception_writes_durable_event(db_session):
+    from sqlalchemy import select
+    from app.models import EventLog
+    from app.services.task_service import _audit_display_only_exception
+    try:
+        _audit_display_only_exception(db_session, "refresh_decision_board", {"run_id": "x"})
+        db_session.flush()
+        events = db_session.scalars(select(EventLog).where(EventLog.event_type == "task.display_only_exception")).all()
+        assert events and events[-1].payload_json["task_name"] == "refresh_decision_board"
+    finally:
+        db_session.rollback()  # do not leak rows into the shared suite database

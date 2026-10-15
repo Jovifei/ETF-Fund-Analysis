@@ -46,6 +46,23 @@ class TaskBusyError(RuntimeError):
     pass
 
 
+DISPLAY_ONLY_EXCEPTION_TASKS = frozenset({"refresh_decision_board"})
+
+
+def _audit_display_only_exception(db, task_name: str, kwargs: dict) -> None:
+    """Every display-only exception run leaves a log line and a durable event."""
+    logger.warning(
+        "display_only_exception task=%s source=local_bundle kwargs=%s",
+        task_name,
+        sorted(k for k in kwargs if k != "run_id"),
+    )
+    if db is not None:
+        try:
+            emit_event(db, "task.display_only_exception", {"task_name": task_name, "workspace_research_source": "local_bundle"})
+        except Exception:  # audit must not mask the task outcome; log line above remains
+            logger.error("display_only_exception audit event could not be written for %s", task_name)
+
+
 class DisplayOnlyTaskRejected(RuntimeError):
     """Raised when a cloud research write task is invoked in display-only mode.
 
@@ -556,7 +573,13 @@ class TaskService:
             raise UnknownTaskError(task_name)
         if getattr(self.settings, "workspace_research_source", "database") == "local_bundle":
             # Unified display-only guard: no cloud research raw/derived writes.
-            raise DisplayOnlyTaskRejected(task_name)
+            # Single audited maintenance exception (owner-approved 2026-10-15):
+            # refresh_decision_board may rebuild the read model from already
+            # stored rows, never with refresh_input (that would fetch market data).
+            allowed = set(getattr(self.settings, "display_only_allowed_tasks", ()) or ()) & DISPLAY_ONLY_EXCEPTION_TASKS
+            if task_name not in allowed or bool(kwargs.get("refresh_input", False)):
+                raise DisplayOnlyTaskRejected(task_name)
+            _audit_display_only_exception(db, task_name, kwargs)
         with _task_lock(db):
             requested_run_id = kwargs.pop("run_id", None)
             run_id = requested_run_id or uuid4().hex

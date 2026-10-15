@@ -1,0 +1,157 @@
+{
+  "schema": "provider-admission-evidence-v1",
+  "template_status": "FILLED_OWNER_APPROVAL_UNITS_PENDING",
+  "provider": "public_composite (akshare / sina / tencent adapters)",
+  "akshare_version_checked": "1.19.1 (box probe, sh510300 3493 rows / sh512480 1779 rows, last 2026-10-14; not stored)",
+  "interfaces": [
+    {
+      "name": "daily_bars",
+      "upstream": "Sina via AKShare",
+      "adapter_call": "fund_etf_hist_sina",
+      "acquire": {
+        "status": "ALLOWED_PERSONAL_USE_OWNER_APPROVED",
+        "evidence_ref": "owner-approval:2026-10-15T08:45+08:00 (fei Jovi, chat) — AKShare storage/display on own authenticated site, personal use"
+      },
+      "store": {
+        "status": "ALLOWED_PERSONAL_USE_OWNER_APPROVED",
+        "evidence_ref": "owner-approval:2026-10-15T08:45+08:00 (fei Jovi, chat) — AKShare storage/display on own authenticated site, personal use",
+        "location": "owner workstation F:\\ETF_Data\\ETF-Fund-Analysis (raw); server keeps only bounded display bundles",
+        "max_retention_days": null
+      },
+      "display": {
+        "status": "ALLOWED_PERSONAL_USE_OWNER_APPROVED",
+        "evidence_ref": "owner-approval:2026-10-15T08:45+08:00 (fei Jovi, chat) — AKShare storage/display on own authenticated site, personal use",
+        "audience": "AUTHENTICATED_PERSONAL_WEBSITE",
+        "public_redistribution": "NOT_ALLOWED"
+      },
+      "quota": {
+        "per_minute": null,
+        "daily": null,
+        "evidence_ref": null,
+        "note": "no published quota; bounded retries per 05 (max 2 network retries)"
+      },
+      "units": {
+        "volume": null,
+        "amount": null,
+        "return": null,
+        "evidence_ref": null,
+        "note": "UNKNOWN until per-interface unit evidence is captured; not inferred from provider name"
+      },
+      "adjustment_basis": null,
+      "source_timestamp_quality": "UNKNOWN",
+      "checked_at": "2026-10-15"
+    },
+    {
+      "name": "quotes",
+      "upstream": "Sina/Tencent via adapters",
+      "adapter_call": "public_composite quote",
+      "acquire": {
+        "status": "ALLOWED_PERSONAL_USE_OWNER_APPROVED",
+        "evidence_ref": "owner-approval:2026-10-15T08:45+08:00 (fei Jovi, chat) — AKShare storage/display on own authenticated site, personal use"
+      },
+      "store": {
+        "status": "ALLOWED_PERSONAL_USE_OWNER_APPROVED",
+        "evidence_ref": "owner-approval:2026-10-15T08:45+08:00 (fei Jovi, chat) — AKShare storage/display on own authenticated site, personal use",
+        "location": "owner workstation F:\\ETF_Data\\ETF-Fund-Analysis (raw); server keeps only bounded display bundles",
+        "max_retention_days": null
+      },
+      "display": {
+        "status": "ALLOWED_PERSONAL_USE_OWNER_APPROVED",
+        "evidence_ref": "owner-approval:2026-10-15T08:45+08:00 (fei Jovi, chat) — AKShare storage/display on own authenticated site, personal use",
+        "audience": "AUTHENTICATED_PERSONAL_WEBSITE",
+        "public_redistribution": "NOT_ALLOWED"
+      },
+      "quota": {
+        "per_minute": null,
+        "daily": null,
+        "evidence_ref": null,
+        "note": "no published quota; bounded retries per 05 (max 2 network retries)"
+      },
+      "units": {
+        "volume": null,
+        "amount": null,
+        "return": null,
+        "evidence_ref": null,
+        "note": "UNKNOWN until per-interface unit evidence is captured; not inferred from provider name"
+      },
+      "adjustment_basis": null,
+      "source_timestamp_quality": "UNKNOWN",
+      "checked_at": "2026-10-15"
+    },
+    {
+      "name": "sector_snapshots",
+      "upstream": "Eastmoney via AKShare",
+      "adapter_call": "sector board spot",
+      "acquire": {
+        "status": "ALLOWED_PERSONAL_USE_OWNER_APPROVED",
+        "evidence_ref": "owner-approval:2026-10-15T08:45+08:00 (fei Jovi, chat) — AKShare storage/display on own authenticated site, personal use"
+      },
+      "store": {
+        "status": "ALLOWED_PERSONAL_USE_OWNER_APPROVED",
+        "evidence_ref": "owner-approval:2026-10-15T08:45+08:00 (fei Jovi, chat) — AKShare storage/display on own authenticated site, personal use",
+        "location": "owner workstation F:\\ETF_Data\\ETF-Fund-Analysis (raw); server keeps only bounded display bundles",
+        "max_retention_days": null
+      },
+      "display": {
+        "status": "ALLOWED_PERSONAL_USE_OWNER_APPROVED",
+        "evidence_ref": "owner-approval:2026-10-15T08:45+08:00 (fei Jovi, chat) — AKShare storage/display on own authenticated site, personal use",
+        "audience": "AUTHENTICATED_PERSONAL_WEBSITE",
+        "public_redistribution": "NOT_ALLOWED"
+      },
+      "quota": {
+        "per_minute": null,
+        "daily": null,
+        "evidence_ref": null,
+        "note": "no published quota; bounded retries per 05 (max 2 network retries)"
+      },
+      "units": {
+        "volume": null,
+        "amount": null,
+        "return": null,
+        "evidence_ref": null,
+        "note": "UNKNOWN until per-interface unit evidence is captured; not inferred from provider name"
+      },
+      "adjustment_basis": null,
+      "source_timestamp_quality": "UNKNOWN",
+      "checked_at": "2026-10-15"
+    },
+    {
+      "name": "market_context",
+      "upstream": "AKShare index/overseas",
+      "adapter_call": "market context adapter",
+      "acquire": {
+        "status": "ALLOWED_PERSONAL_USE_OWNER_APPROVED",
+        "evidence_ref": "owner-approval:2026-10-15T08:45+08:00 (fei Jovi, chat) — AKShare storage/display on own authenticated site, personal use"
+      },
+      "store": {
+        "status": "ALLOWED_PERSONAL_USE_OWNER_APPROVED",
+        "evidence_ref": "owner-approval:2026-10-15T08:45+08:00 (fei Jovi, chat) — AKShare storage/display on own authenticated site, personal use",
+        "location": "owner workstation F:\\ETF_Data\\ETF-Fund-Analysis (raw); server keeps only bounded display bundles",
+        "max_retention_days": null
+      },
+      "display": {
+        "status": "ALLOWED_PERSONAL_USE_OWNER_APPROVED",
+        "evidence_ref": "owner-approval:2026-10-15T08:45+08:00 (fei Jovi, chat) — AKShare storage/display on own authenticated site, personal use",
+        "audience": "AUTHENTICATED_PERSONAL_WEBSITE",
+        "public_redistribution": "NOT_ALLOWED"
+      },
+      "quota": {
+        "per_minute": null,
+        "daily": null,
+        "evidence_ref": null,
+        "note": "no published quota; bounded retries per 05 (max 2 network retries)"
+      },
+      "units": {
+        "volume": null,
+        "amount": null,
+        "return": null,
+        "evidence_ref": null,
+        "note": "UNKNOWN until per-interface unit evidence is captured; not inferred from provider name"
+      },
+      "adjustment_basis": null,
+      "source_timestamp_quality": "UNKNOWN",
+      "checked_at": "2026-10-15"
+    }
+  ],
+  "notes": "Owner approval covers personal, authenticated use only. Upstream terms of service were not separately reviewed; units/timestamp quality stay UNKNOWN. Approval does not extend to public redistribution or paid sources."
+}

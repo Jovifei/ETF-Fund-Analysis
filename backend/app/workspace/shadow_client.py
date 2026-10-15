@@ -77,3 +77,66 @@ def upload_bundle(url,bundle,*,opener=None,compress=True):
         except (UnicodeDecodeError,json.JSONDecodeError):
             raise ValueError("invalid sync receipt JSON") from None
     return _validate_receipt(result,manifest,contract)
+
+
+def _post(url,body,headers,opener):
+    request=Request(url,data=body,headers=headers,method="POST")
+    transport=opener or (lambda req,**kwargs:build_opener(HTTPSHandler(context=ssl.create_default_context()),NoRedirect()).open(req,timeout=60))
+    with transport(request,timeout=60,context=ssl.create_default_context()) as response:
+        status=getattr(response,"status",None)
+        if status is None and callable(getattr(response,"getcode",None)):
+            status=response.getcode()
+        if not isinstance(status,int) or isinstance(status,bool) or status!=200:
+            raise ValueError("invalid sync HTTP status")
+        data=response.read(4097)
+    if len(data)>4096:
+        raise ValueError("invalid sync receipt size")
+    try:
+        return json.loads(data,object_pairs_hook=_unique_object)
+    except (UnicodeDecodeError,json.JSONDecodeError):
+        raise ValueError("invalid sync receipt JSON") from None
+
+
+def upload_bundle_auto(url,bundle,*,opener=None,chunk_size=None):
+    """Single request when canonical bytes fit 16 MiB, otherwise chunk+atomic commit.
+
+    The receipt is validated with the same v1/v2 rules as ``upload_bundle``; a
+    retry re-sends the *same* bundle bytes with fresh nonces (never recomputes).
+    """
+    import gzip, hashlib
+    from app.workspace.shadow_chunks import CHUNK_MAX_DECODED_BYTES, CHUNK_MAX_WIRE_BYTES, chunk_meta, commit_body, split_canonical
+    parsed=urlsplit(url)
+    if parsed.scheme!="https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path!="/api/shadow/sync":
+        raise ValueError("exact HTTPS sync endpoint required")
+    if not isinstance(bundle,dict) or not isinstance(bundle.get("manifest"),dict):
+        raise ValueError("invalid sync manifest")
+    manifest=bundle["manifest"]
+    contract=manifest.get("contract_version") or manifest.get("contract")
+    if contract not in {"shadow-display-v1","local-display-v2"}:
+        raise ValueError("unsupported sync receipt contract")
+    body=canonical(bundle)
+    size=chunk_size or CHUNK_MAX_DECODED_BYTES
+    if len(body)<=size:
+        return upload_bundle(url,bundle,opener=opener)
+    token=os.environ.get("SHADOW_PRODUCER_TOKEN","")
+    if len(token)<32:
+        raise ValueError("producer credential unavailable")
+    key_id=os.environ.get("SHADOW_SIGNING_KEY_ID","");secret=os.environ.get("SHADOW_SIGNING_SECRET","")
+    upload_id=hashlib.sha256(body).hexdigest()
+    parts=split_canonical(body,chunk_size=size)
+    base=f"{parsed.scheme}://{parsed.netloc}/api/shadow/sync"
+    for index,part in enumerate(parts):
+        wire=gzip.compress(part)
+        if len(wire)>CHUNK_MAX_WIRE_BYTES:
+            raise ValueError("chunk wire exceeds 16 MiB")
+        sha=hashlib.sha256(part).hexdigest()
+        headers={"Authorization":"Bearer "+token,"Content-Type":"application/octet-stream","Content-Encoding":"identity",
+                 "X-Chunk-Upload-Id":upload_id,"X-Chunk-Index":str(index),"X-Chunk-Total":str(len(parts)),"X-Chunk-Sha256":sha}
+        headers.update(signed_headers(chunk_meta(upload_id,index,len(parts),sha)+b"\n"+wire,key_id,secret,path="/api/shadow/sync/chunk"))
+        staged=_post(base+"/chunk",wire,headers,opener)
+        if not isinstance(staged,dict) or staged.get("status")!="staged" or staged.get("index")!=index or staged.get("upload_id")!=upload_id:
+            raise ValueError("chunk staging not acknowledged")
+    cbody=commit_body(upload_id,len(parts))
+    headers={"Authorization":"Bearer "+token,"Content-Type":"application/json"}
+    headers.update(signed_headers(cbody,key_id,secret,path="/api/shadow/sync/commit"))
+    return _validate_receipt(_post(base+"/commit",cbody,headers,opener),manifest,contract)
