@@ -1,5 +1,7 @@
 # 当前工程交接
 
+最新候选：PR48 / codex/phase1-blockers-20261015，已测源码5ece78d（2103+23跳过、前端204、浏览器Mock7）。完整清单与阻塞见docs/audits/PHASE1_BLOCKER_REPAIR_20261015.md。当前未部署；网页Model not found、真实源准入证据缺失、服务器空间峰值仍待解决。原目录main与生产身份另核，切勿自动启用新任务或伪造VERIFIED。
+
 当前任务是Jovi授权的main整合与有界清理；生产、数据、算法资格与源码合并分别验收。详细整合收据：docs/audits/MAIN_CONSOLIDATION_20261014.md；完整本机到网站路线：tasks/plans/2026-10-11-local-live-to-website.md。
 
 ## 接收与保护
