@@ -84,7 +84,7 @@ with `-PrivateResearch`. The 16:10 slot requires this explicit input contract;
 intraday slots keep the existing strict behavior even when the flag is present.
 `--skip-trade-day-check` cannot bypass the helper's independent verified calendar.
 
-`closed-session-input-v1.1` accepts only a complete newly fetched Sina quote batch.
+`closed-session-input-v1.1.1` accepts only a complete newly fetched Sina quote batch.
 The current local day must itself be a verified trading day. After 16:00 the
 target is its current session; before 09:00 the target is the previous verified
 trading session, searching at most 30 days and rejecting any unknown calendar
@@ -95,7 +95,13 @@ It binds the exact universe,
 pre-fetch quote ID boundary, actual task run/status/counts and fetch start/end
 window. Every new row must have finite positive price, a quality hash, a source
 time on that target session within 15:00..16:00, fetched within the current same-day window,
-and the sole existing degradation `quote source timestamp is stale`. Missing,
+and the exact existing phase-specific degradation: after 16:00 same-session
+materials require `quote source timestamp is stale`; before 09:00 the independently
+verified previous-session materials require the real MarketService classification
+`quote source date is not today`. The two reasons are not interchangeable, and
+the target-session/source-time checks still reject genuinely older or future data.
+The manifest records the accepted original reason without changing the stored
+quote's realtime/verification/status or TaskRun partial result. Missing,
 extra/duplicate, old-session, future, non-Sina/Mock, invalid-price, other-degraded,
 unverified-calendar or cross-midnight inputs refuse. SQLite naive dates follow
 the existing snapshot-contract settings.timezone convention, never a guessed UTC.

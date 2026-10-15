@@ -26,7 +26,7 @@ CONTRACT_VERSION = "local-display-v2"
 ADMISSION_POLICY_VERSION = "private-research-execution-v1"
 EXPORT_PROJECTION_VERSION = "local-display-projection-v1"
 EXPORT_MAX_BYTES = 16 * 1024 * 1024
-CLOSED_SESSION_INPUT_VERSION = "closed-session-input-v1.1"
+CLOSED_SESSION_INPUT_VERSION = "closed-session-input-v1.1.1"
 OPTIONAL_TASK_PARTS = {"refresh_market_context": "market_context", "refresh_sector_snapshots": "sectors"}
 
 ROW_FIELDS_V2 = {
@@ -231,15 +231,17 @@ def _closed_session_quote_result(db, settings, *, universe, result, after_id, st
         return reject("new_quote_scope_mismatch")
     identities = []
     source_times = []
+    expected_reason = ("quote source timestamp is stale" if target_session == end.date()
+                       else "quote source date is not today")
     for quote, code in rows:
         if (quote.source != "sina:hq_sinajs:v1" or quote.is_realtime is not False
                 or quote.timestamp_verified is not False
-                or quote.degraded_reason != "quote source timestamp is stale"
+                or quote.degraded_reason != expected_reason
                 or isinstance(quote.price, bool) or not isinstance(quote.price, (float, int))
                 or not isfinite(quote.price) or quote.price <= 0
                 or not isinstance(quote.quality_hash, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", quote.quality_hash)
                 or not isinstance(quote.quote_time, datetime) or not isinstance(quote.fetched_at, datetime)):
-            return reject("only_stale_timestamp_closing_quotes_allowed")
+            return reject("only_phase_specific_closing_timestamp_reason_allowed")
         source, fetched = _normalize_time(quote.quote_time, settings), _normalize_time(quote.fetched_at, settings)
         if (source.date() != target_session or not time(15) <= source.time().replace(tzinfo=None) <= time(16)
                 or not start <= fetched <= end or source > fetched):
@@ -250,6 +252,7 @@ def _closed_session_quote_result(db, settings, *, universe, result, after_id, st
         identities.append(identity)
     evidence = {"contract_version": CLOSED_SESSION_INPUT_VERSION, "accepted": True,
         "mode": "closed_session_nonrealtime", "source_session": target_session.isoformat(),
+        "source_degraded_reason": expected_reason,
         "quote_count": size, "run_id": result["run_id"], "source_time_min": min(source_times),
         "source_time_max": max(source_times), "fetch_window_start": start.isoformat(),
         "fetch_window_end": end.isoformat(), "input_hash": stable_hash(sorted(identities, key=lambda row: row["ts_code"])),

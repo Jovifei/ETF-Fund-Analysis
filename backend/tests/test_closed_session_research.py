@@ -227,8 +227,14 @@ def test_actual_quote_time_selector_must_choose_captured_batch(closing_batch):
 
 
 def _move_capture_to_early_next_day(db):
+    from app.services.market_service import MarketService
     start = datetime(2026, 10, 16, 0, 10, tzinfo=TZ)
-    for quote in db.query(QuoteSnapshot): quote.fetched_at = start + timedelta(seconds=5)
+    for quote in db.query(QuoteSnapshot):
+        quote.fetched_at = start + timedelta(seconds=5)
+        verified, reason = MarketService._qualify_quote_timestamp(SimpleNamespace(
+            quote_time=quote.quote_time, is_realtime=True, source=quote.source, degraded_reason=None), quote.fetched_at)
+        quote.timestamp_verified, quote.is_realtime, quote.degraded_reason = verified, verified, reason
+        assert reason == "quote source date is not today"
     run = db.query(TaskRun).one()
     run.started_at, run.finished_at = start, start + timedelta(seconds=9)
     db.flush()
@@ -261,3 +267,61 @@ def test_post_midnight_export_can_keep_previous_captured_session(closing_batch):
     assert local_compute._revalidate_closed_session_capture(closing_batch,
         Settings(_env_file=None, market_provider="public_composite"), proof,
         ["510300.SH", "512480.SH"], datetime(2026, 10, 16, 0, 5, tzinfo=TZ))
+
+
+def test_reason_mapping_is_phase_specific_not_an_allowlist_pair(closing_batch):
+    quote = closing_batch.query(QuoteSnapshot).first()
+    quote.degraded_reason = "quote source date is not today"
+    closing_batch.flush()
+    assert not local_compute.closed_session_result_accepted(accept(closing_batch))
+    start = _move_capture_to_early_next_day(closing_batch)
+    quote.degraded_reason = "quote source timestamp is stale"
+    closing_batch.flush()
+    assert not local_compute.closed_session_result_accepted(accept(closing_batch,
+        started_at=start, finished_at=start + timedelta(seconds=10)))
+
+
+def test_before_open_still_rejects_a_session_older_than_verified_target(closing_batch):
+    start = _move_capture_to_early_next_day(closing_batch)
+    closing_batch.query(QuoteSnapshot).first().quote_time = datetime(2026, 10, 14, 15, 35, tzinfo=TZ)
+    closing_batch.flush()
+    assert not local_compute.closed_session_result_accepted(accept(closing_batch,
+        started_at=start, finished_at=start + timedelta(seconds=10)))
+
+
+def test_real_task_and_market_quote_ingestion_produce_accepted_previous_session_material(closing_batch, monkeypatch):
+    from app.providers.types import QuoteRecord
+    from app.services import market_service, task_service
+    from app.services.execution_policy import TaskExecutionPolicy
+    now = datetime(2026, 10, 16, 0, 10, 5, tzinfo=TZ)
+    class FrozenMeta(type):
+        def __instancecheck__(cls, value): return isinstance(value, datetime)
+    class FrozenDatetime(datetime, metaclass=FrozenMeta):
+        @classmethod
+        def now(cls, tz=None): return now.astimezone(tz) if tz else now.replace(tzinfo=None)
+    class FakePublicSina:
+        name = "sina"
+        def fetch_spot_quotes(self, codes):
+            return [QuoteRecord(ts_code=code, quote_time=datetime(2026, 10, 15, 15, 35, tzinfo=TZ),
+                price=1.2, source="sina:hq_sinajs:v1", is_realtime=True) for code in codes]
+    monkeypatch.setattr(market_service, "datetime", FrozenDatetime)
+    monkeypatch.setattr(task_service, "datetime", FrozenDatetime)
+    closing_batch.commit()
+    before = max(row.id for row in closing_batch.query(QuoteSnapshot))
+    settings = Settings(_env_file=None, database_url=str(closing_batch.get_bind().url), market_provider="public_composite")
+    service = task_service.TaskService(settings, provider=FakePublicSina(),
+        execution_policy=TaskExecutionPolicy(resolve_runtime_provider=False))
+    try:
+        result = service.run(closing_batch, "refresh_quotes", codes=["510300.SH", "512480.SH"])
+        assert result["status"] == "partial" and result["raw_realtime"] == 2 and result["realtime"] == 0
+        proof = local_compute._closed_session_quote_result(closing_batch, settings,
+            universe=["510300.SH", "512480.SH"], result=result, after_id=before,
+            started_at=now - timedelta(seconds=5), finished_at=now + timedelta(seconds=5),
+            private_research=True, enabled=True)
+        assert local_compute.closed_session_result_accepted(proof)
+        assert proof["closed_session_research"]["source_session"] == "2026-10-15"
+        assert closing_batch.query(TaskRun).filter_by(run_id=result["run_id"]).one().status == "partial"
+        assert all(row.degraded_reason == "quote source date is not today" and row.is_realtime is False
+                   for row in closing_batch.query(QuoteSnapshot).filter(QuoteSnapshot.id > before))
+    finally:
+        service.close()
