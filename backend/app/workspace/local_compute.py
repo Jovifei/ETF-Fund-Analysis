@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import json
 import re
-from math import isfinite
+from math import copysign, isfinite
 import shutil
 from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
@@ -24,7 +24,8 @@ from app.workspace.shadow_projection import levels, project_chart, studies
 
 CONTRACT_VERSION = "local-display-v2"
 ADMISSION_POLICY_VERSION = "private-research-execution-v1"
-EXPORT_PROJECTION_VERSION = "local-display-projection-v1"
+EXPORT_PROJECTION_VERSION = "local-display-projection-v1.1"
+NUMBER_ENCODING_VERSION = "safe-integral-json-v1"
 EXPORT_MAX_BYTES = 16 * 1024 * 1024
 CLOSED_SESSION_INPUT_VERSION = "closed-session-input-v1.1.1"
 OPTIONAL_TASK_PARTS = {"refresh_market_context": "market_context", "refresh_sector_snapshots": "sectors"}
@@ -111,6 +112,18 @@ def _display_row(row, *, history_source=None):
     projected["history"] = [{key: value for key, value in confirmed[-1].items()
                              if key in BAR_FIELDS | {"is_forecast", "is_provisional", "adjust"}}] if confirmed else []
     return projected
+
+
+def _display_numbers(value):
+    """Encode safe integral floats compactly; preserve every JSON numeric value."""
+    if (type(value) is float and isfinite(value) and abs(value) <= 2**53 - 1
+            and value.is_integer() and not (value == 0 and copysign(1, value) < 0)):
+        return int(value)
+    if isinstance(value, dict):
+        return {key: _display_numbers(child) for key, child in value.items()}
+    if isinstance(value, list):
+        return [_display_numbers(child) for child in value]
+    return value
 
 
 def _checked_export(bundle):
@@ -741,7 +754,8 @@ def export_local_v2(
             }
 
 
-            # Parts hashes
+            # Numeric encoding is lossless and precedes all content hashes.
+            parts = _display_numbers(parts)
             parts_hashes = {k: digest(v) for k, v in parts.items()}
 
             config_hash = stable_hash(settings.load_strategy())
@@ -763,6 +777,7 @@ def export_local_v2(
                 "calibration_status": "not_calibrated",
                 "admission_policy_version": ADMISSION_POLICY_VERSION,
                 "export_projection_version": EXPORT_PROJECTION_VERSION,
+                "number_encoding_version": NUMBER_ENCODING_VERSION,
             }
             if closed_session_result is not None:
                 manifest["input_observation"] = dict(closed_session_result["closed_session_research"])

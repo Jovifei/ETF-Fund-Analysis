@@ -207,3 +207,18 @@ the producer; optional market/sector observations remain independently global.
 The generic `bootstrap`/`full_pipeline` composite API rejects explicit `codes`
 before provider or database side effects; its default full-pool path is unchanged.
 The local producer explicitly sequences the supported target stages instead.
+
+## Lossless JSON number encoding
+
+`local-display-projection-v1.1` declares `number_encoding_version=safe-integral-json-v1`.
+Only exported parts encode finite integral Python floats within ±(2^53−1) as JSON
+integers (`2.0` becomes `2`), preserving the exact mathematical/JavaScript Number
+value. Negative zero, booleans, nonintegral values, nonfinite values and floats
+outside that safe integer range are unchanged. Existing nonfinite JSON rejection
+still applies. Source database values, formulas, fields, bars, periods, scope and
+the canonical 16 MiB budget remain unchanged; no rounding or field trimming occurs.
+
+Part hashes are computed after encoding (and recomputed after private-research
+safety markers). Wire hashes may change, so this is a new explicitly versioned
+generation; old hashes/receipts are never reused. Receiver numeric validation
+accepts both integer and float JSON numbers with the same existing safety rules.
