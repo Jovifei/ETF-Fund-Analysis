@@ -3,6 +3,7 @@ import hashlib,hmac,os,re
 from datetime import datetime,timezone
 from pathlib import Path
 from secrets import token_hex
+from app.workspace.local_schedule import LocalRunLock
 DOMAIN=b'ETF-SHADOW-REQUEST-V1\x00WRITE_ONLY_SHADOW\x00POST\x00/api/shadow/sync\x00'
 SIGNED_PATHS=('/api/shadow/sync','/api/shadow/sync/chunk','/api/shadow/sync/commit')
 def _domain(path):
@@ -29,11 +30,13 @@ def verify_request(body,headers,root,active_key_id,secret,*,now=None,max_nonces=
     if root.is_symlink():raise ValueError('unsafe replay root')
     root.mkdir(parents=True,exist_ok=True);directory=root/'nonces'
     if directory.is_symlink():raise ValueError('unsafe replay directory')
-    directory.mkdir(exist_ok=True);lock=directory/'reserve.lock'
-    try:fd=os.open(lock,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
-    except FileExistsError:raise ValueError('replay reservation busy') from None
+    directory.mkdir(exist_ok=True);lock_path=directory/'reserve.lock'
+    if lock_path.is_symlink():raise ValueError('unsafe replay lock')
+    # OS ownership ends on process death; retain the inode rather than unlinking
+    # a live lock or permanently rejecting after an abandoned O_EXCL marker.
+    lock=LocalRunLock(lock_path)
+    if not lock.acquire(reclaim_stale=False):raise ValueError('replay reservation busy')
     try:
-        os.close(fd)
         for path in directory.iterdir():
             if re.fullmatch('[a-f0-9]{64}',path.name) and not path.is_symlink():
                 expiry=float(path.read_text())
@@ -44,4 +47,4 @@ def verify_request(body,headers,root,active_key_id,secret,*,now=None,max_nonces=
         try:fd=os.open(path,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
         except FileExistsError:raise ValueError('request replay rejected') from None
         with os.fdopen(fd,'w') as handle:handle.write(str(created.timestamp()+241));handle.flush();os.fsync(handle.fileno())
-    finally:lock.unlink(missing_ok=True)
+    finally:lock.release()

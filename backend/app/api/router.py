@@ -530,8 +530,7 @@ def market_context(
         from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
         store = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=settings.local_display_v2_max_bytes)
         mc_items = LocalDisplayReader(store, code_sha=settings.shadow_sync_code_sha, config_hash=settings.shadow_sync_config_hash).read_market_context()
-        if mc_items is not None:
-            return {"latest_view": mc_items}
+        return {"latest_view": mc_items or []}
     return {"latest_view": MarketContextService(provider=None, settings=settings).latest_view(db)}
 
 
@@ -540,8 +539,11 @@ def market_context(
 def market_context_history(
     context_id: str,
     db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
     limit: int = Query(default=60, ge=2, le=250),
 ) -> dict[str, Any]:
+    if settings.workspace_research_source == "local_bundle":
+        raise HTTPException(404, "context_history_not_published_in_local_bundle")
     result = MarketContextService(provider=None).history(db, context_id, limit=limit)
     if result is None:
         raise HTTPException(status_code=404, detail="market context not found")

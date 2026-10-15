@@ -62,8 +62,10 @@ def detail(code: str, db: DB, settings: Config, user: User, generation: str | No
 
 
 @private_router.get("/workspace/instruments/{code}/chan")
-def chan_evidence(code: str, db: DB, response: Response, interval: Literal["D", "W", "M"] = "D") -> dict:
+def chan_evidence(code: str, db: DB, response: Response, settings: Config, interval: Literal["D", "W", "M"] = "D") -> dict:
     response.headers["Cache-Control"] = "private, no-store"
+    if settings.workspace_research_source == "local_bundle":
+        raise HTTPException(404, "chan_evidence_not_published_in_local_bundle")
     result = read_model.chan_evidence(db, code, interval)
     if result is None:
         raise HTTPException(404, _instrument_missing_reason(db, code))
@@ -120,6 +122,8 @@ def portfolio_risk(db: DB, settings: Config, user: User) -> dict:
 
 @private_router.get("/workspace/factors")
 def factors(db: DB, settings: Config, user: User) -> dict:
+    if settings.workspace_research_source == "local_bundle":
+        return {"available": False, "items": [], "reason": "factors_not_published_in_local_bundle", "actionable": False}
     return read_model.factor_view(db, settings)
 
 

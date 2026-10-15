@@ -197,9 +197,9 @@ def holdings_view(db: Session, settings: Settings, user_id: int | None) -> dict:
     generation = None
     if getattr(settings, "workspace_research_source", "database") == "local_bundle":
         try:
-            from app.workspace.local_display_read import LocalDisplayStore
+            from app.workspace.local_display_read import LocalDisplayStore, LocalDisplayReader
             store = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=settings.local_display_v2_max_bytes)
-            bundle = store.load_bundle()
+            bundle = LocalDisplayReader(store, code_sha=settings.shadow_sync_code_sha, config_hash=settings.shadow_sync_config_hash).load_bundle(None)
             if bundle:
                 bundle_board = bundle.get("parts", {}).get("overview", {})
                 bundle_details = bundle.get("parts", {}).get("details", {})

@@ -243,7 +243,7 @@ class LocalDisplayReader:
         self.store = store
         self.code_sha, self.config_hash = code_sha, config_hash
 
-    def _bundle(self, generation):
+    def load_bundle(self, generation):
         bundle = self.store.load_bundle(generation)
         if bundle is not None and self.code_sha is not None:
             manifest = bundle.get("manifest", {})
@@ -265,7 +265,7 @@ class LocalDisplayReader:
     ) -> dict[str, Any]:
         if horizon not in (1, 3, 5, 10):
             raise ValueError("unsupported horizon")
-        bundle = self._bundle(generation)
+        bundle = self.load_bundle(generation)
         if not bundle:
             return {
                 "rows": [],
@@ -321,7 +321,7 @@ class LocalDisplayReader:
     ) -> dict[str, Any] | None:
         if horizon not in (1, 3, 5, 10):
             raise ValueError("unsupported horizon")
-        bundle = self._bundle(generation)
+        bundle = self.load_bundle(generation)
         if not bundle:
             return None
 
@@ -362,6 +362,7 @@ class LocalDisplayReader:
             "generation": manifest.get("sequence"),
             "selected_horizon": horizon,
             "decision_horizon": captured_horizon,
+            "horizons": [1, 3, 5, 10],
             "as_of": generated_at,
             "freshness": "stale" if is_stale else "fresh",
             "data_status": {"freshness": "stale" if is_stale else "fresh"},
@@ -383,7 +384,7 @@ class LocalDisplayReader:
         user_id: int | None = None,
         generation: str | int | None = None,
     ) -> dict[str, Any] | None:
-        bundle = self._bundle(generation)
+        bundle = self.load_bundle(generation)
         if not bundle:
             return None
 
@@ -394,10 +395,13 @@ class LocalDisplayReader:
 
         # Clean detail of any private holding/avg_cost info before return
         clean_detail = {k: v for k, v in detail.items() if k not in {"avg_cost", "trades", "account_id"}}
+        stale = bool(bundle.get("historical_identity")) or datetime.now(timezone.utc) >= _parse_iso(bundle["manifest"]["expires_at"])
+        if stale and isinstance(clean_detail.get("quote"), dict):
+            clean_detail["quote"] = {**clean_detail["quote"], "status": "stale"}
         return {
             **clean_detail,
             "generation": bundle.get("manifest", {}).get("sequence"),
-            "is_stale": bool(bundle.get("historical_identity")) or datetime.now(timezone.utc) >= _parse_iso(bundle["manifest"]["expires_at"]),
+            "is_stale": stale,
             "read_model_version": CONTRACT_VERSION,
         }
 
@@ -412,7 +416,7 @@ class LocalDisplayReader:
         if interval not in {"1d", "1w", "1mo"}:
             raise ValueError("unsupported_chart_interval")
 
-        bundle = self._bundle(generation)
+        bundle = self.load_bundle(generation)
         if not bundle:
             return None
 
@@ -444,7 +448,7 @@ class LocalDisplayReader:
         }
 
     def read_sectors(self, generation: str | int | None = None) -> dict[str, Any]:
-        bundle = self._bundle(generation)
+        bundle = self.load_bundle(generation)
         if not bundle:
             return {"sectors": [], "available": False}
         sectors_part = bundle.get("parts", {}).get("sectors", {})
@@ -456,7 +460,7 @@ class LocalDisplayReader:
         }
 
     def read_market_context(self, generation: str | int | None = None) -> list[dict[str, Any]] | None:
-        bundle = self._bundle(generation)
+        bundle = self.load_bundle(generation)
         if not bundle:
             return None
         part = bundle.get("parts", {}).get("market_context")

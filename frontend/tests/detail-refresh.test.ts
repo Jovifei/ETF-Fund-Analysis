@@ -71,6 +71,12 @@ afterEach(() => {
 })
 
 describe('detail data refresh lifecycle', () => {
+  it('visibly labels expired local bundles instead of inheriting fresh quote status', async () => {
+    vi.mocked(api).mockImplementation(async (path: string) => path.includes('/chart?')
+      ? chart : { ...detail, generation: 7, is_stale: true })
+    const wrapper = await openDetail()
+    expect(wrapper.get('[data-testid="local-bundle-status"]').text()).toContain('过期')
+  })
   it('pins local chart requests to the returned generation', async () => {
     vi.mocked(api).mockImplementation(async (path: string) => path.includes('/chart?')
       ? { ...chart, generation: 7 }

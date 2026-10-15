@@ -81,3 +81,28 @@ def test_chart_api_forwards_capture_time(monkeypatch):
     api.chart("510300.SH", None, Settings(_env_file=None, workspace_research_source="local_bundle"),
               None, interval="1d", limit=30, as_of=at, generation="1")
     assert seen["generation"] == "1" and seen["as_of"] == at
+
+
+def test_market_context_empty_never_falls_back(monkeypatch, tmp_path):
+    from app.api import router as api
+    monkeypatch.setattr(api.MarketContextService, "latest_view", lambda *a: pytest.fail("cloud fallback"))
+    settings = Settings(_env_file=None, workspace_research_source="local_bundle",
+                        local_display_v2_store_root=str(tmp_path / "empty"))
+    assert api.market_context(None, settings)["latest_view"] == []
+
+
+def test_holdings_reject_unapproved_local_quote(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    from app.workspace import local_display_read, read_model
+    bundle = {"manifest": {"sequence": 1, "code_sha": "a" * 40, "config_hash": "b" * 64},
+              "parts": {"overview": {"rows": []}, "details": {"510300.SH": {"quote": {"price": 10}}}}}
+    monkeypatch.setattr(local_display_read.LocalDisplayStore, "load_bundle", lambda *a: bundle)
+    holding = SimpleNamespace(shares=2, cost_price=4, target_weight=None, notes=None, updated_at=None)
+    instrument = SimpleNamespace(ts_code="510300.SH", name="test", kind="ETF", theme_l1="test", id=1)
+    db = SimpleNamespace(execute=lambda *a: SimpleNamespace(all=lambda: [(holding, instrument)]))
+    settings = Settings(_env_file=None, workspace_research_source="local_bundle",
+                        shadow_sync_code_sha="c" * 40, shadow_sync_config_hash="d" * 64,
+                        local_display_v2_store_root=str(tmp_path / "store"))
+    result = read_model.holdings_view(db, settings, 1)
+    assert result["items"][0]["quote"]["price"] is None
+    assert result["total_market_value"] is None

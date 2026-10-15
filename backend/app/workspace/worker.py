@@ -390,9 +390,11 @@ def monitor_job(process, *, seconds=1800):
 
 
 def run_once() -> bool:
+    # One bounded operational row proves this process is alive to the existing
+    # healthcheck. It is separate from research-table retirement.
+    heartbeat()
     if display_only(get_settings()):
         return False
-    heartbeat()
     enqueue_daily_reviews()
     if workspace_settings().discovery_enabled and get_settings().market_provider != "mock":
         from app.workspace.discovery import enqueue as enqueue_discovery

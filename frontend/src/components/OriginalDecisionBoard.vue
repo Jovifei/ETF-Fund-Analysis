@@ -11,7 +11,7 @@ const favorites=useFavorites(), favoriteError=ref('')
 const router = useRouter(), frame = ref<HTMLIFrameElement | null>(null), height = ref(900)
 const horizon = ref(1), filter = ref(''), revision = ref(0), ready = ref(false)
 const outlook=useQuery<{items:Record<string,{forecasts:Record<string,unknown>}>}>('/api/workspace/research-outlook')
-const q = useQuery<Record<string, unknown>>(() => props.ready===false?null:withGeneration(`/api/decision-board?horizon=${horizon.value===20?1:horizon.value}`,props.generation))
+const q = useQuery<Record<string, unknown>>(() => props.ready===false?null:withGeneration(`/api/decision-board?horizon=${horizon.value===20&&props.generation==null?1:horizon.value}`,props.generation))
 const displayed=computed(()=>q.data.value?{...q.data.value,rows:((q.data.value.rows??[]) as Record<string,unknown>[]).map(row=>({...row,forecasts:{...(outlook.data.value?.items[String(row.ts_code)]?.forecasts??{}),...((row.forecasts??{}) as Record<string,unknown>)}}))}:null)
 function mobileControls(value:{filter:string;horizon:number}) {
   if (![1,3,5,10,20].includes(value.horizon)) return

@@ -42,9 +42,51 @@ def test_worker_execute_cannot_bypass_guard(display_settings, monkeypatch):
 
 def test_worker_tick_and_claim_are_idle_without_db(display_settings, monkeypatch):
     from app.workspace import data_jobs, worker
+    heartbeats = []
+    monkeypatch.setattr(worker, "heartbeat", lambda: heartbeats.append("operational_liveness"))
     monkeypatch.setattr(worker, "session_scope", NoEffects())
     assert worker.run_once() is False
+    assert heartbeats == ["operational_liveness"]
     assert data_jobs.claim(NoEffects()) is None
+
+
+def test_display_only_worker_keeps_bounded_heartbeat_and_actual_health(display_settings, monkeypatch):
+    from contextlib import contextmanager
+    import importlib.util
+    from pathlib import Path
+    from sqlalchemy import create_engine, func, select
+    from sqlalchemy.orm import Session
+    from app.db.base import Base
+    from app.models import DailyBar, TaskRun
+    from app.workspace.models import WorkspaceDataJob, WorkspacePreference
+    from app.workspace import worker
+
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+
+    @contextmanager
+    def local_session():
+        with Session(engine) as db, db.begin():
+            yield db
+
+    path = Path(__file__).resolve().parents[2] / "scripts" / "workspace_worker_health.py"
+    spec = importlib.util.spec_from_file_location("isolated_worker_health", path)
+    health = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(health)
+    monkeypatch.setattr(worker, "session_scope", local_session)
+    monkeypatch.setattr(health, "session_scope", local_session)
+    monkeypatch.setattr(worker, "enqueue_daily_reviews", NoEffects())
+    try:
+        assert health.healthy() is False
+        for _ in range(3):
+            assert worker.run_once() is False
+            assert health.healthy() is True
+        with local_session() as db:
+            assert db.scalar(select(func.count()).select_from(WorkspacePreference)) == 1
+            for model in (DailyBar, TaskRun, WorkspaceDataJob):
+                assert db.scalar(select(func.count()).select_from(model)) == 0
+    finally:
+        engine.dispose()
 
 
 def test_scheduler_tick_rejects_before_provider_or_db(display_settings, monkeypatch):

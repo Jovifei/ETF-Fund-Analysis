@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import {withGeneration} from '../lib/generation'
 import { num, pct, record, stamp, grades } from '../lib/format'
 import { decisionRows, historicalClose, explainStatus, sectorTimingDigest } from '../lib/decisionSummary'
 const props=defineProps<{board:Record<string,unknown>|null;filter:string;horizon:number}>()
@@ -21,14 +22,14 @@ function horizonInput(event:Event){emit('controls',{filter:props.filter,horizon:
     <p class="small-note">与完整指标表使用同一快照；点标的查看完整指标。研究状态不是交易授权。</p>
     <div class="mobile-decision-controls">
       <label>筛选决策标的<input :value="filter" maxlength="128" aria-label="筛选决策标的" placeholder="代码、名称或分级" @input="filterInput"/></label>
-      <label>研究期限<select :value="horizon" aria-label="研究期限" @change="horizonInput"><option v-for="h in [1,3,5,10,20]" :key="h" :value="h">{{h}} 个交易日</option></select></label>
+      <label>研究期限<select :value="horizon" aria-label="研究期限" @change="horizonInput"><option v-for="h in (board?.read_model_version==='local-display-v2'?[1,3,5,10]:[1,3,5,10,20])" :key="h" :value="h">{{h}} 个交易日</option></select></label>
     </div>
     <p class="small-note">快照 {{stamp(board?.generated_at)}} · {{rows.length}} 个标的 · {{board?.freshness??'missing'}}</p>
     <p v-if="!board" role="status">等待决策快照。</p><p v-else-if="!rows.length" role="status">没有匹配标的。</p>
     <section v-for="group in groups" :key="group.grade" class="mobile-decision-group">
       <h3>{{group.grade}} <small>{{group.rows.length}} 个</small></h3>
       <article v-for="row in group.rows" :key="String(row.ts_code)" class="mobile-decision-row" data-testid="mobile-decision-row">
-        <RouterLink :to="`/etf/${row.ts_code}`" class="mobile-instrument"><strong>{{row.name}}</strong><span class="mono">{{row.ts_code}}</span><span>查看完整指标 →</span></RouterLink>
+        <RouterLink :to="withGeneration(`/etf/${row.ts_code}`,board?.generation as string|number|undefined)" class="mobile-instrument"><strong>{{row.name}}</strong><span class="mono">{{row.ts_code}}</span><span>查看完整指标 →</span></RouterLink>
         <div class="mobile-price-pair"><div><small>历史收盘 · {{historicalClose(row).date??'日期未知'}}</small><strong>{{num(historicalClose(row).price,3)}}</strong></div><div><small>涨跌幅 · {{record(row.returns).as_of_date??'日期待核验'}}</small><strong>{{pct(record(row.returns).today)}}</strong></div></div>
         <p class="small-note">支撑带 {{num(record(record(row.entry_exit_ref).support_zone).low,3)}}–{{num(record(record(row.entry_exit_ref).support_zone).high,3)}} · 压力带 {{num(record(record(row.entry_exit_ref).resistance_zone).low,3)}}–{{num(record(record(row.entry_exit_ref).resistance_zone).high,3)}} · {{record(row.theme_relative_strength).label??'主题相对强弱不足'}}</p>
         <details class="mobile-metrics"><summary>指标与 {{horizon}} 日研究</summary><div class="mobile-price-pair">
@@ -44,6 +45,6 @@ function horizonInput(event:Event){emit('controls',{filter:props.filter,horizon:
   <details class="decision-reason-list">
     <summary>查看各标的数据状态与受阻原因（{{rows.length}}）</summary>
     <p class="small-note">保留服务端状态与原因；“数据异常”不是可以忽略的警告。</p>
-    <p v-for="row in rows" :key="String(row.ts_code)"><RouterLink :to="`/etf/${row.ts_code}`">{{row.name}} · {{row.ts_code}}</RouterLink><span>{{explainStatus(row)}}</span></p>
+    <p v-for="row in rows" :key="String(row.ts_code)"><RouterLink :to="withGeneration(`/etf/${row.ts_code}`,board?.generation as string|number|undefined)">{{row.name}} · {{row.ts_code}}</RouterLink><span>{{explainStatus(row)}}</span></p>
   </details>
 </template>
