@@ -487,7 +487,8 @@ def compute_local(settings: Settings, universe: list[str] | None = None, *, admi
                         kwargs["lookback_days"] = 420
                         if private_research:
                             kwargs["retry_history_once"] = True
-                    if universe:
+                    if universe and task in {"refresh_bars", "refresh_quotes", "refresh_indicators",
+                                             "refresh_forecasts", "refresh_signals", "refresh_decision_board"}:
                         kwargs["codes"] = universe
                     before_quote_id = ((db.scalar(select(func.max(QuoteSnapshot.id))) or 0)
                                        if task == "refresh_quotes" and closed_session_research else 0)

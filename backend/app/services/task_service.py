@@ -314,6 +314,7 @@ class TaskService:
 
     def _execute(self, db: Session, task_name: str, run_id: str, **kwargs) -> dict:
         self._bind_runtime_provider(db)
+        scope_kwargs = {"codes": kwargs["codes"]} if kwargs.get("codes") is not None else {}
         if task_name in {"validate_forecasts", "calibrate_forecasts", "backtest_rotation", "backtest_ablation"}:
             from app.providers.data_contract import require_current_history
             require_current_history(db, self.settings)
@@ -360,9 +361,9 @@ class TaskService:
                 run_id=run_id,
             )
         if task_name == "refresh_indicators":
-            return self.indicators.refresh_all(db, run_id=run_id)
+            return self.indicators.refresh_all(db, run_id=run_id, **scope_kwargs)
         if task_name == "refresh_forecasts":
-            return self.forecasts.refresh_all(db, run_id=run_id)
+            return self.forecasts.refresh_all(db, run_id=run_id, **scope_kwargs)
         if task_name == "refresh_news":
             return self.news.refresh(db, since_hours=int(kwargs.get("since_hours", 72)), run_id=run_id)
         if task_name == "analyze_news":
@@ -373,7 +374,7 @@ class TaskService:
                 run_id=run_id,
             )
         if task_name == "refresh_signals":
-            return self.signals.refresh_all(db, run_id=run_id)
+            return self.signals.refresh_all(db, run_id=run_id, **scope_kwargs)
         if task_name == "refresh_sector_snapshots":
             return self.market.refresh_sector_snapshots(db, run_id=run_id)
         if task_name == "refresh_decision_board":
@@ -382,7 +383,7 @@ class TaskService:
                 input_result = self.market.refresh_quotes(db, run_id=run_id)
                 captured = self.decision_board.capture_latest_quotes(db)
                 input_result = {**input_result, "provisional_captured": captured}
-            built = self.decision_board.refresh(db)
+            built = self.decision_board.refresh(db, **scope_kwargs)
             emit_event(
                 db,
                 "decision_board.updated",
@@ -397,6 +398,7 @@ class TaskService:
                 "research_only": True,
                 "actionable": False,
                 "input": input_result,
+                **({"execution_scope": built.payload["execution_scope"]} if kwargs.get("codes") is not None else {}),
             }
         if task_name == "generate_report":
             return self.reports.generate(db, run_id=run_id)
@@ -557,6 +559,8 @@ class TaskService:
     def run(self, db: Session, task_name: str, **kwargs) -> dict:
         if task_name not in self.task_names:
             raise UnknownTaskError(task_name)
+        if task_name in {"bootstrap", "full_pipeline"} and kwargs.get("codes") is not None:
+            raise ValueError("execution_scope_composite_task_unsupported")
         require_task_write(self.settings, task_name, **kwargs)
         if getattr(self.settings, "workspace_research_source", "database") == "local_bundle":
             # Unified display-only guard: no cloud research raw/derived writes.
@@ -636,7 +640,8 @@ class TaskService:
                 from app.services.task_outcome import normalize_outcome
                 result = normalize_outcome(self._execute(db, task_name, run_id, **kwargs))
                 from app.services.settlement import stamp_output_completion
-                result = stamp_output_completion(db, self.settings, task_name, result, started)
+                result = stamp_output_completion(db, self.settings, task_name, result, started,
+                    **({"codes": kwargs["codes"]} if kwargs.get("codes") is not None else {}))
                 if task is not None:
                     task.status = result["status"]
                     task.result_json = result

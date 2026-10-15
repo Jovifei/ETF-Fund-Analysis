@@ -86,7 +86,7 @@ def output_scope_hash(db, settings):
     return stable_hash({"codes": codes, "strategy": settings.load_strategy()})
 
 
-def stamp_output_completion(db, settings, task_name, result, at):
+def stamp_output_completion(db, settings, task_name, result, at, *, codes=None):
     """Processing a blocked view succeeds; it does not certify the input data.
 
     Services with record-coverage contracts keep their own counters and status.
@@ -97,7 +97,17 @@ def stamp_output_completion(db, settings, task_name, result, at):
         return result
     result = dict(result)
     result.setdefault("target_trade_date", settled_session(settings, at).isoformat())
-    result["output_scope_hash"] = output_scope_hash(db, settings)
+    if codes is not None or "execution_scope" in result:
+        from app.services.execution_scope import validate_execution_scope
+        from app.utils.hashing import stable_hash
+        statement = select(Instrument).where(Instrument.enabled.is_(True))
+        if task_name == "refresh_decision_board":
+            statement = statement.where(Instrument.kind.in_(("ETF", "LOF")))
+        instruments = db.scalars(statement).all()
+        validate_execution_scope(result.get("execution_scope"), instruments, codes)
+        result["output_scope_hash"] = stable_hash({"codes": sorted(codes), "strategy": settings.load_strategy()})
+    else:
+        result["output_scope_hash"] = output_scope_hash(db, settings)
     result["completion_contract"] = "settled-output-v106"
     result["completion_basis"] = "processed_output_not_research_qualification"
     proof = (task_name == "refresh_decision_board" and bool(result.get("snapshot_id"))

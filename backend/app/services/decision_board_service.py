@@ -273,18 +273,22 @@ class DecisionBoardService:
         db.flush()
         return row
 
-    def refresh(self, db: Session, *, generated_at: datetime | None = None, demo: bool = False) -> SnapshotBuild:
+    def refresh(self, db: Session, *, generated_at: datetime | None = None, demo: bool = False,
+                codes: list[str] | None = None) -> SnapshotBuild:
         from app.services.research_write_guard import require_research_write
         require_research_write(self.settings, "refresh_decision_board")
         generated_at = generated_at or datetime.now(self.settings.timezone)
         generated_at = generated_at.astimezone(SHANGHAI) if generated_at.tzinfo else generated_at.replace(tzinfo=SHANGHAI)
+        from app.services.execution_scope import target_instruments, scope_metadata
+        instruments = db.scalars(
+            select(Instrument).where(Instrument.enabled.is_(True), Instrument.kind.in_(("ETF", "LOF")))
+        ).all()
+        targets = target_instruments(instruments, codes)
         if not demo:
             # 统一刷新支撑压力快照（250 根 + 真实成交额口径），payload 构建全部读快照。
-            instruments = db.scalars(
-                select(Instrument).where(Instrument.enabled.is_(True), Instrument.kind.in_(("ETF", "LOF")))
-            ).all()
-            self.support_resistance.capture_for_instruments(db, list(instruments), computed_by="scheduled")
+            self.support_resistance.capture_for_instruments(db, targets, computed_by="scheduled")
         payload = self._build_payload(db, generated_at)
+        payload.update(scope_metadata(instruments, codes))
         if demo:
             ephemeral = DecisionBoardSnapshot(
                 snapshot_id=payload["snapshot_id"],

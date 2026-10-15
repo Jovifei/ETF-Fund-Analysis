@@ -390,21 +390,24 @@ class ForecastService:
             for instrument_id, group in combined.groupby("instrument_id", observed=True)
         }
 
-    def refresh_all(self, db: Session, run_id: str | None = None) -> dict:
+    def refresh_all(self, db: Session, run_id: str | None = None, *, codes: list[str] | None = None) -> dict:
         from app.services.research_write_guard import require_research_write
         require_research_write(self.settings, "ForecastService.refresh_all")
         run_id = run_id or uuid4().hex
         instruments = db.scalars(select(Instrument).where(Instrument.enabled.is_(True))).all()
+        from app.services.execution_scope import target_instruments, scope_metadata
+        targets = target_instruments(instruments, codes)
         forecast_cfg = self.strategy["forecast"]
         model_version = self.strategy["forecast_version"]
         feature_schema_version = self.strategy.get("feature_schema_version", FEATURE_SCHEMA_VERSION)
+        # Cross-sectional features and lineage must not depend on the write subset.
         frames = self._frames(db, instruments)
         from app.utils.input_lineage import calculation_digest, history_digest
         panel_hash = calculation_digest(self._frame_history_hashes, self.strategy, "forecast-panel-v2")
         created = 0
         updated = 0
         failures: list[dict[str, str]] = []
-        for instrument in instruments:
+        for instrument in targets:
             frame = frames.get(instrument.id)
             if frame is None or frame.empty:
                 failures.append({"ts_code": instrument.ts_code, "reason": "历史数据不足或指标计算失败"})
@@ -497,10 +500,11 @@ class ForecastService:
         from app.services.task_outcome import coverage_outcome
         from app.services.settlement import settled_session
         target = settled_session(self.settings)
+        target_frames = [frames[item.id] for item in targets if item.id in frames and not frames[item.id].empty]
         completed = sum(frame.iloc[-1]["trade_date"] == target or self.settings.market_provider == "mock"
-                        for frame in frames.values())
-        stale_count = sum(frame.iloc[-1]["trade_date"] != target for frame in frames.values())
-        return coverage_outcome(len(instruments), completed, run_id=run_id, created=created,
+                        for frame in target_frames)
+        stale_count = sum(frame.iloc[-1]["trade_date"] != target for frame in target_frames)
+        return coverage_outcome(len(targets), completed, run_id=run_id, created=created,
             updated=updated, failures=failures, model_version=model_version,
             feature_schema_version=feature_schema_version, target_trade_date=target.isoformat(),
-            stale_count=stale_count)
+            stale_count=stale_count, **scope_metadata(instruments, codes))

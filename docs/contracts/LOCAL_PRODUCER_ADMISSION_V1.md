@@ -183,3 +183,27 @@ bound to both quality hashes. The wall clock cutoff is necessary, not proof of
 source settlement. Legacy stored bars lacking this evidence
 stay UNKNOWN. This phase does not manufacture that evidence or certify forecasts,
 calibration, actionable signals, real trading-day soak or production deployment.
+
+## Explicit target execution scope (execution-scope-v1)
+
+Local configured `universe` limits indicator/forecast/signal persistence and
+required target coverage, including board support/resistance capture. Invalid,
+empty, duplicate, unknown or disabled target codes fail closed. Omitted `codes`
+retains the existing all-enabled behavior and result contract.
+
+The all-enabled background remains unchanged for indicator RPS/panel lineage,
+forecast cross-sectional features, signal regime/portfolio constraints, and board
+theme/sector context. No algorithm, threshold or qualification version changes.
+Scoped results carry versioned target codes/count and background count/hash.
+Board payload retains its original background; export separately selects and
+checks the exact configured target set. Outside instruments and their snapshots
+are not disabled, deleted or refreshed by these scoped target stages.
+
+Output completion validates this metadata against the actual task request and
+database background. Its target scope hash cannot satisfy an all-enabled
+scheduler completion check. Missing/mismatched scope evidence fails rather than
+falling back to global completion. A missing/stale required target still blocks
+the producer; optional market/sector observations remain independently global.
+The generic `bootstrap`/`full_pipeline` composite API rejects explicit `codes`
+before provider or database side effects; its default full-pool path is unchanged.
+The local producer explicitly sequences the supported target stages instead.

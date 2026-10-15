@@ -361,12 +361,15 @@ class SignalService:
             item.reasons.append(f"迟滞过滤：{int(min_minutes)} 分钟内分数变化不足 {score_delta:g}")
             item.reasons = list(dict.fromkeys(item.reasons))[:10]
 
-    def refresh_all(self, db: Session, run_id: str | None = None) -> dict:
+    def refresh_all(self, db: Session, run_id: str | None = None, *, codes: list[str] | None = None) -> dict:
         from app.services.research_write_guard import require_research_write
         require_research_write(self.settings, "SignalService.refresh_all")
         run_id = run_id or uuid4().hex
         now = datetime.now(self.settings.timezone)
         instruments = db.scalars(select(Instrument).where(Instrument.enabled.is_(True))).all()
+        from app.services.execution_scope import target_instruments, scope_metadata
+        targets = target_instruments(instruments, codes)
+        target_ids = {item.id for item in targets}
 
         from app.providers.data_contract import history_issues, qualified_research_history
         blocked = history_issues(db, self.settings, [item.id for item in instruments])
@@ -429,6 +432,7 @@ class SignalService:
             if previous:
                 previous_signals[instrument.id] = previous
 
+        # Preserve regime/portfolio context before limiting persistence targets.
         candidates = [
             self._build_candidate(
                 db,
@@ -456,6 +460,8 @@ class SignalService:
         created = 0
         state_counts: dict[str, int] = defaultdict(int)
         for item in candidates:
+            if item.instrument.id not in target_ids:
+                continue
             snapshot_inputs = {
                 "contract_version": SIGNAL_INPUT_CONTRACT_VERSION,
                 "formal_forecast_horizons": self._formal_forecast_horizons(),
@@ -546,10 +552,13 @@ class SignalService:
                 "exposure_cap": exposure_cap,
             },
         )
-        return {
+        result = {
             "run_id": run_id,
             "created": created,
             "state_counts": dict(state_counts),
             "market_regime": market_regime,
             "exposure_cap": exposure_cap,
         }
+        if codes is not None:
+            result.update(requested=len(targets), completed=created, **scope_metadata(instruments, codes))
+        return result

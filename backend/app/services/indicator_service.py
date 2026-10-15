@@ -48,11 +48,15 @@ class IndicatorService:
         ranks = series.rank(method="average", pct=True) * 100
         return {instrument_id: round(float(ranks.get(instrument_id, 50.0)), 2) for instrument_id in results}
 
-    def refresh_all(self, db: Session, run_id: str | None = None) -> dict:
+    def refresh_all(self, db: Session, run_id: str | None = None, *, codes: list[str] | None = None) -> dict:
         from app.services.research_write_guard import require_research_write
         require_research_write(self.settings, "IndicatorService.refresh_all")
         run_id = run_id or uuid4().hex
         instruments = db.scalars(select(Instrument).where(Instrument.enabled.is_(True))).all()
+        from app.services.execution_scope import target_instruments, scope_metadata
+        targets = target_instruments(instruments, codes)
+        target_ids = {item.id for item in targets}
+        # RPS/panel lineage still read the complete original research background.
         from app.providers.data_contract import history_issues, trailing_unverified_history
         from app.providers.corporate_action_contract import research_history_rows
         issues = history_issues(db, self.settings, [item.id for item in instruments])
@@ -73,14 +77,16 @@ class IndicatorService:
             )
             stale_scope = trailing_unverified_history(rows) if instrument.id in issues else None
             if instrument.id in issues and stale_scope is None:
-                skipped += 1
-                failures.append({"ts_code": instrument.ts_code, "reason": issues[instrument.id]})
+                if instrument.id in target_ids:
+                    skipped += 1
+                    failures.append({"ts_code": instrument.ts_code, "reason": issues[instrument.id]})
                 continue
             if stale_scope:
                 rows = [row for row in rows if row.trade_date <= stale_scope["qualified_through"]]
             if len(rows) < 30:
-                skipped += 1
-                failures.append({"ts_code": instrument.ts_code, "reason": "历史 K 线不足 30 根"})
+                if instrument.id in target_ids:
+                    skipped += 1
+                    failures.append({"ts_code": instrument.ts_code, "reason": "历史 K 线不足 30 根"})
                 continue
             frame = pd.DataFrame(
                 [
@@ -101,7 +107,8 @@ class IndicatorService:
             try:
                 result = calculate_indicators(frame, self.strategy["indicator"])
             except Exception as exc:
-                failures.append({"ts_code": instrument.ts_code, "reason": type(exc).__name__})
+                if instrument.id in target_ids:
+                    failures.append({"ts_code": instrument.ts_code, "reason": type(exc).__name__})
                 continue
             computed[instrument.id] = result
             metadata[instrument.id] = (instrument, rows[-1].trade_date, input_hash)
@@ -119,6 +126,8 @@ class IndicatorService:
         feature_schema_version = self.strategy.get("feature_schema_version", FEATURE_SCHEMA_VERSION)
         strategy_cfg = self.strategy.get("strategy_engine", {})
         for instrument_id, result in computed.items():
+            if instrument_id not in target_ids:
+                continue
             instrument, as_of_date, local_hash = metadata[instrument_id]
             input_hash = stable_hash({"panel": panel_hash, "instrument_id": instrument_id, "local": local_hash})
             values = dict(result.values)
@@ -189,7 +198,7 @@ class IndicatorService:
             {
                 "run_id": run_id,
                 "created": created,
-                "updated": max(0, len(computed) - created),
+                "updated": max(0, len(target_ids & computed.keys()) - created),
                 "skipped": skipped,
                 "failures": failures,
                 "indicator_version": version,
@@ -198,10 +207,11 @@ class IndicatorService:
         from app.services.task_outcome import coverage_outcome
         from app.services.settlement import settled_session
         target = settled_session(self.settings)
+        target_metadata = [value for ident, value in metadata.items() if ident in target_ids]
         completed = sum(as_of_date == target or self.settings.market_provider == "mock"
-                        for _inst, as_of_date, _hash in metadata.values())
-        stale_count = sum(as_of_date != target for _inst, as_of_date, _hash in metadata.values())
-        return coverage_outcome(len(instruments), completed, run_id=run_id,
-            created=created, updated=max(0, len(computed)-created), skipped=skipped,
+                        for _inst, as_of_date, _hash in target_metadata)
+        stale_count = sum(as_of_date != target for _inst, as_of_date, _hash in target_metadata)
+        return coverage_outcome(len(targets), completed, run_id=run_id,
+            created=created, updated=max(0, len(target_ids & computed.keys())-created), skipped=skipped,
             failures=failures, indicator_version=version, target_trade_date=target.isoformat(),
-            stale_count=stale_count)
+            stale_count=stale_count, **scope_metadata(instruments, codes))
