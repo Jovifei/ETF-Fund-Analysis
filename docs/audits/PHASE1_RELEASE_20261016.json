@@ -1,0 +1,158 @@
+{
+  "source_commit": "9fe9fe87adbc216f2db5d77248f990a48e79abad",
+  "source_tree": "7f3214f94aba8d113cd3e532d21f2a20867d50ef",
+  "production_image": "sha256:93d4e2956d7fc8302886787705cf10fa82dec6bd99cf4725da7c6b3d62d69862",
+  "schema_head": "f0e1d2c3b4a5",
+  "producer_config_hash": "972a045a66349166210f0378530164a1a2d50e9a72b26309bf17437bf2258305",
+  "release_operation_sha256": "d5dcc997577be0aefb0470fff84494965e3af8e6f346ebaed77030405ca8e6a8",
+  "tests": {
+    "backend": {
+      "passed": 2241,
+      "skipped": 23,
+      "failed": 0,
+      "errors": 0,
+      "seconds": 809.282
+    },
+    "focused_passed": 104,
+    "unchanged_vue_passed": 205,
+    "vue_typecheck_and_build": "PASS",
+    "ci_pass_run_ids": [
+      38775107179,
+      38775114025,
+      38775107011,
+      38775113618,
+      38775106711,
+      38775113632,
+      38775113780
+    ]
+  },
+  "reviews": {
+    "web_gpt": "OWNER_WAIVED",
+    "local_independent": "PASS"
+  },
+  "deployment": "PASS",
+  "task": {
+    "name": "ETF-Local-Live-Compute",
+    "mode": "MANUAL_START_OF_EXISTING_SCHEDULED_TASK_UNDER_ORIGINAL_PRINCIPAL",
+    "source_commit": "9fe9fe87adbc216f2db5d77248f990a48e79abad",
+    "last_result": 0,
+    "principal_triggers_settings_preserved": true,
+    "configured_triggers": 8,
+    "natural_clock_slot_execution": "NOT_YET_OBSERVED",
+    "next_scheduled_local_time": "2026-10-16T14:20:20+08:00"
+  },
+  "delivery": {
+    "generation": 1792087932590,
+    "bundle_id": "15e28b4f3a14b7ef1825e60bdbe24f23279c62e57814e11939b011b1e3a4d6e4",
+    "canonical_bytes": 16664353,
+    "canonical_sha256": "a85a666cffeb7852d2004c22732eb91af6ea36b2e46c0df2f08cb50825aa7205",
+    "manifest_generated_at": "2026-10-15T18:11:58.902554+00:00",
+    "manifest_expires_at": "2026-10-15T20:11:58.902554+00:00",
+    "receipt": {
+      "bundle_id": "15e28b4f3a14b7ef1825e60bdbe24f23279c62e57814e11939b011b1e3a4d6e4",
+      "manifest_hash": "15e28b4f3a14b7ef1825e60bdbe24f23279c62e57814e11939b011b1e3a4d6e4",
+      "status": "accepted",
+      "sequence": 1792087932590,
+      "received_at": "2026-10-15T18:13:42.703961+00:00"
+    },
+    "universe_count": 34,
+    "part_counts": {
+      "details": 34,
+      "charts": 34,
+      "chart_periods": 34
+    },
+    "overview_rows": 34,
+    "holding_nonnull": 0,
+    "safety": {
+      "usage_scope": "owner_private_research",
+      "actionable": false,
+      "research_only": true,
+      "license_status": "UNKNOWN",
+      "source_qualification": "UNKNOWN",
+      "calibration_status": "not_calibrated"
+    },
+    "input_observation": {
+      "contract_version": "closed-session-input-v1.1.1",
+      "accepted": true,
+      "mode": "closed_session_nonrealtime",
+      "source_session": "2026-10-15",
+      "source_degraded_reason": "quote source date is not today",
+      "quote_count": 34,
+      "run_id": "ac9966fbe88b44eabe1758b448a16485",
+      "source_time_min": "2026-10-15T15:00:01+08:00",
+      "source_time_max": "2026-10-15T15:35:45+08:00",
+      "fetch_window_start": "2026-10-16T02:10:56.237953+08:00",
+      "fetch_window_end": "2026-10-16T02:11:02.614475+08:00",
+      "input_hash": "aba25768ac612bcaf35d39687dcd815c979d81011ca3dbd7ef14286fa6e68352",
+      "is_realtime": false,
+      "actionable": false,
+      "research_only": true,
+      "qualification": "UNKNOWN",
+      "calibration_status": "not_calibrated"
+    }
+  },
+  "consumer": {
+    "production_api_container_readonly_probe": "PASS",
+    "normal_authenticated_browser": "NOT_RUN",
+    "public_health_and_asset_hash": "PASS",
+    "local_real_bundle_browser": "PASS_SEPARATE_PRIOR_REHEARSAL",
+    "api_container_probe_process_peak_rss_bytes": 209604608,
+    "calls": [
+      {
+        "name": "overview_latest",
+        "object_sha256": "b53c2e7c0e32f81a3873091f818098182541ed81d6c2938f5365795cc932b06b",
+        "seconds": 4.0243
+      },
+      {
+        "name": "detail_512480_pinned",
+        "object_sha256": "e173327185c0d4444ef918b343da27734c9d03a7cadf30db9c1fec5750400275",
+        "seconds": 4.3484
+      },
+      {
+        "name": "chart_512480_1d",
+        "object_sha256": "bec4db65637ec5951ee4770a83426c9d55e3f7f0d0774f476185dede8cb16df0",
+        "seconds": 4.1424
+      },
+      {
+        "name": "chart_512480_1w",
+        "object_sha256": "52b0bf800b03fea1d67cfc8d823f8bd48ac8a21ddc99d2406faea404c687d364",
+        "seconds": 4.5345
+      },
+      {
+        "name": "chart_512480_1mo",
+        "object_sha256": "999cd115b51c80555c4aa232d58c38f81e2a979f06fe6332164b604e9ab525d7",
+        "seconds": 4.1268
+      }
+    ],
+    "not_http_p95_or_slo": true
+  },
+  "research_retirement": {
+    "before": "2026-10-16T01:50:05.454225+08:00",
+    "after": "2026-10-16T02:16:44.891989+08:00",
+    "tables": 14,
+    "count_and_insert_update_delete_delta_all_zero": true,
+    "heap_total_bytes_delta_all_zero": true,
+    "scope": "SHORT_WINDOW_ONLY_NOT_TWO_TRADING_DAYS_OR_ALL_DB_WRITES"
+  },
+  "storage": {
+    "observed_sync_domain_bytes": 33312706,
+    "sync_domain_cap_bytes": 67108864,
+    "disk_available_observed_bytes": 1126514688,
+    "old_raw_data_retained": true,
+    "capacity_issue_resolved": false
+  },
+  "remaining": [
+    "natural slot evidence",
+    "two real trading days and7-14day soak",
+    "unified slot ledger and missed-slot recovery not delivered",
+    "runtime/cadence coordination before factor expansion",
+    "normal authenticated user/holdings acceptance",
+    "phone/DPR/label overlap/non-equivalent price basis",
+    "source rights/PIT/OOS/calibration"
+  ],
+  "hub_reporting": "NOT_SENT_CONNECTION_REFUSED",
+  "failure_evidence_retained": [
+    "initial v3 Compose --wait on disabled scheduler caused rollback; original restored",
+    "first manual task paused by parent planned-setting comparison false positive"
+  ]
+}

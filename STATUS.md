@@ -1,25 +1,18 @@
 # 当前项目状态
 
-最终目标：个人ETF/LOF研究工作台。真实数据和确定性计算逐步迁到本机，云端只保留有界展示结果及账号/持仓事务；不自动交易，不把未校准预测当作操作依据。
+个人ETF/LOF研究工作台：真实历史与确定性计算保留本机，网站消费有界展示包，账号与持仓事务保留云端。不自动交易，未校准预测不是操作依据。
 
-## 2026-10-15 一期阻断修复候选（待网页复审/部署）
+2026-10-16发布已完成：PR48合入main，源码`9fe9fe87adbc216f2db5d77248f990a48e79abad`、tree `7f3214f94aba8d113cd3e532d21f2a20867d50ef`；根目录main已快进且干净。v4生产镜像`sha256:93d4e2956d7fc8302886787705cf10fa82dec6bd99cf4725da7c6b3d62d69862`已生效，schema f0e1d2c3b4a5未变。后继文档提交不替代此源码验证身份。
 
-独立分支codex/phase1-blockers-20261015，PR48，源码5ece78d；未覆盖原main/配置/DB/持仓。接收过期/版本、共享预算/并发/崩溃、页面同代、云研究写守卫、准入/partial/对账和任务安全已实际修复。本地完整2103通过/23跳过、Vue204/类型/构建、真实浏览器Mock7通过；固定收据docs/audits/PHASE1_BLOCKER_REPAIR_20261015.md。
+- 最终完整后端2241通过、23跳过、0失败/错误（809.282秒）；聚焦104通过；Vue205/类型/构建通过，7组精确预合并CI绿。
+- 本地真实34只Bundle正常页面消费QA通过；本轮网页GPT复审由Jovi明确免除，工程复审由本地完成，不冒称GPT已审。
+- 已有Windows任务保留原Principal、8个triggers和Settings，仅迁移Action到Python3.12/固定源码/canonical F根。手动启动该真实任务，8阶段执行，LastResult=0；任务Ready、下一计划14:20:20尚未自然触发验收，实际新采集、派生、导出均为9fe；02:13:42（上海）签名HTTPS accepted generation `1792087932590`。
+- 新代34只包已在生产API容器内只读验证进程只读Reader核同代/时点/hash；公网health200及新JS匹配。匿名浏览器仍跳转登录，未绕过认证。正常认证用户页面尚未验收。
 
-当前发布阻塞：网页原会话及新聊天均Model not found，尚无独立通过；F盘配置无逐接口准入证据，真实源导出仍阻断；生产磁盘约1.4GiB，需备份与镜像峰值核算。不把源码PASS或现网103522c健康当作本候选已部署。实际调度/统一job ledger、消费者证明、两交易日零研究增长及真实数据资格未验收。
+数据边界保持：34报价原始collector partial由精确闭市typed proof接受，只作2026-10-15收盘非实时研究；source/license UNKNOWN、actionable=false、not_calibrated。市场上下文6/7的optional partial明确unavailable；板块采集本次成功。不能说8阶段全部collector succeeded。
 
-## 2026-10-14主分支整合
+14张研究表短窗（01:50:05–02:16:44）exact与INSERT/UPDATE/DELETE、heap/total bytes差分全零，不等于两交易日通过。同步域33,312,706字节<64MiB，服务健康、scheduler稳定、无OOM/重启0。5次进程内Reader最大4.5345秒不是HTTP p95或SLO；云盘仍约1.13GB（十进制，约1.05GiB），旧原始数据保留，容量问题未解决。
 
-本轮Jovi授权源码整合与可重建缓存清理，未授权本轮另行部署或删除数据。整合基于a2adee5，接收独立回测d013e48、未推91f7447及389f7d0上的接收安全候选，保留新版gzip、V1/V2回执、决策板/持仓接口。回测版本升级至0.5.8-observed-mark-ledger；strategy config_hash相应变化，不能复用旧生产包身份。
+下一优先级是6分38秒左右任务与最密5分钟slots的容量/频次协调、完整job ledger与漏slot恢复，先于因子扩展。自然定时触发、两个真实交易日、7–14日soak、正常登录/持仓人工验收、本人手机/DPR/标签叠字/真正不等价价格口径专项及PIT/OOS/许可资格分别待验收。Hub仍NOT_SENT（Win10061），不作为已完成部署的否定，也不伪造上报成功。
 
-整合源码与验证身份以docs/audits/MAIN_CONSOLIDATION_20261014.md为准。PR46已合main，根目录已快进对齐。整合基础完整后端1960通过/23跳过，追加市场上下文152项通过；前端200项/typecheck/build、Node27与静态/secret通过，888实现的三组push CI成功。后继收据仅改文档，不冒作重新执行的源码结果。原失败保持，未降门槛。
-
-## 当前未完成项
-
-1. 本地展示的过期激活策略、当前code/config绑定、前端generation pin与完整端点同代语义仍需专项完成。
-2. 云端scheduler已关闭不等于全部任务写入被禁止；需统一display-only准入及实际增长对照。
-3. 首次历史引导dry-run、partial结果资格、私人持仓价格代数、期限选择及图表聚合时点仍需验收。
-4. 最新生产只读核实为e30f143，尚未部署本次整合源码；正式定时/两交易日计数与7–14交易日soak、本人手机/DPR专项单独记录。
-5. 真实数据权限/留存与展示许可、PIT/OOS及算法资格不能由CI/部署升级；保持UNKNOWN、actionable=false、not_calibrated。
-
-旧S2候选按Jovi此前决定保留，不回带旧语义；历史审计枝无独立业务源码，不混入主实现。有效测试与失败/浏览器证据保留，只删除确定可重建缓存。
+详见docs/audits/PHASE1_RELEASE_20261016.md。私有配置、DB/持仓、旧失败与回滚资产保留，不能清理未知资料。

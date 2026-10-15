@@ -1,25 +1,33 @@
 # 当前工程交接
 
-最新候选：PR48 / codex/phase1-blockers-20261015，已测源码5ece78d（2103+23跳过、前端204、浏览器Mock7）。完整清单与阻塞见docs/audits/PHASE1_BLOCKER_REPAIR_20261015.md。当前未部署；网页Model not found、真实源准入证据缺失、服务器空间峰值仍待解决。原目录main与生产身份另核，切勿自动启用新任务或伪造VERIFIED。
+目标：本机真实采集/存储/确定性计算，网站仅消费有界展示结果，保留云端私有账号和持仓。Jovi已授权修复、测试和部署，并明确免除本轮网页GPT复审，由本地作工程决策；不再等待网页恢复，也不冒称网页复审通过。
 
-当前任务是Jovi授权的main整合与有界清理；生产、数据、算法资格与源码合并分别验收。详细整合收据：docs/audits/MAIN_CONSOLIDATION_20261014.md；完整本机到网站路线：tasks/plans/2026-10-11-local-live-to-website.md。
+PR48已合main并快进根目录。固定运行源码`9fe9fe87adbc216f2db5d77248f990a48e79abad` / tree `7f3214f94aba8d113cd3e532d21f2a20867d50ef`。最终后端2241通过/23跳过、聚焦104、Vue205/类型/构建、7组精确CI绿。本地真实包页面QA通过。经v4发布脚本切换的镜像`sha256:93d4e2956d7fc8302886787705cf10fa82dec6bd99cf4725da7c6b3d62d69862`已生效；schema f0e1d2c3b4a5保持。详见docs/audits/PHASE1_RELEASE_20261016.md。
 
-## 接收与保护
+## 本次实际交付
 
-1. fetch后核main/HEAD/工作树和整合收据的真实SHA/tree，不用旧分支标题判断最新版。保护Owner未提交/忽略文件、配置、DB、账号/持仓、任务与回滚资产；不reset/clean/stash。
-2. 按Python3.12、Node>=22.18和实际lockfile验证；同一lockfile不保证node_modules实际版本一致。回归/static/frontend/CI结果按精确源码绑定，不继承为生产或手机通过。
-3. 接收安全v1.1/v2.1保留wire合同、gzip与不同回执；历史STALE读取不自动授权过期包激活，当前版本绑定与前端跨请求pin仍是卡点。
-4. 独立回测d013e48升级backtest_version至0.5.8-observed-mark-ledger，会改变strategy config_hash；生产重新验收前不沿用旧包/回执。
+已有自有Windows任务的Principal、8个triggers和Settings未变，仅迁移执行Action到Python3.12/固定9fe源码/canonical F根。通过手动启动此任务完成真实8阶段、LastResult=0及签名公网HTTPS接收：上海2026-10-16 02:13:42，generation `1792087932590`，bundle `15e28b4f3a14b7ef1825e60bdbe24f23279c62e57814e11939b011b1e3a4d6e4`。本次抓取/派生/导出均9fe；此前ab84/9dd/9fe混合来源只是独立演练，不是最新生产链路。
+
+生产API容器内只读验证进程Reader核同代/时间/hash通过，公网health200与新JS匹配；匿名浏览器正常跳转登录，未绕过认证。正常登录用户/持仓页面尚未验收。本地18093真实包QA已停，截图/hash/初始受保护端点401证据均保留。
+
+原始quote collector partial没有改写：34条精确闭市typed proof接受2026-10-15非实时观察，UNKNOWN/actionable=false/not_calibrated不晋升。市场上下文6/7 optional partial明确unavailable；其余所需scope34完整，板块采集本次成功。
 
 ## 下一顺序
 
-先确认main整合测试/CI与本地分支已对齐；随后完成过期/code-config/generation/端点语义、cloud所有写入口退休和有界真实运行验收。不要重复已合的旧实现，不删除有效测试或失败收据。真实源许可/PIT/OOS、未校准预测、正常私有访问/零副作用、实体手机与图表专项保持独立门槛。源码整合不表示本轮生产发布。
+1. 当前任务耗时约6分38秒，长于最密5分钟slots。先交付频次/耗时容量协调、统一slot台账和漏slot恢复（尚未完成）；不改算法阈值，不把一次手动启动当8个自然触发槽已通过。
+2. 验收自然定时触发、至少两个真实交易日的scope/slots及研究表INSERT/UPDATE/DELETE/bytes差分。现有约27分钟全零只是短窗，不能签发两日完成。
+3. 补正常认证用户/私有持仓、本人手机、DPR2/标签叠字/真正不等价价格口径专项，长期soak与PIT/OOS/许可资格分别留痕。
+4. 云盘仍约1.13GB（十进制，约1.05GiB），旧原始数据尚保留，另作审计迁移/保留规划；没有删除授权的资产不清理。Hub Win10061上报未发送单独记录，不篡改为已发送。
+
+接收器v2.3拒新过期/未来及未批准code/config，历史精确代可STALE读取。用户主动“读取最新批次”才解除旧代pin。统一64MiB按临时写入峰值计费，保护current/previous，仅回收校验通过的更旧缓存；满空间保守拒绝。现同步域33,312,706字节，后续仍持续观察。
+
+显式--private-research不等于上游许可或单位已验证。闭市例外仅在verified交易日及精确phase/source/task/DB捕获proof下运行，盘中与其他partial门槛保留。真实原始/研究价格不同且无法映射时叠加隐藏，不能宣称支撑压力、预测或策略已经可靠。
 
 ## 浏览器认证部署契约（必须保留）
 
 - 生产保持AUTH_ENABLED=true；现有DATABASE_URL指向持久数据库，保留用户与持仓，不把本机展示库替换成账户DB。
 - AUTO_CREATE_SCHEMA=false；由Alembic执行受审迁移，HTTPS保持AUTH_COOKIE_SECURE=true。
 - 首次安装通过auth-bootstrap-admin创建管理员；已有部署保留原数据库用户。浏览器使用数据库账号与安全会话Cookie。
-- 部署前新备份、不可变镜像与可回滚配置；通过精确CI后才能按授权发布，失败受控回退。详见docs/ALIYUN_DEPLOYMENT.md。
+- 新一致备份及不可变镜像/回滚材料已核；失败受控回退，不做静默降级。详见docs/ALIYUN_DEPLOYMENT.md。
 
-进度JSON仍是全部S0–S9任务台账，生成MD/HTML不手改；本文件只记录当前交接，不改最终目标、阈值或资格。UNKNOWN/actionable=false/not_calibrated和无自动交易保持。
+先核实际SHA/tree/分支/数据源及任务定义，不用旧分支标题判断版本。保护Owner修改、私有配置/DB/持仓、任务及回滚资产；不reset/clean/stash。S0–S9进度JSON仍是正式台账，生成MD/HTML不手改。后继文档HEAD不能替代固定源码测试，任务--expected-sha须对应实际工作树HEAD。

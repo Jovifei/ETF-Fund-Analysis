@@ -79,3 +79,20 @@ Jovi已明确暂不使用不可用网页GPT，由本地独立复审和执行。�
 - [ ] 仅从ab84真实输入与9dd派生结果导出新SHA包，校验34覆盖、16MiB、integrity、隐私空态；不上传。
 
 Review: 仅展示JSON数字编码变化，负零、布尔及非整数保留；数据字段/图层/公式/预算不变。真实包另行验收，尚未上传/激活；Hub revision查询因WinError10061失败，未冒报成功或自动重试。
+
+## 2026-10-16 本机优先一期实际发布
+
+- [x] R1–R11修复/负例/回归；PR48合main并快进根目录，固定运行9fe/tree7f321。
+- [x] 最终全量2241通过/23跳过、104聚焦、Vue205/类型/构建及7组精确CI绿。
+- [x] Jovi免本轮网页GPT复审，本地工程复审通过。
+- [x] 新一致备份校验、398发布哈希及不可变镜像；v4切换9fe/image93d/schemaf0，原配置绑定核对通过。
+- [x] 已有自有任务仅迁移Action，原Principal/8triggers/Settings保留；手动真实执行LastResult0，canonical F新采集→派生→导出均9fe→签名HTTPS accepted新代1792087932590。
+- [x] API容器内只读Reader验证进程同代/时点/hash、同步域预算、健康/资源、匿名登录边界通过；本地真实34包浏览器QA证据独立保留。
+- [x] 14研究表短窗exact/INSERT/UPDATE/DELETE/heap/total bytes差分全零；只记短窗，不冒两交易日。
+- [ ] 首要：约6分38秒运行与最密5分钟slots协调、job ledger/漏slot恢复；自然触发及两个真实交易日验收。
+- [ ] 正常认证用户/私有持仓人工验收，手机/DPR2/标签叠字/不等价价格专项，7–14日soak。
+- [ ] 云盘约1.13GB（十进制）且旧原始数据保留：另行审计容量/保留规划，不能称容量已解决。
+- [ ] 权限/许可/PIT/OOS/校准独立补证，持续UNKNOWN/actionable=false/not_calibrated。
+- [ ] Hub NOT_SENT（Win10061）恢复后按原契约处理，不能伪造已发送。
+
+评审：实际本机到签名公网接收及运行Reader链路已跑通；普通认证网页、自然调度、多日及数据/策略资格分别待验收。旧v3失败回滚和首次本地因配置计划暂停的失败均保留，不能改成PASS。完整收据docs/audits/PHASE1_RELEASE_20261016.md。
