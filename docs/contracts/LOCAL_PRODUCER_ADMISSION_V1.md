@@ -84,11 +84,17 @@ with `-PrivateResearch`. The 16:10 slot requires this explicit input contract;
 intraday slots keep the existing strict behavior even when the flag is present.
 `--skip-trade-day-check` cannot bypass the helper's independent verified calendar.
 
-`closed-session-input-v2` accepts only a complete newly fetched Sina quote batch
-after 16:00 on the current verified trading day. It binds the exact universe,
+`closed-session-input-v1.1` accepts only a complete newly fetched Sina quote batch.
+The current local day must itself be a verified trading day. After 16:00 the
+target is its current session; before 09:00 the target is the previous verified
+trading session, searching at most 30 days and rejecting any unknown calendar
+decision. 09:00..16:00 has no exception, and weekends are not enabled by this flag.
+The capture request cannot cross local midnight; export may cross midnight only
+while the independently verified target session still matches the captured one.
+It binds the exact universe,
 pre-fetch quote ID boundary, actual task run/status/counts and fetch start/end
 window. Every new row must have finite positive price, a quality hash, a source
-time on that day within 15:00..16:00, fetched within the current same-day window,
+time on that target session within 15:00..16:00, fetched within the current same-day window,
 and the sole existing degradation `quote source timestamp is stale`. Missing,
 extra/duplicate, old-session, future, non-Sina/Mock, invalid-price, other-degraded,
 unverified-calendar or cross-midnight inputs refuse. SQLite naive dates follow
@@ -108,6 +114,29 @@ realtime, actionable or calibrated. The signed manifest's `input_observation`
 records the contract, `closed_session_nonrealtime`, source session/time range,
 batch hash/count and non-realtime UNKNOWN qualification, with no account data.
 This changes orchestration input acceptance, not formulas or strategy thresholds.
+
+## Bounded public-history recovery
+
+Private compute explicitly passes `retry_history_once=true` for daily history.
+Normal callers retain the old default false and old result shape. Only the
+existing public_composite/akshare scope with an actual CompositeProvider and a
+current failed ProviderError/deadline trace may repeat a per-code fetch, at most
+once for the identical code/date range, when its selected material is not the
+existing complete, qualified, same-source batch. An explicit permission,
+credentials, rate, endpoint rejection, schema or response-budget error in any
+trace forbids retry. Unsupported-only and quantity-unknown-only outcomes do not
+retry. A generic failure does not prove that an error was transient.
+
+Attempt-one traces are staged through the original provider-audit function
+before Composite.last_trace is replaced, and the final attempt uses the existing
+audit finally path; they commit with the existing task transaction, not through
+a separate durability claim. Opt-in coverage/result metadata records per-code
+attempt counts and `daily-batch-v1.0.4-audited-single-retry`; default executions
+retain `daily-batch-v1.0.3-audit`. The adapter still selects a whole same-source
+batch, never merges fields or substitutes cached success. Existing validation,
+unit, date, partial-failure gates and SDK deadlines remain unchanged. A second
+partial remains blocked. This is not a whole-market retry loop; the existing
+registered task's 20-minute execution limit remains in effect.
 
 Required task partial/failure stops the pipeline. An incomplete required ETF
 overview/detail/chart universe cannot export. Outbox bundles and receipts use

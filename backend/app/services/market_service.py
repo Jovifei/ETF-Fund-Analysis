@@ -11,12 +11,29 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.models import DailyBar, Instrument, QuoteSnapshot, SectorSnapshot
 from app.providers.base import MarketProvider, ProviderError
+from app.providers.composite import CompositeProvider
 from app.services.audit_service import AuditTimer, record_provider_audit
 from app.services.event_service import emit_event
 from app.utils.hashing import stable_hash
 from app.providers.data_contract import LEGACY_SOURCES, UNVERIFIED_UNIT_SOURCES, VERSION, HistoryContractError, row_units_verified
 
 logger = logging.getLogger(__name__)
+
+
+def _history_recovery_candidate(provider, records, end_date):
+    if not isinstance(provider, CompositeProvider):
+        return False
+    traces = provider.last_trace
+    denied = {"RATE_LIMITED", "PERMISSION_OR_CREDENTIALS_DENIED", "CREDENTIALS_MISSING",
+              "ENDPOINT_UNAVAILABLE", "UPSTREAM_REJECTED", "UPSTREAM_HTTP_REJECTED",
+              "INVALID_RESPONSE_SCHEMA", "RESPONSE_TOO_LARGE"}
+    if any(trace.reason in denied for trace in traces):
+        return False
+    if not any(trace.operation == "fetch_daily_bars" and trace.status == "failed"
+               and trace.reason in {"ProviderError", "PROVIDER_DEADLINE_EXCEEDED"} for trace in traces):
+        return False
+    quality, complete, _ = CompositeProvider._daily_candidate(records, end_date)
+    return quality < 3 or not complete
 
 
 class MarketService:
@@ -128,6 +145,7 @@ class MarketService:
         codes: list[str] | None = None,
         run_id: str | None = None,
         mock_settled_date: date | None = None,
+        retry_history_once: bool = False,
     ) -> dict:
         from app.services.research_write_guard import require_research_write
         require_research_write(self.settings, "MarketService.refresh_daily_bars")
@@ -153,6 +171,8 @@ class MarketService:
             from app.services.settlement import settled_session
             end_date = settled_session(self.settings, now)
         totals = {"inserted": 0, "updated": 0, "unchanged": 0, "instruments": 0, "price_only": 0, "failures": []}
+        if retry_history_once is True:
+            totals["attempt_counts"] = []
         coverage = []
         for instrument in instruments:
             start_date = end_date - timedelta(days=lookback_days)
@@ -168,8 +188,23 @@ class MarketService:
             timer = AuditTimer()
             error: Exception | None = None
             records = []
+            attempts = 1
             try:
-                records = list(self.provider.fetch_daily_bars(instrument.ts_code, start_date, end_date))
+                fetch_error = None
+                try:
+                    records = list(self.provider.fetch_daily_bars(instrument.ts_code, start_date, end_date))
+                except Exception as exc:
+                    fetch_error = exc
+                if (retry_history_once is True and self.settings.market_provider in {"public_composite", "akshare"}
+                        and _history_recovery_candidate(self.provider, records, end_date)):
+                    if self.persist_provider_audits:
+                        # Stage attempt-one audit before its Composite trace is overwritten.
+                        record_provider_audit(db, run_id=run_id, operation="fetch_daily_bars", provider=self.provider,
+                                              result=records, error=fetch_error, latency_ms=timer.elapsed_ms)
+                    attempts, records, fetch_error, timer = 2, [], None, AuditTimer()
+                    records = list(self.provider.fetch_daily_bars(instrument.ts_code, start_date, end_date))
+                elif fetch_error is not None:
+                    raise fetch_error
                 if not records:
                     raise ProviderError("empty_history_no_refresh")
                 # Validate the complete batch before touching persisted history.
@@ -225,7 +260,8 @@ class MarketService:
                 totals["instruments"] += 1
                 latest_received = max(key[0] for key in batch)
                 coverage.append({"ts_code": instrument.ts_code, "received_through": latest_received.isoformat(),
-                                 "complete": latest_received == end_date})
+                                 "complete": latest_received == end_date,
+                                 **({"attempts": attempts} if retry_history_once is True else {})})
                 totals["price_only"] += int(any(item.source == "akshare:sina:v101" and item.volume is None for item, _ in batch.values()))
                 for key in counts:
                     totals[key] += counts[key]
@@ -233,6 +269,8 @@ class MarketService:
                 error = exc
                 totals["failures"].append({"ts_code": instrument.ts_code, "error": type(exc).__name__})
             finally:
+                if retry_history_once is True:
+                    totals["attempt_counts"].append({"ts_code": instrument.ts_code, "attempts": attempts})
                 if self.persist_provider_audits:
                     record_provider_audit(
                         db,
@@ -248,7 +286,8 @@ class MarketService:
         from app.services.task_outcome import coverage_outcome
         outcome = coverage_outcome(len(instruments), sum(item["complete"] for item in coverage),
             target_trade_date=end_date.isoformat(), coverage=coverage, **totals)
-        return {"run_id": run_id, "ingestion_policy": "daily-batch-v1.0.3-audit", "data_contract": VERSION, **outcome}
+        policy = "daily-batch-v1.0.4-audited-single-retry" if retry_history_once is True else "daily-batch-v1.0.3-audit"
+        return {"run_id": run_id, "ingestion_policy": policy, "data_contract": VERSION, **outcome}
 
     @staticmethod
     def _validated_bar_batch(records, ts_code: str, start_date: date, end_date: date) -> dict:

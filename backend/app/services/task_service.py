@@ -335,6 +335,7 @@ class TaskService:
                 codes=kwargs.get("codes"),
                 run_id=run_id,
                 **({"mock_settled_date": kwargs["mock_settled_date"]} if "mock_settled_date" in kwargs else {}),
+                **({"retry_history_once": True} if kwargs.get("retry_history_once") is True else {}),
             )
         if task_name == "certify_units":
             from app.services.unit_evidence_service import collect_unit_evidence

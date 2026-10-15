@@ -53,6 +53,8 @@ def test_optional_failure_continues_but_core_partial_stops_without_paid_fallback
             assert execution_policy.persist_task_runs is True and execution_policy.persist_provider_audits is True
         def run(self, db, task, **kwargs):
             seen.append(task)
+            if task == "refresh_bars":
+                assert kwargs["retry_history_once"] is True
             if task == "refresh_market_context":
                 raise RuntimeError("synthetic_optional_failure")
             return {"status": "partial" if task == "refresh_quotes" else "succeeded"}

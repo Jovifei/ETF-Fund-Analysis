@@ -26,7 +26,7 @@ CONTRACT_VERSION = "local-display-v2"
 ADMISSION_POLICY_VERSION = "private-research-execution-v1"
 EXPORT_PROJECTION_VERSION = "local-display-projection-v1"
 EXPORT_MAX_BYTES = 16 * 1024 * 1024
-CLOSED_SESSION_INPUT_VERSION = "closed-session-input-v2"
+CLOSED_SESSION_INPUT_VERSION = "closed-session-input-v1.1"
 OPTIONAL_TASK_PARTS = {"refresh_market_context": "market_context", "refresh_sector_snapshots": "sectors"}
 
 ROW_FIELDS_V2 = {
@@ -145,6 +145,32 @@ def _closed_database_identity(db):
     return ("sqlite-file", os.path.normcase(str(path)), stat.st_dev, stat.st_ino)
 
 
+def _closed_research_session(at, settings, calendar=None):
+    from app.services.snapshot_contract import _normalize_time
+    from app.services.trading_calendar_service import TradingCalendarService
+    local = _normalize_time(at, settings)
+    if local is None or settings.timezone_name != "Asia/Shanghai":
+        return None
+    calendar = calendar or TradingCalendarService(settings)
+    decision = calendar.decision(local.date())
+    if not decision.verified or not decision.is_trade_day:
+        return None
+    wall = local.time().replace(tzinfo=None)
+    if wall >= time(16):
+        return local.date()
+    if wall >= time(9):
+        return None
+    day = local.date()
+    for _ in range(30):
+        day -= timedelta(days=1)
+        decision = calendar.decision(day)
+        if not decision.verified:
+            return None
+        if decision.is_trade_day:
+            return day
+    return None
+
+
 def _revalidate_closed_session_capture(db, settings, result, universe, now):
     from app.services.snapshot_contract import _normalize_time
     error = "closed-session evidence database/scope/captured input mismatch"
@@ -152,7 +178,7 @@ def _revalidate_closed_session_capture(db, settings, result, universe, now):
             or tuple(sorted(universe or ())) != result.capture["universe"]
             or settings.market_provider != result.capture["provider"]
             or _normalize_time(now, settings) < result.capture["finished_at"]
-            or _normalize_time(now, settings).date().isoformat() != result["closed_session_research"]["source_session"]):
+            or str(_closed_research_session(now, settings)) != result["closed_session_research"]["source_session"]):
         raise ValueError(error)
     fresh = _closed_session_quote_result(db, settings, universe=universe, result=dict(result),
         after_id=result.capture["after_id"], started_at=result.capture["started_at"],
@@ -172,7 +198,6 @@ def _closed_session_quote_result(db, settings, *, universe, result, after_id, st
                                  finished_at, private_research, enabled, calendar=None):
     """Validate only this newly fetched batch; never update quote or task status."""
     from app.services.snapshot_contract import _normalize_time
-    from app.services.trading_calendar_service import TradingCalendarService
     if not enabled:
         return result
     def reject(reason):
@@ -182,11 +207,11 @@ def _closed_session_quote_result(db, settings, *, universe, result, after_id, st
         return reject("private_public_source_scope_required")
     start, end = _normalize_time(started_at, settings), _normalize_time(finished_at, settings)
     if (settings.timezone_name != "Asia/Shanghai" or start is None or end is None or start > end
-            or start.date() != end.date() or start.time().replace(tzinfo=None) < time(16)):
+            or start.date() != end.date()):
         return reject("closed_session_window_required")
-    decision = (calendar or TradingCalendarService(settings)).decision(end.date())
-    if not decision.verified or not decision.is_trade_day:
-        return reject("verified_current_trade_session_required")
+    target_session = _closed_research_session(end, settings, calendar)
+    if target_session is None or _closed_research_session(start, settings, calendar) != target_session:
+        return reject("verified_closed_trade_session_required")
     size = len(universe or [])
     expected_counts = {"requested": size, "received": size, "inserted": size, "realtime": 0,
                        "raw_realtime": size, "degraded": size, "missing": 0}
@@ -216,7 +241,7 @@ def _closed_session_quote_result(db, settings, *, universe, result, after_id, st
                 or not isinstance(quote.quote_time, datetime) or not isinstance(quote.fetched_at, datetime)):
             return reject("only_stale_timestamp_closing_quotes_allowed")
         source, fetched = _normalize_time(quote.quote_time, settings), _normalize_time(quote.fetched_at, settings)
-        if (source.date() != end.date() or not time(15) <= source.time().replace(tzinfo=None) <= time(16)
+        if (source.date() != target_session or not time(15) <= source.time().replace(tzinfo=None) <= time(16)
                 or not start <= fetched <= end or source > fetched):
             return reject("quote_source_or_fetch_window_mismatch")
         source_times.append(source.isoformat())
@@ -224,7 +249,7 @@ def _closed_session_quote_result(db, settings, *, universe, result, after_id, st
         identity.update(ts_code=code, quote_time=source.isoformat(), fetched_at=fetched.isoformat())
         identities.append(identity)
     evidence = {"contract_version": CLOSED_SESSION_INPUT_VERSION, "accepted": True,
-        "mode": "closed_session_nonrealtime", "source_session": end.date().isoformat(),
+        "mode": "closed_session_nonrealtime", "source_session": target_session.isoformat(),
         "quote_count": size, "run_id": result["run_id"], "source_time_min": min(source_times),
         "source_time_max": max(source_times), "fetch_window_start": start.isoformat(),
         "fetch_window_end": end.isoformat(), "input_hash": stable_hash(sorted(identities, key=lambda row: row["ts_code"])),
@@ -457,6 +482,8 @@ def compute_local(settings: Settings, universe: list[str] | None = None, *, admi
                     kwargs: dict[str, Any] = {}
                     if task == "refresh_bars":
                         kwargs["lookback_days"] = 420
+                        if private_research:
+                            kwargs["retry_history_once"] = True
                     if universe:
                         kwargs["codes"] = universe
                     before_quote_id = ((db.scalar(select(func.max(QuoteSnapshot.id))) or 0)
@@ -546,7 +573,7 @@ def export_local_v2(
             generated = timestamp(original.get("generated_at")) or now
             if captured_quotes is not None:
                 from app.services.snapshot_contract import _normalize_time
-                if (generated.astimezone(settings.timezone).date().isoformat() != closed_session_result["closed_session_research"]["source_session"]
+                if (str(_closed_research_session(generated, settings)) != closed_session_result["closed_session_research"]["source_session"]
                         or generated < closed_session_result.capture["finished_at"] or generated > now):
                     raise ValueError("closed-session evidence does not match board generation")
 

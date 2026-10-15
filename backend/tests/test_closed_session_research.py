@@ -224,3 +224,40 @@ def test_actual_quote_time_selector_must_choose_captured_batch(closing_batch):
         local_compute._revalidate_closed_session_capture(closing_batch,
             Settings(_env_file=None, market_provider="public_composite"), proof,
             ["510300.SH", "512480.SH"], datetime(2026, 10, 15, 16, 12, tzinfo=TZ))
+
+
+def _move_capture_to_early_next_day(db):
+    start = datetime(2026, 10, 16, 0, 10, tzinfo=TZ)
+    for quote in db.query(QuoteSnapshot): quote.fetched_at = start + timedelta(seconds=5)
+    run = db.query(TaskRun).one()
+    run.started_at, run.finished_at = start, start + timedelta(seconds=9)
+    db.flush()
+    return start
+
+
+def test_before_open_accepts_verified_previous_session_with_current_fetch(closing_batch):
+    start = _move_capture_to_early_next_day(closing_batch)
+    result = accept(closing_batch, started_at=start, finished_at=start + timedelta(seconds=10))
+    assert local_compute.closed_session_result_accepted(result)
+    assert result["closed_session_research"]["source_session"] == "2026-10-15"
+    assert local_compute._revalidate_closed_session_capture(closing_batch,
+        Settings(_env_file=None, market_provider="public_composite"), result,
+        ["510300.SH", "512480.SH"], start + timedelta(minutes=1))
+    with pytest.raises(ValueError, match="closed-session evidence"):
+        local_compute._revalidate_closed_session_capture(closing_batch,
+            Settings(_env_file=None, market_provider="public_composite"), result,
+            ["510300.SH", "512480.SH"], start.replace(hour=9, minute=0))
+
+
+def test_previous_session_requires_every_calendar_decision_verified(closing_batch):
+    start = _move_capture_to_early_next_day(closing_batch)
+    calendar = SimpleNamespace(decision=lambda day: SimpleNamespace(verified=day.day != 15, is_trade_day=True))
+    result = accept(closing_batch, started_at=start, finished_at=start + timedelta(seconds=10), calendar=calendar)
+    assert not local_compute.closed_session_result_accepted(result)
+
+
+def test_post_midnight_export_can_keep_previous_captured_session(closing_batch):
+    proof = accept(closing_batch)
+    assert local_compute._revalidate_closed_session_capture(closing_batch,
+        Settings(_env_file=None, market_provider="public_composite"), proof,
+        ["510300.SH", "512480.SH"], datetime(2026, 10, 16, 0, 5, tzinfo=TZ))

@@ -251,7 +251,7 @@ def main() -> int:
     p_run.add_argument("--no-upload", action="store_true", help="Do not upload after export")
     p_run.add_argument("--compute-only", action="store_true", help="Local compute only; no display export or upload")
     p_run.add_argument("--private-research", action="store_true", help="Explicit owner-private research execution scope; does not certify data rights or quality")
-    p_run.add_argument("--closed-session-research", action="store_true", help="After 16:00 only: validate newly fetched same-session stale quotes as non-realtime private research inputs")
+    p_run.add_argument("--closed-session-research", action="store_true", help="Private non-realtime closing research: current verified session after 16:00, previous verified session before 09:00")
     p_run.add_argument("--skip-trade-day-check", action="store_true", help="Bypass trading day gate (for testing/manual runs)")
 
     p_run.add_argument("--board-only", action="store_true", help="Local refresh-then-sync: rebuild decision board from stored local rows, no market fetch")
