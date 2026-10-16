@@ -70,6 +70,31 @@ def test_powershell_parser_and_trigger_function_without_scheduler_calls():
     assert json.loads(result.stdout) == {"daily": True, "at": "13:50", "interval": "PT1M", "duration": "PT3H", "stop": False}
 
 
+def test_original_trigger_guard_uses_actual_boundaries_not_next_run_delay():
+    shell = shutil.which('powershell') or shutil.which('pwsh')
+    if not shell:
+        pytest.skip('PowerShell unavailable')
+    command = r'''
+    $ast=[System.Management.Automation.Language.Parser]::ParseFile($env:ETF_CADENCE_SCRIPT,[ref]$null,[ref]$null)
+    $fn=$ast.Find({param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Assert-OriginalTriggers'},$true)
+    if(-not $fn){throw 'Original trigger guard missing'}
+    Invoke-Expression $fn.Extent.Text
+    $triggers=@('14:20:00','14:30:00','14:45:00','14:50:00','14:55:00','15:00:00','15:15:00','16:10:00') | ForEach-Object {
+      [pscustomobject]@{CimClass=[pscustomobject]@{CimClassName='MSFT_TaskDailyTrigger'};DaysInterval=1;Enabled=$true;Repetition=[pscustomobject]@{Interval=$null};StartBoundary="2026-10-16T$_"}
+    }
+    Assert-OriginalTriggers $triggers
+    $triggers[0].StartBoundary='2026-10-16T14:21:00'
+    $rejected=$false
+    try{Assert-OriginalTriggers $triggers}catch{$rejected=$true}
+    if(-not $rejected){throw 'Changed boundary accepted'}
+    Write-Output 'PASS'
+    '''
+    result = subprocess.run([shell, '-NoProfile', '-NonInteractive', '-Command', command],
+                            env={**os.environ, 'ETF_CADENCE_SCRIPT': str(SCRIPT)}, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == 'PASS'
+
+
 def test_xml_verifier_rejects_principal_setting_and_trigger_drift():
     shell = shutil.which("powershell") or shutil.which("pwsh")
     if not shell:

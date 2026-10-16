@@ -42,6 +42,18 @@ function New-CadenceTrigger {
     return $trigger
 }
 
+function Assert-OriginalTriggers($Triggers) {
+    $expectedSlots = @('14:20:00', '14:30:00', '14:45:00', '14:50:00', '14:55:00', '15:00:00', '15:15:00', '16:10:00')
+    $existingSlots = @($Triggers | ForEach-Object {
+        if ($_.CimClass.CimClassName -ne 'MSFT_TaskDailyTrigger' -or $_.DaysInterval -ne 1 -or
+            -not $_.Enabled -or -not [string]::IsNullOrEmpty([string]$_.Repetition.Interval)) {
+            throw 'Original daily trigger semantics changed'
+        }
+        ([datetime]::Parse($_.StartBoundary)).ToString('HH:mm:ss')
+    } | Sort-Object)
+    if (($existingSlots -join ',') -cne ($expectedSlots -join ',')) { throw 'Original eight slot times changed' }
+}
+
 function Get-TaskSection([string]$XmlText, [string]$Name) {
     [xml]$document = $XmlText
     $node = $document.DocumentElement.SelectSingleNode("*[local-name()='$Name']")
@@ -117,15 +129,7 @@ if ($task.State -ne 'Ready' -or @($task.Actions).Count -ne 1 -or @($task.Trigger
 }
 if ([string]$task.Settings.MultipleInstances -notin @('IgnoreNew', '2') -or
     [string]$task.Settings.ExecutionTimeLimit -ne 'PT20M') { throw 'Original bounded scheduling semantics changed' }
-$expectedSlots = @('14:20:20', '14:30:20', '14:45:20', '14:50:20', '14:55:20', '15:00:20', '15:15:20', '16:10:20')
-$existingSlots = @($task.Triggers | ForEach-Object {
-    if ($_.CimClass.CimClassName -ne 'MSFT_TaskDailyTrigger' -or $_.DaysInterval -ne 1 -or
-        -not $_.Enabled -or -not [string]::IsNullOrEmpty([string]$_.Repetition.Interval)) {
-        throw 'Original daily trigger semantics changed'
-    }
-    ([datetime]::Parse($_.StartBoundary)).ToString('HH:mm:ss')
-} | Sort-Object)
-if (($existingSlots -join ',') -cne ($expectedSlots -join ',')) { throw 'Original eight slot times changed' }
+Assert-OriginalTriggers $task.Triggers
 $originalAction = $task.Actions[0]
 $previousTree = Assert-SafePath $originalAction.WorkingDirectory -Directory
 Assert-CleanSource $previousTree $ExpectedPreviousSha
