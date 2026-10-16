@@ -37,7 +37,12 @@ def read_execution(args):
     root = Path(args.root)
     database = Path(args.db) if args.db else root / 'db' / 'research.sqlite3'
     config = Path(args.config) if args.config else root / 'config' / 'live.json'
-    raw = config.read_bytes()
+    try:
+        if not config.is_file() or config.is_symlink():
+            raise ValueError('local config file required')
+        raw = config.read_bytes()
+    except OSError:
+        raise ValueError('local config file required') from None
     cfg = load_local_config(root, config, content=raw)
     settings = local_settings(root, database, profile=args.profile, market_provider=args.provider)
     identity = execution_identity(raw, database=database, profile=args.profile, provider=args.provider,
@@ -82,7 +87,6 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     root = Path(args.root)
     config_path = Path(args.config) if args.config else root / "config" / "live.json"
-    cfg, settings, execution, original_config = read_execution(args)
     sha = get_current_git_sha()
     expected = getattr(args, "expected_sha", None)
     if expected and expected != sha:
@@ -91,6 +95,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         raise ValueError("live execution requires --expected-sha")
     if args.profile == "mock" and not args.no_upload:
         raise ValueError("mock profile cannot upload")
+    cfg, settings, execution, original_config = read_execution(args)
     universe = cfg["universe"]
     admission = cfg.get("provider_admission")
     private_research = getattr(args, "private_research", False)

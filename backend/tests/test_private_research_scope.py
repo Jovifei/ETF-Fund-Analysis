@@ -40,10 +40,12 @@ def test_mock_cannot_acquire_live_private_scope():
         validate_provider_admission("mock", private_research=True)
 
 
-def test_optional_failure_continues_but_core_partial_stops_without_paid_fallback(monkeypatch):
+def test_optional_failure_continues_but_core_partial_stops_without_paid_fallback(monkeypatch, tmp_path):
     from app.core.config import Settings
     from app.workspace.local_compute import compute_local
     from app.services import task_service
+    from sqlalchemy import create_engine
+    from app.db.base import Base
 
     seen = []
     class StubTasks:
@@ -62,9 +64,14 @@ def test_optional_failure_continues_but_core_partial_stops_without_paid_fallback
             pass
 
     monkeypatch.setattr(task_service, "TaskService", StubTasks)
-    settings = Settings(_env_file=None, market_provider="public_composite", database_url="sqlite://",
+    engine = create_engine(f"sqlite:///{(tmp_path / 'research.sqlite3').as_posix()}")
+    settings = Settings(_env_file=None, market_provider="public_composite", database_url=str(engine.url),
                         tushare_token="synthetic_test_only", ftshare_enabled=True)
-    results = compute_local(settings, ["510300.SH"], private_research=True)
+    try:
+        Base.metadata.create_all(engine)
+        results = compute_local(settings, ["510300.SH"], private_research=True)
+    finally:
+        engine.dispose()
     assert seen == ["refresh_market_context", "refresh_bars", "refresh_quotes"]
     assert results[0]["required"] is False and results[0]["availability"] == "unavailable"
     assert results[-1]["required"] is True and results[-1]["status"] == "partial"

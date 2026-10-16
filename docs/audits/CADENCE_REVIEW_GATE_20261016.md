@@ -61,6 +61,22 @@ batch. The webpage review approved only quote-specific deferred calls, keeping
 original qualified/degraded selection priorities and all other operations.
 Final fixed-source, selection-equivalence and real timing evidence are required.
 
+Morning 6fd50d9 real full preparation/export completed in 219.667 seconds.
+All 34 quotes had capture-bound control coverage; the actual quote stage took
+0.166 seconds. This is not a measured fast-slot or HTTPS latency PASS. Its
+exact CI exposed four failures: two stub tests omitted the now-required SQLite
+schema, and CLI source/config preflight ordering violated existing negative
+contracts. The stubs now initialize isolated schema; source identity rejects
+before reading configuration, and configuration I/O uses a safe ValueError.
+Original assertions and the real capture guard remain. Missing/inaccessible
+configuration and dirty/mismatched source have explicit regression tests.
+
+An initial diagnostic wrapper lacked the Windows multiprocessing main guard;
+its child argument failures and interrupted attempt are retained separately.
+The corrected guarded wrapper produced the actual morning full-run receipt.
+No production or project-code workaround was used for that harness failure.
+The afternoon original 9fe task execution is previous-release evidence only.
+
 Native Windows qualification has now exercised a new disabled, never-run owned
 probe: migrate its action/trigger/settings, restore the original definition
 from immutable UTF-16 XML, compare Principals/Actions/Triggers/Settings exactly,

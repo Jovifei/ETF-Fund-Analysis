@@ -166,7 +166,7 @@ def test_composite_scoped_request_rejected_before_provider_or_database_access(ta
         service.run(None, task_name, codes=codes)
 
 
-def test_local_producer_limits_target_tasks_without_shrinking_global_optional_context(monkeypatch):
+def test_local_producer_limits_target_tasks_without_shrinking_global_optional_context(monkeypatch, tmp_path):
     from app.workspace.local_compute import compute_local
     calls = {}
     class StubTasks:
@@ -176,7 +176,12 @@ def test_local_producer_limits_target_tasks_without_shrinking_global_optional_co
             return {"status": "succeeded"}
         def close(self): pass
     monkeypatch.setattr("app.services.task_service.TaskService", StubTasks)
-    compute_local(Settings(_env_file=None, database_url="sqlite://", market_provider="mock"), ["510300.SH"])
+    engine = create_engine(f"sqlite:///{(tmp_path / 'research.sqlite3').as_posix()}")
+    try:
+        Base.metadata.create_all(engine)
+        compute_local(Settings(_env_file=None, database_url=str(engine.url), market_provider="mock"), ["510300.SH"])
+    finally:
+        engine.dispose()
     for task in ("refresh_market_context", "refresh_sector_snapshots"):
         assert "codes" not in calls[task]
     for task in ("refresh_bars", "refresh_quotes", "refresh_indicators", "refresh_forecasts", "refresh_signals",

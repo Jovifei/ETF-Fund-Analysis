@@ -113,6 +113,33 @@ def test_dirty_identity_rejected_before_compute(tmp_path, monkeypatch):
     assert seen == []
 
 
+@pytest.mark.parametrize("failure", ["dirty", "mismatch", "missing_expected"])
+def test_source_preflight_never_reads_config_for_rejected_identity(tmp_path, monkeypatch, failure):
+    cli = load_cli()
+    monkeypatch.setattr(cli, "read_execution", lambda *args: pytest.fail("rejected source must not read configuration"))
+    if failure == "dirty":
+        monkeypatch.setattr(cli, "get_current_git_sha", lambda: (_ for _ in ()).throw(RuntimeError("dirty")))
+    else:
+        monkeypatch.setattr(cli, "get_current_git_sha", lambda: "b" * 40)
+    args = SimpleNamespace(root=str(tmp_path), config=None, profile="live", no_upload=False,
+                           expected_sha=None if failure == "missing_expected" else "f" * 40)
+    with pytest.raises(RuntimeError if failure == "dirty" else ValueError,
+                       match="dirty" if failure == "dirty" else "identity|expected-sha"):
+        cli.cmd_run(args)
+
+
+@pytest.mark.parametrize("operation", ["read_bytes", "is_file"])
+def test_unreadable_config_uses_safe_value_error_contract(tmp_path, monkeypatch, operation):
+    cli = load_cli()
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"universe": ["510300.SH"]}))
+    monkeypatch.setattr(type(config), operation, lambda self: (_ for _ in ()).throw(
+        PermissionError("private details must not appear")))
+    args = SimpleNamespace(root=str(tmp_path), db=None, profile="mock", provider="mock", config=str(config))
+    with pytest.raises(ValueError, match="^local config file required$"):
+        cli.read_execution(args)
+
+
 def test_partial_compute_must_not_export(tmp_path, monkeypatch):
     cli = load_cli()
     (tmp_path / ".shadow-local").touch()
