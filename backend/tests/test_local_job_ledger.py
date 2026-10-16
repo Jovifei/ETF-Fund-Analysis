@@ -287,6 +287,152 @@ def test_new_slot_does_not_hide_exhausted_delivery_budget(tmp_path):
     assert ledger.get_attempt(aid)["status"] == "FAILED_DELIVERY"
 
 
+def test_supersession_finishes_attempt_and_only_running_upload_jobs(tmp_path):
+    ledger = LocalJobLedger(tmp_path)
+    aid = claim(ledger)["attempt_id"]
+    ledger.mark_export(aid, manifest=packet(now()), bundle_file="bundle_123.json", now=now())
+    ledger.record_job(aid, "upload_1", status="failed", now=now())
+    ledger.record_job(aid, "upload_2", status="running", now=now())
+    ledger.plan_due(now(14, 55), verified_trading=True, identity=IDENTITY)
+    attempt = ledger.get_attempt(aid)
+    assert attempt["status"] == "SUPERSEDED"
+    assert attempt["reason"] == "newer_slot:2026-10-16 14:55"
+    jobs = {job["job_name"]: job for job in ledger.summary()["jobs"]}
+    assert jobs["upload_1"]["status"] == "failed"
+    assert jobs["upload_2"]["status"] == "interrupted"
+    assert jobs["upload_2"]["finished_at"] is not None
+
+
+def test_export_intent_survives_crash_after_file_before_mark_export(tmp_path):
+    import json
+    ledger = LocalJobLedger(tmp_path)
+    aid = claim(ledger)["attempt_id"]
+    manifest = packet(now())
+    ledger.mark_export_intent(aid, manifest=manifest, bundle_file="bundle_123.json", now=now())
+    outbox = tmp_path / "outbox"
+    outbox.mkdir()
+    (outbox / "bundle_123.json").write_text(json.dumps({"manifest": manifest}))
+    # New process owns the OS lock. It resolves the exact durable intent rather
+    # than creating a second sequence or certifying a different file.
+    reopened = LocalJobLedger(tmp_path)
+    assert reopened.recover_interrupted(now(), lock_held=True) == 0
+    assert reopened.export_intents()[0]["attempt_id"] == aid
+    assert reopened.plan_due(now(), verified_trading=True, identity=IDENTITY) is None
+    reopened.mark_export(aid, manifest=manifest, bundle_file="bundle_123.json", now=now())
+    assert reopened.export_intents() == []
+    assert reopened.get_attempt(aid)["sequence"] == 123
+    assert reopened.pending_replay(now=now(), identity=IDENTITY)["attempt_id"] == aid
+
+
+def test_export_intent_is_immutable_and_missing_artifact_quarantined(tmp_path):
+    ledger = LocalJobLedger(tmp_path)
+    aid = claim(ledger)["attempt_id"]
+    manifest = packet(now())
+    ledger.mark_export_intent(aid, manifest=manifest, bundle_file="bundle_123.json", now=now())
+    ledger.mark_export_intent(aid, manifest=manifest, bundle_file="bundle_123.json", now=now())
+    with pytest.raises(ValueError):
+        ledger.mark_export_intent(aid, manifest={**manifest, "sequence": 124}, bundle_file="bundle_124.json", now=now())
+    with pytest.raises(ValueError):
+        ledger.mark_export(aid, manifest={**manifest, "sequence": 124}, bundle_file="bundle_124.json", now=now())
+    ledger.quarantine_export(aid, reason="artifact_missing", now=now())
+    attempt = ledger.get_attempt(aid)
+    assert attempt["status"] == "QUARANTINED" and attempt["bundle_id"] == digest(manifest)
+    assert attempt["bundle_file"] == "bundle_123.json"
+    assert ledger.get_slot("2026-10-16 14:50")["status"] == "QUARANTINED"
+    assert ledger.plan_due(now(), verified_trading=True, identity=IDENTITY) is None
+    assert ledger.export_intents() == []
+    with pytest.raises(ValueError):
+        ledger.claim("2026-10-16 14:50", now(), identity=IDENTITY, lock_held=True)
+
+
+@pytest.mark.parametrize("next_clock,expected", [(now(14, 55), "SUPERSEDED"), (now(day=19), "EXPIRED")])
+def test_exporting_intent_is_not_left_pending_after_supersession_or_expiry(tmp_path, next_clock, expected):
+    ledger = LocalJobLedger(tmp_path)
+    aid = claim(ledger)["attempt_id"]
+    ledger.mark_export_intent(aid, manifest=packet(now()), bundle_file="bundle_123.json", now=now())
+    ledger.plan_due(next_clock, verified_trading=True, identity=IDENTITY)
+    assert ledger.get_attempt(aid)["status"] == expected
+    assert ledger.export_intents() == []
+
+
+def test_execution_contract_hash_details_strict_and_non_required(tmp_path):
+    ledger = LocalJobLedger(tmp_path)
+    aid = claim(ledger)["attempt_id"]
+    fields = ("execution_hash", "base_input_hash", "quote_batch_hash", "config_file_hash")
+    for key in fields:
+        with pytest.raises(ValueError):
+            ledger.record_job(aid, "execution_contract", status="succeeded", required=False,
+                              details={key: "not-a-hash"}, now=now())
+    ledger.record_job(aid, "execution_contract", status="succeeded", required=False,
+                      details={key: "d" * 64 if key != "base_input_hash" else None for key in fields}, now=now())
+    job = ledger.summary()["jobs"][0]
+    assert job["required"] is False and job["details"]["quote_batch_hash"] == "d" * 64
+
+
+def test_public_manifest_persisted_with_intent_and_bound_to_execution_job(tmp_path):
+    ledger = LocalJobLedger(tmp_path)
+    aid = claim(ledger)["attempt_id"]
+    lineage = {"contract_version": "local-execution-lineage-v1", "mode": "fast",
+               **{key: "d" * 64 for key in ("execution_hash", "base_input_hash", "quote_batch_hash", "config_file_hash")}}
+    details = {"execution_mode": lineage["mode"], **{key: value for key, value in lineage.items() if key.endswith("_hash")}}
+    ledger.record_job(aid, "execution_contract", status="succeeded", required=False, details=details, now=now())
+    wrong = {**packet(now()), "execution_lineage": {**lineage, "execution_hash": "e" * 64}}
+    with pytest.raises(ValueError):
+        ledger.mark_export_intent(aid, manifest=wrong, bundle_file="bundle_123.json", now=now())
+    manifest = {**packet(now()), "execution_lineage": lineage}
+    ledger.mark_export_intent(aid, manifest=manifest, bundle_file="bundle_123.json", now=now())
+    reopened = LocalJobLedger(tmp_path)
+    assert reopened.get_attempt(aid)["manifest"] == manifest
+    assert reopened.summary()["attempts"][0]["manifest"] == manifest
+    assert reopened.export_intents()[0]["manifest"] == manifest
+    assert digest(reopened.get_attempt(aid)["manifest"]) == reopened.get_attempt(aid)["bundle_id"]
+
+
+def test_schema_one_upgrade_retains_failure_history_and_does_not_invent_manifest(tmp_path):
+    import sqlite3
+    ledger = LocalJobLedger(tmp_path)
+    aid = claim(ledger)["attempt_id"]
+    ledger.fail(aid, reason="ProviderError", now=now())
+    with sqlite3.connect(ledger.path) as db:
+        db.execute("DROP TABLE IF EXISTS export_manifests")
+        db.execute("PRAGMA user_version=1")
+    reopened = LocalJobLedger(tmp_path)
+    assert reopened.get_attempt(aid)["status"] == "FAILED"
+    assert reopened.get_attempt(aid)["manifest"] is None
+    with sqlite3.connect(ledger.path) as db:
+        assert db.execute("PRAGMA user_version").fetchone()[0] == 2
+
+
+def test_manifest_storage_is_bounded_and_private_fields_rejected(tmp_path):
+    ledger = LocalJobLedger(tmp_path)
+    aid = claim(ledger)["attempt_id"]
+    for extra in ({"padding": "x" * 65536}, {"token": "must-not-store"}):
+        with pytest.raises(ValueError):
+            ledger.mark_export_intent(aid, manifest={**packet(now()), **extra}, bundle_file="bundle_123.json", now=now())
+    assert ledger.get_attempt(aid)["manifest"] is None
+
+
+def test_export_intent_boundaries_and_quarantine_do_not_regress(tmp_path):
+    ledger = LocalJobLedger(tmp_path)
+    when = now(16, 10)
+    aid = claim(ledger, when)["attempt_id"]
+    manifest = {**packet(when), "expires_at": (when + timedelta(hours=2)).isoformat()}
+    ledger.mark_export_intent(aid, manifest=manifest, bundle_file="bundle_123.json", now=when)
+    with pytest.raises(ValueError):
+        ledger.export_intents(limit=33)
+    ledger.plan_due(when + timedelta(minutes=21), verified_trading=True, identity=IDENTITY)
+    assert ledger.get_attempt(aid)["status"] == "EXPIRED"
+    assert ledger.get_slot("2026-10-16 16:10")["status"] == "MISSED"
+    assert ledger.export_intents() == []
+    # A new slot must not relabel a quarantined artifact as an ordinary skip.
+    other = LocalJobLedger(tmp_path / "other")
+    other_id = claim(other)["attempt_id"]
+    other.mark_export_intent(other_id, manifest=packet(now()), bundle_file="bundle_123.json", now=now())
+    other.quarantine_export(other_id, reason="artifact_invalid", now=now())
+    other.plan_due(now(14, 55), verified_trading=True, identity=IDENTITY)
+    assert other.get_slot("2026-10-16 14:50")["status"] == "QUARANTINED"
+
+
 def test_calendar_and_prior_day_never_replay_historical_slots(tmp_path):
     ledger = LocalJobLedger(tmp_path)
     claim(ledger)

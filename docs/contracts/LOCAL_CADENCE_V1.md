@@ -15,12 +15,28 @@ immutable package names and validated receipts. A durable UTC watermark blocks
 clock rollback. A newer due slot supersedes older unstarted work; yesterday's
 observations are never reconstructed as current successful slots.
 
+Ledger v1.1 uses control schema 2 and retains the public manifest in a bounded
+64KiB immutable record. It records EXPORTING intent before atomic file writing;
+after a crash the exact manifest/body may be recovered, otherwise the attempt
+is explicitly QUARANTINED. Unrelated outbox files are never adopted or deleted.
+Supersession ends the old slot, attempt and pending upload job together.
+
 Compute retry is bounded to two attempts with a 60-second cooldown. Exported
 packages survive process/network failures. Initial POST plus two transport
 retries send the identical package with fresh authentication nonces. Package
 expiry, source/config/scope changes, current-session catch-up window (20
 minutes), and fast-observation age (8 minutes) gate replay. Exhaustion records
 FAILED_DELIVERY; it does not issue a new sequence just to resend content.
+The current complete config-file bytes, provider, profile, explicit research
+scope, canonical database identity and upload destination form a separate
+execution hash. Before each replay the current config and provider admission
+are checked again, including explicit withdrawal or expiry. This execution
+identity does not replace the strategy config hash used by the receiver.
+
+Managed packages bind `local-execution-lineage-v1` in the signed manifest:
+actual full/fast mode, execution hash, config-file hash, base-input hash and
+captured-quote-batch hash. The ledger's execution-context job must match that
+manifest exactly. Private configuration/path contents are never included.
 
 ## Input and field dependency contract
 
@@ -66,6 +82,11 @@ a missing field or changed reset identity is UNKNOWN.
 Two distinct verified trading days with the same release identities are needed.
 Fast delivery target is 120 seconds, full preparation/settlement 600 seconds.
 Provider failure or an unmet target is recorded; no market gate is relaxed.
+Stability verifier v2 checks the entire required stage set, unique TaskRun IDs,
+actual mode (including full fallback), successful upload and exact manifest /
+receipt / execution lineage. Nine distinct, increasing generations are needed;
+one quote-only job or one receipt copied across slots cannot pass. Older weak
+v1 reports cannot qualify the new release.
 Natural Windows event-history evidence, authenticated browser consumption,
 phone acceptance and investment-strategy qualification remain separate from
 accepted delivery and the two endpoint runtime captures.

@@ -26,9 +26,25 @@ from app.workspace.local_compute import (
     create_base_manifest,
     validate_base_manifest,
     validate_fast_result,
+    build_execution_lineage,
 )
 from app.workspace.local_schedule import LocalRunLock
 from app.workspace.local_atomic import write_json_atomic
+from app.workspace.local_execution import execution_identity
+
+
+def read_execution(args):
+    root = Path(args.root)
+    database = Path(args.db) if args.db else root / 'db' / 'research.sqlite3'
+    config = Path(args.config) if args.config else root / 'config' / 'live.json'
+    raw = config.read_bytes()
+    cfg = load_local_config(root, config, content=raw)
+    settings = local_settings(root, database, profile=args.profile, market_provider=args.provider)
+    identity = execution_identity(raw, database=database, profile=args.profile, provider=args.provider,
+        private_research=getattr(args, 'private_research', False),
+        closed_session_research=getattr(args, 'closed_session_research', False),
+        sync_url=getattr(args, 'sync_url', None) or 'https://etf.joviluma.com/api/shadow/sync')
+    return cfg, settings, identity, raw
 
 
 def get_current_git_sha() -> str:
@@ -65,9 +81,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     from zoneinfo import ZoneInfo
 
     root = Path(args.root)
-    database = Path(args.db) if args.db else root / "db" / "research.sqlite3"
     config_path = Path(args.config) if args.config else root / "config" / "live.json"
-    cfg = load_local_config(root, config_path)
+    cfg, settings, execution, original_config = read_execution(args)
     sha = get_current_git_sha()
     expected = getattr(args, "expected_sha", None)
     if expected and expected != sha:
@@ -76,7 +91,6 @@ def cmd_run(args: argparse.Namespace) -> int:
         raise ValueError("live execution requires --expected-sha")
     if args.profile == "mock" and not args.no_upload:
         raise ValueError("mock profile cannot upload")
-    settings = local_settings(root, database, profile=args.profile, market_provider=args.provider)
     universe = cfg["universe"]
     admission = cfg.get("provider_admission")
     private_research = getattr(args, "private_research", False)
@@ -90,7 +104,14 @@ def cmd_run(args: argparse.Namespace) -> int:
         if not check["operation_permitted"]:
             print(json.dumps({"status": "admission_blocked", "admission": check}, ensure_ascii=False))
             return 1
-    original_config = config_path.read_bytes()
+    def check_execution():
+        current_cfg, _, current, _ = read_execution(args)
+        if args.profile == 'live' and not validate_provider_admission(args.provider, profile=args.profile,
+                evidence=current_cfg.get('provider_admission'), purpose='export',
+                private_research=private_research)['operation_permitted']:
+            raise ValueError('current provider admission blocked')
+        if current != execution or get_current_git_sha() != sha:
+            raise ValueError('execution configuration changed')
 
     # Fix-7: Trading day gate — check verified trade day
     if not args.skip_trade_day_check:
@@ -129,7 +150,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         if mode in {'fast', 'auto'}:
             try:
                 base = json.loads(base_path.read_text(encoding='utf-8'))
-                validate_base_manifest(settings, universe, base, code_sha=sha)
+                validate_base_manifest(settings, universe, base, code_sha=sha, execution_hash=execution['execution_hash'])
+                mode = 'fast'
             except (OSError, ValueError, TypeError):
                 if mode == 'fast':
                     raise ValueError('fast settled base unavailable') from None
@@ -141,7 +163,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             results = compute_board_only(settings, universe=universe)
         elif mode in {'fast', 'auto'}:
             results = compute_local_fast(settings, universe, base_manifest=base, code_sha=sha,
-                admission=admission, private_research=private_research, on_task=observer)
+                admission=admission, private_research=private_research, on_task=observer,
+                execution_hash=execution['execution_hash'])
         else:
             results = compute_local(settings, universe=universe, admission=admission, private_research=private_research,
                                     closed_session_research=closed_session_research, on_task=observer)
@@ -158,11 +181,11 @@ def cmd_run(args: argparse.Namespace) -> int:
 
         print(json.dumps({"status": "completed", "tasks": results}, indent=2, ensure_ascii=False))
         if mode == 'full' and getattr(args, 'prepare_base', False):
-            base = create_base_manifest(settings, universe, code_sha=sha)
+            base = create_base_manifest(settings, universe, code_sha=sha, execution_hash=execution['execution_hash'])
             write_json_atomic(base_path, base)
         def validate_fast():
             if mode in {'fast', 'auto'}:
-                validate_base_manifest(settings, universe, base, code_sha=sha)
+                validate_base_manifest(settings, universe, base, code_sha=sha, execution_hash=execution['execution_hash'])
                 validate_fast_result(settings, universe, results)
         validate_fast()
         if getattr(args, "compute_only", False):
@@ -194,11 +217,19 @@ def cmd_run(args: argparse.Namespace) -> int:
                        if item.get("task_name") in OPTIONAL_TASK_PARTS and item.get("status") != "succeeded"]
         if mode in {'fast', 'auto'}:
             unavailable = sorted(set(unavailable) | {'market_context', 'sectors'})
+        lineage = (build_execution_lineage(settings, universe, results, base_manifest=base,
+                    execution_hash=execution['execution_hash'], config_file_hash=execution['config_file_hash'],
+                    mode='fast' if mode == 'fast' else 'full')
+                   if getattr(args, 'prepare_base', False) else None)
+        check_execution()
         bundle = export_local_v2(settings, sequence=sequence, code_sha=sha, universe=universe,
                                  admission=admission, private_research=private_research, unavailable_parts=unavailable,
-                                 closed_session_result=next((item for item in results if closed_session_result_accepted(item)), None))
+                                 closed_session_result=next((item for item in results if closed_session_result_accepted(item)), None),
+                                 execution_lineage=lineage)
 
         bundle_path = outbox / f"bundle_{bundle['manifest']['sequence']}.json"
+        if callback := getattr(args, '_on_export_intent', None):
+            callback(bundle, bundle_path)
         write_json_atomic(bundle_path, bundle)
         if callback := getattr(args, '_on_export', None):
             callback(bundle, bundle_path)
@@ -228,6 +259,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             sync_url = getattr(args, "sync_url", None) or "https://etf.joviluma.com/api/shadow/sync"
             from app.workspace.shadow_client import upload_bundle_auto
             try:
+                check_execution()
                 validate_fast()
                 # <=16 MiB per request (wire and decoded); larger bundles go chunked + atomic commit.
                 receipt = upload_bundle_auto(sync_url, bundle)
@@ -261,16 +293,14 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
     from app.workspace.shadow_bundle import digest
     from app.workspace.shadow_client import upload_bundle_auto
     root = Path(args.root)
-    cfg = load_local_config(root, Path(args.config) if args.config else root / 'config' / 'live.json')
+    cfg, settings, execution, _ = read_execution(args)
     sha = get_current_git_sha()
     if args.profile != 'live' or args.expected_sha != sha or args.no_upload or args.compute_only or args.board_only:
         raise ValueError('dispatcher requires approved live source and real delivery')
-    settings = local_settings(root, Path(args.db) if args.db else root / 'db' / 'research.sqlite3',
-                              profile=args.profile, market_provider=args.provider)
     identity = {'code_sha': sha, 'config_hash': stable_hash(settings.load_strategy()),
                 'scope_hash': digest(sorted(cfg['universe']))}
 
-    def run_job(mode, *, on_task, on_export, on_receipt, lock):
+    def run_job(mode, *, on_task, on_export_intent, on_export, on_receipt, lock):
         child = copy(args)
         child.cadence_mode = 'auto' if mode == 'fast' else 'full'
         child.prepare_base = True
@@ -288,13 +318,21 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
                           'coverage_complete': len(found) == len(set(found)) == len(cfg['universe'])}
             on_task(name, result, run_id)
         child._external_lock, child._on_task = lock, observe
-        child._on_export, child._on_receipt = on_export, on_receipt
+        child._on_export_intent, child._on_export, child._on_receipt = on_export_intent, on_export, on_receipt
         return cmd_run(child)
 
-    def replay(*, attempt, on_receipt):
+    def recover_export(*, attempt):
         if get_current_git_sha() != sha:
             raise ValueError('replay source changed')
-        bundle = load_pending_bundle(root, attempt, identity, now=datetime.now(timezone.utc))
+        current_cfg, _, current_execution, _ = read_execution(args)
+        if not validate_provider_admission(args.provider, profile=args.profile,
+                evidence=current_cfg.get('provider_admission'), purpose='export',
+                private_research=args.private_research)['operation_permitted']:
+            raise ValueError('current provider admission blocked')
+        return load_pending_bundle(root, attempt, {**identity, **current_execution}, now=datetime.now(timezone.utc))
+
+    def replay(*, attempt, on_receipt):
+        bundle = recover_export(attempt=attempt)
         bundle_path = root / 'outbox' / attempt['bundle_file']
         manifest = bundle['manifest']
         auth_file = root / 'config' / 'producer_auth.json'
@@ -306,7 +344,7 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
         on_receipt(manifest, receipt)
 
     result = dispatch_once(root, identity, calendar=TradingCalendarService(settings),
-                           run_job=run_job, replay=replay)
+                           run_job=run_job, replay=replay, recover_export=recover_export, execution=execution)
     print(json.dumps({'status': 'dispatch_finished', 'exit_code': result}))
     return result
 

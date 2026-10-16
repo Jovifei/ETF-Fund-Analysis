@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import json
 import re
+from math import isfinite
 
 from app.workspace.local_job_ledger import LocalJobLedger
 from app.workspace.local_schedule import LOCAL_SCHEDULE_SLOTS, LocalRunLock, SHANGHAI
@@ -17,6 +18,47 @@ FULL_SLOTS = {'13:55', '15:15', '16:10'}
 
 def utc_now():
     return datetime.now(timezone.utc)
+
+
+def _validate_fast_replay_quotes(bundle, now):
+    """A new board timestamp cannot renew an older exchange observation."""
+    from app.workspace.read_model import market_time
+    universe = set(bundle['manifest']['universe'])
+    parts = bundle['parts']
+    rows = parts['overview'].get('rows')
+    details = parts['details']
+    if (not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows)
+            or len(rows) != len(universe) or {row.get('ts_code') for row in rows} != universe
+            or set(details) != universe):
+        raise ValueError('fast observation quote coverage incomplete')
+    reference = now.astimezone(SHANGHAI)
+    def stamp(value):
+        try:
+            result = market_time(value)
+            if not isinstance(result, datetime):
+                raise ValueError
+            return result.astimezone(SHANGHAI)
+        except (ValueError, TypeError, AttributeError, OverflowError):
+            raise ValueError('fast observation timestamp invalid') from None
+    for row in rows:
+        quote = details[row['ts_code']].get('quote') or {}
+        summary = row.get('quote') or {}
+        if (not isinstance(quote, dict) or not isinstance(summary, dict)
+                or quote.get('is_realtime') is not True or quote.get('timestamp_verified') is not True
+                or quote.get('is_mock') is not False or not isinstance(quote.get('source'), str)
+                or not quote['source'].strip() or 'mock' in quote['source'].lower()
+                or type(quote.get('price')) not in (int, float) or not isfinite(quote['price']) or quote['price'] <= 0):
+            raise ValueError('fast observation quote unqualified')
+        observed, fetched = stamp(quote.get('source_time')), stamp(quote.get('fetched_at'))
+        if (observed.date() != reference.date() or fetched.date() != reference.date()
+                or not observed <= fetched <= reference
+                or any(not 0 <= (reference-value).total_seconds() <= 8*60 for value in (observed, fetched))):
+            raise ValueError('fast observation quote expired or outside session')
+        if (stamp(summary.get('source_time')) != observed
+                or summary.get('source') != quote['source']
+                or any(summary.get(key) is not quote[key] for key in ('is_realtime', 'timestamp_verified', 'is_mock'))
+                or ('fetched_at' in summary and stamp(summary['fetched_at']) != fetched)):
+            raise ValueError('fast observation overview detail mismatch')
 
 
 def load_pending_bundle(root: Path, attempt: dict, identity: dict, *, now: datetime):
@@ -40,15 +82,22 @@ def load_pending_bundle(root: Path, attempt: dict, identity: dict, *, now: datet
             or manifest.get('config_hash') != identity['config_hash']
             or digest(sorted(manifest.get('universe', []))) != identity['scope_hash']):
         raise ValueError('pending bundle invalid expired or identity mismatch')
+    lineage = manifest.get('execution_lineage') or {}
+    if (not re.fullmatch(r'[0-9a-f]{64}', identity.get('execution_hash', ''))
+            or lineage.get('contract_version') != 'local-execution-lineage-v1'
+            or lineage.get('execution_hash') != identity['execution_hash']
+            or lineage.get('config_file_hash') != identity.get('config_file_hash')):
+        raise ValueError('pending execution configuration mismatch')
     if attempt['slot_id'].rsplit(' ', 1)[-1] not in FULL_SLOTS:
         generated = datetime.fromisoformat(manifest['generated_at'])
         if (now - generated).total_seconds() > 8 * 60:
             raise ValueError('fast observation expired')
+        _validate_fast_replay_quotes(bundle, now)
     return bundle
 
 
 def dispatch_once(root: Path, identity: dict, *, calendar, run_job, replay, now=utc_now,
-                  slots=DISPATCH_SLOTS) -> int:
+                  slots=DISPATCH_SLOTS, recover_export=None, execution=None) -> int:
     """Execute at most the newest eligible slot; the next minute catches overruns.
 
     run_job(mode, on_task, on_export, on_receipt, lock) returns its actual exit
@@ -71,6 +120,17 @@ def dispatch_once(root: Path, identity: dict, *, calendar, run_job, replay, now=
         slot = ledger.plan_due(current, verified_trading=bool(verified), identity=identity, slots=slots)
         if not verified:
             return 0
+        recovery_failed = False
+        for intent in ledger.export_intents():
+            try:
+                if recover_export is None:
+                    raise ValueError('export resolver unavailable')
+                bundle = recover_export(attempt=intent)
+                ledger.mark_export(intent['attempt_id'], manifest=bundle['manifest'],
+                                   bundle_file=intent['bundle_file'], now=now())
+            except Exception as exc:
+                ledger.quarantine_export(intent['attempt_id'], reason=type(exc).__name__, now=now())
+                recovery_failed = True
         pending = ledger.pending_replay(now=now(), identity=identity)
         # A newer due observation takes priority over retrying an old generation.
         if slot is None and pending:
@@ -91,9 +151,12 @@ def dispatch_once(root: Path, identity: dict, *, calendar, run_job, replay, now=
                 return 1
             return 0 if ledger.get_attempt(attempt['attempt_id'])['status'] == 'DELIVERED' else 1
         if slot is None:
-            return 0
+            return 1 if recovery_failed else 0
         attempt = ledger.claim(slot['slot_id'], now(), identity=identity, lock_held=True)
         aid = attempt['attempt_id']
+        if execution is not None:
+            ledger.record_job(aid, 'execution_identity', status='succeeded', required=False,
+                              now=now(), details=execution)
 
         def on_task(name, result, run_id):
             if result is None:
@@ -104,6 +167,12 @@ def dispatch_once(root: Path, identity: dict, *, calendar, run_job, replay, now=
                        if key in result}
             details.update({'source_task_status': result.get('status', 'unknown'),
                             'accepted_closed_session': closed_session_result_accepted(result)})
+            actual_run = result.get('run_id')
+            if actual_run is not None and actual_run != run_id:
+                ledger.record_job(aid, name, status='failed', now=now(), run_id=run_id,
+                    required=name not in OPTIONAL_TASK_PARTS,
+                    details={'run_id': actual_run, 'error_type': 'TaskRunIdentityMismatch'})
+                raise ValueError('task run identity changed')
             scope = result.get('execution_scope') or {}
             codes = scope.get('target_codes')
             if ('coverage_complete' not in details and result.get('status') == 'succeeded'
@@ -116,6 +185,17 @@ def dispatch_once(root: Path, identity: dict, *, calendar, run_job, replay, now=
             ledger.record_job(aid, name, status=status, now=now(), run_id=run_id,
                               required=name not in OPTIONAL_TASK_PARTS, details=details)
 
+        def on_export_intent(bundle, path):
+            lineage = bundle['manifest'].get('execution_lineage') or {}
+            if execution is not None and any(lineage.get(key) != value for key, value in execution.items()):
+                raise ValueError('claimed execution configuration changed')
+            details = {key: lineage.get(key) for key in ('execution_hash', 'config_file_hash',
+                                                        'base_input_hash', 'quote_batch_hash')}
+            details['execution_mode'] = lineage.get('mode')
+            ledger.record_job(aid, 'execution_contract', status='succeeded', required=False,
+                              now=now(), details=details)
+            ledger.mark_export_intent(aid, manifest=bundle['manifest'], bundle_file=Path(path).name, now=now())
+
         def on_export(bundle, path):
             ledger.mark_export(aid, manifest=bundle['manifest'], bundle_file=Path(path).name, now=now())
             ledger.record_job(aid, 'upload_1', status='running', now=now())
@@ -125,6 +205,7 @@ def dispatch_once(root: Path, identity: dict, *, calendar, run_job, replay, now=
             ledger.record_job(aid, 'upload_1', status='succeeded', now=now())
 
         result = run_job('full' if slot['slot'] in FULL_SLOTS else 'fast', on_task=on_task,
+                         on_export_intent=on_export_intent,
                          on_export=on_export, on_receipt=on_receipt, lock=lock)
         latest = ledger.get_attempt(aid)
         if latest['status'] == 'DELIVERED':
@@ -139,7 +220,7 @@ def dispatch_once(root: Path, identity: dict, *, calendar, run_job, replay, now=
     except Exception as exc:
         if ledger is not None and attempt is not None:
             latest = ledger.get_attempt(attempt['attempt_id'])
-            if latest['status'] == 'RUNNING':
+            if latest['status'] in {'RUNNING', 'EXPORTING'}:
                 ledger.fail(attempt['attempt_id'], reason=type(exc).__name__, now=now())
         return 1
     finally:

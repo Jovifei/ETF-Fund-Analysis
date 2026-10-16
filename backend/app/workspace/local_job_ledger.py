@@ -17,13 +17,15 @@ from uuid import uuid4
 from app.workspace.local_schedule import LOCAL_SCHEDULE_SLOTS, SHANGHAI
 from app.workspace.shadow_bundle import digest
 from app.workspace.shadow_client import _validate_receipt
+from app.workspace.local_display_contract import _scan_deep_privacy_and_actionable
 
-VERSION = "local-job-ledger-v1"
-TERMINAL_SLOTS = {"DELIVERED", "SUPERSEDED", "MISSED", "FAILED_DELIVERY"}
+VERSION = "local-job-ledger-v1.1"
+TERMINAL_SLOTS = {"DELIVERED", "SUPERSEDED", "MISSED", "FAILED_DELIVERY", "QUARANTINED"}
+EXECUTION_HASH_FIELDS = {"execution_hash", "base_input_hash", "quote_batch_hash", "config_file_hash"}
 DETAIL_FIELDS = {"coverage_complete", "requested", "completed", "missing", "failed_count",
                  "degraded_count", "accepted_closed_session", "source_task_status", "execution_mode",
                  "duration_seconds", "latency_seconds", "reason", "error_type", "run_id",
-                 "target_trade_date", "scope_hash"}
+                 "target_trade_date", "scope_hash"} | EXECUTION_HASH_FIELDS
 
 
 def _clock(value: datetime) -> datetime:
@@ -60,7 +62,7 @@ class LocalJobLedger:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._transaction() as db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1):
+            if version not in (0, 1, 2):
                 raise ValueError("unsupported local ledger schema")
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS slots (
@@ -80,7 +82,9 @@ class LocalJobLedger:
                     PRIMARY KEY(attempt_id, job_name));
                 CREATE TABLE IF NOT EXISTS clock_watermark (
                     singleton INTEGER PRIMARY KEY CHECK(singleton=1), observed_at TEXT NOT NULL);
-                PRAGMA user_version=1;
+                CREATE TABLE IF NOT EXISTS export_manifests (
+                    attempt_id TEXT PRIMARY KEY REFERENCES attempts(attempt_id), manifest_json TEXT NOT NULL);
+                PRAGMA user_version=2;
             """)
 
     def _check_path(self):
@@ -121,6 +125,14 @@ class LocalJobLedger:
             result["required"] = bool(result["required"])
         return result
 
+    @classmethod
+    def _attempt_row(cls, db, row):
+        result = cls._row(row)
+        if result is not None:
+            manifest = db.execute("SELECT manifest_json FROM export_manifests WHERE attempt_id=?", (result["attempt_id"],)).fetchone()
+            result["manifest"] = json.loads(manifest["manifest_json"]) if manifest else None
+        return result
+
     @staticmethod
     def _observe_clock(db, current: datetime) -> None:
         previous = db.execute("SELECT observed_at FROM clock_watermark WHERE singleton=1").fetchone()
@@ -131,10 +143,12 @@ class LocalJobLedger:
 
     @staticmethod
     def _finish_export(db, row, *, attempt_status: str, slot_status: str, reason: str, stamp: str) -> None:
-        db.execute("UPDATE attempts SET status=?,finished_at=?,updated_at=?,reason=? WHERE attempt_id=? AND status='EXPORTED'",
+        db.execute("UPDATE attempts SET status=?,finished_at=?,updated_at=?,reason=? WHERE attempt_id=? AND status IN ('EXPORTING','EXPORTED')",
                    (attempt_status, stamp, stamp, reason, row["attempt_id"]))
-        db.execute("UPDATE slots SET status=?,updated_at=?,reason=? WHERE slot_id=? AND status='EXPORTED'",
+        db.execute("UPDATE slots SET status=?,updated_at=?,reason=? WHERE slot_id=? AND status IN ('EXPORTING','EXPORTED')",
                    (slot_status, stamp, reason, row["slot_id"]))
+        db.execute("UPDATE jobs SET status='interrupted',finished_at=? WHERE attempt_id=? AND status='running'",
+                   (stamp, row["attempt_id"]))
 
     def get_slot(self, slot_id: str) -> dict | None:
         with self._transaction() as db:
@@ -142,7 +156,7 @@ class LocalJobLedger:
 
     def get_attempt(self, attempt_id: str) -> dict | None:
         with self._transaction() as db:
-            return self._row(db.execute("SELECT * FROM attempts WHERE attempt_id=?", (attempt_id,)).fetchone())
+            return self._attempt_row(db, db.execute("SELECT * FROM attempts WHERE attempt_id=?", (attempt_id,)).fetchone())
 
     def plan_due(self, now: datetime, *, verified_trading: bool, identity: dict,
                  slots=LOCAL_SCHEDULE_SLOTS, max_lateness: int = 1200,
@@ -175,9 +189,9 @@ class LocalJobLedger:
                 self._finish_export(db, attempt, attempt_status="FAILED_DELIVERY", slot_status="FAILED_DELIVERY",
                                     reason="upload_retry_budget_exhausted", stamp=stamp)
             db.execute("UPDATE slots SET status='MISSED',reason='previous_session',updated_at=? "
-                       "WHERE session<? AND status NOT IN ('DELIVERED','SUPERSEDED','MISSED','FAILED_DELIVERY')", (stamp, session))
+                       "WHERE session<? AND status NOT IN ('DELIVERED','SUPERSEDED','MISSED','FAILED_DELIVERY','QUARANTINED')", (stamp, session))
             previous_exports = db.execute("SELECT a.* FROM attempts a JOIN slots s ON s.slot_id=a.slot_id "
-                                          "WHERE s.session<? AND a.status='EXPORTED'", (session,)).fetchall()
+                                          "WHERE s.session<? AND a.status IN ('EXPORTING','EXPORTED')", (session,)).fetchall()
             for attempt in previous_exports:
                 self._finish_export(db, attempt, attempt_status="EXPIRED", slot_status="MISSED", reason="previous_session", stamp=stamp)
             if not verified_trading:
@@ -196,16 +210,20 @@ class LocalJobLedger:
             latest, age = due[-1]
             # Older missed triggers remain explicit evidence, not fake successes.
             for sid, _ in due[:-1]:
+                active_exports = db.execute("SELECT * FROM attempts WHERE slot_id=? AND status IN ('EXPORTING','EXPORTED')", (sid,)).fetchall()
+                for attempt in active_exports:
+                    self._finish_export(db, attempt, attempt_status="SUPERSEDED", slot_status="SUPERSEDED",
+                                        reason=f"newer_slot:{latest}", stamp=stamp)
                 db.execute("UPDATE slots SET status='SUPERSEDED',reason=?,updated_at=? "
-                           "WHERE slot_id=? AND status NOT IN ('DELIVERED','SUPERSEDED','MISSED','FAILED_DELIVERY','RUNNING')",
+                           "WHERE slot_id=? AND status NOT IN ('DELIVERED','SUPERSEDED','MISSED','FAILED_DELIVERY','QUARANTINED','RUNNING')",
                            (f"newer_slot:{latest}", stamp, sid))
-            exported = db.execute("SELECT * FROM attempts WHERE slot_id=? AND status='EXPORTED'", (latest,)).fetchall()
+            exported = db.execute("SELECT * FROM attempts WHERE slot_id=? AND status IN ('EXPORTING','EXPORTED')", (latest,)).fetchall()
             if age > max_lateness:
                 for attempt in exported:
                     self._finish_export(db, attempt, attempt_status="EXPIRED", slot_status="MISSED",
                                         reason="catchup_window_expired", stamp=stamp)
                 db.execute("UPDATE slots SET status='MISSED',reason='catchup_window_expired',updated_at=? "
-                           "WHERE slot_id=? AND status NOT IN ('DELIVERED','SUPERSEDED','MISSED','FAILED_DELIVERY','RUNNING')",
+                           "WHERE slot_id=? AND status NOT IN ('DELIVERED','SUPERSEDED','MISSED','FAILED_DELIVERY','QUARANTINED','RUNNING')",
                            (stamp, latest))
                 return None
             for attempt in exported:
@@ -213,12 +231,9 @@ class LocalJobLedger:
                 expired = datetime.fromisoformat(attempt["expires_at"]) <= current
                 if invalid or expired:
                     state = "INVALIDATED" if invalid else "EXPIRED"
-                    db.execute("UPDATE attempts SET status=?,updated_at=?,finished_at=?,reason=? WHERE attempt_id=?",
-                               (state, stamp, stamp, state.lower(), attempt["attempt_id"]))
-                    db.execute("UPDATE slots SET status='FAILED',updated_at=?,reason=? WHERE slot_id=? AND status='EXPORTED'",
-                               (stamp, state.lower(), latest))
+                    self._finish_export(db, attempt, attempt_status=state, slot_status="FAILED", reason=state.lower(), stamp=stamp)
             row = db.execute("SELECT * FROM slots WHERE slot_id=?", (latest,)).fetchone()
-            if row["status"] in TERMINAL_SLOTS or row["status"] in {"RUNNING", "EXPORTED"}:
+            if row["status"] in TERMINAL_SLOTS or row["status"] in {"RUNNING", "EXPORTING", "EXPORTED"}:
                 return None
             previous = db.execute("SELECT * FROM attempts WHERE slot_id=? ORDER BY attempt_no DESC LIMIT 1", (latest,)).fetchone()
             if previous is not None:
@@ -260,7 +275,7 @@ class LocalJobLedger:
                        "VALUES (?,?,?,'RUNNING',?,?,?,?,?)", (aid, slot_id, attempt_no, stamp, stamp,
                        ident["code_sha"], ident["config_hash"], ident["scope_hash"]))
             db.execute("UPDATE slots SET status='RUNNING',updated_at=?,reason=NULL WHERE slot_id=?", (stamp, slot_id))
-            return self._row(db.execute("SELECT * FROM attempts WHERE attempt_id=?", (aid,)).fetchone())
+            return self._attempt_row(db, db.execute("SELECT * FROM attempts WHERE attempt_id=?", (aid,)).fetchone())
 
     def recover_interrupted(self, now: datetime, *, lock_held: bool) -> int:
         if lock_held is not True:
@@ -292,6 +307,9 @@ class LocalJobLedger:
         details = details or {}
         if not isinstance(details, dict) or not set(details) <= DETAIL_FIELDS:
             raise ValueError("non-public job detail field")
+        for key in EXECUTION_HASH_FIELDS & set(details):
+            if details[key] is not None and (not isinstance(details[key], str) or not re.fullmatch(r"[0-9a-f]{64}", details[key])):
+                raise ValueError("execution detail requires a 64-char hash or null")
         encoded = _json(details)
         if len(encoded.encode()) > 4096 or any(isinstance(v, (dict, list)) for v in details.values()):
             raise ValueError("bounded scalar job details required")
@@ -322,10 +340,21 @@ class LocalJobLedger:
             else:
                 db.execute("INSERT INTO jobs VALUES (?,?,?,?,?,?,?,?)", (attempt_id, job_name, status, stamp, end, run_id, bool(required), encoded))
 
+    def mark_export_intent(self, attempt_id: str, *, manifest: dict, bundle_file: str, now: datetime) -> None:
+        """Commit the immutable artifact identity before its filesystem write."""
+        self._record_export(attempt_id, manifest=manifest, bundle_file=bundle_file, now=now, status="EXPORTING")
+
     def mark_export(self, attempt_id: str, *, manifest: dict, bundle_file: str, now: datetime) -> None:
+        """Confirm the caller has durably written and checked the exact artifact."""
+        self._record_export(attempt_id, manifest=manifest, bundle_file=bundle_file, now=now, status="EXPORTED")
+
+    def _record_export(self, attempt_id: str, *, manifest: dict, bundle_file: str, now: datetime, status: str) -> None:
         current = _clock(now)
         if not isinstance(manifest, dict) or manifest.get("contract_version") != "local-display-v2":
             raise ValueError("display v2 manifest required")
+        encoded_manifest = _json(manifest)
+        if len(encoded_manifest.encode("utf-8")) > 65536 or not _scan_deep_privacy_and_actionable(manifest):
+            raise ValueError("bounded public manifest required")
         seq = manifest.get("sequence")
         if type(seq) is not int or seq < 1 or not isinstance(bundle_file, str) or bundle_file != f"bundle_{seq}.json":
             raise ValueError("immutable local bundle basename required")
@@ -337,7 +366,8 @@ class LocalJobLedger:
         with self._transaction() as db:
             self._observe_clock(db, current)
             row = db.execute("SELECT * FROM attempts WHERE attempt_id=?", (attempt_id,)).fetchone()
-            if row is None or row["status"] not in {"RUNNING", "EXPORTED"}:
+            allowed = {"RUNNING", "EXPORTING", "EXPORTED"}
+            if row is None or row["status"] not in allowed:
                 raise ValueError("attempt is not exportable")
             _forward(row, current)
             if row["code_sha"] != manifest.get("code_sha") or row["config_hash"] != manifest.get("config_hash"):
@@ -346,13 +376,53 @@ class LocalJobLedger:
             if (not isinstance(universe, list) or not universe or not all(isinstance(code, str) for code in universe)
                     or len(set(universe)) != len(universe) or digest(sorted(universe)) != row["scope_hash"]):
                 raise ValueError("export scope identity mismatch")
-            if row["status"] == "EXPORTED":
-                if row["bundle_id"] == bid and row["bundle_file"] == bundle_file:
+            context = db.execute("SELECT status,required,details FROM jobs WHERE attempt_id=? AND job_name='execution_contract'",
+                                 (attempt_id,)).fetchone()
+            if context is not None:
+                details = json.loads(context["details"])
+                lineage = manifest.get("execution_lineage")
+                if (context["status"] != "succeeded" or context["required"] != 0 or not isinstance(lineage, dict)
+                        or set(lineage) != {"contract_version", "mode"} | EXECUTION_HASH_FIELDS
+                        or lineage["contract_version"] != "local-execution-lineage-v1"
+                        or lineage["mode"] not in {"full", "fast"}
+                        or details.get("execution_mode") != lineage["mode"]
+                        or not EXECUTION_HASH_FIELDS <= set(details)
+                        or any(details[key] != lineage[key] for key in EXECUTION_HASH_FIELDS)):
+                    raise ValueError("manifest execution lineage does not match recorded job")
+            stored = db.execute("SELECT manifest_json FROM export_manifests WHERE attempt_id=?", (attempt_id,)).fetchone()
+            if stored is not None and stored["manifest_json"] != encoded_manifest:
+                raise ValueError("stored export manifest is immutable")
+            if row["status"] in {"EXPORTING", "EXPORTED"}:
+                if row["bundle_id"] != bid or row["bundle_file"] != bundle_file:
+                    raise ValueError("export artifact identity is immutable")
+                if row["status"] == status or row["status"] == "EXPORTED":
+                    if stored is None:
+                        db.execute("INSERT INTO export_manifests VALUES (?,?)", (attempt_id, encoded_manifest))
                     return
-                raise ValueError("exported bundle is immutable")
-            db.execute("UPDATE attempts SET status='EXPORTED',updated_at=?,bundle_file=?,sequence=?,bundle_id=?,expires_at=? WHERE attempt_id=?",
-                       (stamp, bundle_file, seq, bid, expiry.isoformat(), attempt_id))
-            db.execute("UPDATE slots SET status='EXPORTED',updated_at=? WHERE slot_id=?", (stamp, row["slot_id"]))
+            if stored is None:
+                db.execute("INSERT INTO export_manifests VALUES (?,?)", (attempt_id, encoded_manifest))
+            db.execute("UPDATE attempts SET status=?,updated_at=?,bundle_file=?,sequence=?,bundle_id=?,expires_at=? WHERE attempt_id=?",
+                       (status, stamp, bundle_file, seq, bid, expiry.isoformat(), attempt_id))
+            db.execute("UPDATE slots SET status=?,updated_at=? WHERE slot_id=?", (status, stamp, row["slot_id"]))
+
+    def export_intents(self, *, limit: int = 32) -> list[dict]:
+        if type(limit) is not int or not 1 <= limit <= 32:
+            raise ValueError("bounded export-intent query required")
+        with self._transaction() as db:
+            rows = db.execute("SELECT a.* FROM attempts a JOIN slots s ON s.slot_id=a.slot_id "
+                              "WHERE a.status='EXPORTING' AND s.status='EXPORTING' ORDER BY a.started_at LIMIT ?", (limit,)).fetchall()
+            return [self._attempt_row(db, row) for row in rows]
+
+    def quarantine_export(self, attempt_id: str, *, reason: str, now: datetime) -> None:
+        stamp = _clock(now).isoformat()
+        if not isinstance(reason, str) or not re.fullmatch(r"[A-Za-z0-9_. -]{1,120}", reason):
+            raise ValueError("bounded public quarantine reason required")
+        with self._transaction() as db:
+            self._observe_clock(db, _clock(now))
+            row = db.execute("SELECT * FROM attempts WHERE attempt_id=?", (attempt_id,)).fetchone()
+            if row is None or row["status"] not in {"EXPORTING", "EXPORTED"}:
+                raise ValueError("quarantine requires an unresolved export")
+            self._finish_export(db, row, attempt_status="QUARANTINED", slot_status="QUARANTINED", reason=reason, stamp=stamp)
 
     def mark_delivered(self, attempt_id: str, *, manifest: dict, receipt: dict, now: datetime) -> None:
         stamp = _clock(now).isoformat()
@@ -379,15 +449,15 @@ class LocalJobLedger:
         with self._transaction() as db:
             self._observe_clock(db, _clock(now))
             row = db.execute("SELECT * FROM attempts WHERE attempt_id=?", (attempt_id,)).fetchone()
-            if row is None or row["status"] not in {"RUNNING", "EXPORTED"}:
+            if row is None or row["status"] not in {"RUNNING", "EXPORTING", "EXPORTED"}:
                 raise ValueError("terminal attempt cannot fail")
             _forward(row, _clock(now))
             # An export survives a transport failure and is replayed byte-for-byte.
-            status = "EXPORTED" if row["status"] == "EXPORTED" else "FAILED"
+            status = row["status"] if row["status"] in {"EXPORTING", "EXPORTED"} else "FAILED"
             db.execute("UPDATE attempts SET status=?,finished_at=?,updated_at=?,reason=? WHERE attempt_id=?",
-                       (status, None if status == "EXPORTED" else stamp, stamp, reason, attempt_id))
+                       (status, None if status in {"EXPORTING", "EXPORTED"} else stamp, stamp, reason, attempt_id))
             db.execute("UPDATE jobs SET status='failed',finished_at=? WHERE attempt_id=? AND status='running'", (stamp, attempt_id))
-            db.execute("UPDATE slots SET status=?,updated_at=?,reason=? WHERE slot_id=? AND status NOT IN ('DELIVERED','SUPERSEDED','MISSED','FAILED_DELIVERY')",
+            db.execute("UPDATE slots SET status=?,updated_at=?,reason=? WHERE slot_id=? AND status NOT IN ('DELIVERED','SUPERSEDED','MISSED','FAILED_DELIVERY','QUARANTINED')",
                        (status, stamp, reason, row["slot_id"]))
 
     def pending_replay(self, *, now: datetime, identity: dict, max_retries: int = 2,
@@ -419,7 +489,7 @@ class LocalJobLedger:
                 ready = last_failure is None or (current - datetime.fromisoformat(last_failure)).total_seconds() >= cooldown_seconds
                 if (all(row[key] == ident[key] for key in ident) and age >= 0 and ready
                         and not any(job["status"] == "running" for job in uploads)):
-                    return self._row(row)
+                    return self._attempt_row(db, row)
         return None
 
     def summary(self, session: str | None = None) -> dict:
@@ -427,7 +497,7 @@ class LocalJobLedger:
             suffix = " WHERE session=?" if session else ""
             args = (session,) if session else ()
             slots = [self._row(r) for r in db.execute("SELECT * FROM slots" + suffix + " ORDER BY slot_id", args)]
-            attempts = [self._row(r) for r in db.execute("SELECT a.* FROM attempts a JOIN slots s ON s.slot_id=a.slot_id" +
+            attempts = [self._attempt_row(db, r) for r in db.execute("SELECT a.* FROM attempts a JOIN slots s ON s.slot_id=a.slot_id" +
                          (" WHERE s.session=?" if session else "") + " ORDER BY a.started_at,a.attempt_no", args)]
             jobs = [self._row(r) for r in db.execute("SELECT j.* FROM jobs j JOIN attempts a ON a.attempt_id=j.attempt_id "
                     "JOIN slots s ON s.slot_id=a.slot_id" + (" WHERE s.session=?" if session else "") + " ORDER BY j.started_at,j.job_name", args)]

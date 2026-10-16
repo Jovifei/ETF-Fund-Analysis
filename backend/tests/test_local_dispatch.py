@@ -89,6 +89,21 @@ def receipt_for(manifest):
             'manifest_hash': digest(manifest), 'received_at': manifest['generated_at']}
 
 
+def fast_parts(at, *, source_time=None):
+    """Synthetic data using the real overview/detail quote consumer shape."""
+    quote = {'price': 1.1, 'source_time': (source_time or at).isoformat(),
+             'fetched_at': at.replace(tzinfo=None).isoformat(), 'source': 'sina:hq_sinajs:v1',
+             'is_realtime': True, 'timestamp_verified': True, 'is_mock': False, 'actionable': False}
+    row = {'ts_code': '510300.SH', 'grade': '观望', 'research_only': True, 'actionable': False,
+           'quote': {key: quote[key] for key in ('source', 'source_time', 'timestamp_verified', 'is_realtime', 'is_mock')}}
+    return {'overview': {'rows': [row]},
+            'details': {'510300.SH': {'instrument': {'ts_code': '510300.SH'}, 'decision': row,
+                        'quote': quote, 'read_as_of': at.isoformat(), 'indicator_values': {},
+                        'forecasts': {}, 'support_resistance': None, 'holding': None,
+                        'research_only': True, 'actionable': False}},
+            'charts': {}, 'sectors': {'sectors': []}}
+
+
 def test_upload_failure_replays_same_package_without_recompute(tmp_path):
     clock = [datetime(2026, 10, 16, 14, 55, tzinfo=TZ)]
     manifest = manifest_for(clock[0])
@@ -156,14 +171,31 @@ def test_skipped_optional_task_keeps_original_status_without_aborting_run(tmp_pa
     assert job['details']['source_task_status'] == 'skipped'
 
 
+def test_task_run_identity_change_is_not_recorded_as_success(tmp_path):
+    now = datetime(2026, 10, 16, 14, 55, tzinfo=TZ)
+    def run(mode, **hooks):
+        hooks['on_task']('refresh_decision_board', None, 'requested-run')
+        hooks['on_task']('refresh_decision_board', {'status': 'succeeded', 'run_id': 'different-queued-run',
+                                                  'coverage_complete': True}, 'requested-run')
+        return 0
+    assert dispatch_once(tmp_path, IDENTITY, calendar=Calendar(), run_job=run,
+                         replay=None, now=lambda: now) == 1
+    job = LocalJobLedger(tmp_path).summary()['jobs'][0]
+    assert job['status'] == 'failed'
+    assert job['details']['error_type'] == 'TaskRunIdentityMismatch'
+
+
 def test_pending_fast_packet_cannot_outlive_quote_freshness(tmp_path):
     from app.workspace.local_dispatch import load_pending_bundle
     from app.workspace.local_display_contract import compute_parts_hashes
     now = datetime(2026, 10, 16, 14, 30, tzinfo=TZ)
     manifest = {**manifest_for(now), 'actionable': False, 'data_origin': 'local_research'}
-    parts = {'overview': {'rows': []}, 'details': {}, 'charts': {}, 'sectors': {'sectors': []}}
+    parts = fast_parts(now)
     manifest['parts_hashes'] = compute_parts_hashes(parts)
-    ident = {**IDENTITY, 'scope_hash': digest(manifest['universe'])}
+    execution = {'execution_hash': 'd'*64, 'config_file_hash': 'e'*64}
+    manifest['execution_lineage'] = {'contract_version': 'local-execution-lineage-v1', 'mode': 'fast',
+                                   **execution, 'base_input_hash': 'f'*64, 'quote_batch_hash': 'a'*64}
+    ident = {**IDENTITY, 'scope_hash': digest(manifest['universe']), **execution}
     outbox = tmp_path / 'outbox'
     outbox.mkdir()
     (outbox / 'bundle_99.json').write_text(json.dumps({'manifest': manifest, 'parts': parts}))
@@ -173,3 +205,130 @@ def test_pending_fast_packet_cannot_outlive_quote_freshness(tmp_path):
         load_pending_bundle(tmp_path, attempt, ident, now=now + timedelta(minutes=9))
     with pytest.raises(ValueError):
         load_pending_bundle(tmp_path, {**attempt, 'bundle_file': '../elsewhere.json'}, ident, now=now)
+
+
+def test_replay_uses_source_quote_age_instead_of_new_board_timestamp(tmp_path):
+    from app.workspace.local_dispatch import load_pending_bundle
+    from app.workspace.local_display_contract import compute_parts_hashes, verify_bundle_integrity
+    generated = datetime(2026, 10, 16, 14, 30, tzinfo=TZ)
+    parts = fast_parts(generated, source_time=generated-timedelta(minutes=7))
+    execution = {'execution_hash': 'd'*64, 'config_file_hash': 'e'*64}
+    manifest = {**manifest_for(generated), 'actionable': False, 'data_origin': 'local_research',
+                'parts_hashes': compute_parts_hashes(parts), 'execution_lineage': {
+                    'contract_version': 'local-execution-lineage-v1', 'mode': 'fast', **execution,
+                    'base_input_hash': 'f'*64, 'quote_batch_hash': 'a'*64}}
+    bundle = {'manifest': manifest, 'parts': parts}
+    now = generated+timedelta(minutes=2)
+    assert verify_bundle_integrity(bundle, now=now)
+    outbox = tmp_path/'outbox'; outbox.mkdir()
+    (outbox/'bundle_99.json').write_text(json.dumps(bundle))
+    attempt = {'bundle_file': 'bundle_99.json', 'bundle_id': digest(manifest), 'slot_id': '2026-10-16 14:30'}
+    identity = {**IDENTITY, **execution, 'scope_hash': digest(manifest['universe'])}
+    assert load_pending_bundle(tmp_path, attempt, identity, now=generated+timedelta(minutes=1))
+    with pytest.raises(ValueError, match='fast observation'):
+        load_pending_bundle(tmp_path, attempt, identity, now=now)
+
+
+@pytest.mark.parametrize('case', ['future_source', 'future_fetch', 'stale_fetch', 'previous_session',
+    'missing_source_time', 'missing_fetch', 'nonrealtime', 'unverified', 'mock', 'mock_source',
+    'zero_price', 'bool_price', 'overview_time', 'overview_mock_type', 'missing_scope', 'duplicate_scope'])
+def test_fast_replay_revalidates_every_real_quote_contract_field(tmp_path, case):
+    from app.workspace.local_dispatch import load_pending_bundle
+    from app.workspace.local_display_contract import compute_parts_hashes
+    at = datetime(2026, 10, 16, 14, 30, tzinfo=TZ)
+    parts = fast_parts(at)
+    quote = parts['details']['510300.SH']['quote']
+    summary = parts['overview']['rows'][0]['quote']
+    if case == 'future_source': quote['source_time'] = (at+timedelta(minutes=1)).isoformat()
+    if case == 'future_fetch': quote['fetched_at'] = (at+timedelta(minutes=1)).isoformat()
+    if case == 'stale_fetch': quote['fetched_at'] = (at-timedelta(minutes=9)).isoformat()
+    if case == 'previous_session': quote['source_time'] = (at-timedelta(days=1)).isoformat()
+    if case == 'missing_source_time': quote.pop('source_time')
+    if case == 'missing_fetch': quote.pop('fetched_at')
+    if case == 'nonrealtime': quote['is_realtime'] = False
+    if case == 'unverified': quote['timestamp_verified'] = False
+    if case == 'mock': quote['is_mock'] = True
+    if case == 'mock_source': quote['source'] = 'mock-provider'
+    if case == 'zero_price': quote['price'] = 0
+    if case == 'bool_price': quote['price'] = True
+    if case == 'overview_time': summary['source_time'] = (at-timedelta(seconds=1)).isoformat()
+    if case == 'overview_mock_type': summary['is_mock'] = 0
+    if case == 'missing_scope': parts['details'].clear()
+    if case == 'duplicate_scope': parts['overview']['rows'].append(dict(parts['overview']['rows'][0]))
+    execution = {'execution_hash': 'd'*64, 'config_file_hash': 'e'*64}
+    manifest = {**manifest_for(at), 'actionable': False, 'data_origin': 'local_research',
+                'parts_hashes': compute_parts_hashes(parts), 'execution_lineage': {
+                    'contract_version': 'local-execution-lineage-v1', 'mode': 'fast', **execution,
+                    'base_input_hash': 'f'*64, 'quote_batch_hash': 'a'*64}}
+    outbox = tmp_path/'outbox'; outbox.mkdir()
+    (outbox/'bundle_99.json').write_text(json.dumps({'manifest': manifest, 'parts': parts}))
+    attempt = {'bundle_file': 'bundle_99.json', 'bundle_id': digest(manifest), 'slot_id': '2026-10-16 14:30'}
+    with pytest.raises(ValueError):
+        load_pending_bundle(tmp_path, attempt, {**IDENTITY, **execution,
+                            'scope_hash': digest(manifest['universe'])}, now=at)
+
+
+def test_full_closed_research_replay_does_not_gain_or_require_fast_flags(tmp_path):
+    from app.workspace.local_dispatch import load_pending_bundle
+    from app.workspace.local_display_contract import compute_parts_hashes
+    at = datetime(2026, 10, 16, 16, 10, tzinfo=TZ)
+    parts = fast_parts(at, source_time=at.replace(hour=15, minute=0))
+    parts['details']['510300.SH']['quote'].update(is_realtime=False, timestamp_verified=False)
+    parts['overview']['rows'][0]['quote'].update(is_realtime=False, timestamp_verified=False)
+    execution = {'execution_hash': 'd'*64, 'config_file_hash': 'e'*64}
+    manifest = {**manifest_for(at), 'actionable': False, 'data_origin': 'local_research',
+                'source_qualification': 'UNKNOWN', 'parts_hashes': compute_parts_hashes(parts),
+                'execution_lineage': {'contract_version': 'local-execution-lineage-v1', 'mode': 'full', **execution,
+                                     'base_input_hash': 'f'*64, 'quote_batch_hash': 'a'*64}}
+    outbox = tmp_path/'outbox'; outbox.mkdir()
+    (outbox/'bundle_99.json').write_text(json.dumps({'manifest': manifest, 'parts': parts}))
+    attempt = {'bundle_file': 'bundle_99.json', 'bundle_id': digest(manifest), 'slot_id': '2026-10-16 16:10'}
+    restored = load_pending_bundle(tmp_path, attempt, {**IDENTITY, **execution,
+                                  'scope_hash': digest(manifest['universe'])}, now=at+timedelta(minutes=2))
+    assert restored['parts']['details']['510300.SH']['quote']['is_realtime'] is False
+    assert restored['manifest']['source_qualification'] == 'UNKNOWN'
+
+
+@pytest.mark.parametrize('write_completed', [True, False])
+@pytest.mark.parametrize('exception_type', [SystemExit, RuntimeError])
+def test_crash_between_packet_write_and_export_confirmation_recovers_or_quarantines(tmp_path, write_completed, exception_type):
+    from app.workspace.local_dispatch import load_pending_bundle
+    from app.workspace.local_display_contract import compute_parts_hashes
+    clock = [datetime(2026, 10, 16, 14, 55, tzinfo=TZ)]
+    manifest = {**manifest_for(clock[0]), 'actionable': False, 'data_origin': 'local_research'}
+    parts = fast_parts(clock[0])
+    execution = {'execution_hash': 'd'*64, 'config_file_hash': 'e'*64}
+    manifest.update(parts_hashes=compute_parts_hashes(parts), execution_lineage={
+        'contract_version': 'local-execution-lineage-v1', 'mode': 'fast', **execution,
+        'base_input_hash': 'f'*64, 'quote_batch_hash': 'a'*64})
+    ident = {**IDENTITY, 'scope_hash': digest(manifest['universe'])}
+    bundle = {'manifest': manifest, 'parts': parts}
+    def crash(mode, **hooks):
+        path = tmp_path / 'outbox' / 'bundle_99.json'
+        hooks['on_export_intent'](bundle, path)
+        if write_completed:
+            path.parent.mkdir()
+            path.write_text(json.dumps(bundle))
+        raise exception_type('process failed before export confirmation')
+    if exception_type is SystemExit:
+        with pytest.raises(SystemExit):
+            dispatch_once(tmp_path, ident, calendar=Calendar(), run_job=crash, replay=None, now=lambda: clock[0])
+    else:
+        assert dispatch_once(tmp_path, ident, calendar=Calendar(), run_job=crash, replay=None, now=lambda: clock[0]) == 1
+    assert LocalJobLedger(tmp_path).summary()['attempts'][0]['status'] == 'EXPORTING'
+    clock[0] += timedelta(seconds=61)
+    def recover(*, attempt):
+        return load_pending_bundle(tmp_path, attempt, {**ident, **execution}, now=clock[0])
+    deliveries = []
+    def replay(*, attempt, on_receipt):
+        deliveries.append(attempt['sequence'])
+        on_receipt(manifest, receipt_for(manifest))
+    def forbidden(*a, **k):
+        raise AssertionError('an immutable pending package must not be recomputed')
+    result = dispatch_once(tmp_path, ident, calendar=Calendar(), run_job=forbidden, replay=replay,
+                           recover_export=recover, now=lambda: clock[0])
+    state = LocalJobLedger(tmp_path).summary()
+    assert len(state['attempts']) == 1
+    assert state['attempts'][0]['status'] == ('DELIVERED' if write_completed else 'QUARANTINED')
+    assert deliveries == ([99] if write_completed else [])
+    assert result == (0 if write_completed else 1)

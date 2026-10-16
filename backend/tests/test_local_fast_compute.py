@@ -16,6 +16,25 @@ SHA = "a" * 40
 DAY = date(2026, 10, 15)
 
 
+def test_config_parser_uses_the_exact_already_read_bytes(tmp_path, monkeypatch):
+    path = tmp_path / "live.json"
+    path.write_text('{"universe":["510000.SH"]}', encoding="utf-8")
+    captured = b'{"universe":["510001.SH"],"provider":"public_composite"}'
+    monkeypatch.setattr(type(path), "read_bytes", lambda self: pytest.fail("config was read twice"))
+    assert local.load_local_config(tmp_path, path, content=captured)["universe"] == ["510001.SH"]
+
+
+@pytest.mark.parametrize("content", [
+    b'{"universe":["510000.SH"],"provider_admission":{"status":"VERIFIED","status":"REVOKED"}}',
+    b'{"universe":["510000.SH"],"number":NaN}',
+])
+def test_config_rejects_ambiguous_keys_and_nonfinite_json(tmp_path, content):
+    path = tmp_path / "live.json"
+    path.write_bytes(content)
+    with pytest.raises(ValueError, match="config JSON"):
+        local.load_local_config(tmp_path, path, content=content)
+
+
 @pytest.fixture
 def baseline(tmp_path, monkeypatch):
     path = tmp_path / "research.sqlite3"
@@ -84,6 +103,54 @@ def test_base_creation_rejects_history_changed_since_actual_calculation(baseline
         db.scalar(select(DailyBar).where(DailyBar.instrument_id == 3)).amount = 11
     with pytest.raises(ValueError, match="base snapshot"):
         local.create_base_manifest(settings, codes, code_sha=SHA, now=now)
+
+
+def test_managed_base_binds_execution_identity_and_rejects_old_or_changed_scope(baseline):
+    settings, codes, now, _ = baseline
+    legacy = local.create_base_manifest(settings, codes, code_sha=SHA, now=now)
+    first = stable_hash({"config_file_hash": "b"*64, "provider": "public_composite", "profile": "live"})
+    base = local.create_base_manifest(settings, codes, code_sha=SHA, now=now, execution_hash=first)
+    assert base["execution_hash"] == first
+    local.validate_base_manifest(settings, codes, base, code_sha=SHA, now=now, execution_hash=first)
+    for old, changed in ((legacy, first), (base, "f"*64), (base, "not-a-hash")):
+        with pytest.raises(ValueError, match="base|execution"):
+            local.validate_base_manifest(settings, codes, old, code_sha=SHA, now=now, execution_hash=changed)
+
+
+@pytest.mark.parametrize("field,value", [("config_file_hash", "f"*64), ("profile", "mock"),
+                                         ("provider", "akshare"), ("private_research", False),
+                                         ("closed_session_research", True)])
+def test_execution_scope_changes_cannot_reuse_mathematically_equal_base(baseline, field, value):
+    settings, codes, now, _ = baseline
+    execution = {"config_file_hash": "a"*64, "profile": "live", "provider": "public_composite",
+                 "private_research": True, "closed_session_research": False}
+    base = local.create_base_manifest(settings, codes, code_sha=SHA, now=now, execution_hash=stable_hash(execution))
+    with pytest.raises(ValueError, match="base input"):
+        local.validate_base_manifest(settings, codes, base, code_sha=SHA, now=now,
+                                     execution_hash=stable_hash({**execution, field: value}))
+
+
+def test_fast_lineage_uses_verified_base_and_actual_quote_batch(baseline, monkeypatch):
+    import copy
+    settings, codes, now, _ = baseline
+    execution_hash, config_file_hash = "b"*64, "c"*64
+    base = local.create_base_manifest(settings, codes, code_sha=SHA, now=now, execution_hash=execution_hash)
+    fake_fast_tasks(monkeypatch, now)
+    results = local.compute_local_fast(settings, codes, base_manifest=base, code_sha=SHA,
+        private_research=True, now=now, execution_hash=execution_hash)
+    lineage = local.build_execution_lineage(settings, codes, results, base_manifest=base,
+        execution_hash=execution_hash, config_file_hash=config_file_hash, mode="fast", now=now)
+    assert lineage == {"contract_version": "local-execution-lineage-v1", "mode": "fast",
+                       "execution_hash": execution_hash, "config_file_hash": config_file_hash,
+                       "base_input_hash": base["input_hash"], "quote_batch_hash": results[-1]["fast_input"]["input_hash"]}
+    tampered = copy.deepcopy(results)
+    tampered[-1]["fast_input"]["input_hash"] = "0"*64
+    with pytest.raises(ValueError, match="quote content"):
+        local.build_execution_lineage(settings, codes, tampered, base_manifest=base,
+            execution_hash=execution_hash, config_file_hash=config_file_hash, mode="fast", now=now)
+    with pytest.raises(ValueError, match="base input"):
+        local.compute_local_fast(settings, codes, base_manifest=base, code_sha=SHA,
+            private_research=True, now=now, execution_hash="d"*64)
 
 
 @pytest.mark.parametrize("case", ["scope", "code", "session", "snapshot", "new_failure", "forged_hash",
@@ -294,13 +361,22 @@ def test_actual_export_and_reader_keep_quote_grade_hashes_but_no_skipped_sector(
         kwargs.setdefault("at", now)
         return actual_read(self, db, **kwargs)
     monkeypatch.setattr(DecisionBoardService, "read_latest", reference_read)
+    execution_hash = "b"*64
+    base = local.create_base_manifest(settings, codes, code_sha=SHA, now=now, execution_hash=execution_hash)
+    results = [{"task_name": task, "status": "succeeded"} for task in (
+        "refresh_bars", "refresh_quotes", "refresh_indicators", "refresh_forecasts", "refresh_signals", "refresh_decision_board")]
+    lineage = local.build_execution_lineage(settings, codes, results, base_manifest=base, execution_hash=execution_hash,
+                                           config_file_hash="c"*64, mode="full", now=now)
     bundle = local.export_local_v2(settings, sequence=20, code_sha=SHA, universe=codes, now=now,
-        private_research=True, unavailable_parts=["sectors", "market_context"])
+        private_research=True, unavailable_parts=["sectors", "market_context"], execution_lineage=lineage)
+    assert bundle["manifest"]["execution_lineage"] == lineage
     assert verify_bundle_integrity(bundle, now=now)
     assert bundle["manifest"]["parts_hashes"] == {key: digest(value) for key, value in bundle["parts"].items()}
     store = LocalDisplayStore(tmp_path / "receiver")
     store.publish(bundle, now=now)
     reader = LocalDisplayReader(store, code_sha=SHA, config_hash=bundle["manifest"]["config_hash"])
+    assert reader.load_bundle(20)["manifest"]["execution_lineage"] == lineage
+    assert digest(bundle["manifest"]) != digest({**bundle["manifest"], "execution_lineage": {**lineage, "config_file_hash": "d"*64}})
     overview = reader.read_overview(generation=20)
     source_rows = {row["ts_code"]: row for row in source["rows"]}
     for row in overview["rows"]:
@@ -317,3 +393,28 @@ def test_actual_export_and_reader_keep_quote_grade_hashes_but_no_skipped_sector(
     with Session(engine) as db:
         persisted = db.scalar(select(DecisionBoardSnapshot).where(DecisionBoardSnapshot.snapshot_id == snapshot_id))
         assert persisted.payload_json == source
+    with pytest.raises(ValueError, match="quote batch"):
+        local.export_local_v2(settings, sequence=21, code_sha=SHA, universe=codes, now=now,
+            private_research=True, execution_lineage={**lineage, "quote_batch_hash": "0"*64})
+    with pytest.raises(ValueError, match="base input"):
+        local.export_local_v2(settings, sequence=21, code_sha=SHA, universe=codes, now=now,
+            private_research=True, execution_lineage={**lineage, "base_input_hash": "0"*64})
+    with Session(engine) as db, db.begin():
+        for quote in db.scalars(select(QuoteSnapshot)):
+            quote.is_realtime = False
+    nonrealtime_lineage = local.build_execution_lineage(settings, codes, results, base_manifest=base,
+        execution_hash=execution_hash, config_file_hash="c"*64, mode="full", now=now)
+    # Hashing an existing closed observation is not qualification or permission
+    # to omit the separately validated in-process closed-session proof.
+    with pytest.raises(ValueError, match="validated closed-session"):
+        local.export_local_v2(settings, sequence=21, code_sha=SHA, universe=codes, now=now,
+            private_research=True, execution_lineage=nonrealtime_lineage)
+
+
+@pytest.mark.parametrize("change", [{"mode": "inferred"}, {"config_file_hash": "bad"},
+                                  {"config_file_hash": True}, {"raw_config": {"private": "excluded"}}])
+def test_execution_lineage_rejects_unrecognized_or_private_payloads(change):
+    lineage = {"contract_version": "local-execution-lineage-v1", "mode": "full",
+               **{key: "a"*64 for key in ("execution_hash", "config_file_hash", "base_input_hash", "quote_batch_hash")}}
+    with pytest.raises(ValueError, match="lineage|hash"):
+        local._validate_execution_lineage({**lineage, **change})

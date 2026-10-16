@@ -14,13 +14,13 @@ from uuid import uuid4
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 
-from app.core.config import Settings, get_settings
-from app.models import Instrument, MarketContextSnapshot, QuoteSnapshot, SectorSnapshot, TaskRun
+from app.core.config import Settings
+from app.models import Instrument, QuoteSnapshot, SectorSnapshot, TaskRun
 from app.services.decision_board_service import DecisionBoardService
 from app.utils.hashing import stable_hash
 from app.workspace.candle_periods import transform_chart
 from app.workspace.read_model import chart_data, instrument_detail, latest_rows, market_time, overview, quote_view
-from app.workspace.shadow_bundle import canonical, digest, make_bundle, timestamp
+from app.workspace.shadow_bundle import canonical, digest, timestamp
 from app.workspace.shadow_projection import levels, project_chart, studies
 
 CONTRACT_VERSION = "local-display-v2"
@@ -373,12 +373,24 @@ def local_settings(
     )
 
 
-def load_local_config(root: Path, config: Path | None = None) -> dict:
+def load_local_config(root: Path, config: Path | None = None, *, content: bytes | None = None) -> dict:
     path = config or root / "config" / "live.json"
     if not path.is_file() or path.is_symlink():
         raise ValueError("local config file required")
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("duplicate config field")
+            result[key] = value
+        return result
+    def reject_constant(_value):
+        raise ValueError("nonfinite config number")
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        raw = path.read_bytes() if content is None else content
+        if not isinstance(raw, bytes):
+            raise ValueError("config bytes required")
+        value = json.loads(raw, object_pairs_hook=unique_object, parse_constant=reject_constant)
     except (ValueError, OSError):
         raise ValueError("invalid local config JSON") from None
     universe = value.get("universe") if isinstance(value, dict) else None
@@ -545,6 +557,8 @@ def compute_local(settings: Settings, universe: list[str] | None = None, *, admi
                 on_task(task, None, run_id)
             try:
                 with Session(engine) as db, db.begin():
+                    if engine.dialect.name == 'sqlite':
+                        db.connection().exec_driver_sql('BEGIN')
                     kwargs: dict[str, Any] = {}
                     if task == "refresh_bars":
                         kwargs["lookback_days"] = 420
@@ -700,36 +714,59 @@ def _base_state(settings, universe, code_sha, now):
         engine.dispose()
 
 
-def create_base_manifest(settings, universe, *, code_sha, now=None):
+def _require_hash(value, name):
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+        raise ValueError(f"invalid {name} hash")
+    return value
+
+
+def create_base_manifest(settings, universe, *, code_sha, now=None, execution_hash=None):
     """Create a local-only receipt after successful settled base computation."""
-    return _base_state(settings, universe, code_sha, now or datetime.now(settings.timezone))
+    if execution_hash is not None:
+        _require_hash(execution_hash, "execution")
+    value = _base_state(settings, universe, code_sha, now or datetime.now(settings.timezone))
+    if execution_hash is not None:
+        value["execution_hash"] = execution_hash
+    return value
 
 
-def validate_base_manifest(settings, universe, base, *, code_sha, now=None):
+def validate_base_manifest(settings, universe, base, *, code_sha, now=None, execution_hash=None):
     if not isinstance(base, dict) or base.get("contract_version") != SETTLED_BASE_VERSION:
         raise ValueError("base manifest missing")
-    current = create_base_manifest(settings, universe, code_sha=code_sha, now=now)
+    current = create_base_manifest(settings, universe, code_sha=code_sha, now=now, execution_hash=execution_hash)
     if current != base:
         raise ValueError("base input identity changed")
     return base
 
 
-def _fast_quotes(db, settings, universe, at, *, quote_ids=None, input_hash=None):
-    from app.services.snapshot_contract import _normalize_time, quote_issues
-    from app.services.qualification_gate import quote_reasons
+def _selected_quotes(db, universe):
     instruments = db.scalars(select(Instrument).where(Instrument.ts_code.in_(universe))).all()
     quotes = latest_rows(db, QuoteSnapshot, [i.id for i in instruments], QuoteSnapshot.quote_time.desc())
-    if (len(quotes) != len(universe)
-            or any(quote_issues(q, settings, at=at) or quote_reasons(settings, q, at, 8) for q in quotes.values())
-            or (quote_ids is not None and {q.id for q in quotes.values()} != set(quote_ids))):
-        raise ValueError("fast quotes incomplete changed or stale")
+    if len(quotes) != len(universe):
+        raise ValueError("quote batch coverage incomplete")
+    return quotes
+
+
+def _quote_batch_hash(quotes, settings):
+    from app.services.snapshot_contract import _normalize_time
     identities = []
     for quote in sorted(quotes.values(), key=lambda q: q.instrument_id):
         row = {c.name: getattr(quote, c.name) for c in QuoteSnapshot.__table__.columns}
         row.update(quote_time=_normalize_time(quote.quote_time, settings),
                    fetched_at=_normalize_time(quote.fetched_at, settings))
         identities.append(row)
-    actual = stable_hash(identities)
+    return stable_hash(identities)
+
+
+def _fast_quotes(db, settings, universe, at, *, quote_ids=None, input_hash=None):
+    from app.services.snapshot_contract import quote_issues
+    from app.services.qualification_gate import quote_reasons
+    quotes = _selected_quotes(db, universe)
+    if (len(quotes) != len(universe)
+            or any(quote_issues(q, settings, at=at) or quote_reasons(settings, q, at, 8) for q in quotes.values())
+            or (quote_ids is not None and {q.id for q in quotes.values()} != set(quote_ids))):
+        raise ValueError("fast quotes incomplete changed or stale")
+    actual = _quote_batch_hash(quotes, settings)
     if input_hash is not None and actual != input_hash:
         raise ValueError("fast captured quote content changed")
     return quotes, actual
@@ -750,13 +787,13 @@ def validate_fast_result(settings, universe, results, *, now=None):
 
 
 def compute_local_fast(settings, universe, *, base_manifest, code_sha, admission=None,
-                       private_research=False, now=None, on_task=None):
+                       private_research=False, now=None, on_task=None, execution_hash=None):
     """Refresh current observations without fetching history or retraining forecasts."""
     from app.models import DecisionBoardProvisionalInput
     from app.services.execution_policy import TaskExecutionPolicy
     from app.services.task_service import TaskService
     initial = now or datetime.now(settings.timezone)
-    validate_base_manifest(settings, universe, base_manifest, code_sha=code_sha, now=initial)
+    validate_base_manifest(settings, universe, base_manifest, code_sha=code_sha, now=initial, execution_hash=execution_hash)
     if not validate_provider_admission(settings.market_provider, evidence=admission, purpose="compute",
                                        private_research=private_research)["operation_permitted"]:
         raise ValueError("fast provider admission blocked")
@@ -777,8 +814,10 @@ def compute_local_fast(settings, universe, *, base_manifest, code_sha, admission
             if on_task is not None:
                 on_task(task, None, run_id)
             try:
-                validate_base_manifest(settings, universe, base_manifest, code_sha=code_sha, now=reference())
+                validate_base_manifest(settings, universe, base_manifest, code_sha=code_sha, now=reference(), execution_hash=execution_hash)
                 with Session(engine) as db, db.begin():
+                    if engine.dialect.name == 'sqlite':
+                        db.connection().exec_driver_sql('BEGIN')
                     before_quote_id = db.scalar(select(func.max(QuoteSnapshot.id))) or 0
                     if quote_ids is not None:
                         check_quotes(db, reference())
@@ -816,7 +855,7 @@ def compute_local_fast(settings, universe, *, base_manifest, code_sha, admission
                 on_task(task, result, run_id)
             if result.get("status") != "succeeded":
                 break
-        validate_base_manifest(settings, universe, base_manifest, code_sha=code_sha, now=reference())
+        validate_base_manifest(settings, universe, base_manifest, code_sha=code_sha, now=reference(), execution_hash=execution_hash)
         if len(results) == 3 and all(row.get("status") == "succeeded" for row in results):
             results[-1]["fast_input"] = {"target_codes": sorted(universe), "quote_ids": sorted(quote_ids),
                                           "input_hash": quote_hash, "actionable": False}
@@ -825,6 +864,55 @@ def compute_local_fast(settings, universe, *, base_manifest, code_sha, admission
     finally:
         service.close()
         engine.dispose()
+
+
+EXECUTION_LINEAGE_VERSION = "local-execution-lineage-v1"
+_LINEAGE_HASHES = ("execution_hash", "config_file_hash", "base_input_hash", "quote_batch_hash")
+
+
+def _validate_execution_lineage(value):
+    if (not isinstance(value, dict)
+            or set(value) != {"contract_version", "mode", *_LINEAGE_HASHES}
+            or value.get("contract_version") != EXECUTION_LINEAGE_VERSION
+            or value.get("mode") not in {"full", "fast"}):
+        raise ValueError("invalid execution lineage contract")
+    for key in _LINEAGE_HASHES:
+        _require_hash(value[key], key)
+    return dict(value)
+
+
+def build_execution_lineage(settings, universe, results, *, base_manifest, execution_hash,
+                            config_file_hash, mode, now=None):
+    """Bind local execution inputs without publishing configuration or paths."""
+    _require_hash(execution_hash, "execution")
+    _require_hash(config_file_hash, "config_file")
+    if mode not in {"full", "fast"} or not isinstance(base_manifest, dict) or not isinstance(results, list):
+        raise ValueError("execution lineage requires full or fast base")
+    validate_base_manifest(settings, universe, base_manifest, code_sha=base_manifest.get("code_sha"),
+                           execution_hash=execution_hash, now=now)
+    _require_hash(base_manifest.get("input_hash"), "base_input")
+    required = {"refresh_quotes", "refresh_signals", "refresh_decision_board"}
+    if mode == "full":
+        required |= {"refresh_bars", "refresh_indicators", "refresh_forecasts"}
+    selected = [item for item in results if isinstance(item, dict) and item.get("task_name") in required]
+    if (len(selected) != len(required) or {item["task_name"] for item in selected} != required
+            or any(item.get("status") != "succeeded" and not (
+                mode == "full" and item["task_name"] == "refresh_quotes" and closed_session_result_accepted(item))
+                   for item in selected)):
+        raise ValueError("execution lineage requires successful current stages")
+    if mode == "fast":
+        validate_fast_result(settings, universe, results, now=now)
+        quote_hash = results[-1]["fast_input"]["input_hash"]
+    else:
+        engine = create_engine(settings.database_url)
+        try:
+            with Session(engine) as db:
+                quote_hash = _quote_batch_hash(_selected_quotes(db, universe), settings)
+        finally:
+            engine.dispose()
+    return _validate_execution_lineage({"contract_version": EXECUTION_LINEAGE_VERSION, "mode": mode,
+        "execution_hash": execution_hash, "config_file_hash": config_file_hash,
+        "base_input_hash": base_manifest["input_hash"], "quote_batch_hash": quote_hash})
 
 
 from contextlib import contextmanager
@@ -853,6 +941,8 @@ def compute_board_only(settings: Settings, universe: list[str] | None = None) ->
     service = TaskService(settings)
     try:
         with Session(engine) as db, db.begin():
+            if engine.dialect.name == 'sqlite':
+                db.connection().exec_driver_sql('BEGIN')
             kwargs: dict[str, Any] = {"codes": universe} if universe else {}
             result = service.run(db, "refresh_decision_board", **kwargs)
             return [{**result, "task_name": "refresh_decision_board"}]
@@ -872,8 +962,15 @@ def export_local_v2(
     private_research: bool = False,
     unavailable_parts: list[str] | None = None,
     closed_session_result: dict | None = None,
+    execution_lineage: dict | None = None,
 ) -> dict[str, Any]:
     now = now or datetime.now(timezone.utc)
+    lineage = _validate_execution_lineage(execution_lineage) if execution_lineage is not None else None
+    if lineage is not None:
+        base = create_base_manifest(settings, universe, code_sha=code_sha,
+                                    execution_hash=lineage["execution_hash"], now=now)
+        if base["input_hash"] != lineage["base_input_hash"]:
+            raise ValueError("execution lineage base input changed")
     if closed_session_result is not None and (not private_research or not closed_session_result_accepted(closed_session_result)):
         raise ValueError("validated in-process closed-session evidence required")
     if settings.market_provider != "mock" and not validate_provider_admission(
@@ -886,6 +983,15 @@ def export_local_v2(
             db.connection().exec_driver_sql("BEGIN")
             captured_quotes = (_revalidate_closed_session_capture(db, settings, closed_session_result, universe, now)
                                if closed_session_result is not None else None)
+            if lineage is not None:
+                selected_quotes = _selected_quotes(db, universe)
+                if _quote_batch_hash(selected_quotes, settings) != lineage["quote_batch_hash"]:
+                    raise ValueError("execution lineage quote batch changed")
+                if lineage["mode"] == "fast":
+                    _fast_quotes(db, settings, universe, now, input_hash=lineage["quote_batch_hash"])
+                elif captured_quotes is None and any(
+                        not q.is_realtime or not q.timestamp_verified or q.degraded_reason for q in selected_quotes.values()):
+                    raise ValueError("execution lineage requires validated closed-session evidence")
             original = DecisionBoardService(settings).read_latest(db) or {}
             generated = timestamp(original.get("generated_at")) or now
             if captured_quotes is not None:
@@ -1081,6 +1187,8 @@ def export_local_v2(
             }
             if closed_session_result is not None:
                 manifest["input_observation"] = dict(closed_session_result["closed_session_research"])
+            if lineage is not None:
+                manifest["execution_lineage"] = lineage
 
             if private_research:
                 def unqualified_copy(value):

@@ -14,9 +14,11 @@ from zoneinfo import ZoneInfo
 
 from app.services.trading_calendar_service import TradingCalendarService
 from app.workspace.local_atomic import write_json_atomic
+from app.workspace.shadow_bundle import digest
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
-REPORT_VERSION = "local-stability-v1"
+REPORT_VERSION = "local-stability-v2"
+EXECUTION_LINEAGE_VERSION = "local-execution-lineage-v1"
 RESEARCH_TABLES = (
     "daily_bars", "quote_snapshots", "indicator_snapshots", "forecast_snapshots",
     "sector_snapshots", "support_resistance_snapshots", "market_context_snapshots",
@@ -27,6 +29,15 @@ RESEARCH_TABLES = (
 METRICS = ("exact_count", "n_tup_ins", "n_tup_upd", "n_tup_del", "heap_bytes", "total_bytes")
 SLOTS = ("13:55", "14:20", "14:30", "14:45", "14:50", "14:55", "15:00", "15:15", "16:10")
 DEFAULT_DEADLINES = {slot: 600 if slot in {"13:55", "15:15", "16:10"} else 120 for slot in SLOTS}
+FULL_SLOTS = {"13:55", "15:15", "16:10"}
+FAST_STAGES = {"refresh_quotes", "refresh_signals", "refresh_decision_board"}
+FULL_STAGES = FAST_STAGES | {"refresh_bars", "refresh_indicators", "refresh_forecasts"}
+OPTIONAL_STAGES = {"refresh_market_context", "refresh_sector_snapshots"}
+EXECUTION_HASH_FIELDS = {"execution_hash", "config_file_hash", "base_input_hash", "quote_batch_hash"}
+
+
+def _sha256(value) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
 
 
 def _time(value: Any) -> datetime:
@@ -126,12 +137,63 @@ def _runtime(before: dict, after: dict, source_sha: str, image_id: str) -> dict:
     return {"state": "PASS", "scope": "two_endpoint_runtime_observations_not_continuous_uptime"}
 
 
+def _execution_contract(slot: str, attempt: dict, jobs: list[dict]) -> dict:
+    """Require actual stages, not merely all stages that happened to be listed."""
+    job_names = [job.get("job_name") for job in jobs]
+    if any(not isinstance(name, str) for name in job_names) or len(set(job_names)) != len(job_names):
+        return {"state": "FAIL", "reason": "duplicate_or_invalid_job_name"}
+    contexts = [job for job in jobs if job.get("job_name") == "execution_contract"]
+    manifest = attempt.get("manifest")
+    if len(contexts) != 1 or not isinstance(manifest, dict):
+        return {"state": "UNKNOWN", "reason": "execution_context_or_manifest_missing"}
+    context = contexts[0]
+    details = context.get("details")
+    lineage = manifest.get("execution_lineage")
+    if (context.get("required") is not False or context.get("status") != "succeeded"
+            or not isinstance(details, dict) or not isinstance(lineage, dict)):
+        return {"state": "UNKNOWN", "reason": "execution_context_unverified"}
+    if (set(lineage) != EXECUTION_HASH_FIELDS | {"mode", "contract_version"}
+            or lineage.get("contract_version") != EXECUTION_LINEAGE_VERSION
+            or any(not _sha256(lineage.get(key)) for key in EXECUTION_HASH_FIELDS)):
+        return {"state": "UNKNOWN", "reason": "execution_lineage_incomplete"}
+    mode = lineage.get("mode")
+    if (mode not in {"full", "fast"} or details.get("execution_mode") != mode
+            or any(details.get(key) != lineage[key] for key in EXECUTION_HASH_FIELDS)
+            or (slot in FULL_SLOTS and mode != "full")):
+        return {"state": "FAIL", "reason": "execution_mode_or_hash_mismatch"}
+    expected = FULL_STAGES if mode == "full" else FAST_STAGES
+    stages = [job for job in jobs if job.get("job_name") in FULL_STAGES]
+    names = [job["job_name"] for job in stages]
+    if set(names) != expected or len(names) != len(expected) or any(job.get("required") is not True for job in stages):
+        return {"state": "FAIL", "reason": "required_stage_set_missing_or_duplicate"}
+    allowed = expected | {"execution_contract"} | (OPTIONAL_STAGES if mode == "full" else set())
+    uploads = [job for job in jobs if isinstance(job.get("job_name"), str)
+               and re.fullmatch(r"upload(?:_[1-9][0-9]*)?", job["job_name"])]
+    if any(job.get("job_name") not in allowed and job not in uploads for job in jobs):
+        return {"state": "FAIL", "reason": "unexpected_execution_stage"}
+    if any(job.get("required") is not False for job in jobs if job.get("job_name") in OPTIONAL_STAGES):
+        return {"state": "FAIL", "reason": "optional_stage_marked_required"}
+    run_ids = [job.get("run_id") for job in stages]
+    if any(not isinstance(value, str) or re.fullmatch(r"[A-Za-z0-9_-]{1,100}", value) is None for value in run_ids):
+        return {"state": "UNKNOWN", "reason": "stage_task_run_identity_missing"}
+    if len(set(run_ids)) != len(run_ids):
+        return {"state": "FAIL", "reason": "stage_task_run_identity_reused"}
+    if not any(job.get("status") == "succeeded" for job in uploads):
+        return {"state": "UNKNOWN", "reason": "successful_upload_job_missing"}
+    if any(job.get("status") == "running" for job in jobs):
+        return {"state": "UNKNOWN", "reason": "unfinished_job_after_delivery"}
+    return {"state": "PASS", "mode": mode, "required_stages": sorted(expected), "run_ids": run_ids}
+
+
 def _delivery(session: date, ledger: dict, source_sha: str, config_hash: str,
               scope_hash: str | None, deadlines: dict[str, int]) -> dict:
+    if ledger.get("ledger_version") != "local-job-ledger-v1.1" or not _sha256(scope_hash):
+        return {"state": "UNKNOWN", "reason": "versioned_ledger_and_expected_scope_required", "slots": []}
     slots = ledger.get("slots", [])
     attempts = ledger.get("attempts", [])
     jobs = ledger.get("jobs", [])
     observations = []
+    seen_runs, seen_bundles, previous_sequence = set(), set(), 0
     for slot in SLOTS:
         slot_id = f"{session.isoformat()} {slot}"
         matches = [item for item in slots if item.get("slot_id") == slot_id]
@@ -153,23 +215,45 @@ def _delivery(session: date, ledger: dict, source_sha: str, config_hash: str,
         required = [job for job in attempt_jobs if job.get("required") is True
                     and not (job.get("job_name") == "upload" or str(job.get("job_name", "")).startswith("upload_"))]
         try:
+            execution = _execution_contract(slot, candidate, attempt_jobs)
+            result["execution"] = execution
+            if execution["state"] != "PASS":
+                result.update(state=execution["state"], reason=execution["reason"])
+                observations.append(result)
+                continue
+            manifest = candidate["manifest"]
             accepted_at = _time(receipt.get("received_at"))
             finished_at = _time(candidate.get("finished_at"))
             planned_at = datetime.combine(session, time.fromisoformat(slot), SHANGHAI)
             latency = (max(accepted_at, finished_at) - planned_at).total_seconds()
             receipt_ok = (receipt.get("status") in {"accepted", "already_accepted"}
-                          and isinstance(candidate.get("bundle_id"), str) and len(candidate["bundle_id"]) == 64
+                          and _sha256(candidate.get("bundle_id"))
+                          and digest(manifest) == candidate["bundle_id"]
                           and receipt.get("bundle_id") == candidate["bundle_id"]
                           and receipt.get("manifest_hash") == candidate["bundle_id"]
                           and type(candidate.get("sequence")) is int and candidate["sequence"] > 0
-                          and type(receipt.get("sequence")) is int and receipt["sequence"] == candidate["sequence"])
+                          and type(receipt.get("sequence")) is int and receipt["sequence"] == candidate["sequence"]
+                          and type(manifest.get("sequence")) is int and manifest["sequence"] == candidate["sequence"])
             identities_ok = (candidate.get("code_sha") == source_sha and candidate.get("config_hash") == config_hash
-                             and isinstance(candidate.get("scope_hash"), str) and len(candidate["scope_hash"]) == 64
-                             and (scope_hash is None or candidate["scope_hash"] == scope_hash))
+                             and candidate.get("scope_hash") == scope_hash
+                             and manifest.get("contract_version") == "local-display-v2"
+                             and manifest.get("code_sha") == source_sha and manifest.get("config_hash") == config_hash)
+            universe = manifest.get("universe")
+            identities_ok = identities_ok and (isinstance(universe, list) and bool(universe)
+                and all(isinstance(code, str) for code in universe) and len(set(universe)) == len(universe)
+                and digest(sorted(universe)) == scope_hash)
+            monotonic = (candidate["sequence"] > previous_sequence and candidate["bundle_id"] not in seen_bundles
+                         and not (set(execution["run_ids"]) & seen_runs))
+            previous_sequence = candidate["sequence"]
+            seen_bundles.add(candidate["bundle_id"])
+            seen_runs.update(execution["run_ids"])
+            input_window = planned_at <= _time(manifest.get("generated_at")) <= finished_at
+            input_window = input_window and accepted_at < _time(manifest.get("expires_at"))
             def closed_research(job):
                 # The dispatch callback records this only after validating its
                 # database-bound typed proof. Raw quality remains false here.
                 return (job.get("job_name") == "refresh_quotes"
+                        and slot == "16:10"
                         and str(job.get("status")).lower() == "partial"
                         and job.get("details", {}).get("coverage_complete") is False
                         and job.get("details", {}).get("accepted_closed_session") is True)
@@ -181,12 +265,13 @@ def _delivery(session: date, ledger: dict, source_sha: str, config_hash: str,
                 for job in required)
             result.update(latency_seconds=latency, deadline_seconds=deadlines[slot],
                           receipt_matched=receipt_ok, identity_matched=identities_ok,
+                          monotonic_delivery=monotonic, input_window_valid=input_window,
                           coverage_complete=raw_coverage, research_coverage_accepted=coverage_ok,
                           closed_research_jobs=len(closed_jobs),
                           input_qualification="closed_non_realtime_research" if closed_jobs else "source_quality_not_promoted",
                           bundle_id=candidate.get("bundle_id"),
                           failed_jobs=sum(str(job.get("status")).lower() in {"failed", "interrupted"} for job in attempt_jobs))
-            result["state"] = "PASS" if (receipt_ok and identities_ok and coverage_ok
+            result["state"] = "PASS" if (receipt_ok and identities_ok and coverage_ok and monotonic and input_window
                 and accepted_at >= planned_at and 0 <= latency <= deadlines[slot]) else "FAIL"
             if not required or any(type(job.get("details", {}).get("coverage_complete")) is not bool for job in required):
                 result["state"] = "UNKNOWN"

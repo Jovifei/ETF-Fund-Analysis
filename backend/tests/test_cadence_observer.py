@@ -6,7 +6,8 @@ from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
-from app.workspace.local_stability import RESEARCH_TABLES, SLOTS
+from app.workspace.local_stability import RESEARCH_TABLES, REPORT_VERSION
+from test_local_stability import jobs as complete_ledger, SCOPE
 
 
 SCRIPT = Path(__file__).parents[2] / "scripts" / "observe_local_cadence.py"
@@ -81,23 +82,14 @@ def invoke(root, mode="before", when=None, runner=None, **overrides):
     when = when or datetime(2026, 10, 16, 13, 50, tzinfo=ZONE)
     args = dict(mode=mode, root=root, session=date(2026, 10, 16),
                 expected_source_sha=SHA, expected_config_hash=CONFIG, expected_image_id=IMAGE,
+                expected_scope_hash=SCOPE,
                 calendar=Calendar(), now=lambda: when, runner=runner or Runner(when))
     args.update(overrides)
     return observer.observe(**args)
 
 
 def ledger(day="2026-10-16"):
-    slots = SLOTS
-    return {"ledger_version": "local-job-ledger-v1",
-            "slots": [{"slot_id": f"{day} {slot}", "status": "DELIVERED"} for slot in slots],
-            "attempts": [{"attempt_id": slot, "slot_id": f"{day} {slot}", "status": "DELIVERED",
-                          "finished_at": f"{day}T{slot}:50+08:00", "code_sha": SHA,
-                          "config_hash": CONFIG, "scope_hash": "d" * 64, "bundle_id": "e" * 64,
-                          "sequence": 1, "receipt": {"bundle_id": "e" * 64, "manifest_hash": "e" * 64,
-                            "sequence": 1, "status": "accepted", "received_at": f"{day}T{slot}:50+08:00"}}
-                         for slot in slots],
-            "jobs": [{"attempt_id": slot, "job_name": "refresh_quotes", "status": "succeeded",
-                      "required": True, "details": {"coverage_complete": True}} for slot in slots]}
+    return complete_ledger(day)
 
 
 def test_before_capture_uses_fixed_alias_and_preserves_immutable_baseline(owned):
@@ -210,10 +202,10 @@ def test_summary_cannot_reuse_an_old_release_acceptance(owned):
     folder.mkdir(parents=True)
     for day in ("2026-10-14", "2026-10-15"):
         (folder / f"{day}.json").write_text(json.dumps({
-            "report_version": "local-stability-v1", "session": day, "state": "PASS",
+            "report_version": REPORT_VERSION, "session": day, "state": "PASS",
             "calendar": {"verified": True, "is_trade_day": True},
             "identity": {"source_sha": "f" * 40, "config_hash": CONFIG,
-                         "image_id": IMAGE, "scope_hash": None}}), encoding="utf-8")
+                         "image_id": IMAGE, "scope_hash": SCOPE}}), encoding="utf-8")
     result = invoke(owned, "summary")
     assert result["state"] == "PARTIAL"
     assert result["verified_trade_days"] == []

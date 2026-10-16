@@ -1,18 +1,25 @@
 from copy import deepcopy
 from datetime import date, datetime, timezone, timedelta
 from types import SimpleNamespace
+from tempfile import TemporaryDirectory
+from pathlib import Path
+from functools import lru_cache
 import pytest
 
 from app.workspace.local_stability import (
     RESEARCH_TABLES, assess_session, compare_cloud_captures,
-    record_stability, summarize_stability,
+    record_stability, summarize_stability, FULL_STAGES, FAST_STAGES, FULL_SLOTS,
+    EXECUTION_LINEAGE_VERSION,
 )
+from app.workspace.shadow_bundle import digest
 
 
 SHA = "a" * 40
 CONFIG = "b" * 64
 IMAGE = "sha256:" + "c" * 64
 SLOTS = ("13:55", "14:20", "14:30", "14:45", "14:50", "14:55", "15:00", "15:15", "16:10")
+UNIVERSE = ["510300.SH"]
+SCOPE = digest(UNIVERSE)
 
 
 class Calendar:
@@ -44,24 +51,60 @@ def runtime(day="2026-10-16", when="13:45"):
                          for role in ("api", "worker", "scheduler")]}
 
 
+def populate_ledger(root, day="2026-10-16"):
+    """Synthetic observer evidence through the real persistence/export APIs."""
+    from app.workspace.local_job_ledger import LocalJobLedger
+    from app.workspace.local_stability import SHANGHAI
+    ledger = LocalJobLedger(root)
+    identity = {"code_sha": SHA, "config_hash": CONFIG, "scope_hash": SCOPE}
+    for sequence, slot in enumerate(SLOTS, 1):
+        planned = datetime.fromisoformat(f"{day}T{slot}:00").replace(tzinfo=SHANGHAI)
+        due = ledger.plan_due(planned, verified_trading=True, identity=identity, slots=SLOTS)
+        attempt = ledger.claim(due["slot_id"], planned, identity=identity, lock_held=True)
+        mode = "full" if slot in FULL_SLOTS else "fast"
+        stage_names = FULL_STAGES if mode == "full" else FAST_STAGES
+        for stage in sorted(stage_names):
+            closed = slot == "16:10" and stage == "refresh_quotes"
+            ledger.record_job(attempt["attempt_id"], stage, status="partial" if closed else "succeeded",
+                now=planned + timedelta(seconds=20), required=True,
+                run_id=f"run_{sequence}_{stage}",
+                details={"coverage_complete": not closed, "accepted_closed_session": closed})
+        lineage = {"contract_version": EXECUTION_LINEAGE_VERSION, "mode": mode,
+                   "execution_hash": digest({"fixture_execution": day}),
+                   "config_file_hash": digest({"fixture_config": day}),
+                   "base_input_hash": digest({"fixture_base": slot}),
+                   "quote_batch_hash": digest({"fixture_quotes": slot})}
+        ledger.record_job(attempt["attempt_id"], "execution_contract", status="succeeded",
+            now=planned + timedelta(seconds=30), required=False,
+            details={"execution_mode": mode, **{key: value for key, value in lineage.items()
+                                                if key not in {"contract_version", "mode"}}})
+        manifest = {"contract_version": "local-display-v2", "sequence": sequence,
+                    "code_sha": SHA, "config_hash": CONFIG, "universe": UNIVERSE,
+                    "generated_at": (planned + timedelta(seconds=25)).isoformat(),
+                    "expires_at": (planned + timedelta(hours=2)).isoformat(),
+                    "execution_lineage": lineage}
+        ledger.mark_export_intent(attempt["attempt_id"], manifest=manifest,
+            bundle_file=f"bundle_{sequence}.json", now=planned + timedelta(seconds=30))
+        ledger.mark_export(attempt["attempt_id"], manifest=manifest,
+            bundle_file=f"bundle_{sequence}.json", now=planned + timedelta(seconds=35))
+        ledger.record_job(attempt["attempt_id"], "upload_1", status="running",
+                          now=planned + timedelta(seconds=40))
+        receipt = {"bundle_id": digest(manifest), "manifest_hash": digest(manifest),
+                   "sequence": sequence, "status": "accepted",
+                   "received_at": (planned + timedelta(seconds=50)).isoformat()}
+        ledger.mark_delivered(attempt["attempt_id"], manifest=manifest, receipt=receipt,
+                              now=planned + timedelta(seconds=50))
+    return ledger
+
+
+@lru_cache(maxsize=3)
+def _jobs_snapshot(day):
+    with TemporaryDirectory(prefix="etf-stability-test-") as folder:
+        return populate_ledger(Path(folder), day).summary(day)
+
+
 def jobs(day="2026-10-16"):
-    return {
-        "ledger_version": "local-job-ledger-v1",
-        "slots": [{"slot_id": f"{day} {slot}", "session": day, "slot": slot,
-                   "status": "DELIVERED", "planned_at": f"{day}T{slot}:00+08:00"} for slot in SLOTS],
-        "attempts": [{"attempt_id": slot, "slot_id": f"{day} {slot}",
-                      "status": "DELIVERED", "attempt_no": 1,
-                      "finished_at": f"{day}T{slot}:50+08:00",
-                      "bundle_id": "d" * 64, "sequence": 1,
-                      "code_sha": SHA, "config_hash": CONFIG, "scope_hash": "e" * 64,
-                      "receipt": {"status": "accepted", "bundle_id": "d" * 64,
-                                  "manifest_hash": "d" * 64,
-                                  "sequence": 1, "received_at": f"{day}T{slot}:50+08:00"}}
-                     for slot in SLOTS],
-        "jobs": [{"attempt_id": slot, "job_name": "refresh_quotes", "required": True,
-                  "status": "SUCCEEDED", "details": {"coverage_complete": True}}
-                 for slot in SLOTS],
-    }
+    return deepcopy(_jobs_snapshot(day))
 
 
 def session(day="2026-10-16", **overrides):
@@ -69,6 +112,7 @@ def session(day="2026-10-16", **overrides):
                 cloud_before=cloud(day), cloud_after=cloud(day, "16:35"),
                 runtime_before=runtime(day), runtime_after=runtime(day, "16:35"),
                 expected_source_sha=SHA, expected_config_hash=CONFIG,
+                expected_scope_hash=SCOPE,
                 expected_image_id=IMAGE, calendar=Calendar(),
                 as_of=datetime(2026, 10, 20, tzinfo=timezone.utc))
     args.update(overrides)
@@ -202,10 +246,13 @@ def test_future_captures_running_jobs_and_deletions_do_not_pass():
 
 def test_upload_retry_is_retained_but_not_collector_coverage():
     ledger = jobs()
+    attempt_id = next(row["attempt_id"] for row in ledger["attempts"] if row["slot_id"].endswith("14:30"))
+    ledger["jobs"] = [row for row in ledger["jobs"] if not (
+        row["attempt_id"] == attempt_id and row["job_name"].startswith("upload_"))]
     ledger["jobs"].extend([
-        {"attempt_id": "14:30", "job_name": "upload_1", "required": True,
+        {"attempt_id": attempt_id, "job_name": "upload_1", "required": True,
          "status": "failed", "details": {}},
-        {"attempt_id": "14:30", "job_name": "upload_2", "required": True,
+        {"attempt_id": attempt_id, "job_name": "upload_2", "required": True,
          "status": "succeeded", "details": {}},
     ])
     result = session(ledger_summary=ledger)
@@ -216,32 +263,9 @@ def test_upload_retry_is_retained_but_not_collector_coverage():
 
 
 def test_real_ledger_summary_contract_is_consumed(tmp_path):
-    from app.workspace.local_job_ledger import LocalJobLedger
-    from app.workspace.shadow_bundle import digest
-    from app.workspace.local_stability import SHANGHAI
-
-    ledger = LocalJobLedger(tmp_path)
-    identity = {"code_sha": SHA, "config_hash": CONFIG, "scope_hash": digest(["510300.SH"])}
-    for sequence, slot in enumerate(SLOTS, 1):
-        planned = datetime.fromisoformat(f"2026-10-16T{slot}:00").replace(tzinfo=SHANGHAI)
-        due = ledger.plan_due(planned, verified_trading=True, identity=identity, slots=SLOTS)
-        claimed = ledger.claim(due["slot_id"], planned, identity=identity, lock_held=True)
-        closed = slot == "16:10"
-        ledger.record_job(claimed["attempt_id"], "refresh_quotes", status="partial" if closed else "succeeded",
-                          now=planned, required=True, details={"coverage_complete": not closed,
-                                                              "accepted_closed_session": closed})
-        manifest = {"contract_version": "local-display-v2", "sequence": sequence,
-                    "code_sha": SHA, "config_hash": CONFIG, "universe": ["510300.SH"],
-                    "expires_at": (planned + timedelta(hours=2)).isoformat()}
-        ledger.mark_export(claimed["attempt_id"], manifest=manifest,
-                           bundle_file=f"bundle_{sequence}.json", now=planned)
-        receipt = {"bundle_id": digest(manifest), "manifest_hash": digest(manifest),
-                   "sequence": sequence, "status": "accepted",
-                   "received_at": (planned + timedelta(seconds=50)).isoformat()}
-        ledger.mark_delivered(claimed["attempt_id"], manifest=manifest, receipt=receipt,
-                              now=planned + timedelta(seconds=50))
+    ledger = populate_ledger(tmp_path)
     report = session(ledger_summary=ledger.summary("2026-10-16"),
-                     expected_scope_hash=identity["scope_hash"])
+                     expected_scope_hash=SCOPE)
     assert report["state"] == "PASS"
     closed = report["checks"]["delivery"]["slots"][-1]
     assert closed["coverage_complete"] is False
@@ -254,7 +278,118 @@ def test_closed_research_exception_is_only_for_explicit_partial_quote_proof():
                     {"details": {"coverage_complete": False}},
                     {"details": {"accepted_closed_session": True}}):
         ledger = jobs()
-        ledger["jobs"][0].update(status="partial", details={"coverage_complete": False,
-                                                            "accepted_closed_session": True})
-        ledger["jobs"][0].update(changes)
+        quote = next(row for row in ledger["jobs"] if row["job_name"] == "refresh_quotes")
+        quote.update(status="partial", details={"coverage_complete": False,
+                                                "accepted_closed_session": True})
+        quote.update(changes)
         assert session(ledger_summary=ledger)["state"] != "PASS"
+
+
+def test_quote_only_is_not_a_complete_delivered_pipeline():
+    ledger = jobs()
+    ledger["jobs"] = [job for job in ledger["jobs"] if job["job_name"] == "refresh_quotes"]
+    assert session(ledger_summary=ledger)["state"] != "PASS"
+
+
+def test_missing_execution_context_cannot_pass():
+    ledger = jobs()
+    ledger["jobs"] = [job for job in ledger["jobs"] if job["job_name"] != "execution_contract"]
+    assert session(ledger_summary=ledger)["state"] != "PASS"
+
+
+def test_receipt_does_not_substitute_for_successful_upload_job():
+    ledger = jobs()
+    ledger["jobs"] = [job for job in ledger["jobs"] if not job["job_name"].startswith("upload")]
+    assert session(ledger_summary=ledger)["state"] != "PASS"
+
+
+@pytest.mark.parametrize("missing", ["refresh_signals", "refresh_decision_board", "refresh_bars", "refresh_forecasts"])
+def test_missing_required_stage_blocks_full_delivery(missing):
+    ledger = jobs()
+    ledger["jobs"] = [job for job in ledger["jobs"] if job["job_name"] != missing]
+    assert session(ledger_summary=ledger)["state"] != "PASS"
+
+
+@pytest.mark.parametrize("change", ["absent", "duplicate_within_attempt", "reused_from_other_slot"])
+def test_task_run_identity_is_required_unique_and_not_reused(change):
+    ledger = jobs()
+    stages = [job for job in ledger["jobs"] if job["job_name"] in FULL_STAGES]
+    if change == "absent":
+        stages[0].pop("run_id")
+    elif change == "duplicate_within_attempt":
+        stages[1]["run_id"] = stages[0]["run_id"]
+    else:
+        later = next(job for job in stages if job["attempt_id"] != stages[0]["attempt_id"])
+        later["run_id"] = stages[0]["run_id"]
+    assert session(ledger_summary=ledger)["state"] != "PASS"
+
+
+def _rebind(attempt):
+    """Adversarial in-memory rewrite also recomputes hashes; context must agree."""
+    attempt["bundle_id"] = digest(attempt["manifest"])
+    attempt["receipt"].update(bundle_id=attempt["bundle_id"], manifest_hash=attempt["bundle_id"],
+                              sequence=attempt["manifest"]["sequence"])
+    attempt["sequence"] = attempt["manifest"]["sequence"]
+
+
+@pytest.mark.parametrize("change", ["missing_manifest", "manifest_tamper", "context_hash", "lineage_hash",
+                                   "scope_tamper", "extra_lineage", "missing_context_hash", "backdated", "sequence_reuse"])
+def test_manifest_context_scope_receipt_and_order_must_all_agree(change):
+    ledger = jobs()
+    attempt = ledger["attempts"][1]
+    context = next(job for job in ledger["jobs"] if job["attempt_id"] == attempt["attempt_id"]
+                   and job["job_name"] == "execution_contract")
+    if change == "missing_manifest":
+        attempt.pop("manifest")
+    elif change == "manifest_tamper":
+        attempt["manifest"]["sequence"] += 123
+    elif change == "context_hash":
+        context["details"]["execution_hash"] = "f" * 64
+    elif change == "missing_context_hash":
+        context["details"].pop("quote_batch_hash")
+    else:
+        if change == "lineage_hash":
+            attempt["manifest"]["execution_lineage"]["execution_hash"] = "f" * 64
+        elif change == "scope_tamper":
+            attempt["manifest"]["universe"] = ["512480.SH"]
+        elif change == "extra_lineage":
+            attempt["manifest"]["execution_lineage"]["extra"] = "unsupported"
+        elif change == "backdated":
+            attempt["manifest"]["generated_at"] = "2026-10-16T13:55:10+08:00"
+        elif change == "sequence_reuse":
+            attempt["manifest"]["sequence"] = ledger["attempts"][0]["sequence"]
+        _rebind(attempt)
+    assert session(ledger_summary=ledger)["state"] != "PASS"
+
+
+def test_actual_full_fallback_needs_full_stages_and_cannot_claim_fast():
+    ledger = jobs()
+    attempt = ledger["attempts"][1]  # 14:20 normally fast.
+    context = next(job for job in ledger["jobs"] if job["attempt_id"] == attempt["attempt_id"]
+                   and job["job_name"] == "execution_contract")
+    for name in sorted(FULL_STAGES - FAST_STAGES):
+        ledger["jobs"].append({"attempt_id": attempt["attempt_id"], "job_name": name,
+            "run_id": f"fallback_{name}", "status": "succeeded", "required": True,
+            "details": {"coverage_complete": True}})
+    assert session(ledger_summary=ledger)["state"] == "FAIL"  # Six actual stages labeled fast.
+    context["details"]["execution_mode"] = "full"
+    attempt["manifest"]["execution_lineage"]["mode"] = "full"
+    _rebind(attempt)
+    assert session(ledger_summary=ledger)["state"] == "PASS"
+    first = ledger["attempts"][0]  # 13:55 must never be marked fast.
+    context = next(job for job in ledger["jobs"] if job["attempt_id"] == first["attempt_id"]
+                   and job["job_name"] == "execution_contract")
+    context["details"]["execution_mode"] = "fast"
+    first["manifest"]["execution_lineage"]["mode"] = "fast"
+    _rebind(first)
+    assert session(ledger_summary=ledger)["state"] == "FAIL"
+
+
+def test_unknown_scope_duplicate_stage_and_legacy_acceptance_cannot_pass():
+    assert session(expected_scope_hash=None)["state"] == "UNKNOWN"
+    ledger = jobs()
+    ledger["jobs"].append(deepcopy(ledger["jobs"][0]))
+    assert session(ledger_summary=ledger)["state"] == "FAIL"
+    legacy = session()
+    legacy["report_version"] = "local-stability-v1"
+    assert summarize_stability([legacy, legacy])["state"] == "PARTIAL"
