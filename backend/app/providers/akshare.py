@@ -52,6 +52,7 @@ def _spot_flow(row: dict[str, Any]) -> dict[str, Any]:
 
 class AKShareProvider(MarketProvider):
     name = "akshare"
+    quote_selection_capability = "degraded_only"
 
     def __init__(self, settings: Settings | None = None, *, ak_client: Any | None = None) -> None:
         self.settings = settings or get_settings()

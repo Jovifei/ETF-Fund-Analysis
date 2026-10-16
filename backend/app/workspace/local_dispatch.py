@@ -9,7 +9,7 @@ from math import isfinite
 
 from app.workspace.local_job_ledger import LocalJobLedger
 from app.workspace.local_schedule import LOCAL_SCHEDULE_SLOTS, LocalRunLock, SHANGHAI
-from app.workspace.local_compute import closed_session_result_accepted, OPTIONAL_TASK_PARTS
+from app.workspace.local_compute import closed_session_result_accepted, quote_control_coverage, OPTIONAL_TASK_PARTS
 from app.workspace.shadow_bundle import digest
 
 DISPATCH_SLOTS = ('13:55', *LOCAL_SCHEDULE_SLOTS)
@@ -167,6 +167,10 @@ def dispatch_once(root: Path, identity: dict, *, calendar, run_job, replay, now=
                        if key in result}
             details.update({'source_task_status': result.get('status', 'unknown'),
                             'accepted_closed_session': closed_session_result_accepted(result)})
+            if name == 'refresh_quotes':
+                control = quote_control_coverage(result, scope_hash=identity['scope_hash'], run_id=run_id)
+                if control is not None:
+                    details.update(control)
             actual_run = result.get('run_id')
             if actual_run is not None and actual_run != run_id:
                 ledger.record_job(aid, name, status='failed', now=now(), run_id=run_id,

@@ -8,18 +8,20 @@ from datetime import date
 from typing import Any, TypeVar
 
 from app.market_context.contracts import MarketContextItem, MarketContextObservation
-from app.providers.base import CapabilityUnavailable, MarketProvider, ProviderError
+from app.providers.base import CapabilityUnavailable, MarketProvider, ProviderError, QuoteCapabilityContractError
 from app.providers.types import BarRecord, InstrumentRecord, NewsRecord, QuoteRecord, SectorRecord
 from app.utils.hashing import stable_hash
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
+QUOTE_ROUTE_VERSION = "quote-route-v2-degraded-deferral"
 _SAFE_FAILURE_CLASSES = frozenset(
     {
         "CapabilityUnavailable",
         "ConnectionError",
         "KeyError",
         "ProviderError",
+        "QuoteCapabilityContractError",
         "RuntimeError",
         "TimeoutError",
         "TypeError",
@@ -270,19 +272,27 @@ class CompositeProvider(MarketProvider):
             return []
 
         selected: dict[str, T] = {}
-        daily_fallbacks: dict[str, T] = {}
-        degraded_quotes: dict[str, T] = {}
+        daily_fallbacks: dict[str, tuple[int, T]] = {}
+        degraded_quotes: dict[str, tuple[int, T]] = {}
         errors: list[str] = []
         unsupported = 0
         successful_calls = 0
-
-        for index, provider in enumerate(self.providers):
+        order = list(enumerate(self.providers))
+        deferred = {index for index, provider in order if operation == "fetch_spot_quotes"
+                    and getattr(provider, "quote_selection_capability", "unknown") == "degraded_only"}
+        order = [item for item in order if item[0] not in deferred] + [item for item in order if item[0] in deferred]
+        called = set()
+        for index, provider in order:
             missing = [code for code in requested if code not in selected]
             if not missing:
                 break
+            called.add(index)
             started = time.perf_counter()
             try:
                 rows = list(call(provider, missing) or [])
+                if index in deferred and any(self._quote_is_qualified(row)
+                        and not str(getattr(row, "source", "")).startswith("tushare:fund_daily") for row in rows):
+                    raise QuoteCapabilityContractError("quote capability contract violated")
                 successful_calls += 1
                 accepted = 0
                 for row in rows:
@@ -298,13 +308,15 @@ class CompositeProvider(MarketProvider):
                         # earlier provider's record.
                         continue
                     if operation == "fetch_spot_quotes" and str(getattr(row, "source", "")).startswith("tushare:fund_daily"):
-                        daily_fallbacks.setdefault(key, row)
+                        if key not in daily_fallbacks or index < daily_fallbacks[key][0]:
+                            daily_fallbacks[key] = (index, row)
                         continue
                     if operation == "fetch_spot_quotes" and not self._quote_is_qualified(row):
                         # A public snapshot can be useful as a degraded display
                         # value, but it must not prevent a later provider from
                         # supplying a timestamped realtime quote.
-                        degraded_quotes.setdefault(key, row)
+                        if key not in degraded_quotes or index < degraded_quotes[key][0]:
+                            degraded_quotes[key] = (index, row)
                         continue
                     selected[key] = row
                     accepted += 1
@@ -319,6 +331,8 @@ class CompositeProvider(MarketProvider):
                 else:
                     status = "ok" if index == 0 else "fallback_used"
                     reason = None
+                if index in deferred:
+                    reason = "deferred_degraded_only" + (f" {reason}" if reason else "")
                 self.last_trace.append(
                     ProviderTrace(
                         operation=operation,
@@ -333,6 +347,8 @@ class CompositeProvider(MarketProvider):
             except CapabilityUnavailable as exc:
                 unsupported += 1
                 label = _safe_failure_label(exc)
+                if index in deferred:
+                    label = f"deferred_degraded_only {label}"
                 self.last_trace.append(
                     ProviderTrace(
                         operation=operation,
@@ -346,6 +362,8 @@ class CompositeProvider(MarketProvider):
                 logger.warning("Provider %s operation %s unsupported: %s", provider.name, operation, label)
             except Exception as exc:
                 label = _safe_failure_label(exc)
+                if index in deferred:
+                    label = f"deferred_degraded_only {label}"
                 errors.append(f"{provider.name}={label}")
                 self.last_trace.append(
                     ProviderTrace(
@@ -358,10 +376,17 @@ class CompositeProvider(MarketProvider):
                     )
                 )
                 logger.warning("Provider %s operation %s failed: %s", provider.name, operation, label)
+                if isinstance(exc, QuoteCapabilityContractError):
+                    raise
 
-        for code, row in degraded_quotes.items():
+        for index, provider in enumerate(self.providers):
+            if index in deferred and index not in called:
+                self.last_trace.append(ProviderTrace(operation=operation, provider=provider.name,
+                    status="skipped", latency_ms=0.0, record_count=0,
+                    reason="qualified_scope_complete_degraded_adapter_deferred"))
+        for code, (_index, row) in degraded_quotes.items():
             selected.setdefault(code, row)
-        for code, row in daily_fallbacks.items():
+        for code, (_index, row) in daily_fallbacks.items():
             selected.setdefault(code, row)
         if selected:
             return [selected[code] for code in requested if code in selected]

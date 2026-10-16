@@ -39,6 +39,28 @@ that job. The release must include a real dispatcher-to-assessor regression,
 with missing, duplicate and mismatched identity rejected. The interrupted
 7e4daff full run is retained as NOT_COMPLETED, not a passing receipt.
 
+Real f3ab310 full and fast local runs then exported all 34 targets successfully
+without uploading. Those runs exposed another actual contract gap: successful
+quote TaskRuns contain requested/received/inserted/realtime counters, but no
+coverage_complete/completed/execution_scope. A fabricated successful fixture
+had hidden the ledger's missing quote coverage. Local capture-bound typed
+control evidence now supplements the ledger only after checking the actual
+TaskRun, new SQLite rows, exact target scope, capture window, existing quality
+rules and actual detail selector. Raw TaskRun JSON and partial/closed-session
+qualification remain unchanged. Plain JSON, stale batches and mismatched
+scope/run/content cannot assert this control proof.
+
+The f3ab310 full test attempt was interrupted for this required repair and
+remains NOT_COMPLETED. Its source-only webpage PASS is not a release approval.
+The fast no-upload observations were 143.103 seconds under concurrent full
+tests and 127.816 seconds without that load; both miss the 120-second target
+and neither proves HTTPS delivery. Read-only ProviderAudit inspection showed
+20.6--55.3 seconds waiting for AKShare spot, whose current adapter always marks
+quotes non-realtime, followed by 0.10--0.16 seconds for Sina's actual qualified
+batch. The webpage review approved only quote-specific deferred calls, keeping
+original qualified/degraded selection priorities and all other operations.
+Final fixed-source, selection-equivalence and real timing evidence are required.
+
 Native Windows qualification has now exercised a new disabled, never-run owned
 probe: migrate its action/trigger/settings, restore the original definition
 from immutable UTF-16 XML, compare Principals/Actions/Triggers/Settings exactly,

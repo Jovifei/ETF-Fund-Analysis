@@ -57,8 +57,15 @@ class CapabilityUnavailable(ProviderError):
     pass
 
 
+class QuoteCapabilityContractError(ProviderError):
+    """An explicitly display-only adapter returned a qualified quote."""
+
+
 class MarketProvider(ABC):
     name = "base"
+    # Unknown adapters retain their original quote priority; degraded_only is
+    # an adapter contract, not a timestamp or license qualification.
+    quote_selection_capability = "unknown"
 
     @abstractmethod
     def list_instruments(self, codes: list[str] | None = None) -> list[InstrumentRecord]:

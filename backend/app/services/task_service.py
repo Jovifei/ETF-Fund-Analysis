@@ -93,6 +93,7 @@ def _provider_failure_audits(provider) -> list[dict]:
     allowed_statuses = {
         "unsupported", "failed", "partial", "fallback_partial", "fallback_used",
         "quality_fallback", "superseded", "empty", "ok",
+        "skipped",
     }
     for trace in traces:
         provider_name = str(getattr(trace, "provider", ""))

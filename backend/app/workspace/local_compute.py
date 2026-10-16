@@ -187,6 +187,73 @@ class _ClosedSessionQuoteResult(dict):
         self.capture = capture
 
 
+class _CapturedQuoteResult(dict):
+    """Control evidence attached in memory; raw TaskRun fields stay unchanged."""
+    def __init__(self, result, proof):
+        super().__init__(result)
+        self.raw_keys = tuple(sorted(result))
+        self.proof = {**proof, "result_hash": digest(result)}
+        self.proof_hash = digest(self.proof)
+
+
+def quote_control_coverage(result, *, scope_hash, run_id):
+    """Only a locally validated new batch can supplement ledger coverage."""
+    if type(result) is not _CapturedQuoteResult:
+        return None
+    proof = result.proof
+    if (digest(proof) != result.proof_hash or proof["scope_hash"] != scope_hash or proof["run_id"] != run_id
+            or result.get("status") != "succeeded" or result.get("run_id") != run_id
+            or set(result) - set(result.raw_keys) - {"task_name", "required"}
+            or digest({key: result[key] for key in result.raw_keys}) != proof["result_hash"]):
+        return None
+    return {"coverage_complete": True, "requested": proof["size"], "completed": proof["size"],
+            "scope_hash": proof["scope_hash"]}
+
+
+def _captured_quote_result(db, settings, *, universe, result, raw_result, run_id,
+                           after_id, started_at, finished_at):
+    """Check actual TaskRun and fresh scoped rows, without changing qualification."""
+    from app.services.snapshot_contract import _normalize_time, quote_issues
+    if (not universe or len(set(universe)) != len(universe) or type(after_id) is not int or after_id < 0
+            or result.get("status") != "succeeded"
+            or raw_result.get("run_id") != run_id or db.get_bind().dialect.name != "sqlite"):
+        return result
+    size = len(universe)
+    expected = {"requested": size, "received": size, "inserted": size, "realtime": size,
+                "raw_realtime": size, "missing": 0, "degraded": 0}
+    if (raw_result.get("missing_codes") != [] or any(type(raw_result.get(key)) is not int
+            or raw_result[key] != value for key, value in expected.items())):
+        return result
+    start, end = _normalize_time(started_at, settings), _normalize_time(finished_at, settings)
+    run = db.scalar(select(TaskRun).where(TaskRun.run_id == run_id, TaskRun.task_name == "refresh_quotes"))
+    if (start is None or end is None or start > end or run is None or run.status != "succeeded"
+            or run.finished_at is None or run.started_at is None
+            or not start <= _normalize_time(run.started_at, settings) <= _normalize_time(run.finished_at, settings) <= end
+            or digest(run.result_json) != digest(raw_result)):
+        return result
+    rows = db.execute(select(QuoteSnapshot, Instrument.ts_code).join(
+        Instrument, Instrument.id == QuoteSnapshot.instrument_id).where(QuoteSnapshot.id > after_id)).all()
+    if len(rows) != size or {code for _, code in rows} != set(universe):
+        return result
+    for quote, _ in rows:
+        fetched = _normalize_time(quote.fetched_at, settings)
+        if (fetched is None or not start <= fetched <= end or quote_issues(quote, settings, at=end)
+                or quote.is_realtime is not True or quote.timestamp_verified is not True or quote.degraded_reason
+                or not isinstance(quote.source, str) or not quote.source.strip() or "mock" in quote.source.lower()
+                or type(quote.price) not in (int, float) or not isfinite(quote.price) or quote.price <= 0
+                or not isinstance(quote.quality_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", quote.quality_hash)):
+            return result
+    selected = _selected_quotes(db, universe)
+    if {quote.id for quote in selected.values()} != {quote.id for quote, _ in rows}:
+        return result
+    origin = _closed_database_identity(db)
+    if origin[0] != "sqlite-file":
+        return result
+    return _CapturedQuoteResult(result, {"run_id": run_id, "scope_hash": digest(sorted(universe)), "size": size,
+        "database_hash": digest(origin), "quote_batch_hash": _quote_batch_hash(selected, settings),
+        "task_hash": digest({"run_id": run_id, "result": raw_result})})
+
+
 def closed_session_result_accepted(result):
     return (type(result) is _ClosedSessionQuoteResult and result.get("status") == "partial"
             and result.get("accepted_for_closed_research") is True
@@ -568,13 +635,17 @@ def compute_local(settings: Settings, universe: list[str] | None = None, *, admi
                                              "refresh_forecasts", "refresh_signals", "refresh_decision_board"}:
                         kwargs["codes"] = universe
                     before_quote_id = ((db.scalar(select(func.max(QuoteSnapshot.id))) or 0)
-                                       if task == "refresh_quotes" and closed_session_research else 0)
+                                       if task == "refresh_quotes" else 0)
                     started = datetime.now(settings.timezone)
                     result = dict(service.run(db, task, run_id=run_id, **kwargs))
                     if task == "refresh_quotes":
+                        raw_result = result
                         result = _closed_session_quote_result(db, settings, universe=universe, result=result,
                             after_id=before_quote_id, started_at=started, finished_at=datetime.now(settings.timezone),
                             private_research=private_research, enabled=closed_session_research)
+                        result = _captured_quote_result(db, settings, universe=universe, result=result,
+                            raw_result=raw_result, run_id=run_id, after_id=before_quote_id, started_at=started,
+                            finished_at=datetime.now(settings.timezone))
             except Exception as exc:
                 if on_task is not None:
                     on_task(task, {"status": "failed", "error_type": type(exc).__name__}, run_id)
@@ -821,6 +892,7 @@ def compute_local_fast(settings, universe, *, base_manifest, code_sha, admission
                     before_quote_id = db.scalar(select(func.max(QuoteSnapshot.id))) or 0
                     if quote_ids is not None:
                         check_quotes(db, reference())
+                    started = reference()
                     result = dict(service.run(db, task, codes=universe, run_id=run_id))
                     if task == "refresh_quotes" and result.get("status") == "succeeded":
                         quotes, quote_hash = check_quotes(db, reference())
@@ -843,6 +915,9 @@ def compute_local_fast(settings, universe, *, base_manifest, code_sha, admission
                                 db.add(DecisionBoardProvisionalInput(instrument_id=ident,
                                     observed_at=quote.quote_time, source=quote.source, **values))
                         db.flush()
+                        result = _captured_quote_result(db, settings, universe=universe, result=result,
+                            raw_result=result, run_id=run_id, after_id=before_quote_id, started_at=started,
+                            finished_at=reference())
                     if quote_ids is not None:
                         check_quotes(db, reference())
             except Exception as exc:
