@@ -76,7 +76,7 @@ def test_export_hashes_encoded_parts_and_receiver_accepts_without_numeric_change
     bundle = lc.export_local_v2(settings, sequence=1, code_sha="a"*40, universe=["510300.SH"], now=now,
         private_research=True, unavailable_parts=["sectors", "market_context"])
     assert bundle["manifest"]["number_encoding_version"] == "safe-integral-json-v1"
-    assert bundle["manifest"]["export_projection_version"] == "local-display-projection-v1.1"
+    assert bundle["manifest"]["export_projection_version"] == "local-display-projection-v1.2"
     assert type(bundle["parts"]["charts"]["510300.SH"]["bars"][0]["volume"]) is int
     assert bundle["parts"]["details"]["510300.SH"]["forecasts"]["1"]["q50"] == 0.125
     assert bundle["manifest"]["parts_hashes"] == {key: digest(value) for key, value in bundle["parts"].items()}

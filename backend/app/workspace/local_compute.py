@@ -9,6 +9,7 @@ import shutil
 from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
@@ -24,7 +25,7 @@ from app.workspace.shadow_projection import levels, project_chart, studies
 
 CONTRACT_VERSION = "local-display-v2"
 ADMISSION_POLICY_VERSION = "private-research-execution-v1"
-EXPORT_PROJECTION_VERSION = "local-display-projection-v1.1"
+EXPORT_PROJECTION_VERSION = "local-display-projection-v1.2"
 NUMBER_ENCODING_VERSION = "safe-integral-json-v1"
 EXPORT_MAX_BYTES = 16 * 1024 * 1024
 CLOSED_SESSION_INPUT_VERSION = "closed-session-input-v1.1.1"
@@ -124,6 +125,51 @@ def _display_numbers(value):
     if isinstance(value, list):
         return [_display_numbers(child) for child in value]
     return value
+
+
+def _project_unavailable_optional(parts, unavailable_parts, source_rows, at):
+    """Suppress skipped corroboration at its actual consumer paths, not grades.
+
+    SignalGradeService attaches sector breadth after classify_row. Grades and
+    technical theme observations therefore do not depend on this optional block.
+    Never mutate the persisted board or rebuild themes from the smaller export
+    universe: the original all-enabled research background remains intact.
+    """
+    unavailable = set(unavailable_parts) & {"sectors", "market_context"}
+    if not unavailable:
+        return parts
+    def row_projection(row):
+        if not isinstance(row, dict) or "sectors" not in unavailable:
+            return row
+        previous = row.get("sector") or {}
+        sector = {"label": "未验证 / 不可用", "status": "unavailable", "available": False,
+                  "reason_code": "optional_not_refreshed", "up": None, "down": None,
+                  "research_only": True, "actionable": False,
+                  **{key: previous[key] for key in ("source_as_of", "source_time", "fetched_at", "trade_date")
+                     if isinstance(previous, dict) and key in previous}}
+        return {**row, "sector": sector}
+    overview_part = parts["overview"]
+    projected_overview = {**overview_part, "rows": [row_projection(row) for row in overview_part.get("rows", [])]}
+    if "sectors" in unavailable:
+        from app.utils.sector_timing import build_sector_timing_observation
+        original_timing = overview_part.get("sector_timing") or {}
+        timing = build_sector_timing_observation(source_rows, at=at, market_evidence=[],
+                                                  slot_hint=original_timing.get("slot_hint"))
+        for theme in timing["themes"]:
+            theme["market_corroboration"]["reason_code"] = "optional_not_refreshed"
+        timing["market_corroboration_status"] = "unavailable"
+        projected_overview["sector_timing"] = timing
+    details = {}
+    for code, detail in parts["details"].items():
+        explanation = detail.get("decision_explanation") or {}
+        caveats = explanation.get("evidence_caveats") or []
+        caveats = caveats if isinstance(caveats, list) else []
+        details[code] = {**detail, "decision": row_projection(detail.get("decision")),
+            "decision_explanation": {**explanation,
+                "evidence_caveats": list(dict.fromkeys([*caveats,
+                    *[f"{part}_optional_not_refreshed" for part in ("sectors", "market_context") if part in unavailable]])),
+                "grade_basis": "quote_and_technical_indicators_not_optional_market_corroboration"}}
+    return {**parts, "overview": projected_overview, "details": details}
 
 
 def _checked_export(bundle):
@@ -462,7 +508,8 @@ def doctor_check(root: Path | str, database: Path | str, profile: str = "live") 
 
 
 def compute_local(settings: Settings, universe: list[str] | None = None, *, admission: dict | None = None,
-                  private_research: bool = False, closed_session_research: bool = False) -> list[dict[str, Any]]:
+                  private_research: bool = False, closed_session_research: bool = False,
+                  on_task=None) -> list[dict[str, Any]]:
     if settings.market_provider == "mock" and settings.app_env == "local_research":
         raise ValueError("live profile rejects mock provider")
 
@@ -493,6 +540,9 @@ def compute_local(settings: Settings, universe: list[str] | None = None, *, admi
 
         for task in task_names:
             required = task not in OPTIONAL_TASK_PARTS
+            run_id = uuid4().hex
+            if on_task is not None:
+                on_task(task, None, run_id)
             try:
                 with Session(engine) as db, db.begin():
                     kwargs: dict[str, Any] = {}
@@ -506,15 +556,20 @@ def compute_local(settings: Settings, universe: list[str] | None = None, *, admi
                     before_quote_id = ((db.scalar(select(func.max(QuoteSnapshot.id))) or 0)
                                        if task == "refresh_quotes" and closed_session_research else 0)
                     started = datetime.now(settings.timezone)
-                    result = dict(service.run(db, task, **kwargs))
+                    result = dict(service.run(db, task, run_id=run_id, **kwargs))
                     if task == "refresh_quotes":
                         result = _closed_session_quote_result(db, settings, universe=universe, result=result,
                             after_id=before_quote_id, started_at=started, finished_at=datetime.now(settings.timezone),
                             private_research=private_research, enabled=closed_session_research)
             except Exception as exc:
+                if on_task is not None:
+                    on_task(task, {"status": "failed", "error_type": type(exc).__name__}, run_id)
                 if required:
                     raise
                 result = {"status": "unavailable", "error_type": type(exc).__name__}
+            else:
+                if on_task is not None:
+                    on_task(task, result, run_id)
             result.update(task_name=task, required=required)
             if not required and result.get("status") != "succeeded":
                 result["availability"] = "unavailable"
@@ -525,6 +580,251 @@ def compute_local(settings: Settings, universe: list[str] | None = None, *, admi
         service.close()
         engine.dispose()
     return results
+
+
+SETTLED_BASE_VERSION = "local-settled-base-v1"
+
+
+def _base_state(settings, universe, code_sha, now):
+    """Read actual immutable daily inputs; never hash mutable signal/board tables."""
+    from app.models import DailyBar, ForecastSnapshot, IndicatorSnapshot, UnitCertificationEvidence
+    from app.services.execution_scope import target_instruments, execution_scope
+    from app.services.settlement import settled_session
+    from app.services.snapshot_contract import snapshot_issues, formal_forecast_horizons, _normalize_time
+    from app.services.trading_calendar_service import TradingCalendarService
+    from app.providers.data_contract import history_issues, trailing_unverified_history
+    from app.providers.corporate_action_contract import official_corporate_actions, research_history_rows
+    from app.utils.input_lineage import history_digest, calculation_digest
+    if not isinstance(code_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", code_sha) or set(code_sha) == {"0"}:
+        raise ValueError("base requires fixed code identity")
+    if settings.workspace_research_source != "database" or settings.timezone_name != "Asia/Shanghai":
+        raise ValueError("base requires local research database")
+    local = _normalize_time(now, settings)
+    calendar = TradingCalendarService(settings)
+    decision = calendar.decision(local.date())
+    if not decision.verified or not decision.is_trade_day:
+        raise ValueError("base requires verified trading day")
+    target = settled_session(settings, local)
+    target_decision = calendar.decision(target)
+    if not target_decision.verified or not target_decision.is_trade_day:
+        raise ValueError("base requires verified settled session")
+    engine = create_engine(settings.database_url)
+    try:
+        with Session(engine) as db:
+            db.connection().exec_driver_sql("BEGIN")
+            identity = _closed_database_identity(db)
+            if identity[0] != "sqlite-file":
+                raise ValueError("base requires owned file database")
+            instruments = db.scalars(select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.id)).all()
+            targets = target_instruments(instruments, universe)
+            if universe is None:
+                raise ValueError("base requires explicit target scope")
+            ids, target_ids = [i.id for i in instruments], [i.id for i in targets]
+            scope = execution_scope(instruments, universe)
+            quality = history_issues(db, settings, ids)
+            if any(i in quality for i in target_ids):
+                raise ValueError("base target history unqualified")
+            def columns(row):
+                return {c.name: getattr(row, c.name) for c in row.__table__.columns}
+            inputs = {"instruments": [columns(i) for i in instruments], "quality": quality,
+                      "corporate_actions": {i.ts_code: [str(e) for e in official_corporate_actions(i.ts_code)]
+                                            for i in instruments}}
+            bars = db.scalars(select(DailyBar).where(DailyBar.instrument_id.in_(ids)).order_by(
+                DailyBar.instrument_id, DailyBar.trade_date, DailyBar.id)).all()
+            if any(row.trade_date > target for row in bars):
+                raise ValueError("base contains unsettled history")
+            inputs["daily_bars"] = stable_hash([columns(row) for row in bars])
+            strategy = settings.load_strategy()
+            history_hashes = {"indicator": {}, "forecast": {}}
+            for item in instruments:
+                raw = [row for row in bars if row.instrument_id == item.id]
+                research = raw if settings.market_provider == "mock" else research_history_rows(raw, item.ts_code)
+                stale = trailing_unverified_history(research) if item.id in quality else None
+                if item.id in quality and stale is None:
+                    continue
+                if stale:
+                    research = [row for row in research if row.trade_date <= stale["qualified_through"]]
+                for kind, minimum in (("indicator", 30), ("forecast", int(strategy["forecast"].get("min_history", 180)))):
+                    if len(research) >= minimum:
+                        history_hashes[kind][item.id] = history_digest(research)
+            panel_hashes = {kind: calculation_digest(values, strategy, f"{kind}-panel-v2")
+                            for kind, values in history_hashes.items()}
+            inputs["unit_evidence"] = stable_hash([columns(row) for row in db.scalars(
+                select(UnitCertificationEvidence).order_by(UnitCertificationEvidence.id))])
+            snapshots = []
+            horizons = formal_forecast_horizons(settings.load_strategy())
+            for item in targets:
+                own_bars = [row for row in bars if row.instrument_id == item.id]
+                if not own_bars or own_bars[-1].trade_date != target:
+                    raise ValueError("base target history session incomplete")
+                indicator = db.scalar(select(IndicatorSnapshot).where(IndicatorSnapshot.instrument_id == item.id)
+                    .order_by(IndicatorSnapshot.as_of_date.desc(), IndicatorSnapshot.generated_at.desc(), IndicatorSnapshot.id.desc()))
+                selected = [(indicator, "indicator")]
+                for horizon in horizons:
+                    row = db.scalar(select(ForecastSnapshot).where(ForecastSnapshot.instrument_id == item.id,
+                        ForecastSnapshot.horizon == horizon).order_by(ForecastSnapshot.as_of_date.desc(),
+                        ForecastSnapshot.generated_at.desc(), ForecastSnapshot.id.desc()))
+                    selected.append((row, "forecast"))
+                for row, kind in selected:
+                    if (snapshot_issues(row, settings, target, kind=kind, at=local)
+                            or row.git_commit_sha != code_sha
+                            or row.input_hash != stable_hash({"panel": panel_hashes[kind], "instrument_id": item.id,
+                                                              "local": history_hashes[kind].get(item.id)})):
+                        raise ValueError("base snapshot identity invalid")
+                    snapshots.append(columns(row))
+            inputs["snapshots"] = stable_hash(snapshots)
+            tasks = []
+            for name in ("refresh_bars", "refresh_indicators", "refresh_forecasts"):
+                run = db.scalar(select(TaskRun).where(TaskRun.task_name == name).order_by(
+                    TaskRun.started_at.desc(), TaskRun.id.desc()))
+                result = run.result_json if run is not None else {}
+                coverage = result.get("coverage") or []
+                scope_ok = (isinstance(coverage, list) and len(coverage) == len(universe)
+                    and all(isinstance(row, dict) and row.get("complete") is True
+                            and row.get("received_through") == target.isoformat() for row in coverage)
+                    and {row.get("ts_code") for row in coverage} == set(universe)) if name == "refresh_bars" else result.get("execution_scope") == scope
+                if (run is None or run.status != "succeeded" or run.finished_at is None
+                        or _normalize_time(run.finished_at, settings) > local
+                        or result.get("coverage_complete") is not True
+                        or result.get("target_trade_date") != target.isoformat()
+                        or not scope_ok):
+                    raise ValueError("base successful scoped stages required")
+                tasks.append(columns(run))
+            inputs["tasks"] = stable_hash(tasks)
+            return {"contract_version": SETTLED_BASE_VERSION, "code_sha": code_sha,
+                "database_identity": list(identity), "provider": settings.market_provider,
+                "config_hash": stable_hash(settings.load_strategy()), "target_codes": sorted(universe),
+                "background_count": len(instruments), "target_trade_date": target.isoformat(),
+                "input_hash": stable_hash(inputs), "actionable": False, "calibration_status": "not_calibrated"}
+    finally:
+        engine.dispose()
+
+
+def create_base_manifest(settings, universe, *, code_sha, now=None):
+    """Create a local-only receipt after successful settled base computation."""
+    return _base_state(settings, universe, code_sha, now or datetime.now(settings.timezone))
+
+
+def validate_base_manifest(settings, universe, base, *, code_sha, now=None):
+    if not isinstance(base, dict) or base.get("contract_version") != SETTLED_BASE_VERSION:
+        raise ValueError("base manifest missing")
+    current = create_base_manifest(settings, universe, code_sha=code_sha, now=now)
+    if current != base:
+        raise ValueError("base input identity changed")
+    return base
+
+
+def _fast_quotes(db, settings, universe, at, *, quote_ids=None, input_hash=None):
+    from app.services.snapshot_contract import _normalize_time, quote_issues
+    from app.services.qualification_gate import quote_reasons
+    instruments = db.scalars(select(Instrument).where(Instrument.ts_code.in_(universe))).all()
+    quotes = latest_rows(db, QuoteSnapshot, [i.id for i in instruments], QuoteSnapshot.quote_time.desc())
+    if (len(quotes) != len(universe)
+            or any(quote_issues(q, settings, at=at) or quote_reasons(settings, q, at, 8) for q in quotes.values())
+            or (quote_ids is not None and {q.id for q in quotes.values()} != set(quote_ids))):
+        raise ValueError("fast quotes incomplete changed or stale")
+    identities = []
+    for quote in sorted(quotes.values(), key=lambda q: q.instrument_id):
+        row = {c.name: getattr(quote, c.name) for c in QuoteSnapshot.__table__.columns}
+        row.update(quote_time=_normalize_time(quote.quote_time, settings),
+                   fetched_at=_normalize_time(quote.fetched_at, settings))
+        identities.append(row)
+    actual = stable_hash(identities)
+    if input_hash is not None and actual != input_hash:
+        raise ValueError("fast captured quote content changed")
+    return quotes, actual
+
+
+def validate_fast_result(settings, universe, results, *, now=None):
+    """Recheck the exact observation immediately before export and upload."""
+    proof = results[-1].get("fast_input") if results else None
+    if not isinstance(proof, dict) or proof.get("target_codes") != sorted(universe):
+        raise ValueError("fast observation proof missing")
+    engine = create_engine(settings.database_url)
+    try:
+        with Session(engine) as db:
+            _fast_quotes(db, settings, universe, now or datetime.now(settings.timezone),
+                         quote_ids=proof.get("quote_ids"), input_hash=proof.get("input_hash"))
+    finally:
+        engine.dispose()
+
+
+def compute_local_fast(settings, universe, *, base_manifest, code_sha, admission=None,
+                       private_research=False, now=None, on_task=None):
+    """Refresh current observations without fetching history or retraining forecasts."""
+    from app.models import DecisionBoardProvisionalInput
+    from app.services.execution_policy import TaskExecutionPolicy
+    from app.services.task_service import TaskService
+    initial = now or datetime.now(settings.timezone)
+    validate_base_manifest(settings, universe, base_manifest, code_sha=code_sha, now=initial)
+    if not validate_provider_admission(settings.market_provider, evidence=admission, purpose="compute",
+                                       private_research=private_research)["operation_permitted"]:
+        raise ValueError("fast provider admission blocked")
+    if private_research:
+        settings = settings.model_copy(update={"tushare_token": "", "ftshare_enabled": False})
+    engine = create_engine(settings.database_url)
+    service = TaskService(settings, execution_policy=TaskExecutionPolicy(resolve_runtime_provider=not private_research))
+    results = []
+    quote_ids = None
+    quote_hash = None
+    def reference():
+        return now or datetime.now(settings.timezone)
+    def check_quotes(db, at):
+        return _fast_quotes(db, settings, universe, at, quote_ids=quote_ids, input_hash=quote_hash)
+    try:
+        for task in ("refresh_quotes", "refresh_signals", "refresh_decision_board"):
+            run_id = uuid4().hex
+            if on_task is not None:
+                on_task(task, None, run_id)
+            try:
+                validate_base_manifest(settings, universe, base_manifest, code_sha=code_sha, now=reference())
+                with Session(engine) as db, db.begin():
+                    before_quote_id = db.scalar(select(func.max(QuoteSnapshot.id))) or 0
+                    if quote_ids is not None:
+                        check_quotes(db, reference())
+                    result = dict(service.run(db, task, codes=universe, run_id=run_id))
+                    if task == "refresh_quotes" and result.get("status") == "succeeded":
+                        quotes, quote_hash = check_quotes(db, reference())
+                        if any(q.id <= before_quote_id for q in quotes.values()):
+                            raise ValueError("fast requires newly captured quote batch")
+                        quote_ids = {q.id for q in quotes.values()}
+                        for ident, quote in quotes.items():
+                            existing = db.scalar(select(DecisionBoardProvisionalInput).where(
+                                DecisionBoardProvisionalInput.instrument_id == ident,
+                                DecisionBoardProvisionalInput.observed_at == quote.quote_time,
+                                DecisionBoardProvisionalInput.source == quote.source))
+                            values = {"open_price": quote.open, "high_price": quote.high, "low_price": quote.low,
+                                      "last_price": quote.price, "volume": quote.volume, "amount": quote.amount,
+                                      "pct_change_percent_points": quote.pct_change,
+                                      "timestamp_verified": bool(quote.timestamp_verified)}
+                            if existing is not None:
+                                if any(getattr(existing, key) != value for key, value in values.items()):
+                                    raise ValueError("fast conflicting same-time provisional revision")
+                            else:
+                                db.add(DecisionBoardProvisionalInput(instrument_id=ident,
+                                    observed_at=quote.quote_time, source=quote.source, **values))
+                        db.flush()
+                    if quote_ids is not None:
+                        check_quotes(db, reference())
+            except Exception as exc:
+                if on_task is not None:
+                    on_task(task, {"status": "failed", "error_type": type(exc).__name__}, run_id)
+                raise
+            result.update(task_name=task, required=True)
+            results.append(result)
+            if on_task is not None:
+                on_task(task, result, run_id)
+            if result.get("status") != "succeeded":
+                break
+        validate_base_manifest(settings, universe, base_manifest, code_sha=code_sha, now=reference())
+        if len(results) == 3 and all(row.get("status") == "succeeded" for row in results):
+            results[-1]["fast_input"] = {"target_codes": sorted(universe), "quote_ids": sorted(quote_ids),
+                                          "input_hash": quote_hash, "actionable": False}
+            validate_fast_result(settings, universe, results, now=reference())
+        return results
+    finally:
+        service.close()
+        engine.dispose()
 
 
 from contextlib import contextmanager
@@ -752,7 +1052,7 @@ def export_local_v2(
                 "market_context": market_context_part,
                 "chart_periods": chart_periods,
             }
-
+            parts = _project_unavailable_optional(parts, unavailable, original.get("rows", []), generated)
 
             # Numeric encoding is lossless and precedes all content hashes.
             parts = _display_numbers(parts)

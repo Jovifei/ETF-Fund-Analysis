@@ -22,6 +22,10 @@ from app.workspace.local_compute import (
     validate_provider_admission,
     OPTIONAL_TASK_PARTS,
     closed_session_result_accepted,
+    compute_local_fast,
+    create_base_manifest,
+    validate_base_manifest,
+    validate_fast_result,
 )
 from app.workspace.local_schedule import LocalRunLock
 from app.workspace.local_atomic import write_json_atomic
@@ -108,18 +112,39 @@ def cmd_run(args: argparse.Namespace) -> int:
             }, ensure_ascii=False))
             return 0
 
-    lock = LocalRunLock(root / ".run.lock")
-    if not lock.acquire():
+    external_lock = getattr(args, '_external_lock', None)
+    lock = external_lock or LocalRunLock(root / ".run.lock")
+    if external_lock is not None and (not isinstance(external_lock, LocalRunLock) or external_lock._fd is None):
+        raise ValueError('dispatcher execution lock required')
+    if external_lock is None and not lock.acquire():
         print(json.dumps({"error": "another local compute task is currently running"}, ensure_ascii=False))
         return 2
 
     try:
+        previous_source = os.environ.get('GIT_COMMIT_SHA')
+        os.environ['GIT_COMMIT_SHA'] = sha  # Only this verified process; no persistent configuration change.
+        mode = getattr(args, 'cadence_mode', 'full')
+        base_path = root / 'state' / 'settled_base.json'
+        base = None
+        if mode in {'fast', 'auto'}:
+            try:
+                base = json.loads(base_path.read_text(encoding='utf-8'))
+                validate_base_manifest(settings, universe, base, code_sha=sha)
+            except (OSError, ValueError, TypeError):
+                if mode == 'fast':
+                    raise ValueError('fast settled base unavailable') from None
+                mode = 'full'
+                print(json.dumps({'status': 'base_recovery', 'mode': 'full'}))
+        observer = getattr(args, '_on_task', None)
         if getattr(args, "board_only", False):
             # Local refresh-then-sync: no market fetch, rebuild board from stored rows, then export + upload.
             results = compute_board_only(settings, universe=universe)
+        elif mode in {'fast', 'auto'}:
+            results = compute_local_fast(settings, universe, base_manifest=base, code_sha=sha,
+                admission=admission, private_research=private_research, on_task=observer)
         else:
             results = compute_local(settings, universe=universe, admission=admission, private_research=private_research,
-                                    closed_session_research=closed_session_research)
+                                    closed_session_research=closed_session_research, on_task=observer)
 
         # Check if any required task failed
         if not results:
@@ -132,6 +157,14 @@ def cmd_run(args: argparse.Namespace) -> int:
                 return 1
 
         print(json.dumps({"status": "completed", "tasks": results}, indent=2, ensure_ascii=False))
+        if mode == 'full' and getattr(args, 'prepare_base', False):
+            base = create_base_manifest(settings, universe, code_sha=sha)
+            write_json_atomic(base_path, base)
+        def validate_fast():
+            if mode in {'fast', 'auto'}:
+                validate_base_manifest(settings, universe, base, code_sha=sha)
+                validate_fast_result(settings, universe, results)
+        validate_fast()
         if getattr(args, "compute_only", False):
             return 0
 
@@ -159,12 +192,16 @@ def cmd_run(args: argparse.Namespace) -> int:
 
         unavailable = [OPTIONAL_TASK_PARTS[item["task_name"]] for item in results
                        if item.get("task_name") in OPTIONAL_TASK_PARTS and item.get("status") != "succeeded"]
+        if mode in {'fast', 'auto'}:
+            unavailable = sorted(set(unavailable) | {'market_context', 'sectors'})
         bundle = export_local_v2(settings, sequence=sequence, code_sha=sha, universe=universe,
                                  admission=admission, private_research=private_research, unavailable_parts=unavailable,
                                  closed_session_result=next((item for item in results if closed_session_result_accepted(item)), None))
 
         bundle_path = outbox / f"bundle_{bundle['manifest']['sequence']}.json"
         write_json_atomic(bundle_path, bundle)
+        if callback := getattr(args, '_on_export', None):
+            callback(bundle, bundle_path)
 
         print(json.dumps({
             "status": "exported",
@@ -191,10 +228,13 @@ def cmd_run(args: argparse.Namespace) -> int:
             sync_url = getattr(args, "sync_url", None) or "https://etf.joviluma.com/api/shadow/sync"
             from app.workspace.shadow_client import upload_bundle_auto
             try:
+                validate_fast()
                 # <=16 MiB per request (wire and decoded); larger bundles go chunked + atomic commit.
                 receipt = upload_bundle_auto(sync_url, bundle)
                 receipt_path = outbox / f"bundle_{bundle['manifest']['sequence']}.receipt.json"
                 write_json_atomic(receipt_path, receipt)
+                if callback := getattr(args, '_on_receipt', None):
+                    callback(bundle['manifest'], receipt)
                 print(json.dumps({"status": "uploaded", "receipt": receipt}, indent=2, ensure_ascii=False))
             except Exception as exc:
                 # Fix-6: upload failure must exit non-zero so Windows Task Scheduler records it
@@ -203,7 +243,72 @@ def cmd_run(args: argparse.Namespace) -> int:
 
         return 0
     finally:
-        lock.release()
+        if previous_source is None:
+            os.environ.pop('GIT_COMMIT_SHA', None)
+        else:
+            os.environ['GIT_COMMIT_SHA'] = previous_source
+        if external_lock is None:
+            lock.release()
+
+
+def cmd_dispatch(args: argparse.Namespace) -> int:
+    """Minute wake-ups share one durable scheduling and execution owner."""
+    from copy import copy
+    from datetime import datetime, timezone
+    from app.services.trading_calendar_service import TradingCalendarService
+    from app.utils.hashing import stable_hash
+    from app.workspace.local_dispatch import dispatch_once, load_pending_bundle
+    from app.workspace.shadow_bundle import digest
+    from app.workspace.shadow_client import upload_bundle_auto
+    root = Path(args.root)
+    cfg = load_local_config(root, Path(args.config) if args.config else root / 'config' / 'live.json')
+    sha = get_current_git_sha()
+    if args.profile != 'live' or args.expected_sha != sha or args.no_upload or args.compute_only or args.board_only:
+        raise ValueError('dispatcher requires approved live source and real delivery')
+    settings = local_settings(root, Path(args.db) if args.db else root / 'db' / 'research.sqlite3',
+                              profile=args.profile, market_provider=args.provider)
+    identity = {'code_sha': sha, 'config_hash': stable_hash(settings.load_strategy()),
+                'scope_hash': digest(sorted(cfg['universe']))}
+
+    def run_job(mode, *, on_task, on_export, on_receipt, lock):
+        child = copy(args)
+        child.cadence_mode = 'auto' if mode == 'fast' else 'full'
+        child.prepare_base = True
+        def observe(name, result, run_id):
+            if name == 'refresh_decision_board' and result is not None and result.get('status') == 'succeeded':
+                from sqlalchemy import select
+                from app.models import DecisionBoardSnapshot
+                from app.workspace.local_compute import local_session
+                with local_session(settings) as db:
+                    snapshot = db.scalar(select(DecisionBoardSnapshot).where(
+                        DecisionBoardSnapshot.snapshot_id == result.get('snapshot_id')))
+                    rows = (snapshot.payload_json or {}).get('rows', []) if snapshot else []
+                    found = [row.get('ts_code') for row in rows if row.get('ts_code') in cfg['universe']]
+                result = {**result, 'requested': len(cfg['universe']), 'completed': len(found),
+                          'coverage_complete': len(found) == len(set(found)) == len(cfg['universe'])}
+            on_task(name, result, run_id)
+        child._external_lock, child._on_task = lock, observe
+        child._on_export, child._on_receipt = on_export, on_receipt
+        return cmd_run(child)
+
+    def replay(*, attempt, on_receipt):
+        if get_current_git_sha() != sha:
+            raise ValueError('replay source changed')
+        bundle = load_pending_bundle(root, attempt, identity, now=datetime.now(timezone.utc))
+        bundle_path = root / 'outbox' / attempt['bundle_file']
+        manifest = bundle['manifest']
+        auth_file = root / 'config' / 'producer_auth.json'
+        auth_data = json.loads(auth_file.read_text(encoding='utf-8'))
+        os.environ.update(SHADOW_PRODUCER_TOKEN=auth_data['producer_token'],
+                          SHADOW_SIGNING_KEY_ID=auth_data['key_id'], SHADOW_SIGNING_SECRET=auth_data['signing_secret'])
+        receipt = upload_bundle_auto(args.sync_url, bundle)
+        write_json_atomic(bundle_path.with_suffix('.receipt.json'), receipt)
+        on_receipt(manifest, receipt)
+
+    result = dispatch_once(root, identity, calendar=TradingCalendarService(settings),
+                           run_job=run_job, replay=replay)
+    print(json.dumps({'status': 'dispatch_finished', 'exit_code': result}))
+    return result
 
 
 def cmd_reconcile(args: argparse.Namespace) -> int:
@@ -255,6 +360,11 @@ def main() -> int:
     p_run.add_argument("--skip-trade-day-check", action="store_true", help="Bypass trading day gate (for testing/manual runs)")
 
     p_run.add_argument("--board-only", action="store_true", help="Local refresh-then-sync: rebuild decision board from stored local rows, no market fetch")
+    p_run.add_argument('--cadence-mode', default='full', choices=['full', 'fast', 'auto'])
+    p_run.add_argument('--prepare-base', action='store_true', help='Persist validated settled inputs after full preparation')
+
+    subparsers.add_parser('dispatch', parents=[p_run], add_help=False,
+                         help='Recover and execute the latest due slot; invoke every minute')
 
     # Reconcile (16:30): local outbox vs receipts + matured T+1/T+5 outcomes; read-only, results stay local
     p_rec = subparsers.add_parser("reconcile", help="Reconcile local bundles with receipts and summarise matured T+1/T+5 outcomes")
@@ -273,6 +383,8 @@ def main() -> int:
         return cmd_run(args)
     elif args.command == "reconcile":
         return cmd_reconcile(args)
+    elif args.command == 'dispatch':
+        return cmd_dispatch(args)
     return 1
 
 

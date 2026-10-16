@@ -96,3 +96,14 @@ Review: 仅展示JSON数字编码变化，负零、布尔及非整数保留；�
 - [ ] Hub NOT_SENT（Win10061）恢复后按原契约处理，不能伪造已发送。
 
 评审：实际本机到签名公网接收及运行Reader链路已跑通；普通认证网页、自然调度、多日及数据/策略资格分别待验收。旧v3失败回滚和首次本地因配置计划暂停的失败均保留，不能改成PASS。完整收据docs/audits/PHASE1_RELEASE_20261016.md。
+
+# 2026-10-16 cadence recovery
+
+- [x] Verify current source, clean Owner tree, real Windows action and runtime baseline.
+- [x] Define scoped execution/acceptance contract in docs/plans/2026-10-16-cadence-recovery.md.
+- [x] Deliver persistent slot/job ledger, latest-slot recovery and same-package upload replay.
+- [x] Deliver verified settled-base fast updates without changing numerical or qualification contracts.
+- [ ] Test dispatcher and preview owned Windows migration/rollback.
+- [ ] Complete exact-source tests, independent review and webpage GPT review.
+- [ ] Controlled deployment and actual local task verification.
+- [ ] Arrange two verified trading-day slot/latency/cloud-zero-growth observation; report pending until observed.
