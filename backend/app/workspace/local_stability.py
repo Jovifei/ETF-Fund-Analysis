@@ -161,12 +161,24 @@ def _execution_contract(slot: str, attempt: dict, jobs: list[dict]) -> dict:
             or any(details.get(key) != lineage[key] for key in EXECUTION_HASH_FIELDS)
             or (slot in FULL_SLOTS and mode != "full")):
         return {"state": "FAIL", "reason": "execution_mode_or_hash_mismatch"}
+    identities = [job for job in jobs if job.get("job_name") == "execution_identity"]
+    if len(identities) != 1:
+        return {"state": "UNKNOWN", "reason": "execution_identity_missing"}
+    identity = identities[0]
+    identity_details = identity.get("details")
+    identity_fields = {"execution_hash", "config_file_hash"}
+    if (identity.get("required") is not False or identity.get("status") != "succeeded"
+            or not isinstance(identity_details, dict) or set(identity_details) != identity_fields
+            or any(not _sha256(identity_details[key]) for key in identity_fields)):
+        return {"state": "UNKNOWN", "reason": "execution_identity_unverified"}
+    if any(identity_details[key] != lineage[key] for key in identity_fields):
+        return {"state": "FAIL", "reason": "execution_identity_hash_mismatch"}
     expected = FULL_STAGES if mode == "full" else FAST_STAGES
     stages = [job for job in jobs if job.get("job_name") in FULL_STAGES]
     names = [job["job_name"] for job in stages]
     if set(names) != expected or len(names) != len(expected) or any(job.get("required") is not True for job in stages):
         return {"state": "FAIL", "reason": "required_stage_set_missing_or_duplicate"}
-    allowed = expected | {"execution_contract"} | (OPTIONAL_STAGES if mode == "full" else set())
+    allowed = expected | {"execution_contract", "execution_identity"} | (OPTIONAL_STAGES if mode == "full" else set())
     uploads = [job for job in jobs if isinstance(job.get("job_name"), str)
                and re.fullmatch(r"upload(?:_[1-9][0-9]*)?", job["job_name"])]
     if any(job.get("job_name") not in allowed and job not in uploads for job in jobs):

@@ -103,7 +103,7 @@ Review: 仅展示JSON数字编码变化，负零、布尔及非整数保留；�
 - [x] Define scoped execution/acceptance contract in docs/plans/2026-10-16-cadence-recovery.md.
 - [x] Deliver persistent slot/job ledger, latest-slot recovery and same-package upload replay.
 - [x] Deliver verified settled-base fast updates without changing numerical or qualification contracts.
-- [ ] Test dispatcher and preview owned Windows migration/rollback.
+- [x] Test dispatcher and preview owned Windows migration/rollback; native disabled probe restored from saved XML, actual task unchanged.
 - [ ] Complete exact-source tests, independent review and webpage GPT review.
 - [ ] Controlled deployment and actual local task verification.
 - [ ] Arrange two verified trading-day slot/latency/cloud-zero-growth observation; report pending until observed.

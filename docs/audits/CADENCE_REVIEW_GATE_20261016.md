@@ -33,6 +33,19 @@ is unavailable at the exact nested consumer paths before content hashing.
 
 ## Verification and release boundaries
 
+The second webpage review found a real producer/consumer mismatch: dispatch
+records an `execution_identity` control job, but the v2 assessor did not allow
+that job. The release must include a real dispatcher-to-assessor regression,
+with missing, duplicate and mismatched identity rejected. The interrupted
+7e4daff full run is retained as NOT_COMPLETED, not a passing receipt.
+
+Native Windows qualification has now exercised a new disabled, never-run owned
+probe: migrate its action/trigger/settings, restore the original definition
+from immutable UTF-16 XML, compare Principals/Actions/Triggers/Settings exactly,
+then remove only that owned probe. This passed against the 7e4daff migration
+script, whose bytes are unchanged by the assessor repair. The real producer
+task and its principal remain unchanged. Saved XML and hashes stay private.
+
 - Keep original failed/interrupted logs. The 2a85e36 and a537c89 full-test
   attempts were interrupted for required source revisions, not reported PASS.
 - Re-run full backend tests, static checks and exact CI on the final immutable

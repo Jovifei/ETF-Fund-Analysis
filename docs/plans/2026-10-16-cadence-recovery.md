@@ -17,7 +17,7 @@ Keep the canonical local data root, private configuration, account database and 
 
 - [x] Failure-first ledger, recovery, fast-base, dispatcher and stability tests (final exact-source qualification remains below).
 - [x] Implement ledger and full/fast execution hooks, upload replay and latest-slot dispatcher.
-- [ ] Preview and test owned Windows task migration; preserve a valid XML rollback.
+- [x] Preview and test owned Windows task migration; preserve a valid XML rollback (disabled native probe; actual task migration remains below).
 - [ ] Full backend tests, compile/static checks, relevant front-end checks, independent review and exact CI.
 - [ ] Webpage GPT reviews current source and test evidence; resolve actionable findings.
 - [ ] Freeze source, back up data/task, deploy and independently verify actual source/image/settings/receipt.

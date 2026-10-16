@@ -61,6 +61,10 @@ def populate_ledger(root, day="2026-10-16"):
         planned = datetime.fromisoformat(f"{day}T{slot}:00").replace(tzinfo=SHANGHAI)
         due = ledger.plan_due(planned, verified_trading=True, identity=identity, slots=SLOTS)
         attempt = ledger.claim(due["slot_id"], planned, identity=identity, lock_held=True)
+        execution = {"execution_hash": digest({"fixture_execution": day}),
+                     "config_file_hash": digest({"fixture_config": day})}
+        ledger.record_job(attempt["attempt_id"], "execution_identity", status="succeeded",
+                          required=False, now=planned, details=execution)
         mode = "full" if slot in FULL_SLOTS else "fast"
         stage_names = FULL_STAGES if mode == "full" else FAST_STAGES
         for stage in sorted(stage_names):
@@ -70,8 +74,7 @@ def populate_ledger(root, day="2026-10-16"):
                 run_id=f"run_{sequence}_{stage}",
                 details={"coverage_complete": not closed, "accepted_closed_session": closed})
         lineage = {"contract_version": EXECUTION_LINEAGE_VERSION, "mode": mode,
-                   "execution_hash": digest({"fixture_execution": day}),
-                   "config_file_hash": digest({"fixture_config": day}),
+                   **execution,
                    "base_input_hash": digest({"fixture_base": slot}),
                    "quote_batch_hash": digest({"fixture_quotes": slot})}
         ledger.record_job(attempt["attempt_id"], "execution_contract", status="succeeded",
@@ -187,7 +190,8 @@ def test_missing_missed_late_unproven_or_mixed_identity_delivery_blocks_pass():
         candidate = jobs()
         candidate["attempts"][0].update(changes)
         cases.append(candidate)
-    uncovered = jobs(); uncovered["jobs"][0]["details"]["coverage_complete"] = False
+    uncovered = jobs()
+    next(job for job in uncovered["jobs"] if job["job_name"] in FULL_STAGES)["details"]["coverage_complete"] = False
     cases.append(uncovered)
     for candidate in cases:
         assert session(ledger_summary=candidate)["state"] != "PASS"
@@ -237,7 +241,7 @@ def test_runtime_restart_boundary_is_unknown_and_non_auth_proof_stays_unrun():
 def test_future_captures_running_jobs_and_deletions_do_not_pass():
     assert session(as_of=datetime(2026, 10, 16, 6, tzinfo=timezone.utc))["state"] == "PARTIAL"
     running = jobs()
-    running["jobs"][0]["status"] = "RUNNING"
+    next(job for job in running["jobs"] if job["job_name"] in FULL_STAGES)["status"] = "RUNNING"
     assert session(ledger_summary=running)["state"] == "FAIL"
     after = cloud(when="16:35")
     after["tables"][0]["exact_count"] -= 1
@@ -258,7 +262,7 @@ def test_upload_retry_is_retained_but_not_collector_coverage():
     result = session(ledger_summary=ledger)
     assert result["state"] == "PASS"
     assert result["checks"]["delivery"]["slots"][2]["failed_jobs"] == 1
-    del ledger["jobs"][0]["details"]["coverage_complete"]
+    del next(job for job in ledger["jobs"] if job["job_name"] in FULL_STAGES)["details"]["coverage_complete"]
     assert session(ledger_summary=ledger)["checks"]["delivery"]["state"] == "UNKNOWN"
 
 
@@ -393,3 +397,81 @@ def test_unknown_scope_duplicate_stage_and_legacy_acceptance_cannot_pass():
     legacy = session()
     legacy["report_version"] = "local-stability-v1"
     assert summarize_stability([legacy, legacy])["state"] == "PARTIAL"
+
+
+def test_real_dispatch_execution_identity_closes_the_stability_contract(tmp_path):
+    """Use the deployed dispatcher protocol, including execution=, end to end."""
+    from app.workspace.local_dispatch import dispatch_once
+    from app.workspace.local_execution import execution_identity
+    from app.workspace.local_job_ledger import LocalJobLedger
+    from app.workspace.local_stability import SHANGHAI
+    from app.workspace.local_atomic import write_json_atomic
+
+    database = tmp_path / "research.sqlite3"
+    database.touch()
+    execution = execution_identity(b'{"universe":["510300.SH"]}', database=database,
+        profile="live", provider="public_composite", private_research=True,
+        closed_session_research=True, sync_url="https://etf.joviluma.com/api/shadow/sync")
+    identity = {"code_sha": SHA, "config_hash": CONFIG, "scope_hash": SCOPE}
+    for sequence, slot in enumerate(SLOTS, 1):
+        planned = datetime.fromisoformat(f"2026-10-16T{slot}:00").replace(tzinfo=SHANGHAI)
+        clock = [planned]
+        def run_job(mode, **hooks):
+            names = FULL_STAGES if mode == "full" else FAST_STAGES
+            for stage in sorted(names):
+                run_id = f"dispatch_{sequence}_{stage}"
+                hooks["on_task"](stage, None, run_id)
+                clock[0] += timedelta(seconds=1)
+                hooks["on_task"](stage, {"status": "succeeded", "run_id": run_id,
+                                        "coverage_complete": True}, run_id)
+            lineage = {"contract_version": EXECUTION_LINEAGE_VERSION, "mode": mode,
+                       **execution, "base_input_hash": digest({"fixture_base": slot}),
+                       "quote_batch_hash": digest({"fixture_quotes": slot})}
+            manifest = {"contract_version": "local-display-v2", "sequence": sequence,
+                "code_sha": SHA, "config_hash": CONFIG, "universe": UNIVERSE,
+                "generated_at": clock[0].isoformat(),
+                "expires_at": (planned + timedelta(hours=2)).isoformat(), "execution_lineage": lineage}
+            bundle = {"manifest": manifest}
+            path = tmp_path / "outbox" / f"bundle_{sequence}.json"
+            hooks["on_export_intent"](bundle, path)
+            write_json_atomic(path, bundle)
+            hooks["on_export"](bundle, path)
+            clock[0] = planned + timedelta(seconds=50)
+            receipt = {"status": "accepted", "sequence": sequence, "bundle_id": digest(manifest),
+                       "manifest_hash": digest(manifest), "received_at": clock[0].isoformat()}
+            hooks["on_receipt"](manifest, receipt)
+            return 0
+        assert dispatch_once(tmp_path, identity, calendar=Calendar(), run_job=run_job,
+                             replay=None, execution=execution, now=lambda: clock[0]) == 0
+    summary = LocalJobLedger(tmp_path).summary("2026-10-16")
+    assert sum(job["job_name"] == "execution_identity" for job in summary["jobs"]) == len(SLOTS)
+    assert session(ledger_summary=summary)["state"] == "PASS"
+
+
+@pytest.mark.parametrize("change", ["missing", "duplicate", "failed", "required", "missing_hash", "invalid_hash",
+                                   "execution_hash", "config_file_hash", "rewritten_lineage"])
+def test_execution_identity_must_be_unique_successful_and_bind_both_hashes(change):
+    ledger = jobs()
+    identity = next(job for job in ledger["jobs"] if job["job_name"] == "execution_identity")
+    if change == "missing":
+        ledger["jobs"].remove(identity)
+    elif change == "duplicate":
+        ledger["jobs"].append(deepcopy(identity))
+    elif change == "failed":
+        identity["status"] = "failed"
+    elif change == "required":
+        identity["required"] = True
+    elif change == "missing_hash":
+        identity["details"].pop("config_file_hash")
+    elif change == "invalid_hash":
+        identity["details"]["execution_hash"] = "not-a-hash"
+    elif change == "rewritten_lineage":
+        attempt = next(row for row in ledger["attempts"] if row["attempt_id"] == identity["attempt_id"])
+        context = next(job for job in ledger["jobs"] if job["job_name"] == "execution_contract"
+                       and job["attempt_id"] == identity["attempt_id"])
+        context["details"]["execution_hash"] = "f" * 64
+        attempt["manifest"]["execution_lineage"]["execution_hash"] = "f" * 64
+        _rebind(attempt)
+    else:
+        identity["details"][change] = "f" * 64
+    assert session(ledger_summary=ledger)["state"] != "PASS"
