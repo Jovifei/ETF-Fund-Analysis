@@ -42,6 +42,7 @@ from app.services.flow_share_research import (
 from app.services.signal_grade_service import GRADE_ORDER, SignalGradeService, classify_row
 from app.services.support_resistance_service import SupportResistanceService
 from app.services.trading_calendar_service import TradingCalendarService
+from app.workspace.refresh_policy import lunch_close_quote_fresh
 from app.utils.indicators_v05 import calculate_indicators
 from app.utils.numbers import finite_or_none
 from app.utils.support_resistance import build_support_resistance
@@ -893,7 +894,8 @@ class DecisionBoardService:
         target = generated_at.astimezone(SHANGHAI) if generated_at.tzinfo else generated_at.replace(tzinfo=SHANGHAI)
         if quote_time > target:
             return "stale", "quote_future_at_snapshot_generation"
-        if quote_time.date() != target.date() or (target - quote_time).total_seconds() > 8 * 60:
+        if quote_time.date() != target.date() or ((target - quote_time).total_seconds() > 8 * 60
+                                                  and not lunch_close_quote_fresh(quote_time, target)):
             return "stale", "quote_stale_at_snapshot_generation"
         if not quote.timestamp_verified or not quote.is_realtime or quote.degraded_reason:
             return "stale", "quote_unverified_or_degraded"
@@ -904,7 +906,8 @@ class DecisionBoardService:
             return {"status": "missing", "used_for_derived_values": False, "reason": "no_provisional_input"}
         observed = row.observed_at.astimezone(SHANGHAI) if row.observed_at.tzinfo else row.observed_at.replace(tzinfo=SHANGHAI)
         target = generated_at.astimezone(SHANGHAI) if generated_at.tzinfo else generated_at.replace(tzinfo=SHANGHAI)
-        if observed > target or observed.date() != target.date() or (target - observed).total_seconds() > 8 * 60:
+        if (observed > target or observed.date() != target.date()
+                or ((target - observed).total_seconds() > 8 * 60 and not lunch_close_quote_fresh(observed, target))):
             return {"status": "stale", "used_for_derived_values": False, "reason": "provisional_outside_snapshot_window", "observed_at": observed.isoformat(), "source": row.source, "timestamp_verified": bool(row.timestamp_verified)}
         complete = all(
             value is not None and isfinite(float(value))

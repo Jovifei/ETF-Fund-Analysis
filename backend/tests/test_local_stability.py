@@ -17,7 +17,7 @@ from app.workspace.shadow_bundle import digest
 SHA = "a" * 40
 CONFIG = "b" * 64
 IMAGE = "sha256:" + "c" * 64
-SLOTS = ("13:55", "14:20", "14:30", "14:45", "14:50", "14:55", "15:00", "15:15", "16:10")
+SLOTS = ("11:40", "13:55", "14:20", "14:30", "14:45", "14:50", "14:55", "15:00", "15:15", "16:10")
 UNIVERSE = ["510300.SH"]
 SCOPE = digest(UNIVERSE)
 
@@ -261,7 +261,7 @@ def test_upload_retry_is_retained_but_not_collector_coverage():
     ])
     result = session(ledger_summary=ledger)
     assert result["state"] == "PASS"
-    assert result["checks"]["delivery"]["slots"][2]["failed_jobs"] == 1
+    assert result["checks"]["delivery"]["slots"][3]["failed_jobs"] == 1  # 14:30 (11:40 is index 0)
     del next(job for job in ledger["jobs"] if job["job_name"] in FULL_STAGES)["details"]["coverage_complete"]
     assert session(ledger_summary=ledger)["checks"]["delivery"]["state"] == "UNKNOWN"
 
@@ -340,7 +340,7 @@ def _rebind(attempt):
                                    "scope_tamper", "extra_lineage", "missing_context_hash", "backdated", "sequence_reuse"])
 def test_manifest_context_scope_receipt_and_order_must_all_agree(change):
     ledger = jobs()
-    attempt = ledger["attempts"][1]
+    attempt = ledger["attempts"][2]  # 14:20 (11:40 is index 0)
     context = next(job for job in ledger["jobs"] if job["attempt_id"] == attempt["attempt_id"]
                    and job["job_name"] == "execution_contract")
     if change == "missing_manifest":
@@ -368,7 +368,7 @@ def test_manifest_context_scope_receipt_and_order_must_all_agree(change):
 
 def test_actual_full_fallback_needs_full_stages_and_cannot_claim_fast():
     ledger = jobs()
-    attempt = ledger["attempts"][1]  # 14:20 normally fast.
+    attempt = ledger["attempts"][2]  # 14:20 normally fast.
     context = next(job for job in ledger["jobs"] if job["attempt_id"] == attempt["attempt_id"]
                    and job["job_name"] == "execution_contract")
     for name in sorted(FULL_STAGES - FAST_STAGES):
@@ -380,7 +380,7 @@ def test_actual_full_fallback_needs_full_stages_and_cannot_claim_fast():
     attempt["manifest"]["execution_lineage"]["mode"] = "full"
     _rebind(attempt)
     assert session(ledger_summary=ledger)["state"] == "PASS"
-    first = ledger["attempts"][0]  # 13:55 must never be marked fast.
+    first = ledger["attempts"][1]  # 13:55 must never be marked fast.
     context = next(job for job in ledger["jobs"] if job["attempt_id"] == first["attempt_id"]
                    and job["job_name"] == "execution_contract")
     context["details"]["execution_mode"] = "fast"

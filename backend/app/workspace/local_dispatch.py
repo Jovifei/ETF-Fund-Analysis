@@ -11,8 +11,9 @@ from app.workspace.local_job_ledger import LocalJobLedger
 from app.workspace.local_schedule import LOCAL_SCHEDULE_SLOTS, LocalRunLock, SHANGHAI
 from app.workspace.local_compute import closed_session_result_accepted, quote_control_coverage, OPTIONAL_TASK_PARTS
 from app.workspace.shadow_bundle import digest
+from app.workspace.refresh_policy import lunch_close_quote_fresh
 
-DISPATCH_SLOTS = ('13:55', *LOCAL_SCHEDULE_SLOTS)
+DISPATCH_SLOTS = tuple(sorted(('13:55', *LOCAL_SCHEDULE_SLOTS)))
 FULL_SLOTS = {'13:55', '15:15', '16:10'}
 
 
@@ -52,7 +53,9 @@ def _validate_fast_replay_quotes(bundle, now):
         observed, fetched = stamp(quote.get('source_time')), stamp(quote.get('fetched_at'))
         if (observed.date() != reference.date() or fetched.date() != reference.date()
                 or not observed <= fetched <= reference
-                or any(not 0 <= (reference-value).total_seconds() <= 8*60 for value in (observed, fetched))):
+                or not 0 <= (reference-fetched).total_seconds() <= 8*60
+                or not (0 <= (reference-observed).total_seconds() <= 8*60
+                        or lunch_close_quote_fresh(observed, reference))):
             raise ValueError('fast observation quote expired or outside session')
         if (stamp(summary.get('source_time')) != observed
                 or summary.get('source') != quote['source']

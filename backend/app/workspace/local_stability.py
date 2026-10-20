@@ -27,8 +27,9 @@ RESEARCH_TABLES = (
     "chan_observed_transitions", "chan_research_stream_heads",
 )
 METRICS = ("exact_count", "n_tup_ins", "n_tup_upd", "n_tup_del", "heap_bytes", "total_bytes")
-SLOTS = ("13:55", "14:20", "14:30", "14:45", "14:50", "14:55", "15:00", "15:15", "16:10")
-DEFAULT_DEADLINES = {slot: 600 if slot in {"13:55", "15:15", "16:10"} else 120 for slot in SLOTS}
+SLOTS = ("11:40", "13:55", "14:20", "14:30", "14:45", "14:50", "14:55", "15:00", "15:15", "16:10")
+# 11:40 is a fast slot but may fall back to a full run when the settled base is not yet current.
+DEFAULT_DEADLINES = {slot: 600 if slot in {"11:40", "13:55", "15:15", "16:10"} else 120 for slot in SLOTS}
 FULL_SLOTS = {"13:55", "15:15", "16:10"}
 FAST_STAGES = {"refresh_quotes", "refresh_signals", "refresh_decision_board"}
 FULL_STAGES = FAST_STAGES | {"refresh_bars", "refresh_indicators", "refresh_forecasts"}

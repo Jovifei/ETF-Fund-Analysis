@@ -829,12 +829,22 @@ def _quote_batch_hash(quotes, settings):
     return stable_hash(identities)
 
 
+def _fast_quote_reasons(settings, quote, at):
+    """8-minute rule, except today's 11:30 morning-close quote for the 11:40 lunch slot."""
+    from app.services.qualification_gate import quote_reasons
+    from app.workspace.refresh_policy import lunch_close_quote_fresh
+    reasons = quote_reasons(settings, quote, at, 8)
+    if "quote_stale" in reasons and lunch_close_quote_fresh(getattr(quote, "quote_time", None), at):
+        reasons = [reason for reason in reasons if reason != "quote_stale"]
+    return reasons
+
+
 def _fast_quotes(db, settings, universe, at, *, quote_ids=None, input_hash=None):
     from app.services.snapshot_contract import quote_issues
     from app.services.qualification_gate import quote_reasons
     quotes = _selected_quotes(db, universe)
     if (len(quotes) != len(universe)
-            or any(quote_issues(q, settings, at=at) or quote_reasons(settings, q, at, 8) for q in quotes.values())
+            or any(quote_issues(q, settings, at=at) or _fast_quote_reasons(settings, q, at) for q in quotes.values())
             or (quote_ids is not None and {q.id for q in quotes.values()} != set(quote_ids))):
         raise ValueError("fast quotes incomplete changed or stale")
     actual = _quote_batch_hash(quotes, settings)

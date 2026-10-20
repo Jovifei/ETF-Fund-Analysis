@@ -19,9 +19,35 @@ from zoneinfo import ZoneInfo
 
 ZONE = ZoneInfo('Asia/Shanghai')
 
+# 11:40 lunch slot: one board after the 11:30 morning close.  Only inside this
+# reference window may the same-day morning-close quote (source time 11:29 or
+# later) count as fresh; every other slot keeps its normal 8-minute rule.
+LUNCH_CLOSE_SLOT = '11:40'
+LUNCH_CLOSE_WINDOW = (time(11, 40), time(12, 15))
+MORNING_CLOSE_EARLIEST_SOURCE = time(11, 29)
+
 
 def market_time(value):
     return value.replace(tzinfo=ZONE) if value.tzinfo is None else value.astimezone(ZONE)
+
+
+def lunch_close_quote_fresh(observed, reference) -> bool:
+    """True only for the 11:40 lunch slot reading today's 11:30 morning-close quote.
+
+    ``reference`` (board generation / validation time) must lie in 11:40-12:15
+    Asia/Shanghai, and ``observed`` (quote source time) must be the same day,
+    at or after 11:29 and not after ``reference``.  Lunch has no newer
+    exchange print, so this is the freshest real observation available.
+    """
+
+    if not isinstance(observed, datetime) or not isinstance(reference, datetime):
+        return False
+    observed, reference = market_time(observed), market_time(reference)
+    start, end = LUNCH_CLOSE_WINDOW
+    return (observed.date() == reference.date()
+            and start <= reference.time().replace(tzinfo=None) <= end
+            and observed.time().replace(tzinfo=None) >= MORNING_CLOSE_EARLIEST_SOURCE
+            and observed <= reference)
 
 
 def intraday_refresh_minutes(now: datetime, *, is_trade_day: bool) -> int | None:
