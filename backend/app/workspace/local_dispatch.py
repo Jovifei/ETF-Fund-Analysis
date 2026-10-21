@@ -21,8 +21,18 @@ def utc_now():
     return datetime.now(timezone.utc)
 
 
-def _validate_fast_replay_quotes(bundle, now):
-    """A new board timestamp cannot renew an older exchange observation."""
+LUNCH_SLOT = '11:40'
+
+
+def _validate_fast_replay_quotes(bundle, now, *, slot=None):
+    """A new board timestamp cannot renew an older exchange observation.
+
+    The only relaxation: for the 11:40 lunch slot the provider marks the
+    11:30 morning-close print as not realtime (no trading over lunch).  Such a
+    quote is accepted only when ``slot == '11:40'``, its source timestamp is
+    verified, and ``lunch_close_quote_fresh`` holds (same trade day, source
+    >= 11:29, validation inside 11:40-12:15).  Every other case stays strict.
+    """
     from app.workspace.read_model import market_time
     universe = set(bundle['manifest']['universe'])
     parts = bundle['parts']
@@ -44,8 +54,16 @@ def _validate_fast_replay_quotes(bundle, now):
     for row in rows:
         quote = details[row['ts_code']].get('quote') or {}
         summary = row.get('quote') or {}
-        if (not isinstance(quote, dict) or not isinstance(summary, dict)
-                or quote.get('is_realtime') is not True or quote.get('timestamp_verified') is not True
+        if not isinstance(quote, dict) or not isinstance(summary, dict):
+            raise ValueError('fast observation quote unqualified')
+        realtime = quote.get('is_realtime')
+        lunch_relaxed = False
+        if realtime is False and slot == LUNCH_SLOT and quote.get('timestamp_verified') is True:
+            lunch_observed = stamp(quote.get('source_time'))
+            lunch_relaxed = (lunch_observed.date() == reference.date()
+                             and lunch_close_quote_fresh(lunch_observed, reference))
+            realtime = lunch_relaxed
+        if (realtime is not True or quote.get('timestamp_verified') is not True
                 or quote.get('is_mock') is not False or not isinstance(quote.get('source'), str)
                 or not quote['source'].strip() or 'mock' in quote['source'].lower()
                 or type(quote.get('price')) not in (int, float) or not isfinite(quote['price']) or quote['price'] <= 0):
@@ -59,7 +77,12 @@ def _validate_fast_replay_quotes(bundle, now):
             raise ValueError('fast observation quote expired or outside session')
         if (stamp(summary.get('source_time')) != observed
                 or summary.get('source') != quote['source']
-                or any(summary.get(key) is not quote[key] for key in ('is_realtime', 'timestamp_verified', 'is_mock'))
+                or any(summary.get(key) is not quote[key] for key in ('timestamp_verified', 'is_mock'))
+                # The detail projection marks a >10 min old print as not realtime
+                # while the board summary keeps the provider flag; only for an
+                # accepted lunch-close quote may the two flags differ.
+                or (summary.get('is_realtime') is not quote['is_realtime']
+                    and not (lunch_relaxed and type(summary.get('is_realtime')) is bool))
                 or ('fetched_at' in summary and stamp(summary['fetched_at']) != fetched)):
             raise ValueError('fast observation overview detail mismatch')
 
@@ -95,7 +118,7 @@ def load_pending_bundle(root: Path, attempt: dict, identity: dict, *, now: datet
         generated = datetime.fromisoformat(manifest['generated_at'])
         if (now - generated).total_seconds() > 8 * 60:
             raise ValueError('fast observation expired')
-        _validate_fast_replay_quotes(bundle, now)
+        _validate_fast_replay_quotes(bundle, now, slot=attempt['slot_id'].rsplit(' ', 1)[-1])
     return bundle
 
 

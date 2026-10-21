@@ -132,3 +132,89 @@ def test_1140_missed_after_lateness_does_not_block_1355(tmp_path):
     assert ledger.plan_due(at(12, 1), verified_trading=True, identity=IDENTITY, slots=DISPATCH_SLOTS) is None
     due = ledger.plan_due(at(13, 55, 10), verified_trading=True, identity=IDENTITY, slots=DISPATCH_SLOTS)
     assert due["slot"] == "13:55"
+
+def _lunch_bundle(observed, fetched, **overrides):
+    bundle = _bundle(observed, fetched)
+    for part in (bundle["parts"]["details"]["510300.SH"]["quote"], bundle["parts"]["overview"]["rows"][0]["quote"]):
+        part.update(is_realtime=False, **overrides)
+    return bundle
+
+
+def test_fast_replay_accepts_nonrealtime_lunch_close_only_for_1140():
+    # 2026-10-21 production shape: sina 11:30 morning close, is_realtime=False, verified.
+    _validate_fast_replay_quotes(_lunch_bundle(at(11, 30), at(11, 41, 27)), at(11, 43), slot="11:40")
+    _validate_fast_replay_quotes(_lunch_bundle(at(11, 29), at(11, 41)), at(11, 47), slot="11:40")
+
+
+def test_fast_replay_lunch_nonrealtime_rejects_stale_source_time():
+    with pytest.raises(ValueError, match="unqualified"):
+        _validate_fast_replay_quotes(_lunch_bundle(at(11, 28, 59), at(11, 41)), at(11, 43), slot="11:40")
+    with pytest.raises(ValueError, match="unqualified"):
+        _validate_fast_replay_quotes(_lunch_bundle(at(10, 30), at(11, 41)), at(11, 43), slot="11:40")
+
+
+def test_fast_replay_lunch_nonrealtime_rejects_wrong_day():
+    with pytest.raises(ValueError):
+        _validate_fast_replay_quotes(_lunch_bundle(at(11, 30, day=20), at(11, 41)), at(11, 43), slot="11:40")
+
+
+def test_fast_replay_lunch_nonrealtime_rejects_unverified_timestamp():
+    with pytest.raises(ValueError, match="unqualified"):
+        _validate_fast_replay_quotes(_lunch_bundle(at(11, 30), at(11, 41), timestamp_verified=False),
+                                     at(11, 43), slot="11:40")
+
+
+@pytest.mark.parametrize("slot", [None, "13:55", "14:20", "14:30", "14:45", "15:00", "15:15", "16:10"])
+def test_fast_replay_nonrealtime_stays_strict_outside_1140(slot):
+    with pytest.raises(ValueError, match="unqualified"):
+        _validate_fast_replay_quotes(_lunch_bundle(at(11, 30), at(11, 41)), at(11, 43), slot=slot)
+    with pytest.raises(ValueError, match="unqualified"):
+        _validate_fast_replay_quotes(_lunch_bundle(at(14, 25), at(14, 30, 5)), at(14, 31), slot=slot)
+
+
+def test_fast_replay_1140_nonrealtime_rejected_outside_lunch_validation_window():
+    with pytest.raises(ValueError, match="unqualified"):
+        _validate_fast_replay_quotes(_lunch_bundle(at(11, 30), at(11, 38)), at(11, 39), slot="11:40")
+    with pytest.raises(ValueError):
+        _validate_fast_replay_quotes(_lunch_bundle(at(11, 30), at(12, 10)), at(12, 16), slot="11:40")
+
+
+def test_load_pending_bundle_passes_attempt_slot_to_replay_validation(monkeypatch):
+    import inspect
+    source = inspect.getsource(local_dispatch.load_pending_bundle)
+    assert "_validate_fast_replay_quotes(bundle, now, slot=attempt['slot_id'].rsplit(' ', 1)[-1])" in source
+
+def _production_lunch_bundle(observed, fetched):
+    """Exact 2026-10-21 11:40 export shape: board summary keeps the provider flag
+    (is_realtime=True, naive source_time, no fetched_at) while the detail
+    projection marks the >10 min old 11:30 print is_realtime=False."""
+    detail = {"is_realtime": False, "timestamp_verified": True, "is_mock": False, "source": "sina:hq_sinajs:v1",
+              "price": 1.0, "source_time": observed.isoformat(), "fetched_at": fetched.replace(tzinfo=None).isoformat()}
+    summary = {"is_realtime": True, "timestamp_verified": True, "is_mock": False, "source": "sina:hq_sinajs:v1",
+               "source_time": observed.replace(tzinfo=None).isoformat(), "status": "fresh", "actionable": False}
+    return {"manifest": {"universe": ["510300.SH"]},
+            "parts": {"overview": {"rows": [{"ts_code": "510300.SH", "quote": summary}]},
+                      "details": {"510300.SH": {"quote": detail}}}}
+
+
+def test_fast_replay_accepts_production_1140_shape_and_stays_strict_elsewhere():
+    bundle = _production_lunch_bundle(at(11, 30), at(11, 41, 27))
+    for minute in (43, 45, 47):
+        _validate_fast_replay_quotes(bundle, at(11, minute), slot="11:40")
+    for slot in (None, "13:55", "14:20"):
+        with pytest.raises(ValueError, match="unqualified"):
+            _validate_fast_replay_quotes(bundle, at(11, 43), slot=slot)
+    with pytest.raises(ValueError):  # replay window still bounded by the 8-minute fetch rule
+        _validate_fast_replay_quotes(bundle, at(11, 52), slot="11:40")
+
+
+def test_fast_replay_flag_mismatch_still_rejected_when_not_lunch_relaxed():
+    bundle = _bundle(at(14, 25), at(14, 30, 5))
+    bundle["parts"]["overview"]["rows"][0]["quote"]["is_realtime"] = False
+    with pytest.raises(ValueError, match="mismatch"):
+        _validate_fast_replay_quotes(bundle, at(14, 31), slot="14:30")
+    lunch = _production_lunch_bundle(at(11, 30), at(11, 41))
+    lunch["parts"]["overview"]["rows"][0]["quote"]["is_realtime"] = None
+    with pytest.raises(ValueError, match="mismatch"):
+        _validate_fast_replay_quotes(lunch, at(11, 43), slot="11:40")
+
