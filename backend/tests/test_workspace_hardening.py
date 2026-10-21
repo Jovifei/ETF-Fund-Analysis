@@ -58,10 +58,10 @@ def test_research_retry_is_explicit_preserves_input(bootstrapped):
         client.post('/api/workspace/research-jobs/' + job_id + '/cancel')
 
 
-@pytest.mark.parametrize('horizon', [1, 3, 5, 10])
+@pytest.mark.parametrize('horizon', [1, 3, 7, 20, 60])
 def test_horizon_http_query_casts_string_before_validation(horizon, bootstrapped):
     with TestClient(app) as client:
         response = client.get('/api/workspace/overview', params={'horizon': horizon, 'limit': 5})
         assert response.status_code == 200
         assert len(response.json()['rows']) <= 5
-        assert client.get('/api/workspace/overview?horizon=20').status_code == 422
+        assert client.get('/api/workspace/overview?horizon=5').status_code == 422

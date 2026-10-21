@@ -6,6 +6,7 @@ Private holdings are joined per request and never enter a shared response cache.
 """
 from __future__ import annotations
 
+from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS
 import json
 from datetime import UTC, datetime, time
 from pathlib import Path
@@ -178,7 +179,7 @@ def overview(db: Session, settings: Settings, horizon: int = 1, offset: int = 0,
     return {
         "snapshot_id": payload.get("snapshot_id"), "generated_at": payload.get("generated_at"),
         "next_refresh_at": payload.get("next_refresh_at"), "counts": payload.get("counts", {}),
-        "freshness_at_capture": payload.get("freshness", "missing"), "horizons": [1, 3, 5, 10],
+        "freshness_at_capture": payload.get("freshness", "missing"), "horizons": list(DEFAULT_RESEARCH_HORIZONS),
         "rows": [compact_row(row) for row in rows[offset:offset + limit]],
         "total": len(rows), "offset": offset, "limit": limit,
         "themes": sorted({str(row.get("theme_l1")) for row in payload.get("rows", []) if row.get("theme_l1")}),
@@ -268,19 +269,21 @@ def instrument_detail(db: Session, settings: Settings, code: str, user_id: int |
     if indicator is not None and market_time(indicator.generated_at) > read_as_of:
         indicator_issues = [*indicator_issues, "indicator_snapshot_after_read_time"]
     forecast_issues = {str(h): snapshot_issues(forecasts.get((inst.id, h)), settings, expected, kind="forecast")
-                       for h in (1, 3, 5, 10)}
-    for horizon in (1, 3, 5, 10):
+                       for h in DEFAULT_RESEARCH_HORIZONS}
+    for horizon in DEFAULT_RESEARCH_HORIZONS:
         forecast = forecasts.get((inst.id, horizon))
         if forecast is not None and market_time(forecast.generated_at) > read_as_of:
             forecast_issues[str(horizon)] = [*forecast_issues[str(horizon)], "forecast_snapshot_after_read_time"]
     if indicator_issues:
         indicator = None
     forecast_rows = {}
-    for horizon in (1, 3, 5, 10):
+    for horizon in DEFAULT_RESEARCH_HORIZONS:
         item = forecasts.get((inst.id, horizon))
         if item and not forecast_issues[str(horizon)]:
             forecast_rows[str(horizon)] = {name: getattr(item, name) for name in ("p_up", "expected_return", "q10", "q50", "q90", "sample_count", "confidence", "calibration_status", "model_version", "config_hash", "terminal_price_q10", "terminal_price_q50", "terminal_price_q90")}
             forecast_rows[str(horizon)]["as_of_date"] = iso(item.as_of_date)
+            if item.expected_return is None or item.p_up is None:
+                forecast_rows[str(horizon)]["unavailable_reason"] = (item.diagnostics_json or {}).get("reason") or "forecast_value_missing"
     from app.providers.data_contract import history_issues
     issue = history_issues(db, settings, [inst.id]).get(inst.id)
     view_quote = quote_view(quote, settings, as_of=read_as_of)
@@ -336,7 +339,7 @@ def instrument_detail(db: Session, settings: Settings, code: str, user_id: int |
     availability = availability_result["modules"]
     availability["forecasts"]["by_horizon"] = {
         str(h): forecast_availability(forecasts.get((inst.id, h)), forecast_issues[str(h)], history_issue=issue)
-        for h in (1, 3, 5, 10)
+        for h in DEFAULT_RESEARCH_HORIZONS
     }
     decision_explanation = {
         "conclusion": row.get("grade") if row else None,

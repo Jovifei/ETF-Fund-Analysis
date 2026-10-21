@@ -3,7 +3,16 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-DEFAULT_RESEARCH_HORIZONS: tuple[int, ...] = (1, 3, 5, 10)
+DEFAULT_RESEARCH_HORIZONS: tuple[int, ...] = (1, 3, 7, 20, 60)
+"""Formal forecast horizons in trading days: 明日 / 3日 / 7日 / 一个月(20) / 3个月(60)."""
+
+FORECAST_HORIZON_LABELS: dict[int, str] = {
+    1: "明日",
+    3: "3日",
+    7: "7日",
+    20: "一个月",
+    60: "3个月",
+}
 
 
 def normalize_horizons(

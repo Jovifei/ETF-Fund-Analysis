@@ -45,7 +45,9 @@
           "no_unit_guessing": true,
           "unit": "decimal_ratio"
         },
-        "source": "unavailable"
+        "sample_count": null,
+        "source": "unavailable",
+        "unavailable_reason": "forecast_snapshot_missing"
       },
       "forecast_scenario": [],
       "forecasts": {
@@ -69,9 +71,11 @@
             "no_unit_guessing": true,
             "unit": "decimal_ratio"
           },
-          "source": "unavailable"
+          "sample_count": null,
+          "source": "unavailable",
+          "unavailable_reason": "forecast_snapshot_missing"
         },
-        "10": {
+        "20": {
           "as_of_date": null,
           "calibration_status": "not_calibrated",
           "confidence": null,
@@ -91,7 +95,9 @@
             "no_unit_guessing": true,
             "unit": "decimal_ratio"
           },
-          "source": "unavailable"
+          "sample_count": null,
+          "source": "unavailable",
+          "unavailable_reason": "forecast_snapshot_missing"
         },
         "3": {
           "as_of_date": null,
@@ -113,9 +119,11 @@
             "no_unit_guessing": true,
             "unit": "decimal_ratio"
           },
-          "source": "unavailable"
+          "sample_count": null,
+          "source": "unavailable",
+          "unavailable_reason": "forecast_snapshot_missing"
         },
-        "5": {
+        "60": {
           "as_of_date": null,
           "calibration_status": "not_calibrated",
           "confidence": null,
@@ -135,7 +143,33 @@
             "no_unit_guessing": true,
             "unit": "decimal_ratio"
           },
-          "source": "unavailable"
+          "sample_count": null,
+          "source": "unavailable",
+          "unavailable_reason": "forecast_snapshot_missing"
+        },
+        "7": {
+          "as_of_date": null,
+          "calibration_status": "not_calibrated",
+          "confidence": null,
+          "config_hash": null,
+          "disclaimer": "FORECAST · 非实际结果",
+          "expected_return": null,
+          "feature_basis": "unavailable",
+          "feature_schema_version": null,
+          "input_hash": null,
+          "intraday_provisional_used": false,
+          "model_version": null,
+          "p_up": null,
+          "q10": null,
+          "q50": null,
+          "q90": null,
+          "return_semantics": {
+            "no_unit_guessing": true,
+            "unit": "decimal_ratio"
+          },
+          "sample_count": null,
+          "source": "unavailable",
+          "unavailable_reason": "forecast_snapshot_missing"
         }
       },
       "freshness": "stale",

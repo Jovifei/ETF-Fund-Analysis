@@ -17,7 +17,7 @@ class MemoryStore:
                               "expires_at": "2026-10-15T20:00:00Z"},
                 "parts": {"overview": {"snapshot_id": f"board-{i}", "rows": [
                     {"ts_code": "510300.SH", "forecasts": {"1": {"expected_return": .01},
-                                                           "5": {"expected_return": .05}}}]},
+                                                           "7": {"expected_return": .07}}}]},
                           "details": {"510300.SH": {"read_as_of": f"2026-10-15T0{i}:00:00Z"}},
                           "charts": {"510300.SH": {"as_of": f"2026-10-15T0{i}:00:00Z", "bars": []}},
                           "sectors": {"sectors": []}}}
@@ -44,11 +44,11 @@ def test_explicit_generation_and_capture_time_never_follow_latest():
 def test_board_snapshot_and_horizon_are_explicit():
     reader = LocalDisplayReader(MemoryStore())
     assert reader.read_decision_board(snapshot_id="missing") is None
-    five = reader.read_decision_board(horizon=5, generation=1)
-    assert five["selected_horizon"] == 5
-    assert five["rows"][0]["forecast"]["expected_return"] == .05
+    five = reader.read_decision_board(horizon=7, generation=1)
+    assert five["selected_horizon"] == 7
+    assert five["rows"][0]["forecast"]["expected_return"] == .07
     with pytest.raises(ValueError, match="horizon"):
-        reader.read_decision_board(horizon=20)
+        reader.read_decision_board(horizon=10)
 
 
 def test_cloud_chart_reader_never_aggregates_daily_data():

@@ -73,7 +73,8 @@ def test_reference_board_assets_and_columns_are_same_origin() -> None:
     # v104 explicitly removes the duplicate previous-day change column.
     assert "<th>较昨日</th>" not in js.text
     assert "sortDaily" in js.text
-    assert "明日预测" in js.text
+    assert "明日" in js.text and "3个月" in js.text
+    assert "预测涨幅" in js.text and "上涨概率" in js.text and "当前未提供" in js.text
     assert "J 90~100" in js.text
     assert "J>100" in js.text
     assert "量比" in js.text

@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS
 import logging
 import math
 import re
@@ -342,7 +343,7 @@ class CalibrationService:
                 return False
             return True
 
-        expected_horizons = {str(int(value)) for value in self.strategy["forecast"].get("horizons", (1, 3, 5, 10))}
+        expected_horizons = {str(int(value)) for value in self.strategy["forecast"].get("horizons", DEFAULT_RESEARCH_HORIZONS)}
         actual_horizons = set(summary.get("per_horizon") or {})
         horizon_count = max(1, len(expected_horizons))
         minimum_per_horizon = max(1, math.ceil(self.gates["minimum_total_samples"] / horizon_count))

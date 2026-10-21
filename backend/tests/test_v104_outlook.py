@@ -46,6 +46,5 @@ def test_research_outlook_horizons_remain_distinct_from_formal_forecast_contract
     strategy = get_settings().load_strategy()
     formal = tuple(aligned_research_horizons(strategy))
     assert HORIZONS == (1, 5, 20)
-    assert formal == (1, 3, 5, 10)
-    assert 20 not in formal
+    assert formal == (1, 3, 7, 20, 60)
     assert VERSION != strategy["forecast_version"]

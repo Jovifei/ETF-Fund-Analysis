@@ -14,7 +14,7 @@ from app.utils.historical_classification_contract import current_metadata_classi
 
 
 def _synthetic_panel() -> pd.DataFrame:
-    dates = list(pd.bdate_range("2025-01-02", periods=260).date)
+    dates = list(pd.bdate_range("2025-01-02", periods=380).date)
     features = sorted(
         {
             feature
@@ -89,7 +89,7 @@ def test_global_model_research_uses_purged_expanding_walk_forward(
     assert payload["split"]["folds"] == 4
     assert payload["split"]["test_sessions_per_fold"] == 20
     assert payload["split"]["minimum_train_sessions"] == 150
-    assert payload["configured_horizons"] == [1, 3, 5, 10]
+    assert payload["configured_horizons"] == [1, 3, 7, 20, 60]
     assert len(payload["config_hash"]) == 64
     assert payload["git_commit_sha"]
     assert payload["evidence_contract"]["pit_qualified"] is False
@@ -108,7 +108,7 @@ def test_global_model_research_uses_purged_expanding_walk_forward(
     for horizon in DEFAULT_RESEARCH_HORIZONS:
         item = payload["horizons"][str(horizon)]
         assert item["status"] == "ok"
-        assert item["mature_label_dates"] == 260 - horizon
+        assert item["mature_label_dates"] == 380 - horizon
         assert item["fold_count"] == 4
         assert item["valid_fold_count"] == 4
         assert item["oos_samples"] == 4 * 20 * 6
@@ -122,10 +122,10 @@ def test_global_model_research_uses_purged_expanding_walk_forward(
         assert all(fold["train_instruments"] == fold["test_instruments"] == 6 for fold in folds)
         assert all("ts_code" in fold["lineage_columns"] and f"label_end_date_{horizon}" in fold["lineage_columns"] for fold in folds)
         assert [fold["train_sessions"] for fold in folds] == [
-            180 - 2 * horizon,
-            200 - 2 * horizon,
-            220 - 2 * horizon,
-            240 - 2 * horizon,
+            300 - 2 * horizon,
+            320 - 2 * horizon,
+            340 - 2 * horizon,
+            360 - 2 * horizon,
         ]
         for previous, current in zip(folds, folds[1:]):
             assert previous["test_end"] < current["test_start"]
@@ -156,7 +156,7 @@ def test_sparse_instrument_uses_actual_label_end_not_global_calendar_distance(
     )
     dates = sorted(panel["trade_date"].unique())
     first_test = dates[-80:]
-    missing = set(dates[175:180])
+    missing = set(dates[-85:-80])
     panel = panel.loc[~((panel["ts_code"] == "TEST00.SH") & panel["trade_date"].isin(missing))].copy()
     for horizon in DEFAULT_RESEARCH_HORIZONS:
         panel[f"label_end_date_{horizon}"] = (
@@ -164,7 +164,7 @@ def test_sparse_instrument_uses_actual_label_end_not_global_calendar_distance(
         )
     leaked_under_old_rule = panel.loc[
         (panel["ts_code"] == "TEST00.SH")
-        & (panel["trade_date"] < dates[179])
+        & (panel["trade_date"] < dates[-81])
         & (panel["label_end_date_1"] >= first_test[0])
     ]
     assert not leaked_under_old_rule.empty

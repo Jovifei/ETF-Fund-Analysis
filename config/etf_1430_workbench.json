@@ -6,7 +6,7 @@
     "target": "14:30",
     "end": "14:40"
   },
-  "forecast_horizons": [1, 3, 5, 10],
+  "forecast_horizons": [1, 3, 7, 20, 60],
   "minimum_history": 180,
   "historical_candles": 160,
   "scenario_candles": 10,

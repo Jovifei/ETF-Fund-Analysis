@@ -358,7 +358,7 @@ async function loadDecisionBoard(silent = false) {
     const payload = await api(`/api/decision-board?horizon=${encodeURIComponent(horizon)}`, {signal: controller.signal});
     if (controller.signal.aborted) return;
     const selectedHorizon = Number(payload.selected_horizon ?? payload.selected_forecast_horizon ?? horizon);
-    if ([1, 3, 5, 10].includes(selectedHorizon)) state.decisionUi.horizon = selectedHorizon;
+    if ([1, 3, 7, 20, 60].includes(selectedHorizon)) state.decisionUi.horizon = selectedHorizon;
     const changed = !state.decisionBoard || payload.snapshot_id !== state.decisionBoard.snapshot_id;
     state.decisionBoard = payload;
     const pending = state.decisionRefreshTask;
@@ -397,16 +397,17 @@ function decisionDetailHtml(detail) {
   const history = Array.isArray(detail?.history) ? detail.history : [];
   const scenario = Array.isArray(detail?.forecast_scenario) ? detail.forecast_scenario : [];
   const metric = (label, value) => `<div class="detail-metric" aria-label="${escapeHtml(`${label} ${value}`)}"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`;
-  const selectedHorizon = [1, 3, 5, 10].includes(Number(detail?.selected_horizon)) ? Number(detail.selected_horizon) : 1;
+  const HORIZON_NAMES = {1: '明日', 3: '3日', 7: '7日', 20: '一个月', 60: '3个月'};
+  const selectedHorizon = [1, 3, 7, 20, 60].includes(Number(detail?.selected_horizon)) ? Number(detail.selected_horizon) : 1;
   const forecasts = detail?.forecasts && typeof detail.forecasts === 'object' ? detail.forecasts : {};
   const selectedForecast = detail?.forecast && typeof detail.forecast === 'object' ? detail.forecast : {};
-  const forecastCards = [1, 3, 5, 10].map(horizon => {
+  const forecastCards = [1, 3, 7, 20, 60].map(horizon => {
     const forecast = forecasts[String(horizon)] || forecasts[horizon] || (horizon === selectedHorizon ? selectedForecast : {});
     const selectedClass = horizon === selectedHorizon ? ' detail-forecast-card--selected' : '';
-    return `<article class="detail-forecast-card${selectedClass}" aria-label="${escapeHtml(`${horizon} 日预测`)}">
-      <div class="forecast-label">FORECAST · 非实际结果 · 仅供研究</div><h4>${escapeHtml(`${horizon} 日预测`)}</h4>
+    return `<article class="detail-forecast-card${selectedClass}" aria-label="${escapeHtml(`${HORIZON_NAMES[horizon]}预测`)}">
+      <div class="forecast-label">FORECAST · 非实际结果 · 仅供研究</div><h4>${escapeHtml(`${HORIZON_NAMES[horizon]}预测`)}</h4>
       <div class="detail-forecast-card-grid">${[
-        ['期望收益', decisionPercent(forecast?.expected_return)], ['上涨概率', decisionPercent(forecast?.p_up)], ['q10/q50/q90', `${decisionPercent(forecast?.q10)} / ${decisionPercent(forecast?.q50)} / ${decisionPercent(forecast?.q90)}`], ['置信度', fmt(forecast?.confidence, 0)], ['校准状态', decisionCellText(forecast?.calibration_status)],
+        ['预测涨幅', forecast?.expected_return == null ? '当前未提供' : decisionPercent(forecast?.expected_return)], ['上涨概率', forecast?.p_up == null ? '当前未提供' : decisionPercent(forecast?.p_up)], ['q10/q50/q90', `${decisionPercent(forecast?.q10)} / ${decisionPercent(forecast?.q50)} / ${decisionPercent(forecast?.q90)}`], ['置信度', fmt(forecast?.confidence, 0)], ['校准状态', decisionCellText(forecast?.calibration_status)],
       ].map(([label, value]) => metric(label, value)).join('')}</div>
       <div class="forecast-card-disclaimer">研究情景 · 非实际结果 · 不构成投资建议</div></article>`;
   }).join('');
@@ -428,7 +429,7 @@ function decisionDetailHtml(detail) {
       ['指标版本', decisionCellText(indicator?.version)], ['指标日期', decisionCellText(indicator?.as_of_date)],
       ['来源时间', timeText(quote?.source_time)], ['临时观测', decisionCellText(provisional?.status)], ['临时观测时间', timeText(provisional?.observed_at || provisional?.source_time)],
     ].map(([label, value]) => metric(label, value)).join('')}</div>
-    <section class="detail-forecast forecast-surface"><div class="forecast-label">FORECAST · 非实际结果 · 仅供研究</div><h3>1 / 3 / 5 / 10 日预测 · 当前 ${escapeHtml(String(selectedHorizon))} 日</h3>
+    <section class="detail-forecast forecast-surface"><div class="forecast-label">FORECAST · 非实际结果 · 仅供研究</div><h3>明日 / 3日 / 7日 / 一个月 / 3个月 预测 · 当前 ${escapeHtml(HORIZON_NAMES[selectedHorizon])}</h3>
       <div class="detail-forecast-grid detail-forecast-cards">${forecastCards}</div></section>
     <div class="detail-chart-note">历史K线 ${history.length} 根 → 预测情景 ${scenario.length} 根 · 边界后的紫色虚线蜡烛均为非实际结果。</div>
     <section class="reason-box"><strong>支撑 / 压力 / 缠论近似</strong><br>支撑 ${escapeHtml(decisionDetailLevel(levels?.nearest_support))} · 压力 ${escapeHtml(decisionDetailLevel(levels?.nearest_resistance))} · ${escapeHtml(decisionChanRange(chan?.zone || levels?.chan_zone_approx))}<br>支撑层级 ${escapeHtml(levelText(levels?.support_levels))}<br>压力层级 ${escapeHtml(levelText(levels?.resistance_levels))}<br>${escapeHtml(decisionCellText(chan?.label))} · ${escapeHtml(decisionCellText(chan?.detail))}</section>
@@ -1260,7 +1261,7 @@ function instrumentRow(row) {
     <td><div class="metric-main">${escapeHtml(fmt(v.rsi14,1))}</div><div class="metric-sub">6:${escapeHtml(fmt(v.rsi6,1))} / 12:${escapeHtml(fmt(v.rsi12,1))}</div></td>
     <td><div class="metric-main">${escapeHtml(v.td_buy_setup ?? '—')} / ${escapeHtml(v.td_sell_setup ?? '—')}</div><div class="metric-sub">买 / 卖设置</div></td>
     <td><div class="metric-main ${escapeHtml(colorClass(v.return_20d))}">${escapeHtml(pct(v.return_20d,2,true))}</div><div class="metric-sub">60日 ${escapeHtml(pct(v.return_60d,2,true))}</div></td>
-    <td>${forecastCell(f['1'])}</td><td>${forecastCell(f['5'])}</td><td>${forecastCell(f['20'])}</td>
+    <td>${forecastCell(f['1'])}</td><td>${forecastCell(f['7'])}</td><td>${forecastCell(f['20'])}</td>
     <td><span class="badge ${escapeHtml(stateClass(s.state))}">${escapeHtml(s.state || '待计算')}</span><div class="metric-sub">分 ${escapeHtml(fmt(s.score,1))} · conf ${escapeHtml(fmt(s.confidence,1))}</div></td>
   </tr>`;
 }
@@ -1305,7 +1306,7 @@ function renderHoldings() {
     ['现金 / 未分配', '未录入', '本版不推断现金余额'],
   ];
   qs('#holdingSummary').innerHTML = items.map(([l,v,s]) => `<div class="summary-card"><div class="label">${escapeHtml(l)}</div><div class="value">${escapeHtml(v)}</div><div class="sub">${escapeHtml(s)}</div></div>`).join('');
-  qs('#holdingTable tbody').innerHTML = holdings.length ? holdings.map(h => `<tr><td><a class="instrument-name" href="/etf/${encodeURIComponent(h.ts_code)}">${displayIdentity(h.ts_code, h.name)}</a><div class="instrument-meta">${escapeHtml(h.theme_l1 || '未分类')}/${escapeHtml(h.theme_l2 || '-')}</div></td><td>${escapeHtml(fmt(h.shares,4))}</td><td>${escapeHtml(fmt(h.cost_price,4))}</td><td>${escapeHtml(fmt(h.latest_price,4))}</td><td>${escapeHtml(amountText(h.market_value))}</td><td class="${escapeHtml(colorClass(h.pnl))}">${escapeHtml(fmt(h.pnl,2))} / ${escapeHtml(holdingPnlPercent(h))}</td><td>${escapeHtml(fmt(h.current_weight*100,1))}%</td><td>${h.target_weight==null?'—':escapeHtml(fmt(h.target_weight*100,1))+'%'}</td><td>${escapeHtml(h.current_action||'—')}</td><td class="${escapeHtml(colorClass(h.forecasts&&h.forecasts['1']?h.forecasts['1'].expected_return:null))}">${escapeHtml(h.forecasts&&h.forecasts['1']?pct(h.forecasts['1'].expected_return,2,true):'—')}</td><td class="${escapeHtml(colorClass(h.forecasts&&h.forecasts['3']?h.forecasts['3'].expected_return:null))}">${escapeHtml(h.forecasts&&h.forecasts['3']?pct(h.forecasts['3'].expected_return,2,true):'—')}</td><td class="${escapeHtml(colorClass(h.forecasts&&h.forecasts['5']?h.forecasts['5'].expected_return:null))}">${escapeHtml(h.forecasts&&h.forecasts['5']?pct(h.forecasts['5'].expected_return,2,true):'—')}</td><td class="${escapeHtml(colorClass(h.forecasts&&h.forecasts['10']?h.forecasts['10'].expected_return:null))}">${escapeHtml(h.forecasts&&h.forecasts['10']?pct(h.forecasts['10'].expected_return,2,true):'—')}</td><td>${escapeHtml(fmt(h.nearest_support,3))}</td><td>${escapeHtml(fmt(h.nearest_resistance,3))}</td><td><button class="small-button edit-holding" data-code="${escapeHtml(h.ts_code)}">修改</button> <button class="small-button danger delete-holding" data-code="${escapeHtml(h.ts_code)}">删除</button></td></tr>`).join('') : '<tr class="loading-row"><td colspan="16">尚未录入持仓</td></tr>';
+  qs('#holdingTable tbody').innerHTML = holdings.length ? holdings.map(h => `<tr><td><a class="instrument-name" href="/etf/${encodeURIComponent(h.ts_code)}">${displayIdentity(h.ts_code, h.name)}</a><div class="instrument-meta">${escapeHtml(h.theme_l1 || '未分类')}/${escapeHtml(h.theme_l2 || '-')}</div></td><td>${escapeHtml(fmt(h.shares,4))}</td><td>${escapeHtml(fmt(h.cost_price,4))}</td><td>${escapeHtml(fmt(h.latest_price,4))}</td><td>${escapeHtml(amountText(h.market_value))}</td><td class="${escapeHtml(colorClass(h.pnl))}">${escapeHtml(fmt(h.pnl,2))} / ${escapeHtml(holdingPnlPercent(h))}</td><td>${escapeHtml(fmt(h.current_weight*100,1))}%</td><td>${h.target_weight==null?'—':escapeHtml(fmt(h.target_weight*100,1))+'%'}</td><td>${escapeHtml(h.current_action||'—')}</td><td class="${escapeHtml(colorClass(h.forecasts&&h.forecasts['1']?h.forecasts['1'].expected_return:null))}">${escapeHtml(h.forecasts&&h.forecasts['1']?pct(h.forecasts['1'].expected_return,2,true):'—')}</td><td class="${escapeHtml(colorClass(h.forecasts&&h.forecasts['3']?h.forecasts['3'].expected_return:null))}">${escapeHtml(h.forecasts&&h.forecasts['3']?pct(h.forecasts['3'].expected_return,2,true):'—')}</td><td class="${escapeHtml(colorClass(h.forecasts&&h.forecasts['7']?h.forecasts['7'].expected_return:null))}">${escapeHtml(h.forecasts&&h.forecasts['7']?pct(h.forecasts['7'].expected_return,2,true):'—')}</td><td class="${escapeHtml(colorClass(h.forecasts&&h.forecasts['20']?h.forecasts['20'].expected_return:null))}">${escapeHtml(h.forecasts&&h.forecasts['20']?pct(h.forecasts['20'].expected_return,2,true):'—')}</td><td class="${escapeHtml(colorClass(h.forecasts&&h.forecasts['60']?h.forecasts['60'].expected_return:null))}">${escapeHtml(h.forecasts&&h.forecasts['60']?pct(h.forecasts['60'].expected_return,2,true):'—')}</td><td>${escapeHtml(fmt(h.nearest_support,3))}</td><td>${escapeHtml(fmt(h.nearest_resistance,3))}</td><td><button class="small-button edit-holding" data-code="${escapeHtml(h.ts_code)}">修改</button> <button class="small-button danger delete-holding" data-code="${escapeHtml(h.ts_code)}">删除</button></td></tr>`).join('') : '<tr class="loading-row"><td colspan="17">尚未录入持仓</td></tr>';
   qsa('.edit-holding').forEach(b => b.addEventListener('click', () => openHolding(b.dataset.code)));
   qsa('.delete-holding').forEach(b => b.addEventListener('click', () => deleteHolding(b.dataset.code)));
   syncHoldingOptions();

@@ -149,7 +149,16 @@ def similarity_forecast(
     maximum_confidence: float,
     feature_columns: Iterable[str] | None = None,
     conformal_alpha: float = 0.20,
+    minimum_effective_windows: int | None = None,
 ) -> ForecastResult:
+    """Similarity forecast.
+
+    ``minimum_effective_windows`` (when set) is a sample-sufficiency gate: the
+    nearest neighbours' forward-label windows overlap, so for long horizons the
+    number of *independent* outcomes can be tiny (e.g. 2-3 for 60 days on ~280
+    bars).  Below the gate the horizon is reported unavailable instead of
+    publishing a number that is not supported by enough independent history.
+    """
     horizon = int(horizon)
     frame = indicator_frame.copy()
     frame["_row_position"] = np.arange(len(frame), dtype=int)
@@ -195,6 +204,17 @@ def similarity_forecast(
     overlap = _label_overlap_diagnostics(nearest["_row_position"].to_numpy(dtype=int), horizon)
     if len(terminal) < minimum_neighbors:
         return _empty_result(horizon, "not_enough_neighbors", len(terminal))
+    effective_windows = int(overlap["effective_non_overlapping_neighbor_count"])
+    if minimum_effective_windows is not None and effective_windows < int(minimum_effective_windows):
+        result = _empty_result(horizon, "insufficient_independent_windows", len(terminal))
+        result.diagnostics.update({
+            "candidate_count": int(len(candidates)),
+            "neighbor_count": int(len(terminal)),
+            **overlap,
+            "minimum_effective_windows": int(minimum_effective_windows),
+            "calibration_claim": "research_only_not_calibrated",
+        })
+        return result
 
     weights = 1.0 / np.maximum(nearest_distances, 0.05)
     weights = weights / weights.sum()
@@ -425,6 +445,11 @@ class ForecastService:
                     maximum_confidence=float(forecast_cfg.get("maximum_confidence_uncalibrated", 55)),
                     feature_columns=selected,
                     conformal_alpha=float(forecast_cfg.get("conformal_alpha", 0.20)),
+                    minimum_effective_windows=(
+                        int(forecast_cfg["minimum_effective_windows"])
+                        if forecast_cfg.get("minimum_effective_windows") is not None
+                        else None
+                    ),
                 )
                 reproducibility = reproducibility_payload(
                     strategy=self.strategy,

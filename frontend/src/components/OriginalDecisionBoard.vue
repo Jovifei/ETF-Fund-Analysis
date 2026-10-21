@@ -14,7 +14,7 @@ const outlook=useQuery<{items:Record<string,{forecasts:Record<string,unknown>}>}
 const q = useQuery<Record<string, unknown>>(() => props.ready===false?null:withGeneration(`/api/decision-board?horizon=${horizon.value===20&&props.generation==null?1:horizon.value}`,props.generation))
 const displayed=computed(()=>q.data.value?{...q.data.value,rows:((q.data.value.rows??[]) as Record<string,unknown>[]).map(row=>({...row,forecasts:{...(outlook.data.value?.items[String(row.ts_code)]?.forecasts??{}),...((row.forecasts??{}) as Record<string,unknown>)}}))}:null)
 function mobileControls(value:{filter:string;horizon:number}) {
-  if (![1,3,5,10,20].includes(value.horizon)) return
+  if (![1,3,7,20,60].includes(value.horizon)) return
   revision.value += 1; filter.value=value.filter.slice(0,128); horizon.value=value.horizon
 }
 function deliver() {
@@ -26,7 +26,7 @@ function receive(event: MessageEvent) {
   const value = event.data
   if (value?.type === 'etf-board:ready') { ready.value = true; deliver() }
   if (value?.type === 'etf-board:height' && Number.isFinite(value.height)) height.value = Math.max(240, Math.min(100000, value.height))
-  if (value?.type === 'etf-board:controls' && [1,3,5,10,20].includes(value.horizon) && Number.isSafeInteger(value.revision) && value.revision >= revision.value) {
+  if (value?.type === 'etf-board:controls' && [1,3,7,20,60].includes(value.horizon) && Number.isSafeInteger(value.revision) && value.revision >= revision.value) {
     revision.value = value.revision; horizon.value = value.horizon; filter.value = String(value.filter ?? '').slice(0,128)
   }
   if(value?.type==='etf-board:favorite' && typeof value.code==='string' && /^\d{6}\.(SH|SZ|BJ)$/.test(value.code)){ favoriteError.value=''; favorites.toggle(value.code).catch(e=>{favoriteError.value=errorText(e)}) }

@@ -46,10 +46,15 @@ from app.workspace.refresh_policy import lunch_close_quote_fresh
 from app.utils.indicators_v05 import calculate_indicators
 from app.utils.numbers import finite_or_none
 from app.utils.support_resistance import build_support_resistance
+from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS
 
 READ_MODEL_VERSION = "decision-read-v110-flow-share-provenance"
 CURRENT_BOARD_READ_CONTRACT = "current-board-read-v1-temporal"
-HORIZONS = (1, 3, 5, 10)
+HORIZONS = DEFAULT_RESEARCH_HORIZONS
+# The illustrative candle path stays within the former 10-session span so the
+# public bundle (canonical ~15.9 MiB of a 16 MiB budget) cannot grow by
+# 20/60-session candle paths once those horizons become available.
+SCENARIO_MAX_ANCHOR_DAYS = 10
 # Must match docs/INTRADAY_REFRESH_CADENCE.md and refresh_policy windows.
 # Lunch 11:31–12:59 is intentionally absent.  14:50–15:00 is every 2 minutes.
 SLOT_TIMES = (
@@ -424,7 +429,7 @@ class DecisionBoardService:
     @staticmethod
     def _validate_horizon(horizon: int) -> None:
         if horizon not in HORIZONS:
-            raise ValueError("horizon must be one of 1, 3, 5, 10")
+            raise ValueError("horizon must be one of 1, 3, 7, 20, 60")
 
     def _prune_snapshot_dates(self, db: Session) -> None:
         """Retain every snapshot on the latest 20 actual trading dates only."""
@@ -982,7 +987,8 @@ class DecisionBoardService:
         if current is None or current <= 0 or not basis_date:
             return []
         accepted = {h: {**forecasts[str(h)], "expected_return": value} for h in HORIZONS
-                    if (value := finite_or_none(forecasts.get(str(h), {}).get("expected_return"))) is not None}
+                    if h <= SCENARIO_MAX_ANCHOR_DAYS
+                    and (value := finite_or_none(forecasts.get(str(h), {}).get("expected_return"))) is not None}
         if not accepted or any(row.get("as_of_date") != basis_date for row in accepted.values()):
             return []
         if any(not row.get("model_version") for row in accepted.values()) or len({row.get("model_version") for row in accepted.values()}) != 1:
@@ -1078,6 +1084,13 @@ class DecisionBoardService:
             "q50": finite_or_none(row.q50) if row is not None else None,
             "q90": finite_or_none(row.q90) if row is not None else None,
             "p_up": finite_or_none(row.p_up) if row is not None else None,
+            "sample_count": row.sample_count if row is not None else None,
+            "unavailable_reason": (
+                "forecast_snapshot_missing" if row is None
+                else ((row.diagnostics_json or {}).get("reason") or "forecast_value_missing")
+                if finite_or_none(row.expected_return) is None or finite_or_none(row.p_up) is None
+                else None
+            ),
             "confidence": finite_or_none(row.confidence) if row is not None else None,
             "calibration_status": row.calibration_status if row is not None else "not_calibrated",
             "as_of_date": row.as_of_date.isoformat() if row is not None else None,

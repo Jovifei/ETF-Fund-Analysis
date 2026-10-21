@@ -93,10 +93,12 @@ HORIZON_FEATURES: dict[int, tuple[str, ...]] = {
     1: SHORT_HORIZON_FEATURES,
     3: SWING_HORIZON_FEATURES,
     5: SWING_HORIZON_FEATURES,
+    7: SWING_HORIZON_FEATURES,
     10: MEDIUM_HORIZON_FEATURES,
-    # Kept for reproduction of already-persisted v0.7 research artifacts.
-    # New configured research/forecast runs use 1/3/5/10.
+    # 5/10 are kept for reproduction of already-persisted v0.7 research artifacts.
+    # New configured research/forecast runs use 1/3/7/20/60.
     20: MEDIUM_HORIZON_FEATURES,
+    60: MEDIUM_HORIZON_FEATURES,
 }
 
 BOOLEAN_FEATURES = (

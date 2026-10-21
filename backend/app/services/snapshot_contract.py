@@ -14,7 +14,8 @@ from app.utils.hashing import stable_hash
 
 SNAPSHOT_CONTRACT_VERSION = "current-snapshot-v3-temporal"
 SIGNAL_INPUT_CONTRACT_VERSION = "signal-snapshot-inputs-v1"
-SIGNAL_FORECAST_SCORE_WEIGHTS = {1: 0.5, 5: 0.3}
+# 5-day weight moved to the nearest formal swing horizon (7) when horizons became 1/3/7/20/60.
+SIGNAL_FORECAST_SCORE_WEIGHTS = {1: 0.5, 7: 0.3}
 
 
 def formal_forecast_horizons(strategy: dict[str, Any]) -> list[int]:

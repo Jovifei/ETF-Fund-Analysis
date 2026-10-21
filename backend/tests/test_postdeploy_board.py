@@ -44,7 +44,7 @@ def test_sr_is_read_not_silently_lost_to_static_self_error(isolated,monkeypatch)
     assert not db.new and not db.dirty
 
 
-@pytest.mark.parametrize('horizon',[1,3,5,10])
+@pytest.mark.parametrize('horizon',[1,3,7,20,60])
 def test_read_projection_keeps_anomaly_counts(horizon):
     payload={'rows':[{'ts_code':'998801.SH','grade':'数据异常'}]}
     result=DecisionBoardService._select_horizon(payload,horizon)

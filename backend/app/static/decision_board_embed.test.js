@@ -9,7 +9,7 @@ test('cached iframe data preserves an independent failed-refresh state',()=>{
   const handlers={},nodes={},parent={postMessage(){}};
   const node=(name)=>nodes[name]??={value:'',disabled:true,innerHTML:'',addEventListener(){},getBoundingClientRect(){return {height:300}}};
   const ctx={window:{parent,location:{origin:'https://fixture'},addEventListener(k,f){handlers[k]=f}},
-    document:{querySelector:node},state:{},HORIZONS:[1,3,5,10,20],renderAll(){},esc:String,
+    document:{querySelector:node},state:{},HORIZONS:[1,3,7,20,60],renderAll(){},esc:String,
     requestAnimationFrame(){},ResizeObserver:class {observe(){} disconnect(){}}};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'decision_board_embed.js'),'utf8'),ctx);
   const board={rows:[]};

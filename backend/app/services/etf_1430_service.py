@@ -7,6 +7,7 @@ fails closed when a real-time source timestamp is not qualified.
 
 from __future__ import annotations
 
+from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS
 import json
 import math
 from collections import Counter
@@ -101,7 +102,7 @@ class ETF1430WorkbenchService:
     def _persisted_forecasts(self, persisted: dict[int, ForecastSnapshot]) -> dict[int, dict[str, Any]]:
         """Read the same persisted forecasts used by the canonical decision board."""
         result: dict[int, dict[str, Any]] = {}
-        for horizon_value in self.config.get("forecast_horizons", [1, 3, 5, 10]):
+        for horizon_value in self.config.get("forecast_horizons", list(DEFAULT_RESEARCH_HORIZONS)):
             horizon = int(horizon_value)
             stored = persisted.get(horizon)
             if stored is None:
@@ -242,7 +243,7 @@ class ETF1430WorkbenchService:
 
     @staticmethod
     def _score_forecast(forecasts: dict[int, dict[str, Any]]) -> float:
-        weights = {1: 0.35, 3: 0.25, 5: 0.23, 10: 0.17}
+        weights = {1: 0.35, 3: 0.25, 7: 0.23, 20: 0.17}
         total = 0.0; used = 0.0
         for horizon, weight in weights.items():
             item = forecasts.get(horizon, {}); p_up = _finite(item.get("p_up")); expected = _finite(item.get("expected_return")); confidence = _finite(item.get("confidence"))
@@ -338,7 +339,7 @@ class ETF1430WorkbenchService:
     def _scenario_candles(self, last_bar: DailyBar, forecasts: dict[int, dict[str, Any]]) -> list[dict[str, Any]]:
         if last_bar is None:
             return []
-        horizon_days = sorted(int(value) for value in self.config.get("forecast_horizons", [1, 3, 5, 10]))
+        horizon_days = sorted(int(value) for value in self.config.get("forecast_horizons", list(DEFAULT_RESEARCH_HORIZONS)))
         total_days = int(self.config.get("scenario_candles", max(horizon_days)))
         current = float(last_bar.close)
         anchors_x = [0]
@@ -349,7 +350,10 @@ class ETF1430WorkbenchService:
             item = forecasts.get(horizon, {})
             close_value = _finite(item.get("terminal_price_q50"))
             if close_value is None:
-                expected = _finite(item.get("expected_return")) or 0.0
+                expected = _finite(item.get("expected_return"))
+                if expected is None:
+                    # Unavailable horizon: no anchor, never a fabricated 0% path point.
+                    continue
                 close_value = current * (1 + expected)
             low_value = _finite(item.get("path_low_price_q50")) or min(current, close_value)
             high_value = _finite(item.get("path_high_price_q50")) or max(current, close_value)
@@ -465,7 +469,7 @@ class ETF1430WorkbenchService:
         if not qualification["actionable"]:
             risks.append("实时源时间或14:30窗口未通过资格，仅供研究")
         if all(item.get("calibration_status") != "calibrated" for item in forecasts.values()):
-            risks.append("1/3/5/10日预测尚未校准")
+            risks.append("明日/3日/7日/一个月/3个月预测尚未校准")
         if sr.get("chan_zone_approx"):
             risks.append("缠论区间为重叠区近似，不是完整CZSC结果")
         if structure_metrics.get("risk_reward") is not None and float(structure_metrics["risk_reward"]) < float(self.config["thresholds"]["minimum_risk_reward"]):

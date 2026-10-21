@@ -426,7 +426,7 @@ def decision_board(
     try:
         payload = DecisionBoardService(settings).read_latest(db, horizon=horizon, snapshot_id=snapshot_id)
     except ValueError:
-        raise HTTPException(status_code=422, detail="horizon must be one of 1, 3, 5, 10") from None
+        raise HTTPException(status_code=422, detail="horizon must be one of 1, 3, 7, 20, 60") from None
     if payload is None:
         raise HTTPException(status_code=404, detail="decision-board snapshot not found")
     return payload
@@ -467,7 +467,7 @@ def decision_board_detail(
             db, ts_code, horizon=horizon, snapshot_id=snapshot_id
         )
     except ValueError:
-        raise HTTPException(status_code=422, detail="horizon must be one of 1, 3, 5, 10") from None
+        raise HTTPException(status_code=422, detail="horizon must be one of 1, 3, 7, 20, 60") from None
     if row is None:
         raise HTTPException(status_code=404, detail="decision-board instrument not found")
     return row

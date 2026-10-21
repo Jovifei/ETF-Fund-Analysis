@@ -21,7 +21,7 @@ test('percentage contract uses decimal ratios exactly once',()=>{const ui=load()
 test('score color follows Chinese market red-strong green-risk convention',()=>{const ui=load();assert.equal(ui.scoreClass(90),'score-strong');assert.equal(ui.scoreClass(75),'score-good');assert.equal(ui.scoreClass(60),'score-mid');assert.equal(ui.scoreClass(45),'score-watch');assert.equal(ui.scoreClass(20),'score-risk');});
 test('relative direction arrows follow company screenshot semantics',()=>{const ui=load();assert.match(ui.deltaArrow(.01),/class="delta-arrow up"/);assert.match(ui.deltaArrow(-.01),/class="delta-arrow down"/);assert.match(ui.deltaArrow(0),/→/);});
 test('confidence interpretation matches reference bands',()=>{const ui=load();assert.equal(ui.confidenceBand(66),'可参考');assert.equal(ui.confidenceBand(48),'弱信号');assert.equal(ui.confidenceBand(28),'忽略');assert.equal(ui.confidenceBand(40),'弱信号');assert.equal(ui.confidenceBand(39),'忽略');});
-test('main source keeps the documented decision columns without duplicate day-change column',()=>{for(const label of ['标的','今日涨幅','量能','均线多空','MACD','KDJ','九转','RSI','板块涨跌','近1周','操作建议'])assert.match(source,new RegExp(label));assert.match(source,/明日预测/);assert.doesNotMatch(source,/较昨日/);assert.match(source,/data-sort-daily/);});
+test('main source keeps the documented decision columns without duplicate day-change column',()=>{for(const label of ['标的','今日涨幅','量能','均线多空','MACD','KDJ','九转','RSI','板块涨跌','近1周','操作建议'])assert.match(source,new RegExp(label));assert.match(source,/1:'明日',3:'3日',7:'7日',20:'一个月',60:'3个月'/);assert.match(source,/\$\{horizonLabel\(state\.horizon\)\}预测/);assert.doesNotMatch(source,/较昨日/);assert.match(source,/data-sort-daily/);});
 test('main table keeps score inside instrument cell instead of a separate score column',()=>{assert.match(source,/score-mini/);assert.doesNotMatch(source,/<th>综合分<\/th>/);});
 
 test('uncalibrated p_up is labelled as historical neighbor frequency',()=>{const ui=load();assert.equal(ui.forecastProbabilityLabel({calibration_status:'not_calibrated'}),'历史相似样本上涨占比');assert.equal(ui.forecastProbabilityLabel({calibration_status:'calibrated'}),'上涨概率');});
@@ -48,7 +48,7 @@ test('audit: cached iframe state cannot hide a failed refresh',()=>{
   const handlers={}, nodes={}; const parent={postMessage(){}};
   const node=(name)=>nodes[name]??=( {value:'',disabled:true,innerHTML:'',addEventListener(){},getBoundingClientRect(){return {height:300}}} );
   const ctx={window:{parent,location:{origin:'https://fixture'},addEventListener(k,f){handlers[k]=f}},
-    document:{querySelector:node},state:{},HORIZONS:[1,3,5,10,20],renderAll(){},esc:String,
+    document:{querySelector:node},state:{},HORIZONS:[1,3,7,20,60],renderAll(){},esc:String,
     requestAnimationFrame(){},ResizeObserver:class {observe(){} disconnect(){}}};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname,'decision_board_embed.js'),'utf8'),ctx);
   const emit=(error)=>handlers.message({source:parent,origin:'https://fixture',data:{type:'etf-board:state',

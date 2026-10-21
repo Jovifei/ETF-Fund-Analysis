@@ -112,7 +112,7 @@ def _attach(
     snapshot_inputs = {
         "contract_version": SIGNAL_INPUT_CONTRACT_VERSION,
         "formal_forecast_horizons": [int(value) for value in strategy["forecast"]["horizons"]],
-        "forecast_score_horizon_weights": {"1": 0.5, "5": 0.3},
+        "forecast_score_horizon_weights": {"1": 0.5, "7": 0.3},
         "quote_input_hash": None,
         "indicator": {
             "input_hash": indicator_input_hash,

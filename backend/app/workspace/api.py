@@ -11,6 +11,7 @@ from app.core.config import Settings, get_settings
 from app.core.security import optional_current_user, require_admin, require_private_access
 from app.db.session import get_db
 from app.models import AuthUser, Instrument
+from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS
 from app.workspace import read_model
 from app.workspace.actions_api import router as actions_router
 from app.workspace.bridge_api import router as device_router
@@ -41,8 +42,8 @@ def _local_reader(settings: Settings):
 
 @private_router.get("/workspace/overview")
 def overview(db: DB, settings: Config, user: User, horizon: int = Query(default=1), offset: int = Query(default=0, ge=0, le=10000), limit: int = Query(default=100, ge=1, le=500), theme: str | None = Query(default=None, max_length=128), generation: str | None = Query(default=None)) -> dict:
-    if horizon not in (1, 3, 5, 10):
-        raise HTTPException(422, "horizon must be one of 1, 3, 5, 10")
+    if horizon not in DEFAULT_RESEARCH_HORIZONS:
+        raise HTTPException(422, "horizon must be one of 1, 3, 7, 20, 60")
     if settings.workspace_research_source == "local_bundle":
         return _local_reader(settings).read_overview(horizon, offset, limit, theme, generation=generation)
     return read_model.overview(db, settings, horizon, offset, limit, theme)

@@ -507,7 +507,7 @@ class FactorAnalysisService:
                 for factor in factors
                 for horizon in regime_horizons
             ]
-        theme_horizon = 5 if 5 in horizons else horizons[0]
+        theme_horizon = 7 if 7 in horizons else (5 if 5 in horizons else horizons[0])
         by_theme: dict[str, dict] = {}
         for theme, subset in panel.groupby("theme_l1", observed=True):
             if subset["ts_code"].nunique() < 3:

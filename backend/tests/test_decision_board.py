@@ -443,13 +443,13 @@ def test_private_api_reads_snapshot_and_queues_refresh(db_session, bootstrapped)
     db_session.commit()
 
     client = TestClient(app)
-    response = client.get("/api/decision-board?horizon=5")
-    detail = client.get("/api/decision-board/510300.SH?horizon=5")
+    response = client.get("/api/decision-board?horizon=7")
+    detail = client.get("/api/decision-board/510300.SH?horizon=7")
     queued = client.post("/api/decision-board/refresh")
 
     assert response.status_code == 200
-    assert response.json()["selected_forecast_horizon"] == 5
-    assert response.json()["selected_horizon"] == 5
+    assert response.json()["selected_forecast_horizon"] == 7
+    assert response.json()["selected_horizon"] == 7
     assert all(isinstance(group, list) for group in response.json()["groups"].values())
     assert detail.status_code == 200
     assert detail.json()["ts_code"] == "510300.SH"
@@ -461,22 +461,23 @@ def test_snapshot_rows_supply_all_wide_table_metric_objects_and_selected_groups(
     service = DecisionBoardService()
     service.refresh(db_session)
 
-    payload = service.read_latest(db_session, horizon=5)
+    payload = service.read_latest(db_session, horizon=7)
     row = payload["rows"][0]
     assert set(("volume", "ma", "macd", "kdj", "td", "rsi", "chan", "sector")) <= set(row)
     assert all(isinstance(row[key], dict) and row[key].get("label") for key in ("volume", "ma", "macd", "kdj", "td", "rsi", "chan", "sector"))
-    assert row["forecast"] == row["forecasts"]["5"]
-    assert payload["groups"][row["grade"]][0]["forecast"] == row["forecasts"]["5"]
+    assert row["forecast"] == row["forecasts"]["7"]
+    assert payload["groups"][row["grade"]][0]["forecast"] == row["forecasts"]["7"]
 
 
 def test_detail_is_captured_in_snapshot_and_stays_immutable_after_domain_rows_change(db_session, bootstrapped) -> None:
     service = DecisionBoardService()
     built = service.refresh(db_session)
-    detail_before = service.read_instrument(db_session, "510300.SH", horizon=10)
+    detail_before = service.read_instrument(db_session, "510300.SH", horizon=20)
     assert detail_before is not None
     assert detail_before["snapshot_id"] == built.snapshot.snapshot_id
     assert len(detail_before["history"]) > 0
-    assert len(detail_before["forecast_scenario"]) == 10
+    # 情景路径锚点上限 10 日；新口径最长可用锚点为 7 日。
+    assert len(detail_before["forecast_scenario"]) == 7
     assert "support_resistance" in detail_before and "chan" in detail_before
 
     bar = db_session.scalar(
@@ -488,7 +489,7 @@ def test_detail_is_captured_in_snapshot_and_stays_immutable_after_domain_rows_ch
     try:
         bar.close = 999.0
         db_session.flush()
-        detail_after = service.read_instrument(db_session, "510300.SH", horizon=10)
+        detail_after = service.read_instrument(db_session, "510300.SH", horizon=20)
         assert detail_after == detail_before
     finally:
         # The shared session-level bootstrap is reused by later backtest tests.
@@ -624,7 +625,7 @@ def test_selected_horizon_changes_forecast_sort_key() -> None:
     metrics = {"kind": "flat"}
     forecasts = {
         "1": {"expected_return": 0.01, "confidence": 0.4},
-        "5": {"expected_return": -0.01, "confidence": 0.9},
+        "7": {"expected_return": -0.01, "confidence": 0.9},
     }
     one_day = semantic_sort_keys(
         volume=metrics, ma={"kind": "mixed"}, macd={"kind": "bull_cont"},
@@ -634,7 +635,7 @@ def test_selected_horizon_changes_forecast_sort_key() -> None:
     five_day = semantic_sort_keys(
         volume=metrics, ma={"kind": "mixed"}, macd={"kind": "bull_cont"},
         kdj={"kind": "healthy"}, td={"kind": "none"}, rsi={"value": 60},
-        chan={"status": "inside"}, forecasts=forecasts, horizon=5, today_return=0.0,
+        chan={"status": "inside"}, forecasts=forecasts, horizon=7, today_return=0.0,
     )
     assert one_day["forecast"] < five_day["forecast"]
 
@@ -660,7 +661,7 @@ def test_read_latest_and_api_rematerialize_selected_horizon_forecast_key(db_sess
     )
     matching = db_session.scalar(
         select(ForecastSnapshot)
-        .where(ForecastSnapshot.instrument_id == target.instrument_id, ForecastSnapshot.horizon == 5)
+        .where(ForecastSnapshot.instrument_id == target.instrument_id, ForecastSnapshot.horizon == 7)
         .order_by(ForecastSnapshot.as_of_date.desc(), ForecastSnapshot.generated_at.desc())
         .limit(1)
     )
@@ -670,12 +671,12 @@ def test_read_latest_and_api_rematerialize_selected_horizon_forecast_key(db_sess
     db_session.commit()
     code = db_session.scalar(select(DecisionBoardSnapshot).where(DecisionBoardSnapshot.snapshot_id == snapshot.snapshot.snapshot_id)).payload_json["rows"][0]["ts_code"]
     one = DecisionBoardService().read_latest(db_session, horizon=1, snapshot_id=snapshot.snapshot.snapshot_id)
-    five = DecisionBoardService().read_latest(db_session, horizon=5, snapshot_id=snapshot.snapshot.snapshot_id)
+    five = DecisionBoardService().read_latest(db_session, horizon=7, snapshot_id=snapshot.snapshot.snapshot_id)
     one_row = next(row for row in one["rows"] if row["instrument_id"] == target.instrument_id)
     five_row = next(row for row in five["rows"] if row["instrument_id"] == target.instrument_id)
     client = TestClient(app)
     api_one = client.get(f"/api/decision-board?snapshot_id={snapshot.snapshot.snapshot_id}&horizon=1")
-    api_five = client.get(f"/api/decision-board?snapshot_id={snapshot.snapshot.snapshot_id}&horizon=5")
+    api_five = client.get(f"/api/decision-board?snapshot_id={snapshot.snapshot.snapshot_id}&horizon=7")
     assert one_row["sort_keys"]["forecast"] != five_row["sort_keys"]["forecast"]
     assert api_one.status_code == api_five.status_code == 200
     assert next(row for row in api_one.json()["rows"] if row["instrument_id"] == target.instrument_id)["sort_keys"]["forecast"] == one_row["sort_keys"]["forecast"]

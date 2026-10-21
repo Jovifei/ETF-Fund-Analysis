@@ -8,5 +8,5 @@ def test_detail_availability_api_contract(bootstrapped):
     payload = response.json()
     assert payload['availability_contract_version'] == 'detail-availability-v1'
     assert len(payload['availability']) == 9
-    assert set(payload['availability']['forecasts']['by_horizon']) == {'1', '3', '5', '10'}
+    assert set(payload['availability']['forecasts']['by_horizon']) == {'1', '3', '7', '20', '60'}
     assert payload['actionable'] is False

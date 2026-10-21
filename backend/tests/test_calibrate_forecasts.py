@@ -141,7 +141,7 @@ def _write_validation_artifact(db_session, tmp_path, payload, *, as_of_time=None
     return path
 
 
-def _synthetic_validation_payload(svc, *, horizons=(1, 3, 5, 10), source="public_composite",
+def _synthetic_validation_payload(svc, *, horizons=(1, 3, 7, 20, 60), source="public_composite",
                                   pit=True, holdout=True, nan_metric=False, run_id="synthetic-validation"):
     rows = []
     for instrument in range(5):
@@ -233,10 +233,10 @@ def test_bad_h10_cannot_hide_inside_good_aggregate_metrics(db_session, tmp_path)
     svc = CalibrationService()
     payload = _synthetic_validation_payload(svc, run_id="bad-h10")
     for row in payload["instruments"]:
-        row["horizons"]["10"]["directional_accuracy"] = 0.0
+        row["horizons"]["60"]["directional_accuracy"] = 0.0
     _write_validation_artifact(db_session, tmp_path, payload)
     result = svc.create_candidate(db_session, run_id="bad-h10-candidate")
-    assert result["gate_results"]["horizons"]["10"]["items"]["directional_accuracy"] is False
+    assert result["gate_results"]["horizons"]["60"]["items"]["directional_accuracy"] is False
     assert result["gate_results"]["horizons"]["1"]["items"]["directional_accuracy"] is True
     assert result["gate_results"]["items"]["per_horizon_gates"] is False
     assert result["gates_passed"] is False
@@ -246,10 +246,10 @@ def test_empty_formal_horizon_is_a_hard_failure(db_session, tmp_path):
     svc = CalibrationService()
     payload = _synthetic_validation_payload(svc, run_id="empty-h10")
     for row in payload["instruments"]:
-        row["horizons"]["10"] = {"sample_count": 0}
+        row["horizons"]["60"] = {"sample_count": 0}
     _write_validation_artifact(db_session, tmp_path, payload)
     result = svc.create_candidate(db_session, run_id="empty-h10-candidate")
-    h10 = result["gate_results"]["horizons"]["10"]
+    h10 = result["gate_results"]["horizons"]["60"]
     assert h10["items"]["sample_count"] is False
     assert h10["items"]["metrics_valid"] is False
     assert result["gates_passed"] is False
@@ -260,7 +260,7 @@ def test_out_of_range_probability_metrics_fail_closed(db_session, tmp_path):
     payload = _synthetic_validation_payload(svc, run_id="range-invalid")
     payload["instruments"][0]["horizons"]["1"]["directional_accuracy"] = 1.2
     payload["instruments"][1]["horizons"]["3"]["brier_score"] = -0.1
-    payload["instruments"][2]["horizons"]["5"]["interval_80_coverage"] = 2.0
+    payload["instruments"][2]["horizons"]["7"]["interval_80_coverage"] = 2.0
     _write_validation_artifact(db_session, tmp_path, payload)
     result = svc.create_candidate(db_session, run_id="range-invalid-candidate")
     assert result["gate_results"]["items"]["metrics_valid"] is False
@@ -304,7 +304,7 @@ def test_latest_validation_selection_uses_append_identity_not_timezone_stripped_
 
     svc = CalibrationService()
     older_payload = _synthetic_validation_payload(svc, horizons=(1,), source="mock", run_id="older-future-clock")
-    newer_payload = _synthetic_validation_payload(svc, horizons=(1, 3, 5, 10), source="mock", run_id="newer-lower-clock")
+    newer_payload = _synthetic_validation_payload(svc, horizons=(1, 3, 7, 20, 60), source="mock", run_id="newer-lower-clock")
 
     # Simulate the SQLite cross-host ordering hazard seen in Linux CI:
     # an earlier-inserted Asia/Shanghai-style wall clock sorts numerically ahead
@@ -316,5 +316,5 @@ def test_latest_validation_selection_uses_append_identity_not_timezone_stripped_
 
     result = svc.create_candidate(db_session, run_id="append-order-candidate")
     assert result["status"] == "candidate_created"
-    assert result["summary"]["horizon_contract"] == ["1", "3", "5", "10"]
+    assert result["summary"]["horizon_contract"] == ["1", "3", "7", "20", "60"]
     assert result["gate_results"]["items"]["all_formal_horizons"] is True

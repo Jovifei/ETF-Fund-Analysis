@@ -143,8 +143,8 @@ def test_future_indicator_forecast_and_signal_are_not_current_evidence():
         strategy = settings.load_strategy()
         snapshot_inputs = {
             "contract_version": SIGNAL_INPUT_CONTRACT_VERSION,
-            "formal_forecast_horizons": [1, 3, 5, 10],
-            "forecast_score_horizon_weights": {"1": 0.5, "5": 0.3},
+            "formal_forecast_horizons": [1, 3, 7, 20, 60],
+            "forecast_score_horizon_weights": {"1": 0.5, "7": 0.3},
             "quote_input_hash": None,
             "indicator": None,
             "forecasts": {},

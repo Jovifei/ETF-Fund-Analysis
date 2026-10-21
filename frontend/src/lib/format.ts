@@ -1,5 +1,6 @@
 import type { Forecast, Metric, SupportLevel } from './types'
-export const horizons = [1, 3, 5, 10] as const
+export const horizons = [1, 3, 7, 20, 60] as const
+export const horizonLabels: Record<number, string> = { 1: '明日', 3: '3日', 7: '7日', 20: '一个月', 60: '3个月' }
 export const grades = ['可加仓', '可入场', '可试探', '观望', '减仓']
 export function num(value: unknown, digits = 2): string { return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString('zh-CN', { maximumFractionDigits: digits, minimumFractionDigits: digits }) : '—' }
 export function pct(value: unknown, digits = 2): string { return typeof value === 'number' && Number.isFinite(value) ? `${value > 0 ? '+' : ''}${num(value * 100, digits)}%` : '—' }

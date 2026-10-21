@@ -30,7 +30,7 @@ test('original report lives in home; ETF navigation preserves shell and filter',
 })
 
 test('industry and concept remain visible without decision snapshots', async ({page}) => {
-  await page.route('**/api/decision-board?*', r => r.fulfill({json:{rows:[],counts:{},horizons:[1,3,5,10]}}))
+  await page.route('**/api/decision-board?*', r => r.fulfill({json:{rows:[],counts:{},horizons:[1,3,7,20,60]}}))
   await page.goto('/')
   await expect(page.getByRole('heading',{name:'行业与概念板块'})).toBeVisible()
   await page.getByRole('button',{name:'概念板块',exact:true}).click()

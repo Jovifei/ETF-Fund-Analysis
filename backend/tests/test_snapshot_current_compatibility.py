@@ -96,7 +96,7 @@ def _signal(db, inst, when, *, current: bool, expires: datetime | None = None):
     snapshot_inputs = {
         "contract_version": SIGNAL_INPUT_CONTRACT_VERSION,
         "formal_forecast_horizons": [int(v) for v in strategy["forecast"]["horizons"]],
-        "forecast_score_horizon_weights": {"1": 0.5, "5": 0.3},
+        "forecast_score_horizon_weights": {"1": 0.5, "7": 0.3},
         "quote_input_hash": None,
         "indicator": None,
         "forecasts": {},
@@ -222,8 +222,8 @@ def test_signal_refresh_does_not_relabel_incompatible_inputs_as_current_provenan
         inputs = row.evidence_json["snapshot_inputs"]
         assert inputs["indicator"] is None
         assert inputs["forecasts"] == {}
-        assert inputs["formal_forecast_horizons"] == [1, 3, 5, 10]
-        assert inputs["forecast_score_horizon_weights"] == {"1": 0.5, "5": 0.3}
+        assert inputs["formal_forecast_horizons"] == [1, 3, 7, 20, 60]
+        assert inputs["forecast_score_horizon_weights"] == {"1": 0.5, "7": 0.3}
         assert signal_issues(row, get_settings(), at=row.as_of_time) == []
         assert row.is_actionable is False
     finally:
@@ -231,7 +231,7 @@ def test_signal_refresh_does_not_relabel_incompatible_inputs_as_current_provenan
         engine.dispose()
 
 
-def test_preflight_formal_forecast_contract_is_1_3_5_10_not_research_outlook_20():
+def test_preflight_formal_forecast_contract_is_1_3_7_20_60():
     engine, db = _db()
     try:
         inst = _instrument(db)
@@ -241,8 +241,8 @@ def test_preflight_formal_forecast_contract_is_1_3_5_10_not_research_outlook_20(
             at=datetime.now(get_settings().timezone),
         )
         missing = set(result.missing_optional)
-        assert {"1日预测", "3日预测", "5日预测", "10日预测"}.issubset(missing)
-        assert "20日预测" not in missing
+        assert {"1日预测", "3日预测", "7日预测", "20日预测", "60日预测"}.issubset(missing)
+        assert "5日预测" not in missing and "10日预测" not in missing
     finally:
         db.close()
         engine.dispose()

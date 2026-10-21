@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 def test_etf_1430_summary_and_detail_contract(bootstrapped, db_session):
     service = ETF1430WorkbenchService()
     summary = service.summary(db_session)
-    assert summary["forecast_horizons"] == [1, 3, 5, 10]
+    assert summary["forecast_horizons"] == [1, 3, 7, 20, 60]
     assert summary["automatic_orders"] is False
     assert summary["historical_1430_backtest"] == "not_qualified"
     assert summary["rows"]
@@ -20,7 +20,7 @@ def test_etf_1430_summary_and_detail_contract(bootstrapped, db_session):
     assert row["score_semantics"] == "explanatory_ranking_only_not_current_decision"
     assert row["actionable"] is False  # mock provider must fail closed
     assert set(row["component_scores"]) == {"trend", "momentum", "volume_flow", "structure", "forecast", "news"}
-    assert set(row["forecasts"]) == {"1", "3", "5", "10"}
+    assert set(row["forecasts"]) == {"1", "3", "7", "20", "60"}
     assert all(item["source"] in {"persisted_forecast_snapshot", "unavailable"} for item in row["forecasts"].values())
     assert not any(item["source"] == "dynamic_similarity_research" for item in row["forecasts"].values())
     for item in row["forecasts"].values():

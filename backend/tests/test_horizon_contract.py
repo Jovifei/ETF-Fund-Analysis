@@ -19,7 +19,7 @@ def test_research_and_1430_horizons_share_one_contract():
     )
 
     expected = DEFAULT_RESEARCH_HORIZONS
-    assert expected == (1, 3, 5, 10)
+    assert expected == (1, 3, 7, 20, 60)
     assert aligned_research_horizons(strategy) == expected
     assert tuple(int(value) for value in workbench["forecast_horizons"]) == expected
     assert strategy["feature_schema_version"] == FEATURE_SCHEMA_VERSION
@@ -29,14 +29,14 @@ def test_research_and_1430_horizons_share_one_contract():
         assert horizon in HORIZON_FEATURES
         assert len(feature_columns_for_horizon(horizon)) >= 12
 
-    # 20-day support remains readable only for reproduction of older v0.7 artifacts.
-    assert 20 in HORIZON_FEATURES
-    assert 20 not in expected
+    # 5/10-day feature sets remain readable only for reproduction of older v0.7 artifacts.
+    assert 5 in HORIZON_FEATURES and 10 in HORIZON_FEATURES
+    assert 5 not in expected and 10 not in expected
 
 
 def test_research_horizon_config_drift_fails_closed():
     strategy = {
-        "forecast": {"horizons": [1, 3, 5, 10]},
+        "forecast": {"horizons": [1, 3, 7, 20, 60]},
         "factor_analysis": {"horizons": [1, 5, 20]},
     }
     with pytest.raises(ValueError, match="must match"):

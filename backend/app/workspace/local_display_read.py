@@ -1,6 +1,7 @@
 """Store and compatibility reader for local-display-v2 bundles."""
 from __future__ import annotations
 
+from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS
 import json
 import os
 import re
@@ -270,7 +271,7 @@ class LocalDisplayReader:
         theme: str | None = None,
         generation: str | int | None = None,
     ) -> dict[str, Any]:
-        if horizon not in (1, 3, 5, 10):
+        if horizon not in DEFAULT_RESEARCH_HORIZONS:
             raise ValueError("unsupported horizon")
         bundle = self.load_bundle(generation)
         if not bundle:
@@ -326,7 +327,7 @@ class LocalDisplayReader:
         snapshot_id: str | None = None,
         generation: str | int | None = None,
     ) -> dict[str, Any] | None:
-        if horizon not in (1, 3, 5, 10):
+        if horizon not in DEFAULT_RESEARCH_HORIZONS:
             raise ValueError("unsupported horizon")
         bundle = self.load_bundle(generation)
         if not bundle:
@@ -369,7 +370,7 @@ class LocalDisplayReader:
             "generation": manifest.get("sequence"),
             "selected_horizon": horizon,
             "decision_horizon": captured_horizon,
-            "horizons": [1, 3, 5, 10],
+            "horizons": list(DEFAULT_RESEARCH_HORIZONS),
             "as_of": generated_at,
             "freshness": "stale" if is_stale else "fresh",
             "data_status": {"freshness": "stale" if is_stale else "fresh"},

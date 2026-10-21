@@ -130,7 +130,7 @@ test('auth-disabled reads bootstrap and decision snapshots without a localStorag
     calls.push({path, authorization: options.headers.get('Authorization')});
     if (path === '/api/bootstrap') return response({demo:false,summary:{instrument_count:0,live_quote_count:0,state_counts:{},market_width:{up:0,down:0,unchanged:0},provider:'test'},instruments:[],market_context:[],holdings:[],news:[],tasks:[],provider_health:[]});
     if (path === '/api/reports') return response([]);
-    if (path === '/api/decision-board?horizon=1') return response({snapshot_id:'public-snapshot',groups:{},rows:[],counts:{},horizons:[1,3,5,10],selected_horizon:1});
+    if (path === '/api/decision-board?horizon=1') return response({snapshot_id:'public-snapshot',groups:{},rows:[],counts:{},horizons:[1,3,7,20,60],selected_horizon:1});
     return response({});
   };
   await ui.loadBootstrap();
@@ -165,17 +165,18 @@ test('snapshot detail exposes persisted candles, forecast boundary, levels, indi
 test('snapshot detail renders all forecast horizons while emphasizing the selected horizon', () => {
   const {ui} = loadBoardUi();
   const html = ui.detailHtml({
-    snapshot_id: 'snap-forecast-grid', ts_code: '510300.SH', name: '沪深300', selected_horizon: 5,
+    snapshot_id: 'snap-forecast-grid', ts_code: '510300.SH', name: '沪深300', selected_horizon: 7,
     forecasts: {
       1: { horizon: 1, expected_return: 0.001, p_up: 0.51, q10: -0.01, q50: 0.001, q90: 0.02, confidence: 31, calibration_status: 'not_calibrated' },
       3: { horizon: 3, expected_return: 0.003, p_up: 0.53, q10: -0.02, q50: 0.003, q90: 0.03, confidence: 32, calibration_status: 'not_calibrated' },
-      5: { horizon: 5, expected_return: 0.005, p_up: 0.55, q10: -0.03, q50: 0.005, q90: 0.04, confidence: 33, calibration_status: 'not_calibrated' },
-      10: { horizon: 10, expected_return: 0.01, p_up: 0.6, q10: -0.04, q50: 0.01, q90: 0.06, confidence: 34, calibration_status: 'not_calibrated' },
+      7: { horizon: 7, expected_return: 0.005, p_up: 0.55, q10: -0.03, q50: 0.005, q90: 0.04, confidence: 33, calibration_status: 'not_calibrated' },
+      20: { horizon: 20, expected_return: 0.01, p_up: 0.6, q10: -0.04, q50: 0.01, q90: 0.06, confidence: 34, calibration_status: 'not_calibrated' },
     },
   });
-  for (const marker of ['1 日预测', '3 日预测', '5 日预测', '10 日预测', '期望收益', '上涨概率', 'q10/q50/q90', '置信度', 'not_calibrated', '研究情景 · 非实际结果']) assert.match(html, new RegExp(marker));
-  assert.match(html, /detail-forecast-card--selected[\s\S]*5 日预测/);
-  assert.equal((html.match(/<article class="detail-forecast-card(?: |")/g) || []).length, 4);
+  for (const marker of ['明日预测', '3日预测', '7日预测', '一个月预测', '3个月预测', '预测涨幅', '上涨概率', 'q10/q50/q90', '置信度', 'not_calibrated', '研究情景 · 非实际结果']) assert.match(html, new RegExp(marker));
+  assert.match(html, /detail-forecast-card--selected[\s\S]*7日预测/);
+  assert.equal((html.match(/<article class="detail-forecast-card(?: |")/g) || []).length, 5);
+  assert.match(html, /3个月预测[\s\S]*当前未提供/);  // 60-day absent -> honest placeholder, not interpolated
   assert.doesNotMatch(html, /准确率/);
 });
 

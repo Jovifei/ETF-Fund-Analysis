@@ -66,7 +66,7 @@ def test_watchlist_api_endpoints(bootstrapped):
 
 
 def test_holdings_endpoint_enriches_action_and_forecasts(bootstrapped, db_session):
-    """持仓行带 canonical action + 1/3/5/10 预测 + 支撑/压力（读快照，零计算）。"""
+    """持仓行带 canonical action + 1/3/7/20/60 预测 + 支撑/压力（读快照，零计算）。"""
     with TestClient(app) as client:
         put = client.put(
             "/api/holdings/510300.SH",
@@ -76,7 +76,7 @@ def test_holdings_endpoint_enriches_action_and_forecasts(bootstrapped, db_sessio
         rows = client.get("/api/holdings").json()
         row = next(r for r in rows if r["ts_code"] == "510300.SH")
         assert "current_action" in row
-        assert set(row["forecasts"]) == {"1", "3", "5", "10"}
+        assert set(row["forecasts"]) == {"1", "3", "7", "20", "60"}
         for item in row["forecasts"].values():
             assert item["calibration_status"] in {"not_calibrated", "calibrated"}
         assert "nearest_support" in row and "nearest_resistance" in row

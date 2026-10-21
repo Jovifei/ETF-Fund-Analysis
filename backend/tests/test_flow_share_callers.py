@@ -133,7 +133,7 @@ def saved_payload(settings, *, version=NEW_VERSION, contract="etf-flow-share-v2"
             "freshness": "stale", "data_status": {}, "source_status": {},
             "rows": [{"ts_code": "510390.SH", "grade": "可加仓", "actionable": False,
                       "forecasts": {str(h): {"expected_return": h/100, "calibration_status": "not_calibrated"}
-                                    for h in (1, 3, 5, 10)},
+                                    for h in (1, 3, 7, 20, 60)},
                       "flow_share": flow}]}
 
 
@@ -207,7 +207,7 @@ def test_old_or_mixed_saved_contracts_are_blocked_without_rewriting(runtime, mon
     monkeypatch.setattr(SignalGradeService, "build", forbidden)
     service = DecisionBoardService(settings)
     try:
-        for horizon in (1, 3, 5, 10):
+        for horizon in (1, 3, 7, 20, 60):
             for snapshot_id in (None, "saved-flow"):
                 result = service.read_latest(db, horizon=horizon, snapshot_id=snapshot_id)
                 row = result["rows"][0]
@@ -252,13 +252,13 @@ def test_current_saved_flow_passes_through_on_snapshot_and_http_reads(runtime, c
             with pytest.raises(AssertionError, match="Provider/network access is forbidden"):
                 socket.create_connection(("127.0.0.1", 1), timeout=0.01)
             for endpoint in ("/api/decision-board", "/api/decision-board/510390.SH"):
-                response = client.get(endpoint, params={"snapshot_id": "saved-flow", "horizon": 5})
+                response = client.get(endpoint, params={"snapshot_id": "saved-flow", "horizon": 7})
                 assert response.status_code == 200
                 assert response.headers["cache-control"] == "private, no-store"
                 value = response.json()
                 row = value["rows"][0] if "rows" in value else value
                 assert row["flow_share"]["main_net_inflow"] == 42
-                assert row["forecast"]["expected_return"] == .05
+                assert row["forecast"]["expected_return"] == .07
         assert db.scalar(select(DecisionBoardSnapshot)).payload_json == payload
     finally:
         app.dependency_overrides.pop(get_db, None)
