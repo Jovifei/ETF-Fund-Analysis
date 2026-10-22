@@ -29,13 +29,16 @@ class LocalDisplayStore:
     """Immutable v2 generations with validation on every read and bounded publication."""
     FILE_RE = re.compile(r"bundle_([1-9][0-9]*)_([0-9a-f]{16})\.json")
 
-    def __init__(self, store_dir: Path | str, *, max_bytes: int | None = None, domain=None):
+    def __init__(self, store_dir: Path | str, *, max_bytes: int | None = None, domain=None, max_generations: int = 20):
         self.store_dir = Path(store_dir)
         if self.store_dir.is_symlink():
             raise ValueError("symlink store rejected")
         self.max_bytes = MAX_BUNDLE_BYTES if max_bytes is None else max_bytes
         if type(self.max_bytes) is not int or self.max_bytes <= 0:
             raise ValueError("invalid store budget")
+        if type(max_generations) is not int or max_generations < 2 or max_generations > 100:
+            raise ValueError("invalid max_generations")
+        self.max_generations = max_generations
         self.store_dir.mkdir(parents=True, exist_ok=True)
         self.latest_link = self.store_dir / "latest.json"
         self.previous_link = self.store_dir / "previous.json"
@@ -125,8 +128,10 @@ class LocalDisplayStore:
         total = self.domain.used_bytes() + self.domain.held_bytes + extra
         count = len(files) + (0 if target.exists() else 1)
         evict = []
+        # Keep enough generations for a full trading day of slots (~12–20).
+        max_keep = getattr(self, "max_generations", 20)
         for path in reclaimable:
-            if total <= self.domain.max_bytes and count <= 5:
+            if total <= self.domain.max_bytes and count <= max_keep:
                 break
             total -= path.stat().st_size
             count -= 1
@@ -173,7 +178,29 @@ class LocalDisplayStore:
                 raise ValueError("invalid latest generation pointer")
             if current is not None:
                 if manifest.sequence < current["sequence"]:
-                    raise ValueError("bundle sequence older than current sequence")
+                    # Historical re-ack / restore: never promote older sequences to latest.
+                    # Same identity already on disk, or restore of a previously accepted
+                    # bundle that was evicted for capacity, returns already_accepted.
+                    if target.exists():
+                        existing = self._load_file(target, expected_id=identity)
+                        if existing is None or digest(existing["manifest"]) != identity:
+                            raise ValueError("immutable bundle collision")
+                        return self._receipt(manifest_dict, identity, "already_accepted")
+                    if not verify_bundle_integrity(bundle):
+                        raise ValueError("bundle parts integrity verification failed")
+                    # Structural-only check: expiry is irrelevant for historical evidence.
+                    created = True
+                    extra = len(data)
+                    evict = self._budget_plan(target, len(data), current, extra)
+                    for path in evict:
+                        path.unlink()
+                    self.domain.reserve(extra)
+                    try:
+                        self._atomic(target, data)
+                    except OSError:
+                        target.unlink(missing_ok=True)
+                        raise
+                    return self._receipt(manifest_dict, identity, "already_accepted")
                 if manifest.sequence == current["sequence"]:
                     if identity == current["bundle_id"]:
                         return self._receipt(manifest_dict, identity, "already_accepted")

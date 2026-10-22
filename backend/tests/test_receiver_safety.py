@@ -195,7 +195,8 @@ def receiver_settings(tmp_path):
         shadow_sync_code_sha="a"*40,shadow_sync_config_hash="b"*64,shadow_sync_producer_token=SecretStr("x"*32),
         shadow_sync_active_key_id="synthetic",shadow_sync_signing_secret=SecretStr("s"*32),
         shadow_sync_max_bytes=33554432,shadow_sync_max_generations=20,shadow_sync_max_request_bytes=65536,
-        local_display_v2_store_root=str(tmp_path/"v2"),local_display_v2_max_decompressed_bytes=65536)
+        local_display_v2_store_root=str(tmp_path/"v2"),local_display_v2_max_bytes=50_000_000,
+        local_display_v2_max_decompressed_bytes=65536)
 
 @pytest.mark.parametrize("value",[[],{"manifest":None},{"manifest":[]}])
 def test_invalid_envelope_is_rejected(tmp_path,monkeypatch,value):
@@ -281,7 +282,8 @@ def test_safety_scan_covers_entire_envelope(section):
 
 def test_pruning_never_deletes_unknown_user_files(tmp_path):
     import os
-    store=LocalDisplayStore(tmp_path)
+    # Cap generations at 5 so reclaim runs; unknown notes must still survive.
+    store=LocalDisplayStore(tmp_path, max_generations=5)
     for sequence in range(1,6):store.publish(v2(sequence),now=NOW)
     note=tmp_path/"bundle_notes.json";note.write_text("synthetic retained note",encoding="utf-8")
     os.utime(note,(1,1))
@@ -401,3 +403,71 @@ def test_same_sequence_different_existing_bundle_is_rejected(tmp_path):
         store.publish(value,now=NOW)
     assert snapshot(tmp_path)==before
 
+
+def test_older_sequence_reack_restores_without_promoting(tmp_path):
+    """Evicted older sequence can be re-acked; latest/previous stay put."""
+    store = LocalDisplayStore(tmp_path, max_bytes=10_000_000, max_generations=20)
+    first = store.publish(v2(1), now=NOW)
+    store.publish(v2(2), now=NOW)
+    store.publish(v2(3), now=NOW)
+    # Simulate eviction of sequence 1
+    for path in tmp_path.glob("bundle_1_*.json"):
+        path.unlink()
+    assert store.load_bundle(1) is None
+    latest_before = json.loads((tmp_path / "latest.json").read_text(encoding="utf-8"))
+    previous_before = json.loads((tmp_path / "previous.json").read_text(encoding="utf-8"))
+    again = store.publish(v2(1), now=NOW)
+    assert again["status"] == "already_accepted"
+    assert again["bundle_id"] == first["bundle_id"]
+    assert again["sequence"] == 1
+    assert store.load_bundle(1) is not None
+    assert json.loads((tmp_path / "latest.json").read_text(encoding="utf-8")) == latest_before
+    assert json.loads((tmp_path / "previous.json").read_text(encoding="utf-8")) == previous_before
+    assert store.load_bundle()["manifest"]["sequence"] == 3
+
+
+def test_older_sequence_same_file_is_already_accepted(tmp_path):
+    store = LocalDisplayStore(tmp_path)
+    store.publish(v2(1), now=NOW)
+    store.publish(v2(2), now=NOW)
+    again = store.publish(v2(1), now=NOW)
+    assert again["status"] == "already_accepted"
+    assert store.load_bundle()["manifest"]["sequence"] == 2
+
+
+def test_retention_keeps_more_than_five_when_budget_allows(tmp_path):
+    store = LocalDisplayStore(tmp_path, max_bytes=50_000_000, max_generations=20)
+    for sequence in range(1, 13):
+        store.publish(v2(sequence), now=NOW)
+    files = sorted(tmp_path.glob("bundle_*.json"))
+    assert len(files) >= 12
+    assert store.load_bundle()["manifest"]["sequence"] == 12
+    assert store.load_bundle(1) is not None
+
+
+def test_historical_reack_via_api_skips_live_identity_gate(tmp_path, monkeypatch):
+    """Older-sequence re-ack may carry a prior cutover code_sha."""
+    from app.workspace import shadow_api
+    from app.workspace.shadow_auth import signed_headers
+    settings = receiver_settings(tmp_path)
+    settings.local_display_v2_max_bytes = 50_000_000
+    monkeypatch.setattr(shadow_api, "get_settings", lambda: settings)
+    store = LocalDisplayStore(tmp_path / "v2")
+    old = v2(1)
+    old["manifest"]["code_sha"] = "c" * 40
+    rehash(old)
+    store.publish(old, now=NOW)
+    store.publish(v2(2), now=NOW)
+    store.publish(v2(3), now=NOW)  # previous=2, latest=3; seq1 is reclaimable cache only
+    for path in (tmp_path / "v2").glob("bundle_1_*.json"):
+        path.unlink()
+    app = FastAPI(); app.include_router(shadow_api.router)
+    body = canonical(old)
+    headers = {**signed_headers(body, "synthetic", "s" * 32), "Authorization": "Bearer " + "x" * 32}
+    result = TestClient(app).post("/api/shadow/sync", content=body, headers=headers)
+    assert result.status_code == 200, result.text
+    payload = result.json()
+    assert payload["status"] == "already_accepted"
+    assert payload["bundle_id"] == digest(old["manifest"])
+    assert payload["sequence"] == 1
+    assert LocalDisplayStore(tmp_path / "v2").load_bundle()["manifest"]["sequence"] == 3

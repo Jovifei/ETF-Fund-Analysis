@@ -69,10 +69,28 @@ def _publish_decoded(raw_body,target,settings,domain=None):
         approved_config = getattr(settings, 'shadow_sync_config_hash', '')
         if not re.fullmatch(r'[0-9a-f]{40}', approved_sha) or not re.fullmatch(r'[0-9a-f]{64}', approved_config):
             raise ValueError('approved runtime identity unavailable')
-        if manifest.get('code_sha') != approved_sha or manifest.get('config_hash') != approved_config:
-            raise ValueError('runtime identity mismatch')
         from app.workspace.local_display_read import LocalDisplayStore
-        store_v2 = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=getattr(settings, 'local_display_v2_max_bytes', 67108864),domain=domain)
+        max_bytes = getattr(settings, 'local_display_v2_max_bytes', 335544320)
+        max_generations = getattr(settings, 'shadow_sync_max_generations', 20)
+        store_v2 = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=max_bytes, domain=domain, max_generations=max_generations)
+        # New activations must match the live approved identity. Older-sequence
+        # re-acks (same or restored historical bundle_id) skip that gate so an
+        # evicted slot can be re-acknowledged after a later cutover.
+        seq = manifest.get('sequence')
+        latest = None
+        try:
+            latest_path = store_v2.latest_link
+            if latest_path.exists():
+                latest = store_v2._load_pointer(latest_path)
+        except Exception:
+            latest = None
+        is_historical = (
+            isinstance(seq, int) and latest is not None and isinstance(latest.get('sequence'), int)
+            and seq < latest['sequence']
+        )
+        if not is_historical:
+            if manifest.get('code_sha') != approved_sha or manifest.get('config_hash') != approved_config:
+                raise ValueError('runtime identity mismatch')
         return store_v2.publish(value)
     if domain is not None:
         # V1 retains its own exact receipt/validation contract, but shares the disk

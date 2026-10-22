@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     shadow_sync_producer_token: SecretStr = SecretStr('')
     shadow_sync_active_key_id: str = ''
     shadow_sync_signing_secret: SecretStr = SecretStr('')
-    shadow_sync_max_bytes: int = Field(default=67108864, ge=1048576, le=268435456)
+    shadow_sync_max_bytes: int = Field(default=335544320, ge=1048576, le=536870912)
     shadow_sync_max_request_bytes: int = Field(default=16777216, ge=1024, le=33554432)
     shadow_sync_max_generations: int = Field(default=20, ge=2, le=100)
 
@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     # Audited maintenance exceptions in local_bundle mode; only refresh_decision_board is honoured.
     display_only_allowed_tasks: list[str] = Field(default_factory=list)
     local_display_v2_store_root: str = str(PROJECT_ROOT / '.local' / 'local-display-v2')
-    local_display_v2_max_bytes: int = Field(default=67108864, ge=1024, le=67108864)
+    local_display_v2_max_bytes: int = Field(default=335544320, ge=1024, le=536870912)  # ~20 x 16MiB bundles
     local_display_v2_max_decompressed_bytes: int = Field(default=67108864, ge=1024, le=67108864)
 
     app_name: str = "中国 ETF/LOF 私有决策看板"
