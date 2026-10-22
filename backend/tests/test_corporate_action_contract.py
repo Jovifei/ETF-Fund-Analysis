@@ -156,8 +156,8 @@ def test_price_basis_contract_is_independent_of_read_window_and_tracks_effective
     )
 
     assert wide["price_basis_id"] == narrow["price_basis_id"]
-    assert wide["effective_evidence_ids"] == ["sse_512480_20260629"]
-    assert before_event["effective_evidence_ids"] == []
+    assert wide["effective_evidence_ids"] == ["sse_512480_20210317", "sse_512480_20260629"]
+    assert before_event["effective_evidence_ids"] == ["sse_512480_20210317"]
     assert before_event["price_basis_id"] != wide["price_basis_id"]
 
 

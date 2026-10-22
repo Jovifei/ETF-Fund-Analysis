@@ -47,6 +47,7 @@ _OFFICIAL_ACTIONS = {
         CorporateActionEvent("512000.SH", date(2025, 8, 1), date(2025, 8, 4), "1:2", "sse_512000_20250729"),
     ),
     "512480.SH": (
+        CorporateActionEvent("512480.SH", date(2021, 3, 25), date(2021, 3, 29), "1:2", "sse_512480_20210317"),
         CorporateActionEvent("512480.SH", date(2026, 7, 2), date(2026, 7, 3), "1:2", "sse_512480_20260629"),
     ),
     "515880.SH": (
@@ -60,6 +61,7 @@ _OFFICIAL_ACTIONS = {
         CorporateActionEvent("159995.SZ", date(2026, 7, 6), date(2026, 7, 7), "1:2", "szse_159995_20260707"),
     ),
     "512760.SH": (
+        CorporateActionEvent("512760.SH", date(2020, 9, 8), date(2020, 9, 10), "1:2", "sse_512760_20200910"),
         CorporateActionEvent("512760.SH", date(2026, 3, 26), date(2026, 3, 27), "1:2", "sse_512760_20260327"),
     ),
     "515050.SH": (
@@ -67,6 +69,21 @@ _OFFICIAL_ACTIONS = {
     ),
     "516780.SH": (
         CorporateActionEvent("516780.SH", date(2026, 5, 22), date(2026, 5, 25), "1:2", "sse_516780_20260525"),
+    ),
+    "512170.SH": (
+        CorporateActionEvent("512170.SH", date(2021, 2, 23), date(2021, 2, 25), "1:3", "sse_512170_20210208"),
+    ),
+    "159928.SZ": (
+        CorporateActionEvent("159928.SZ", date(2021, 6, 24), date(2021, 6, 25), "1:4", "szse_159928_20210621"),
+    ),
+    "512690.SH": (
+        CorporateActionEvent("512690.SH", date(2021, 5, 13), date(2021, 5, 17), "1:2", "sse_512690_20210430"),
+    ),
+    "513100.SH": (
+        CorporateActionEvent("513100.SH", date(2022, 1, 12), date(2022, 1, 14), "1:5", "sse_513100_20220104_0U96WMU8"),
+    ),
+    "512010.SH": (
+        CorporateActionEvent("512010.SH", date(2021, 6, 24), date(2021, 6, 28), "1:4", "sse_512010_20210616"),
     ),
     "516160.SH": (
         CorporateActionEvent("516160.SH", date(2024, 9, 13), date(2024, 9, 18), "100000000:30912005", "sse_516160_20240910_JMX6"),
