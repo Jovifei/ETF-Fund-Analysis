@@ -5,7 +5,9 @@ from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS
 import json
 import os
 import re
+import threading
 import uuid
+from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -23,6 +25,30 @@ from app.workspace.shadow_bundle import digest, canonical
 
 GEN_SEQ_RE = re.compile(r"^[0-9]+$")
 GEN_HASH_RE = re.compile(r"^[0-9a-fA-F]{16,64}$")
+
+# Process-wide cache of validated, immutable bundle files.  A bundle is ~16 MB
+# of JSON and ~70 MB once parsed; the overview page fires 5-8 reads at once,
+# and parsing each one twice (pointer check + load) per request drove the API
+# to ~600 MB and a host OOM kill on 2026-10-22.  Files are written once via
+# os.replace, so (device, inode, size, mtime_ns) identifies their content.
+# Parsing is serialised under one lock so concurrent misses cost one parse.
+# Cached values are shared and must be treated as read-only by callers.
+def _cache_entries_from_env() -> int:
+    try:
+        return max(0, min(8, int(os.environ.get("LOCAL_DISPLAY_V2_CACHE_ENTRIES", "2"))))
+    except ValueError:
+        return 2
+
+
+_BUNDLE_CACHE_MAX = _cache_entries_from_env()
+_BUNDLE_CACHE: "OrderedDict[tuple, dict[str, Any]]" = OrderedDict()
+_BUNDLE_CACHE_LOCK = threading.Lock()
+
+
+def clear_bundle_cache() -> None:
+    with _BUNDLE_CACHE_LOCK:
+        _BUNDLE_CACHE.clear()
+
 
 
 class LocalDisplayStore:
@@ -52,15 +78,29 @@ class LocalDisplayStore:
         if not match or path.parent != self.store_dir or path.is_symlink():
             return None
         try:
-            if path.stat().st_size > self.max_bytes:
+            st = path.stat()
+            if st.st_size > self.max_bytes:
                 return None
-            value = json.loads(path.read_bytes())
-            if not verify_bundle_integrity(value):
-                return None
-            manifest = value["manifest"]
-            identity = digest(manifest)
-            if str(manifest["sequence"]) != match[1] or identity[:16] != match[2]:
-                return None
+            key = (str(path), st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns)
+            with _BUNDLE_CACHE_LOCK:
+                cached = _BUNDLE_CACHE.get(key) if _BUNDLE_CACHE_MAX else None
+                if cached is not None:
+                    _BUNDLE_CACHE.move_to_end(key)
+                    value, identity = cached
+                else:
+                    value = json.loads(path.read_bytes())
+                    if not verify_bundle_integrity(value):
+                        return None
+                    manifest = value["manifest"]
+                    identity = digest(manifest)
+                    if str(manifest["sequence"]) != match[1] or identity[:16] != match[2]:
+                        return None
+                    if _BUNDLE_CACHE_MAX:
+                        for stale in [k for k in _BUNDLE_CACHE if k[0] == key[0]]:
+                            del _BUNDLE_CACHE[stale]
+                        _BUNDLE_CACHE[key] = (value, identity)
+                        while len(_BUNDLE_CACHE) > _BUNDLE_CACHE_MAX:
+                            _BUNDLE_CACHE.popitem(last=False)
             if expected_id is not None and identity != expected_id:
                 return None
             return value
