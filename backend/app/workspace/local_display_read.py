@@ -527,12 +527,17 @@ class LocalDisplayReader:
         if not bundle:
             return {"sectors": [], "available": False}
         sectors_part = bundle.get("parts", {}).get("sectors", {})
-        return {
+        result = {
             "sectors": sectors_part.get("sectors", []),
             "boards": [{**row, "sector_pct_change": row.get("pct_change")} for row in sectors_part.get("sectors", [])],
-            "available": True,
+            "available": sectors_part.get("availability") != "unavailable",
             "generation": bundle.get("manifest", {}).get("sequence"),
         }
+        # Pass the producer's honest status through so the page can say why it is empty.
+        for key in ("availability", "reason", "refreshed_at", "refreshed_in_slot", "source_as_of"):
+            if key in sectors_part:
+                result[key] = sectors_part[key]
+        return result
 
     def read_market_context(self, generation: str | int | None = None) -> list[dict[str, Any]] | None:
         bundle = self.load_bundle(generation)

@@ -21,6 +21,7 @@ from app.workspace.local_compute import (
     load_local_config,
     validate_provider_admission,
     OPTIONAL_TASK_PARTS,
+    optional_result_available,
     closed_session_result_accepted,
     compute_local_fast,
     create_base_manifest,
@@ -218,10 +219,11 @@ def cmd_run(args: argparse.Namespace) -> int:
         now_ms = int(time.time() * 1000)
         sequence = max(now_ms, highest_seq + 1)
 
-        unavailable = [OPTIONAL_TASK_PARTS[item["task_name"]] for item in results
-                       if item.get("task_name") in OPTIONAL_TASK_PARTS and item.get("status") != "succeeded"]
-        if mode in {'fast', 'auto'}:
-            unavailable = sorted(set(unavailable) | {'market_context', 'sectors'})
+        unavailable = sorted({OPTIONAL_TASK_PARTS[item["task_name"]] for item in results
+                              if item.get("task_name") in OPTIONAL_TASK_PARTS and not optional_result_available(item)})
+        # Fast slots never call providers for optional context; they re-publish a same-day
+        # full refresh labelled as carried forward, or an honest not_refreshed_today reason.
+        carry_optional = mode in {'fast', 'auto'}
         lineage = (build_execution_lineage(settings, universe, results, base_manifest=base,
                     execution_hash=execution['execution_hash'], config_file_hash=execution['config_file_hash'],
                     mode='fast' if mode == 'fast' else 'full')
@@ -230,7 +232,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         bundle = export_local_v2(settings, sequence=sequence, code_sha=sha, universe=universe,
                                  admission=admission, private_research=private_research, unavailable_parts=unavailable,
                                  closed_session_result=next((item for item in results if closed_session_result_accepted(item)), None),
-                                 execution_lineage=lineage)
+                                 execution_lineage=lineage, carry_optional=carry_optional)
 
         bundle_path = outbox / f"bundle_{bundle['manifest']['sequence']}.json"
         if callback := getattr(args, '_on_export_intent', None):

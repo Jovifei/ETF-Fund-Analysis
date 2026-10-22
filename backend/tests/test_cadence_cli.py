@@ -64,7 +64,8 @@ def test_fast_rechecks_inputs_before_export_and_marks_optional_unavailable(cli, 
     monkeypatch.setattr(cli, 'build_execution_lineage', lambda *a, **k: {'mode': k['mode'],
         'execution_hash': k['execution_hash'], 'config_file_hash': k['config_file_hash']})
     def export(*a, **k):
-        assert k['unavailable_parts'] == ['market_context', 'sectors']
+        assert k['unavailable_parts'] == []
+        assert k['carry_optional'] is True
         assert checks[-2:] == ['base', 'quotes']
         assert k['execution_lineage']['mode'] == 'fast'
         assert len(k['execution_lineage']['execution_hash']) == 64
@@ -118,3 +119,21 @@ def test_pending_replay_rechecks_current_permissions_and_entire_config(cli, run_
     monkeypatch.setattr(local_dispatch, 'dispatch_once', dispatch)
     assert cli.cmd_dispatch(run_args) == 1
     assert not (Path(run_args.root) / 'config' / 'producer_auth.json').exists()
+
+
+def test_full_mode_keeps_partial_market_context_and_flags_failed_sectors(cli, run_args, monkeypatch):
+    run_args.cadence_mode = 'full'
+    monkeypatch.setattr(cli, 'get_current_git_sha', lambda: 'b' * 40)
+    monkeypatch.setattr(cli, 'compute_local', lambda *a, **k: [
+        {'status': 'partial', 'task_name': 'refresh_market_context', 'required': False, 'observed': 6},
+        {'status': 'failed', 'task_name': 'refresh_sector_snapshots', 'required': False},
+        {'status': 'succeeded', 'task_name': 'refresh_decision_board'}])
+    monkeypatch.setattr(cli, 'create_base_manifest', lambda *a, **k: {'validated': True})
+    monkeypatch.setattr(cli, 'build_execution_lineage', lambda *a, **k: {'mode': k['mode'],
+        'execution_hash': k['execution_hash'], 'config_file_hash': k['config_file_hash']})
+    def export(*a, **k):
+        assert k['unavailable_parts'] == ['sectors']
+        assert k['carry_optional'] is False
+        return {'manifest': {'sequence': k['sequence']}}
+    monkeypatch.setattr(cli, 'export_local_v2', export)
+    assert cli.cmd_run(run_args) == 0

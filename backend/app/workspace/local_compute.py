@@ -30,6 +30,73 @@ NUMBER_ENCODING_VERSION = "safe-integral-json-v1"
 EXPORT_MAX_BYTES = 16 * 1024 * 1024
 CLOSED_SESSION_INPUT_VERSION = "closed-session-input-v1.1.1"
 OPTIONAL_TASK_PARTS = {"refresh_market_context": "market_context", "refresh_sector_snapshots": "sectors"}
+# A market-context observation older than this is withheld (status + reason kept, values removed).
+MARKET_CONTEXT_MAX_SOURCE_AGE = timedelta(days=7)
+OPTIONAL_REASON_FAILED = "optional_refresh_failed"
+OPTIONAL_REASON_NOT_TODAY = "not_refreshed_today"
+OPTIONAL_REASON_CARRIED = "fast_slot_reuses_same_day_refresh"
+
+
+def optional_result_available(result: dict) -> bool:
+    """Whether an optional refresh stored publishable observations.
+
+    Market context reports ``partial`` when some configured items have no
+    observation. Each item in the latest view already carries its own status
+    (stale / unavailable), so a partial refresh that observed real rows must
+    not blank the whole panel. Sector snapshots stay all-or-nothing.
+    """
+    status = result.get("status")
+    if status == "succeeded":
+        return True
+    observed = result.get("observed")
+    return (result.get("task_name") == "refresh_market_context" and status == "partial"
+            and type(observed) is int and observed > 0)
+
+
+def _same_day_optional_refresh(db, settings, task_name: str, now: datetime) -> dict | None:
+    """Latest accepted optional refresh finished on the current Shanghai date.
+
+    Fast slots do not call providers for optional context; they may re-publish
+    the stored output of a same-day full refresh, labelled with its time.
+    TaskRun times are stored as naive Asia/Shanghai wall time.
+    """
+    import json as _json
+    from app.models import TaskRun
+    local_now = now.astimezone(settings.timezone)
+    day_start = datetime.combine(local_now.date(), datetime.min.time())
+    statuses = ("succeeded", "partial") if task_name == "refresh_market_context" else ("succeeded",)
+    rows = db.scalars(select(TaskRun).where(
+        TaskRun.task_name == task_name, TaskRun.status.in_(statuses),
+        TaskRun.finished_at.is_not(None), TaskRun.started_at >= day_start)
+        .order_by(TaskRun.finished_at.desc(), TaskRun.id.desc()).limit(20)).all()
+    for row in rows:
+        finished = row.finished_at if row.finished_at.tzinfo is None else \
+            row.finished_at.astimezone(settings.timezone).replace(tzinfo=None)
+        if finished > local_now.replace(tzinfo=None):
+            continue
+        try:
+            result = _json.loads(row.result_json) if isinstance(row.result_json, str) else dict(row.result_json or {})
+        except (TypeError, ValueError):
+            continue
+        if not optional_result_available({**result, "task_name": task_name, "status": row.status}):
+            continue
+        return {"run_id": row.run_id, "started_at": row.started_at, "finished_at": row.finished_at,
+                "refreshed_at": finished.replace(tzinfo=settings.timezone).isoformat()}
+    return None
+
+
+def _market_item_too_old(row: dict, generated: datetime) -> bool:
+    source = row.get("source_timestamp")
+    if isinstance(source, str):
+        try:
+            source = datetime.fromisoformat(source)
+        except ValueError:
+            return False
+    if not isinstance(source, datetime):
+        return False
+    if source.tzinfo is None:
+        source = source.replace(tzinfo=timezone.utc)
+    return generated - source > MARKET_CONTEXT_MAX_SOURCE_AGE
 
 ROW_FIELDS_V2 = {
     "ts_code",
@@ -656,7 +723,7 @@ def compute_local(settings: Settings, universe: list[str] | None = None, *, admi
                 if on_task is not None:
                     on_task(task, result, run_id)
             result.update(task_name=task, required=required)
-            if not required and result.get("status") != "succeeded":
+            if not required and not optional_result_available(result):
                 result["availability"] = "unavailable"
             results.append(result)
             if required and result.get("status") != "succeeded" and not closed_session_result_accepted(result):
@@ -1048,6 +1115,7 @@ def export_local_v2(
     unavailable_parts: list[str] | None = None,
     closed_session_result: dict | None = None,
     execution_lineage: dict | None = None,
+    carry_optional: bool = False,
 ) -> dict[str, Any]:
     now = now or datetime.now(timezone.utc)
     lineage = _validate_execution_lineage(execution_lineage) if execution_lineage is not None else None
@@ -1176,14 +1244,36 @@ def export_local_v2(
 
             # 3. Sectors part
             unavailable = set(unavailable_parts or ())
+            reasons = {part: OPTIONAL_REASON_FAILED for part in unavailable}
+            carried: dict[str, dict] = {}
+            if carry_optional:
+                for task_name, part in OPTIONAL_TASK_PARTS.items():
+                    if part in unavailable:
+                        continue
+                    evidence = _same_day_optional_refresh(db, settings, task_name, now)
+                    if evidence is None:
+                        unavailable.add(part)
+                        reasons[part] = OPTIONAL_REASON_NOT_TODAY
+                    else:
+                        carried[part] = evidence
             sector_snaps = []
             try:
                 with db.begin_nested():
+                    sector_query = select(SectorSnapshot)
+                    if "sectors" in carried:
+                        # Only rows written by the accepted same-day run, never a later failed one.
+                        sector_query = sector_query.where(
+                            SectorSnapshot.fetched_at >= carried["sectors"]["started_at"],
+                            SectorSnapshot.fetched_at <= carried["sectors"]["finished_at"])
                     sector_rows = [] if "sectors" in unavailable else db.scalars(
-                        select(SectorSnapshot).order_by(SectorSnapshot.fetched_at.desc()).limit(100)).all()
+                        sector_query.order_by(SectorSnapshot.fetched_at.desc()).limit(100)).all()
             except Exception:
                 sector_rows = []
                 unavailable.add("sectors")
+                reasons["sectors"] = OPTIONAL_REASON_FAILED
+            if "sectors" in carried and not sector_rows and "sectors" not in unavailable:
+                unavailable.add("sectors")
+                reasons["sectors"] = OPTIONAL_REASON_NOT_TODAY
             for s in sector_rows:
                 sector_snaps.append({
                     "sector_name": s.sector_name,
@@ -1210,6 +1300,14 @@ def export_local_v2(
                     mc_rows = [] if "market_context" in unavailable else MarketContextService(provider=None, settings=settings).latest_view(db)
                 for row in mc_rows:
                     r_clean = dict(row)
+                    if _market_item_too_old(r_clean, generated):
+                        r_clean.update(status="unavailable", freshness="unavailable", degraded=True,
+                                       degraded_reason="source_older_than_7_days",
+                                       observed_value=None, today_pct_change=None, price=None)
+                        if isinstance(r_clean.get("observation"), dict):
+                            r_clean["observation"] = {**r_clean["observation"], "observed_value": None,
+                                                      "today_pct_change": None, "price": None,
+                                                      "freshness": "unavailable"}
                     if isinstance(r_clean.get("source_timestamp"), datetime):
                         r_clean["source_timestamp"] = r_clean["source_timestamp"].isoformat()
                     if isinstance(r_clean.get("fetched_at"), datetime):
@@ -1228,11 +1326,21 @@ def export_local_v2(
             except Exception:
                 market_context_items = []
                 unavailable.add("market_context")
+                reasons["market_context"] = OPTIONAL_REASON_FAILED
             market_context_part = {"items": market_context_items}
+            if sector_snaps and "sectors" not in unavailable:
+                trade_dates = [s["trade_date"] for s in sector_snaps if s.get("trade_date")]
+                sectors_part["source_as_of"] = max(trade_dates) if trade_dates else None
+            for part, holder in (("sectors", sectors_part), ("market_context", market_context_part)):
+                if part in carried and part not in unavailable:
+                    holder.update(availability="carried_forward", reason=OPTIONAL_REASON_CARRIED,
+                                  refreshed_in_slot=False, refreshed_at=carried[part]["refreshed_at"])
             if "sectors" in unavailable:
-                sectors_part = {"sectors": [], "availability": "unavailable", "reason": "optional_refresh_failed"}
+                sectors_part = {"sectors": [], "availability": "unavailable",
+                                "reason": reasons.get("sectors", OPTIONAL_REASON_FAILED)}
             if "market_context" in unavailable:
-                market_context_part = {"items": [], "availability": "unavailable", "reason": "optional_refresh_failed"}
+                market_context_part = {"items": [], "availability": "unavailable",
+                                       "reason": reasons.get("market_context", OPTIONAL_REASON_FAILED)}
 
             # Construct parts dictionary
             parts = {
@@ -1243,7 +1351,9 @@ def export_local_v2(
                 "market_context": market_context_part,
                 "chart_periods": chart_periods,
             }
-            parts = _project_unavailable_optional(parts, unavailable, original.get("rows", []), generated)
+            # Carried-forward panels are display context only: row-level corroboration and
+            # grades keep the not-refreshed projection, exactly as before for fast slots.
+            parts = _project_unavailable_optional(parts, unavailable | set(carried), original.get("rows", []), generated)
 
             # Numeric encoding is lossless and precedes all content hashes.
             parts = _display_numbers(parts)
