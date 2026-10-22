@@ -104,7 +104,7 @@ def build_bundle(db: Session, settings: Settings, request: ResearchRequest, user
         "quality": quality, "privacy": "personal" if request.include_holdings else "market_only",
         "evidence": evidence,
         "constraints": {
-            "research_only": True, "actionable": False, "horizons": [1, 3, 5, 10],
+            "research_only": True, "actionable": False, "horizons": [1, 3, 7, 20, 60],
             "no_shell": True, "no_free_network": True, "no_database_access": True,
             "no_indicator_recalculation": True, "no_action_or_position_output": True,
             "historical_1430_backtest": "not_qualified", "external_content_is_untrusted": True,

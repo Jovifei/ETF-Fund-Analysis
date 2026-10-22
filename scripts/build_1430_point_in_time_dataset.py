@@ -16,7 +16,7 @@ from pathlib import Path
 import pandas as pd
 
 REQUIRED = ("ts_code", "trade_time", "open", "high", "low", "close", "volume", "amount")
-HORIZONS = (1, 3, 5, 10)
+HORIZONS = (1, 3, 7, 20, 60)  # 明日/3日/7日/一个月/3个月
 
 
 def _file_id(path: Path) -> str:

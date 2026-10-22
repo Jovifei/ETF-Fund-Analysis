@@ -30,11 +30,11 @@ def valid():
             'history_blockers': [], 'indicator_latest': '2026-09-14',
             'indicator_version': 'ind-test', 'indicator_config_hash': 'b' * 64,
             'indicator_feature_schema': 'features-test', 'indicator_input_hash_verified': True,
-            'forecast_latest': '2026-09-14', 'forecast_horizons': 4,
+            'forecast_latest': '2026-09-14', 'forecast_horizons': 5,
             'forecasts': [{'horizon': h, 'as_of_date': '2026-09-14',
                           'model_version': 'forecast-test', 'config_hash': 'b' * 64,
                           'feature_schema': 'features-test', 'input_hash_verified': True,
-                          'values_valid': True} for h in (1, 3, 5, 10)],
+                          'values_valid': True} for h in (1, 3, 7, 20, 60)],
             'quote_latest': '2026-09-15T14:34:00+08:00',
             'quote_realtime': True, 'quote_timestamp_verified': True}]}
 
@@ -92,6 +92,31 @@ def test_wrong_indicator_identity_rejected(key):
 
 def test_four_forecasts_with_wrong_identities_do_not_pass():
     data = valid(); data['items'][0]['forecasts'][-1]['horizon'] = 20
+    assert evaluate(data)['status'] == 'fail'
+
+
+def test_legacy_four_horizon_evidence_is_rejected():
+    data = valid(); item = data['items'][0]
+    item['forecasts'] = [dict(item['forecasts'][0], horizon=h) for h in (1, 3, 5, 10)]
+    item['forecast_horizons'] = 4
+    assert evaluate(data)['status'] == 'fail'
+
+
+def test_unavailable_long_horizon_with_reason_passes_without_values():
+    data = valid(); f = data['items'][0]['forecasts'][-1]
+    f.update(values_valid=False, unavailable_reason='insufficient_independent_windows')
+    assert evaluate(data, require_realtime=True)['status'] == 'pass'
+
+
+@pytest.mark.parametrize('reason', [None, '', 'Bad Reason!', 5])
+def test_unavailable_horizon_without_machine_reason_fails(reason):
+    data = valid(); f = data['items'][0]['forecasts'][-1]
+    f.update(values_valid=False, unavailable_reason=reason)
+    assert evaluate(data)['status'] == 'fail'
+
+
+def test_valid_values_with_unavailable_reason_is_contradictory():
+    data = valid(); data['items'][0]['forecasts'][0]['unavailable_reason'] = 'not_enough_neighbors'
     assert evaluate(data)['status'] == 'fail'
 
 

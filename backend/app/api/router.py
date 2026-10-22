@@ -591,7 +591,7 @@ def holdings(
     user: Annotated[AuthUser | None, Depends(optional_current_user)],
 ) -> list[dict]:
     rows = HoldingService().list(db, user_id=user.id if user is not None else None)
-    # 持仓页融合（PR-D）：当前动作 + 1/3/5/10 预测 + 距支撑/压力，全部读已落库快照。
+    # 持仓页融合（PR-D）：当前动作 + 1/3/7/20/60 预测 + 距支撑/压力，全部读已落库快照。
     instruments = {inst.ts_code: inst for inst in db.scalars(select(Instrument)).all()}
     _, decisions = CurrentDecisionService(settings).resolve_many(db, list(instruments.values()))
     forecast_map = latest_forecast_map(db, settings=settings)

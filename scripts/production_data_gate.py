@@ -26,6 +26,21 @@ CODE = re.compile(r'^\d{6}\.(SH|SZ|BJ)$')
 HEX40 = re.compile(r'^[0-9a-f]{40}$')
 HEX64 = re.compile(r'^[0-9a-f]{64}$')
 SHANGHAI = ZoneInfo('Asia/Shanghai')
+# Formal forecast horizons (trading days): 明日/3日/7日/一个月/3个月.
+FORECAST_HORIZONS = (1, 3, 7, 20, 60)
+UNAVAILABLE_REASON = re.compile(r'^[a-z][a-z0-9_]{2,63}$')
+
+
+def _forecast_values_ok(forecast: dict) -> bool:
+    """Values must be valid, or explicitly unavailable with a machine reason (shown as 当前未提供).
+
+    An unavailable horizon never passes with values attached; nothing is substituted.
+    """
+    if forecast.get('values_valid') is True:
+        return forecast.get('unavailable_reason') in (None, '')
+    reason = forecast.get('unavailable_reason')
+    return (forecast.get('values_valid') is False and isinstance(reason, str)
+            and UNAVAILABLE_REASON.fullmatch(reason) is not None)
 
 
 def _timestamp(value: object) -> datetime | None:
@@ -142,15 +157,17 @@ def evaluate_snapshot(snapshot: dict, *, now: datetime | None = None,
         if item.get('forecast_latest') != target:
             blockers.append('forecast_target_not_covered')
         forecasts = item.get('forecasts')
-        valid_forecasts = isinstance(forecasts, list) and len(forecasts) == 4 and all(isinstance(f, dict) for f in forecasts)
-        if (not valid_forecasts or not _count(item.get('forecast_horizons')) or item['forecast_horizons'] != 4
+        valid_forecasts = (isinstance(forecasts, list) and len(forecasts) == len(FORECAST_HORIZONS)
+                           and all(isinstance(f, dict) for f in forecasts))
+        if (not valid_forecasts or not _count(item.get('forecast_horizons'))
+                or item['forecast_horizons'] != len(FORECAST_HORIZONS)
                 or any(type(f.get('horizon')) is not int for f in forecasts)
-                or sorted(f['horizon'] for f in forecasts) != [1, 3, 5, 10]):
+                or sorted(f['horizon'] for f in forecasts) != sorted(FORECAST_HORIZONS)):
             blockers.append('forecast_horizons_incomplete')
         elif any(f.get('as_of_date') != target or f.get('model_version') != versions.get('forecast')
                  or f.get('config_hash') != versions.get('config_hash')
                  or f.get('feature_schema') != versions.get('feature_schema')
-                 or f.get('input_hash_verified') is not True or f.get('values_valid') is not True for f in forecasts):
+                 or f.get('input_hash_verified') is not True or not _forecast_values_ok(f) for f in forecasts):
             blockers.append('forecast_per_horizon_contract_unverified')
         quote_time = _timestamp(item.get('quote_latest'))
         if quote_time is None:
