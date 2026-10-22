@@ -68,6 +68,9 @@ _OFFICIAL_ACTIONS = {
     "516780.SH": (
         CorporateActionEvent("516780.SH", date(2026, 5, 22), date(2026, 5, 25), "1:2", "sse_516780_20260525"),
     ),
+    "516160.SH": (
+        CorporateActionEvent("516160.SH", date(2024, 9, 13), date(2024, 9, 18), "100000000:30912005", "sse_516160_20240910_JMX6"),
+    ),
 }
 
 
