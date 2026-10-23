@@ -4,9 +4,10 @@ export function useQuery<T>(url: MaybeRefOrGetter<string | null>) {
   const data = shallowRef<T | null>(null), loading = ref(false), error = ref('')
   let controller: AbortController | null = null, sequence = 0
   let pending: { path: string; promise: Promise<void>; controller: AbortController } | null = null
-  function load(quiet = false): Promise<void> {
+  function load(quiet = false, force = false): Promise<void> {
     const path = toValue(url)
-    if (pending && pending.path === path && !pending.controller.signal.aborted) return pending.promise
+    // Automatic reads may coalesce; an explicit reread must observe a newly published batch.
+    if (!force && pending && pending.path === path && !pending.controller.signal.aborted) return pending.promise
     controller?.abort()
     const current = ++sequence
     if (!path) { pending = null; data.value = null; loading.value = false; error.value = ''; return Promise.resolve() }
@@ -23,9 +24,9 @@ export function useQuery<T>(url: MaybeRefOrGetter<string | null>) {
     pending = { path, promise, controller: active }
     return promise
   }
-  const reload = () => load(false)
+  const reload = () => load(false, true)
   const refresh = () => load(true)
-  watch(() => toValue(url), () => { data.value = null; void reload() }, { immediate: true })
+  watch(() => toValue(url), () => { data.value = null; void load() }, { immediate: true })
   onScopeDispose(() => { ++sequence; controller?.abort(); pending = null })
   return { data, loading, error, reload, refresh }
 }

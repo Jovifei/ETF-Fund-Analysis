@@ -342,12 +342,13 @@ class LocalDisplayStore:
             pointer = self._load_pointer(self.latest_link)
             return self._load_file(self.store_dir / pointer["bundle_file"], expected_id=pointer["bundle_id"]) if pointer else None
         text = str(generation).strip()
-        if len(text) > 64 or (not GEN_SEQ_RE.fullmatch(text) and not GEN_HASH_RE.fullmatch(text)):
+        sequence_alias = bool(GEN_SEQ_RE.fullmatch(text))
+        hash_alias = type(generation) is not int and bool(GEN_HASH_RE.fullmatch(text))
+        if not sequence_alias and not hash_alias:
             return None
-        explicit_sequence = type(generation) is int
-        full_id = not explicit_sequence and len(text) == 64 and GEN_HASH_RE.fullmatch(text)
-        sequence_alias = bool(GEN_SEQ_RE.fullmatch(text)) and not full_id
-        hash_alias = bool(GEN_HASH_RE.fullmatch(text)) and not explicit_sequence
+        # Decimal sequences have no hash-width limit. A numeric string can be
+        # both a sequence and a hash alias (even at 64 digits); reject ambiguity
+        # after validating both candidates. Explicit integers select only sequences.
         matches = []
         for path in self.store_dir.glob("bundle_*.json"):
             name = self.FILE_RE.fullmatch(path.name)
@@ -363,12 +364,8 @@ class LocalDisplayStore:
                 continue
             manifest = value["manifest"]
             identity = digest(manifest)
-            if full_id:
-                matched = identity == text.lower()
-            elif explicit_sequence:
-                matched = str(manifest["sequence"]) == text
-            else:
-                matched = (bool(GEN_SEQ_RE.fullmatch(text)) and str(manifest["sequence"]) == text) or (bool(GEN_HASH_RE.fullmatch(text)) and identity.startswith(text.lower()))
+            matched = ((sequence_alias and str(manifest["sequence"]) == text)
+                       or (hash_alias and identity.startswith(text.lower())))
             if matched:
                 matches.append(value)
         # Sequence and short hash aliases must be unambiguous. No fallback to latest.
