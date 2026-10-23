@@ -1,5 +1,5 @@
 """One opt-in per-code recovery preserves provider audit and quality gates."""
-from datetime import date
+from datetime import date, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -117,6 +117,75 @@ def test_already_complete_same_source_material_does_not_retry(history_db):
     result, _ = run(history_db, fallback)
     assert result["status"] == "succeeded" and len(fallback.calls) == 1
     assert result["attempt_counts"][0]["attempts"] == 1
+
+
+class DelayedHistory(PublicAdapter):
+    def __init__(self, *, recovers):
+        super().__init__("tencent")
+        self.recovers = recovers
+
+    def fetch_daily_bars(self, code, start, end):
+        rows = super().fetch_daily_bars(code, start, end)
+        if not self.recovers or len(self.calls) == 1:
+            rows[0].trade_date = end - timedelta(days=1)
+        return rows
+
+
+def test_one_retry_recovers_missing_target_date_and_keeps_original_partial_audit(history_db):
+    fallback = DelayedHistory(recovers=True)
+
+    result, _ = run(history_db, fallback)
+
+    assert result["status"] == "succeeded" and result["coverage_complete"] is True
+    assert result["ingestion_policy"] == "daily-batch-v1.0.5-audited-target-retry"
+    assert len(fallback.calls) == 2 and fallback.calls[0] == fallback.calls[1]
+    assert result["coverage"][0]["received_through"] == "2026-10-15"
+    assert result["coverage"][0]["attempts"] == 2
+    audits = history_db.scalars(select(ProviderAudit).order_by(ProviderAudit.id)).all()
+    assert [(row.provider, row.status, row.reason) for row in audits] == [
+        ("akshare", "quality_fallback", "price_only_units_unverified"),
+        ("tencent", "fallback_partial", "target_date_missing"),
+        ("akshare", "quality_fallback", "price_only_units_unverified"),
+        ("tencent", "fallback_used", None),
+    ]
+
+
+def test_missing_target_after_retry_stays_failed_without_relabeling_old_bars(history_db):
+    fallback = DelayedHistory(recovers=False)
+
+    result, _ = run(history_db, fallback)
+
+    assert result["status"] == "failed" and result["coverage_complete"] is False
+    assert len(fallback.calls) == 2
+    assert result["coverage"] == [{"ts_code": "510300.SH", "received_through": "2026-10-14",
+                                   "complete": False, "attempts": 2}]
+    assert [row.trade_date for row in history_db.scalars(select(DailyBar))] == [date(2026, 10, 14)]
+    audits = history_db.scalars(select(ProviderAudit).order_by(ProviderAudit.id)).all()
+    assert len(audits) == 4
+    assert [row.reason for row in audits if row.provider == "tencent"] == ["target_date_missing"] * 2
+
+
+@pytest.mark.parametrize("enabled,provider", [(False, "public_composite"), (True, "mock"), (True, "tushare")])
+def test_missing_target_does_not_retry_without_existing_public_opt_in(history_db, enabled, provider):
+    fallback = DelayedHistory(recovers=True)
+    result, _ = run(history_db, fallback, enabled=enabled, provider_name=provider)
+    assert len(fallback.calls) == 1
+    assert result["status"] == "failed" and result["coverage_complete"] is False
+
+
+@pytest.mark.parametrize("reason", ["RATE_LIMITED", "PERMISSION_OR_CREDENTIALS_DENIED",
+                                  "CREDENTIALS_MISSING", "INVALID_RESPONSE_SCHEMA"])
+def test_missing_target_does_not_override_explicit_provider_restriction(history_db, reason):
+    restricted = PublicAdapter("restricted-public", errors=[ProviderError("fixture", safe_code=reason)])
+    stale = DelayedHistory(recovers=True)
+    provider = CompositeProvider([restricted, stale])
+
+    result = MarketService(provider, Settings(_env_file=None, market_provider="public_composite")).refresh_daily_bars(
+        history_db, codes=["510300.SH"], retry_history_once=True)
+
+    assert normalize_outcome(result)["status"] == "failed"
+    assert result["coverage_complete"] is False
+    assert len(restricted.calls) == len(stale.calls) == 1
 
 
 @pytest.mark.parametrize("code", ["RATE_LIMITED", "PERMISSION_OR_CREDENTIALS_DENIED",
