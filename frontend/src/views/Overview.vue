@@ -15,19 +15,24 @@ import TaskProgress from '../components/TaskProgress.vue'
 import OutlookPanel from '../components/OutlookPanel.vue'
 import PageState from '../components/PageState.vue'
 import DataHealth from '../components/DataHealth.vue'
-import type { ChartData, DataJob } from '../lib/types'
+import ContextReadStatus from '../components/ContextReadStatus.vue'
+import type { ChartData, ContextReadView, DataJob } from '../lib/types'
 defineOptions({ name: 'MarketOverview' })
 type IndexChart = ChartData & {summary?:{price:number|null;change_ratio:number|null;source_time:string|null}}
 // Keep this list aligned with the bounded index-history provider contract.
 const INDEX_HISTORY_CONTEXTS = new Set(['cn-shanghai-composite', 'cn-csi300', 'cn-csi-all'])
 const route = useRoute(), router = useRouter(), session = useSession(), board = ref<InstanceType<typeof OriginalDecisionBoard> | null>(null)
-const snapshot=useQuery<{generation?:string|number}>('/api/workspace/overview?limit=1')
+const snapshot=useQuery<{generation?:string|number;research_source?:string;read_model_version?:string}>('/api/workspace/overview?limit=1')
 const generation=computed(()=>snapshot.data.value?.generation)
-const captured=(path:string)=>snapshot.data.value?withGeneration(path,generation.value):null
-const market = useQuery<Record<string, unknown>>(()=>captured('/api/workspace/market-context'))
+const localMode = computed(() => snapshot.data.value?.research_source === 'local_bundle' ||
+  snapshot.data.value?.read_model_version === 'local-display-v2')
+const snapshotReady = computed(() => snapshot.data.value != null && (!localMode.value || generation.value != null))
+const captured=(path:string)=>snapshotReady.value?withGeneration(path,generation.value):null
+const market = useQuery<ContextReadView>(()=>captured('/api/workspace/market-context'))
 const sectors = useQuery<Record<string, unknown>>(()=>captured('/api/workspace/sectors'))
 const discovery = useQuery<Record<string, unknown>>('/api/workspace/discovery')
-const indexCache=useQuery<{items:Record<string,unknown>[]}>(()=>captured('/api/workspace/indexes'))
+const indexCache=useQuery<ContextReadView>(()=>captured('/api/workspace/indexes'))
+const indexHistoryAvailable = computed(() => !localMode.value && market.data.value?.index_history_available !== false)
 const contextCards = computed(() => {
   const items=(Array.isArray(market.data.value?.latest_view)?market.data.value!.latest_view:[]).map(record).filter(x=>['index','tradable_proxy'].includes(String(x.context_kind)))
   for(const cached of indexCache.data.value?.items??[]){
@@ -40,7 +45,7 @@ const contextCards = computed(() => {
 const selectedContextId = ref(''), indexPeriod=ref('1d')
 const selectedContext = computed(() => contextCards.value.find(x => String(x.context_id) === selectedContextId.value))
 const selectedIndexSupported = computed(() => INDEX_HISTORY_CONTEXTS.has(selectedContextId.value))
-const contextHistory = useQuery<IndexChart>(() => selectedContextId.value ? `/api/workspace/indexes/${encodeURIComponent(selectedContextId.value)}/chart?limit=500&interval=${indexPeriod.value}` : null)
+const contextHistory = useQuery<IndexChart>(() => indexHistoryAvailable.value && selectedContextId.value ? `/api/workspace/indexes/${encodeURIComponent(selectedContextId.value)}/chart?limit=500&interval=${indexPeriod.value}` : null)
 function displayStatus(item:Record<string,unknown>){
   const key=String(record(item.display_time).status??item.freshness??'unavailable')
   const names:Record<string,string>={historical:'历史日线观察',stale:'已过展示窗口',recent_observation:'近期观察（非实时资格）',unverified:'源时间待核验',unavailable:'尚无数据',mock:'演示',degraded:'已降级',unknown:'未知'}
@@ -49,9 +54,11 @@ function displayStatus(item:Record<string,unknown>){
 function openContext(item: Record<string, unknown>) {
   const code = String(item.display_code ?? '').trim()
   if (item.is_tradable_proxy && code) { void router.push(withGeneration(`/etf/${encodeURIComponent(code)}`,generation.value)); return }
+  if (!indexHistoryAvailable.value) return
   selectedContextId.value = String(item.context_id ?? '')
 }
 async function syncIndex() {
+  if (!canSync.value || !indexHistoryAvailable.value || !selectedIndexSupported.value) return
   busy.value=true; error.value=''; notice.value=''
   try { const r=await api<{job:DataJob}>('/api/workspace/data-jobs',{method:'POST',body:{task:'index_history',codes:[],lookback_days:1800,request_key:crypto.randomUUID()}});activeTasks.value=[r.job.job_id]; notice.value='三只 A 股指数历史已排队；完成后点重新读取。历史缓存跨重启保留。' }
   catch(e){error.value=errorText(e)}finally{busy.value=false}
@@ -64,7 +71,7 @@ const sectorItems = computed(() => filtered.value.slice(0, showAll.value ? 2000 
 const dataHealth=ref<InstanceType<typeof DataHealth>|null>(null)
 const activeTasks=ref<string[]>([]),prepareLimit=ref(10),prepareScale=ref(0),plan=ref<{codes:string[];items:{ts_code:string;name:string;bars:number;market_cap_cny:number|null}[];note:string}|null>(null)
 const busy = ref(false), notice = ref(''), error = ref('')
-const canSync = computed(() => session.role === 'admin' || !session.identifier)
+const canSync = computed(() => snapshotReady.value && !localMode.value && (session.role === 'admin' || !session.identifier))
 const storage=useQuery<Record<string,unknown>>(()=>canSync.value?'/api/workspace/storage':null)
 async function previewHistory(){error.value='';try{plan.value=await api('/api/workspace/catalog-preparation?limit='+prepareLimit.value+'&minimum_scale='+prepareScale.value*1e8)}catch(e){error.value=errorText(e)}}
 async function prepareHistory(){if(!plan.value?.codes.length)return;error.value='';try{const r=await api<{job:DataJob}>('/api/workspace/data-jobs',{method:'POST',body:{task:'prepare_history',codes:plan.value.codes,lookback_days:1500,request_key:crypto.randomUUID()}});activeTasks.value=[r.job.job_id];notice.value='已确认加入研究池并排队下载 '+plan.value.codes.length+' 只历史；收藏与持仓不变。';plan.value=null}catch(e){error.value=errorText(e)}}
@@ -92,9 +99,12 @@ async function recompute(){if(busy.value)return;busy.value=true;error.value='';t
   <p v-if="snapshot.error.value" class="notice" role="alert">{{snapshot.error.value}}</p><nav class="section-tabs" aria-label="总览内容"><a href="#market-boards">行业与概念</a><a href="#etf-decisions">ETF 决策快照</a><RouterLink to="/analysis">搜索全部 ETF / LOF</RouterLink></nav>
   <div v-if="route.query.mode === '1430'" class="notice warning-notice">14:30 为同一总览的研究模式，不是另一套动作。历史分钟验证尚未取得资格。</div>
   <DataHealth v-if="canSync" ref="dataHealth"/>
-  <div class="cards market-context-cards"><article v-for="item in contextCards" :key="String(item.context_id)" class="stat-card market-context-card" role="button" tabindex="0" :aria-label="`查看${item.label}历史数据`" @click="openContext(item)" @keydown.enter="openContext(item)"><div class="label">{{ item.label }}</div><div class="value">{{ num(item.observed_value) }} <span class="delta" :class="direction(numeric(item.today_pct_change))">{{ pct(numeric(item.today_pct_change) == null ? null : Number(item.today_pct_change)/100) }}</span></div><small>{{item.freshness==='historical'?(item.is_partial?'盘中日线未收盘':'最近历史收盘'):'最近观测'}} · {{ item.source ?? '尚未取得指数数据' }} · {{ record(item.display_time).precision === 'date_assumed' ? record(item.display_time).date_label : item.freshness === 'historical' && item.source_timestamp ? String(item.source_timestamp).slice(0,10) : stamp(item.source_timestamp) }} · {{ displayStatus(item) }}<small v-if="record(item.display_time).note">{{record(item.display_time).note}}</small></small><span class="small-note">{{ item.is_tradable_proxy && item.display_code ? '打开对应 ETF K 线' : '查看指数 K 线' }}</span></article>
-    <article v-if="!contextCards.length" class="stat-card"><div class="label">市场指数上下文</div><div class="value">待同步</div><small>{{ market.error.value || '使用原有市场数据接入，不使用 ETF 样本冒充指数。' }}</small></article></div>
-  <section v-if="selectedContext" class="card market-context-detail" aria-live="polite"><div class="card-header"><div><h2>{{selectedContext.label}} · 指数 K 线</h2><small>最近历史收盘 {{num(contextHistory.data.value?.summary?.price)}} · {{pct(contextHistory.data.value?.summary?.change_ratio)}} · {{contextHistory.data.value?.source_as_of??'尚未同步'}}；不冒充今日实时</small></div><div class="actions"><button v-if="canSync && selectedIndexSupported" class="button small" :disabled="busy" @click="syncIndex">下载指数历史</button><button class="button small" @click="contextHistory.reload()">重新读取 K 线</button><button class="button small" @click="selectedContextId=''">关闭</button></div></div><p v-if="!selectedIndexSupported" class="notice" role="status">当前版本仅支持三个 A 股指数历史下载；该指数保留原有观测卡片，暂不提供 OHLC 缓存。</p><PageState :loading="contextHistory.loading.value" :error="contextHistory.error.value" :empty="!contextHistory.data.value?.available" title="指数历史尚未准备" :description="selectedIndexSupported ? '需要管理员下载真实开高低收数据。旧点位快照不拼成蜡烛图；下载失败保留已有历史。' : '当前版本暂不支持该指数的历史 OHLC 缓存；保留原有观测，不拼造蜡烛图。'" @retry="contextHistory.reload"><EtfChart v-if="contextHistory.data.value?.available" :data="contextHistory.data.value" :label="String(selectedContext.label)" @period="indexPeriod=$event"/></PageState></section>
+  <p v-if="localMode && !snapshotReady" class="notice" role="status">尚无可消费批次；请在本机更新后主动重新读取。</p>
+  <p v-if="market.error.value" data-testid="market-context-read-error" class="notice warning-notice" role="alert">市场上下文读取失败，保留同批次上次结果：{{market.error.value}}</p>
+  <ContextReadStatus v-if="market.data.value?.read_contract" data-testid="market-context-status" :view="market.data.value"/>
+  <div class="cards market-context-cards"><article v-for="item in contextCards" :key="String(item.context_id)" class="stat-card market-context-card" :class="{interactive:indexHistoryAvailable || item.is_tradable_proxy && item.display_code}" :role="indexHistoryAvailable || item.is_tradable_proxy && item.display_code ? 'button' : undefined" :tabindex="indexHistoryAvailable || item.is_tradable_proxy && item.display_code ? 0 : undefined" :aria-label="indexHistoryAvailable || item.is_tradable_proxy && item.display_code ? `查看${item.label}历史数据` : undefined" @click="openContext(item)" @keydown.enter="openContext(item)"><div class="label">{{ item.label }}</div><div class="value">{{ num(item.observed_value) }} <span class="delta" :class="direction(numeric(item.today_pct_change))">{{ pct(numeric(item.today_pct_change) == null ? null : Number(item.today_pct_change)/100) }}</span></div><small>{{item.freshness==='historical'?(item.is_partial?'盘中日线未收盘':'最近历史收盘'):'最近观测'}} · {{ item.source ?? '尚未取得指数数据' }} · {{ record(item.display_time).precision === 'date_assumed' ? record(item.display_time).date_label : item.freshness === 'historical' && item.source_timestamp ? String(item.source_timestamp).slice(0,10) : stamp(item.source_timestamp) }} · {{ displayStatus(item) }}<small v-if="record(item.display_time).note">{{record(item.display_time).note}}</small></small><span class="small-note">{{ item.is_tradable_proxy && item.display_code ? '打开对应 ETF K 线' : indexHistoryAvailable ? '查看指数 K 线' : '本地展示包未发布指数历史' }}</span></article>
+    <article v-if="!contextCards.length" class="stat-card"><div class="label">市场指数上下文</div><div class="value">{{ localMode ? '无上下文观察' : '待同步' }}</div><small>{{ market.error.value || '使用原有市场数据接入，不使用 ETF 样本冒充指数。' }}</small></article></div>
+  <section v-if="indexHistoryAvailable && selectedContext" class="card market-context-detail" aria-live="polite"><div class="card-header"><div><h2>{{selectedContext.label}} · 指数 K 线</h2><small>最近历史收盘 {{num(contextHistory.data.value?.summary?.price)}} · {{pct(contextHistory.data.value?.summary?.change_ratio)}} · {{contextHistory.data.value?.source_as_of??'尚未同步'}}；不冒充今日实时</small></div><div class="actions"><button v-if="canSync && selectedIndexSupported" class="button small" :disabled="busy" @click="syncIndex">下载指数历史</button><button class="button small" @click="contextHistory.reload()">重新读取 K 线</button><button class="button small" @click="selectedContextId=''">关闭</button></div></div><p v-if="!selectedIndexSupported" class="notice" role="status">当前版本仅支持三个 A 股指数历史下载；该指数保留原有观测卡片，暂不提供 OHLC 缓存。</p><PageState :loading="contextHistory.loading.value" :error="contextHistory.error.value" :empty="!contextHistory.data.value?.available" title="指数历史尚未准备" :description="selectedIndexSupported ? '需要管理员下载真实开高低收数据。旧点位快照不拼成蜡烛图；下载失败保留已有历史。' : '当前版本暂不支持该指数的历史 OHLC 缓存；保留原有观测，不拼造蜡烛图。'" @retry="contextHistory.reload"><EtfChart v-if="contextHistory.data.value?.available" :data="contextHistory.data.value" :label="String(selectedContext.label)" @period="indexPeriod=$event"/></PageState></section>
   <div class="card section" data-testid="full-market-breadth"><div class="card-header"><h2>全市场涨跌宽度</h2><small>独立 A 股快照，非 ETF 样本</small></div><div class="card-body"><div v-for="item in breadth" :key="String(item.sector_name)" class="actions"><strong>{{ item.sector_name }}</strong><span class="bull">上涨 {{ num(record(item.breadth).up,0) }}</span><span class="bear">下跌 {{ num(record(item.breadth).down,0) }}</span><span>平盘 {{ num(record(item.breadth).flat,0) }}</span><small>{{ item.source }} · {{ item.source_as_of }}</small></div><p v-if="!breadth.length" class="muted">尚无全市场宽度快照，缺失项不填零。</p></div></div>
   <section id="market-boards" class="card section" aria-labelledby="boards-heading"><div class="card-header"><div><h2 id="boards-heading">行业与概念板块</h2><p>读取原有行业 / 概念 / 全市场快照；每类数据独立显示。</p></div><button v-if="canSync" class="button" :disabled="busy" @click="syncDiscovery">同步市场目录与板块</button></div>
     <div class="toolbar"><button class="button" :class="{primary:sectorKind==='industry'}" @click="sectorKind='industry';showAll=false">行业板块</button><button class="button" :class="{primary:sectorKind==='concept'}" @click="sectorKind='concept';showAll=false">概念板块</button><input v-model="sectorFilter" aria-label="筛选板块" placeholder="筛选板块名称"/><small>{{ filtered.length }} 个板块 · 可搜索基金 {{ discovery.data.value?.catalog_count ?? '—' }} 个</small></div>
@@ -105,10 +115,10 @@ async function recompute(){if(busy.value)return;busy.value=true;error.value='';t
     <div class="card-body"><span v-for="job in (Array.isArray(discovery.data.value?.jobs)?discovery.data.value!.jobs:[])" :key="String(record(job).task)" class="small-note">{{ record(job).task }}：<Badge :value="String(record(job).status)"/> {{ stamp(record(job).finished_at ?? record(job).created_at) }}　</span><RouterLink to="/settings">查看采集步骤和失败原因</RouterLink></div>
   </section>
   <div class="toolbar"><button v-if="canSync" class="button" :disabled="busy" @click="recompute">重算已存历史指标</button><span class="small-note">已有 K 线但决策快照为空：可先离线重算。单只基金数据不全，不影响其他标的；无历史时在 ETF 详情补齐。</span></div>
-  <details v-if="canSync" class="card section"><summary class="card-header">优先准备 ETF 历史与存储检查</summary><div class="card-body"><p>目录可搜索不等于历史已下载。先预览最多30只，再确认加入研究池；按已知市场市值/成交额优先，未知规模排后。不会下载所有市场基金。</p><div class="toolbar"><label>每批 <input v-model.number="prepareLimit" type="number" min="1" max="30" style="width:80px"/></label><label>已知市值至少 <input v-model.number="prepareScale" type="number" min="0" max="1000" style="width:90px"/>亿元</label><button class="button" @click="previewHistory">预览历史准备清单</button></div><div v-if="plan"><p>{{plan.note}}</p><p v-for="item in plan.items" :key="item.ts_code">{{item.name}} {{item.ts_code}} · 已存 {{item.bars}} 根 · {{item.market_cap_cny==null?'市值未知':num(item.market_cap_cny/1e8)+'亿元'}}</p><button class="button primary" :disabled="!plan.codes.length" @click="prepareHistory">确认准备 {{plan.codes.length}} 只历史</button></div><p>当前数据库 {{bytes(storage.data.value?.database_bytes)}} · 已存日线 {{storage.data.value?.daily_bar_rows??'—'}} 条 · 应用所在文件系统可用 {{bytes(storage.data.value?.application_disk_free_bytes)}}</p><small>{{storage.data.value?.note}}。E盘归档使用 docs/HISTORY_STORAGE_V103.md 中的只读导出流程；不会同步正在运行的SQLite文件。</small></div></details><OriginalDecisionBoard ref="board" :generation="generation" :ready="snapshot.data.value!=null"/><details class="card section"><summary class="card-header">日／周／月预测的计算与边界</summary><div class="card-body"><OutlookPanel/></div></details>
+  <details v-if="canSync" class="card section"><summary class="card-header">优先准备 ETF 历史与存储检查</summary><div class="card-body"><p>目录可搜索不等于历史已下载。先预览最多30只，再确认加入研究池；按已知市场市值/成交额优先，未知规模排后。不会下载所有市场基金。</p><div class="toolbar"><label>每批 <input v-model.number="prepareLimit" type="number" min="1" max="30" style="width:80px"/></label><label>已知市值至少 <input v-model.number="prepareScale" type="number" min="0" max="1000" style="width:90px"/>亿元</label><button class="button" @click="previewHistory">预览历史准备清单</button></div><div v-if="plan"><p>{{plan.note}}</p><p v-for="item in plan.items" :key="item.ts_code">{{item.name}} {{item.ts_code}} · 已存 {{item.bars}} 根 · {{item.market_cap_cny==null?'市值未知':num(item.market_cap_cny/1e8)+'亿元'}}</p><button class="button primary" :disabled="!plan.codes.length" @click="prepareHistory">确认准备 {{plan.codes.length}} 只历史</button></div><p>当前数据库 {{bytes(storage.data.value?.database_bytes)}} · 已存日线 {{storage.data.value?.daily_bar_rows??'—'}} 条 · 应用所在文件系统可用 {{bytes(storage.data.value?.application_disk_free_bytes)}}</p><small>{{storage.data.value?.note}}。E盘归档使用 docs/HISTORY_STORAGE_V103.md 中的只读导出流程；不会同步正在运行的SQLite文件。</small></div></details><OriginalDecisionBoard ref="board" :generation="generation" :ready="snapshotReady"/><details class="card section"><summary class="card-header">日／周／月预测的计算与边界</summary><div class="card-body"><OutlookPanel/></div></details>
 </section></template>
 <style scoped>
-.market-context-card { cursor: pointer; }
+.market-context-card.interactive { cursor: pointer; }
 .market-context-card:focus-visible { outline: 2px solid var(--accent, #27c5d8); outline-offset: 2px; }
 .market-context-card .small-note { display: block; margin-top: 8px; }
 .market-context-detail { margin-top: 16px; }

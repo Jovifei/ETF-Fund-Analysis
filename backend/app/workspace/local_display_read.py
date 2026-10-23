@@ -325,6 +325,8 @@ class LocalDisplayStore:
 
 
 class LocalDisplayReader:
+    CONTEXT_READ_VERSION = "local-display-context-read-v1"
+
     def __init__(self, store: LocalDisplayStore, *, code_sha: str | None = None, config_hash: str | None = None):
         self.store = store
         self.code_sha, self.config_hash = code_sha, config_hash
@@ -361,6 +363,8 @@ class LocalDisplayReader:
                 "read_model_version": CONTRACT_VERSION,
                 "contains_mock": False,
                 "is_stale": True,
+                "research_source": "local_bundle",
+                "index_history_available": False,
             }
 
         manifest = bundle.get("manifest", {})
@@ -397,6 +401,8 @@ class LocalDisplayReader:
             "sector_timing": ov_part.get("sector_timing", {}),
             "generation": manifest.get("sequence"),
             "is_stale": is_stale,
+            "research_source": "local_bundle",
+            "index_history_available": False,
         }
 
     def read_decision_board(
@@ -558,3 +564,53 @@ class LocalDisplayReader:
         if not part or not isinstance(part.get("items"), list) or not part["items"]:
             return None
         return list(part["items"])
+
+    def read_market_context_view(
+        self, generation: str | int | None = None, *, now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Versioned read envelope; publication state and expiry are independent.
+
+        ``as_of`` is the captured bundle time, while ``read_at`` is the read clock.
+        No read-time label changes source observations or their qualification.
+        The legacy list method remains available for existing callers.
+        """
+        now = now or datetime.now(timezone.utc)
+        bundle = self.load_bundle(generation)
+        manifest = bundle.get("manifest", {}) if bundle else {}
+        part = bundle.get("parts", {}).get("market_context") if bundle else None
+        items = [dict(row) for row in part.get("items", []) if isinstance(row, dict)] if isinstance(part, dict) else []
+        if not bundle:
+            availability, reason = "unavailable", "generation_unavailable" if generation is not None else "local_bundle_unavailable"
+        elif not isinstance(part, dict):
+            availability, reason = "unpublished", "market_context_not_published"
+        else:
+            availability = part.get("availability") or ("available" if items else "unavailable")
+            reason = part.get("reason") or (None if items else "market_context_empty")
+        historical = bool(bundle and bundle.get("historical_identity"))
+        expired = now >= _parse_iso(manifest["expires_at"]) if bundle else None
+        stale = not bundle or historical or bool(expired)
+        return {
+            "items": items,
+            "available": bool(items) and availability not in {"unavailable", "unpublished"},
+            "availability": availability,
+            "reason": reason,
+            **{key: part.get(key) if isinstance(part, dict) else None
+               for key in ("source_as_of", "refreshed_at", "refreshed_in_slot")},
+            "generation": manifest.get("sequence"),
+            "requested_generation": generation,
+            "as_of": manifest.get("generated_at"),
+            "generated_at": manifest.get("generated_at"),
+            "expires_at": manifest.get("expires_at"),
+            "read_at": now.isoformat(),
+            "is_stale": stale,
+            "is_expired": expired,
+            "historical_identity": historical,
+            "read_model_version": CONTRACT_VERSION,
+            "read_contract": self.CONTEXT_READ_VERSION,
+            "research_source": "local_bundle",
+            "index_history_available": False,
+            "provider_called": False,
+            "actionable": False,
+            "research_only": True,
+            "calibration_status": "not_calibrated",
+        }
