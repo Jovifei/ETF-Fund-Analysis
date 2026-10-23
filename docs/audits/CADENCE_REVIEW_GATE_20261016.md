@@ -1,5 +1,13 @@
 # Cadence recovery: fixed-source review gate
 
+## Remote status correction — 2026-10-21 16:40 UTC
+
+[PR #49](https://github.com/Jovifei/ETF-Fund-Analysis/pull/49) was merged at 2026-10-16 14:53:53 UTC. The remotely verified main and cadence branch both point to `3d1ab1696653403cab2f6942495a1abc0e8c5dfb` (tree `bd59fa1acc2ca50e9564e8f40e0109a77e0c86e2`). Exact-SHA completed/success workflow evidence is recorded in [STATUS.md](../../STATUS.md). Statements below that main remains unchanged or final CI is unfinished describe the pre-merge review stage, not the current remote source state.
+
+This correction is read-only source/PR/CI verification, not a new test run, deployment approval, confirmed production rollout, upload recovery, authenticated consumer acceptance, or two-session acceptance. All original failures, interrupted runs, data-preservation requirements and runtime gates below remain intact and require their own current evidence.
+
+## Original review-stage record
+
 Jovi authorized implementation, tests, webpage GPT review, controlled rollout,
 then two verified trading-session observations. This document records the
 repair contract; it is not a deployment or two-day acceptance receipt.
