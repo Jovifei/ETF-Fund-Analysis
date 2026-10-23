@@ -9,7 +9,10 @@ test('original report lives in home; ETF navigation preserves shell and filter',
   await expect(page.getByRole('heading', {name:'行业与概念板块'})).toBeVisible()
   const report = page.frameLocator('iframe[title="原版 ETF 决策快照"]')
   await expect(report.locator('.decision-data-row').first()).toBeVisible()
-  await report.locator('#horizonSelect').selectOption('5')
+  expect(await report.locator('#horizonSelect option').evaluateAll(options =>
+    options.map(option => (option as HTMLOptionElement).value),
+  )).toEqual(['1', '3', '7', '20', '60'])
+  await report.locator('#horizonSelect').selectOption('7')
   await report.locator('#searchInput').fill('512480')
   await expect(report.locator('.decision-data-row')).toHaveCount(1)
   await expect(report.locator('.decision-data-row')).toContainText('512480')
@@ -22,7 +25,7 @@ test('original report lives in home; ETF navigation preserves shell and filter',
   await page.goBack()
   await expect(page).toHaveURL(/\/$/)
   await expect(report.locator('#searchInput')).toHaveValue('512480')
-  await expect(report.locator('#horizonSelect')).toHaveValue('5')
+  await expect(report.locator('#horizonSelect')).toHaveValue('7')
   await expect(report.locator('.decision-data-row')).toHaveCount(1)
   await expect(page.locator('.sidebar')).toHaveAttribute('data-preserved-shell','yes')
   expect(errors).toEqual([])
