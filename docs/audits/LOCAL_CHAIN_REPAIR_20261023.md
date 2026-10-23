@@ -31,3 +31,9 @@ Jovi正常登录后总览决策板/板块/上下文超时，一次只读重试�
 脱敏证据在E:\Claude_allow\Download\ETF-chain-fix-20261023：web-read目录、bars-operational-receipt.json、bars-green-final.log及parent-focused.xml。Hub revision查询Win10061失败，未发送或自动重试。
 
 文档精简在独立codex/docs-consolidation-20261023，不把文档清理混入业务修复。main不变，任何合并/部署须按Jovi实际条件。
+
+## 必要依赖安全修补
+
+CI实际发现Vite7.3.5命中GHSA-587h-7wmj-h5pm高危（上游公告：https://github.com/vitejs/launch-editor/security/advisories/GHSA-587h-7wmj-h5pm）。Jovi另行明确授权同大版本最小升级到7.3.7，不降低门禁。package-lock仅根Vite声明与node_modules/vite条目改变，其余锁定包原样。
+
+隔离安装ignore-scripts，初次npm ci因ECONNRESET失败保留日志；使用既有缓存重新执行成功。安全审计高危/严重均0，仍有2中危/1低危独立保留；205项Vue单测、TypeScript和生产构建通过。旧固定59fbb13的后端全量在独立未改工作树运行，后继补丁不改backend/scripts或测试；新SHA的精确CI另行核验，不冒充新SHA已本地全量通过。
