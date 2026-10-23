@@ -80,7 +80,7 @@ def test_reader_distinguishes_unpublished_part_and_retired_generation(tmp_path):
     assert unpublished["source_as_of"] is None
     retired = reader.read_market_context_view("6", now=READ_AT)
     assert retired["availability"] == "unavailable"
-    assert retired["reason"] == "generation_unavailable"
+    assert retired["reason"] == "local_display_generation_unavailable"
     assert retired["generation"] is None
     assert retired["requested_generation"] == "6"
     assert retired["generated_at"] is None
@@ -147,15 +147,16 @@ def test_context_http_gets_keep_status_without_provider_or_sql(tmp_path, monkeyp
                 assert view["provider_called"] is view["actionable"] is False
                 assert view["research_only"] is True
                 assert view["calibration_status"] == "not_calibrated"
-                assert view[item_key] == part["items"] or (
-                    item_key == "latest_view" and all(row["context_id"] == ITEM["context_id"] for row in view[item_key]))
+                assert len(view[item_key]) == len(part["items"])
+                for actual, expected in zip(view[item_key], part["items"], strict=True):
+                    assert {key: actual[key] for key in expected} == expected
                 for key in ("source_as_of", "refreshed_at", "refreshed_in_slot"):
                     if key in part:
                         assert view[key] == part[key]
                 assert response.headers["cache-control"] == "private, no-store"
             missing = client.get("/api/workspace/market-context?generation=6").json()
             assert missing["generation"] is None
-            assert missing["reason"] == "generation_unavailable"
+            assert missing["reason"] == "local_display_generation_unavailable"
             assert missing["latest_view"] == []
             assert client.get("/api/workspace/indexes/cn-csi300/chart").status_code == 404
     engine.dispose()

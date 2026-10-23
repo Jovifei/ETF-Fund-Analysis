@@ -12,7 +12,7 @@ const label = computed(() => {
 const reason = computed(() => {
   const reasons: Record<string, string> = { optional_refresh_failed: '可选上下文更新失败，缺失项保持为空。',
     not_refreshed_today: '本交易日尚未更新。', fast_slot_reuses_same_day_refresh: '本时段沿用同日已存观察，未重新采集。',
-    market_context_not_published: '展示包未包含市场上下文。', generation_unavailable: '所选批次不可用，请主动读取最新批次。',
+    market_context_not_published: '展示包未包含市场上下文。', local_display_generation_unavailable: '所选批次不可用，请主动读取最新批次。',
     local_bundle_unavailable: '尚无可读取的展示包。', market_context_empty: '本批次没有上下文观察。',
     coverage_incomplete: '仅展示已取得的上下文，缺失项保持为空。' }
   return reasons[props.view.reason ?? ''] ?? props.view.reason

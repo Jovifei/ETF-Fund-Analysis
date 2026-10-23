@@ -15,6 +15,8 @@ vi.mock('klinecharts', () => ({
   registerOverlay: vi.fn(), ActionType: { OnCrosshairChange: 'crosshair' },
 }))
 
+vi.mock('../src/stores/favorites', () => ({ useFavorites: () => ({ reload: vi.fn() }) }))
+import HistoryLoader from '../src/components/HistoryLoader.vue'
 import EtfChart from '../src/components/EtfChart.vue'
 import DecisionSummary from '../src/components/DecisionSummary.vue'
 
@@ -75,4 +77,11 @@ describe('local-display-v2 consumer validation', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('宽基')
   })
+})
+
+it('does not offer cloud history collection in local-bundle mode', () => {
+  const wrapper = mount(HistoryLoader, { props: { code: '510300.SH', readOnly: true } })
+  expect(wrapper.find('button').exists()).toBe(false)
+  expect(wrapper.text()).toContain('本机')
+  wrapper.unmount()
 })
