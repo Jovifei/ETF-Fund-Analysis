@@ -107,3 +107,15 @@ Review: 仅展示JSON数字编码变化，负零、布尔及非整数保留；�
 - [ ] Complete exact-source tests, independent review and webpage GPT review.
 - [ ] Controlled deployment and actual local task verification.
 - [ ] Arrange two verified trading-day slot/latency/cloud-zero-growth observation; report pending until observed.
+
+## 2026-10-23 本地链路修复（已获Jovi明确授权）
+
+范围：独立分支先测后修“正常登录网站读取超时”和“15:15/16:10收盘日线刷新失败”。不自动部署；保护原目录用户文档、F盘数据库/配置、服务器备份与另一AI服务。文档清理在单独分支。
+
+- [x] 固定main基线1a4b665，保留原目录新修改，创建独立修复工作树。
+- [x] 复核今天多槽DELIVERED与回执；记录收盘34只中0/3/6只完成的失败及登录页面超时。
+- [x] 沿真实调用链定位根因，分别先运行失败测试/受控复现，不用放宽超时或资格门槛掩盖故障。
+- [x] 最小修复两个有证据的问题，保留原始失败与必要兼容，数值策略不扩范围。
+- [ ] 受影响测试、静态检查、完整后端和必要前端验证；独立复审最终diff并冻结SHA。
+- [ ] codex-with-chatgpt连接恢复后复审；实际公网消费/自然任务未验证须标NOT_RUN，不能从合成测试推导。
+- [ ] 交付固定提交及集中证据；不自动合main、推送或部署服务器。

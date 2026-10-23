@@ -294,8 +294,19 @@ class LocalDisplayStore:
             return None
         explicit_sequence = type(generation) is int
         full_id = not explicit_sequence and len(text) == 64 and GEN_HASH_RE.fullmatch(text)
+        sequence_alias = bool(GEN_SEQ_RE.fullmatch(text)) and not full_id
+        hash_alias = bool(GEN_HASH_RE.fullmatch(text)) and not explicit_sequence
         matches = []
         for path in self.store_dir.glob("bundle_*.json"):
+            # Retention exceeds the parsed cache: loading every generation here
+            # evicts the requested file and repeats whole-day validation per read.
+            # Names select candidates only; _load_file still checks their content.
+            name = self.FILE_RE.fullmatch(path.name)
+            if name is None or not (
+                (sequence_alias and name[1] == text)
+                or (hash_alias and name[2] == text[:16].lower())
+            ):
+                continue
             value = self._load_file(path)
             if value is None:
                 continue

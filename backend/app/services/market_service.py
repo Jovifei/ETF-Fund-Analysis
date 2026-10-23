@@ -29,8 +29,11 @@ def _history_recovery_candidate(provider, records, end_date):
               "INVALID_RESPONSE_SCHEMA", "RESPONSE_TOO_LARGE"}
     if any(trace.reason in denied for trace in traces):
         return False
-    if not any(trace.operation == "fetch_daily_bars" and trace.status == "failed"
-               and trace.reason in {"ProviderError", "PROVIDER_DEADLINE_EXCEEDED"} for trace in traces):
+    retryable = any(trace.operation == "fetch_daily_bars" and (
+        trace.status == "failed" and trace.reason in {"ProviderError", "PROVIDER_DEADLINE_EXCEEDED"}
+        or trace.status in {"partial", "fallback_partial"} and trace.reason == "target_date_missing"
+    ) for trace in traces)
+    if not retryable:
         return False
     quality, complete, _ = CompositeProvider._daily_candidate(records, end_date)
     return quality < 3 or not complete
@@ -286,7 +289,7 @@ class MarketService:
         from app.services.task_outcome import coverage_outcome
         outcome = coverage_outcome(len(instruments), sum(item["complete"] for item in coverage),
             target_trade_date=end_date.isoformat(), coverage=coverage, **totals)
-        policy = "daily-batch-v1.0.4-audited-single-retry" if retry_history_once is True else "daily-batch-v1.0.3-audit"
+        policy = "daily-batch-v1.0.5-audited-target-retry" if retry_history_once is True else "daily-batch-v1.0.3-audit"
         return {"run_id": run_id, "ingestion_policy": policy, "data_contract": VERSION, **outcome}
 
     @staticmethod
