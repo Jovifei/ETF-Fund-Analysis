@@ -25,12 +25,15 @@ from app.workspace.shadow_bundle import digest, canonical
 
 GEN_SEQ_RE = re.compile(r"^[0-9]+$")
 GEN_HASH_RE = re.compile(r"^[0-9a-fA-F]{16,64}$")
+ACCEPTANCE_HISTORY_VERSION = "local-acceptance-v1"
+ACCEPTANCE_HISTORY_LIMIT = 256
+CONSUMER_VERSION = "local-display-consumer-v1"
 
 # Process-wide cache of validated, immutable bundle files.  A bundle is ~16 MB
 # of JSON and ~70 MB once parsed; the overview page fires 5-8 reads at once,
 # and parsing each one twice (pointer check + load) per request drove the API
 # to ~600 MB and a host OOM kill on 2026-10-22.  Files are written once via
-# os.replace, so (device, inode, size, mtime_ns) identifies their content.
+# os.replace, so (device, inode, size, mtime_ns, ctime_ns) identifies their content.
 # Parsing is serialised under one lock so concurrent misses cost one parse.
 # Cached values are shared and must be treated as read-only by callers.
 def _cache_entries_from_env() -> int:
@@ -81,14 +84,19 @@ class LocalDisplayStore:
             st = path.stat()
             if st.st_size > self.max_bytes:
                 return None
-            key = (str(path), st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns)
+            key = (str(path), st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
             with _BUNDLE_CACHE_LOCK:
                 cached = _BUNDLE_CACHE.get(key) if _BUNDLE_CACHE_MAX else None
                 if cached is not None:
                     _BUNDLE_CACHE.move_to_end(key)
                     value, identity = cached
                 else:
-                    value = json.loads(path.read_bytes())
+                    raw = path.read_bytes()
+                    after = path.stat()
+                    if path.is_symlink() or (after.st_dev, after.st_ino, after.st_size,
+                                            after.st_mtime_ns, after.st_ctime_ns) != key[1:]:
+                        return None
+                    value = json.loads(raw)
                     if not verify_bundle_integrity(value):
                         return None
                     manifest = value["manifest"]
@@ -106,6 +114,35 @@ class LocalDisplayStore:
             return value
         except (OSError, ValueError, TypeError, KeyError, RecursionError):
             return None
+
+    @staticmethod
+    def _acceptance_history(pointer: dict[str, Any]) -> list[dict[str, Any]]:
+        """Proof is committed atomically with latest, never inferred from old files.
+
+        Legacy pointers prove only their own identity. The bounded history is
+        NOT a permanent audit archive: a pruned identity cannot be restored.
+        """
+        own = {"sequence": pointer["sequence"], "bundle_id": pointer["bundle_id"]}
+        if type(own["sequence"]) is not int or own["sequence"] <= 0:
+            raise ValueError("invalid acceptance sequence")
+        if "acceptance_history_version" not in pointer and "accepted" not in pointer:
+            return [own]
+        if pointer.get("acceptance_history_version") != ACCEPTANCE_HISTORY_VERSION:
+            raise ValueError("invalid acceptance history version")
+        records = pointer.get("accepted")
+        if not isinstance(records, list) or not 1 <= len(records) <= ACCEPTANCE_HISTORY_LIMIT:
+            raise ValueError("invalid acceptance history")
+        last = 0
+        for record in records:
+            if (not isinstance(record, dict) or set(record) != {"sequence", "bundle_id"}
+                    or type(record["sequence"]) is not int or record["sequence"] <= last
+                    or not isinstance(record["bundle_id"], str)
+                    or not re.fullmatch(r"[0-9a-f]{64}", record["bundle_id"])):
+                raise ValueError("invalid acceptance identity")
+            last = record["sequence"]
+        if records[-1] != own:
+            raise ValueError("acceptance history does not match pointer")
+        return records
 
     def _load_pointer(self, path: Path) -> dict[str, Any] | None:
         try:
@@ -126,6 +163,7 @@ class LocalDisplayStore:
             manifest = value["manifest"]
             if any(pointer.get(key) != manifest[key] for key in ("sequence", "generated_at", "expires_at")):
                 return None
+            self._acceptance_history(pointer)
             return pointer
         except (OSError, ValueError, TypeError, KeyError):
             return None
@@ -216,11 +254,20 @@ class LocalDisplayStore:
             current = self._load_pointer(self.latest_link) if self.latest_link.exists() else None
             if self.latest_link.exists() and current is None:
                 raise ValueError("invalid latest generation pointer")
+            history = self._acceptance_history(current) if current else []
+            if current and "acceptance_history_version" not in current and self.previous_link.exists():
+                # Upgrade only validated pointer evidence; orphan cache files prove nothing.
+                previous = self._load_pointer(self.previous_link)
+                if previous is None:
+                    raise ValueError("invalid previous generation pointer")
+                if previous["sequence"] < current["sequence"]:
+                    history = [{"sequence": previous["sequence"], "bundle_id": previous["bundle_id"]}, *history]
             if current is not None:
                 if manifest.sequence < current["sequence"]:
-                    # Historical re-ack / restore: never promote older sequences to latest.
-                    # Same identity already on disk, or restore of a previously accepted
-                    # bundle that was evicted for capacity, returns already_accepted.
+                    if {"sequence": manifest.sequence, "bundle_id": identity} not in history:
+                        raise ValueError("historical identity was not accepted or proof was pruned")
+                    # Only an exact receiver-accepted identity may be restored. Expiry
+                    # does not revoke historical evidence; neither pointer is promoted.
                     if target.exists():
                         existing = self._load_file(target, expected_id=identity)
                         if existing is None or digest(existing["manifest"]) != identity:
@@ -229,7 +276,6 @@ class LocalDisplayStore:
                     if not verify_bundle_integrity(bundle):
                         raise ValueError("bundle parts integrity verification failed")
                     # Structural-only check: expiry is irrelevant for historical evidence.
-                    created = True
                     extra = len(data)
                     evict = self._budget_plan(target, len(data), current, extra)
                     for path in evict:
@@ -255,9 +301,15 @@ class LocalDisplayStore:
             old_latest = self.latest_link.read_bytes() if self.latest_link.exists() else None
             old_previous = self.previous_link.read_bytes() if self.previous_link.exists() else None
             created = not target.exists()
+            accepted = [*history, {"sequence": manifest.sequence, "bundle_id": identity}]
             pointer = {"bundle_file": target.name, "bundle_id": identity, "sequence": manifest.sequence,
-                       "generated_at": manifest.generated_at, "expires_at": manifest.expires_at}
-            extra = ((len(data) if created else 0) + len(canonical(pointer))
+                       "generated_at": manifest.generated_at, "expires_at": manifest.expires_at,
+                       "acceptance_history_version": ACCEPTANCE_HISTORY_VERSION,
+                       "accepted": accepted[-ACCEPTANCE_HISTORY_LIMIT:]}
+            pointer_data = canonical(pointer)
+            if len(pointer_data) > 65536:
+                raise ValueError("acceptance history exceeds pointer limit")
+            extra = ((len(data) if created else 0) + len(pointer_data)
                      + (len(canonical(current)) if current else 0))
             evict = self._budget_plan(target, len(data), current, extra)
             # GC precedes the new temporary file: no transient budget overdraft.
@@ -271,7 +323,7 @@ class LocalDisplayStore:
                     self._atomic(target, data)
                 if current is not None:
                     self._atomic(self.previous_link, canonical(current))
-                self._atomic(self.latest_link, canonical(pointer))
+                self._atomic(self.latest_link, pointer_data)
             except OSError:
                 for path, payload in ((self.previous_link, old_previous), (self.latest_link, old_latest)):
                     if payload is None:
@@ -290,23 +342,30 @@ class LocalDisplayStore:
             pointer = self._load_pointer(self.latest_link)
             return self._load_file(self.store_dir / pointer["bundle_file"], expected_id=pointer["bundle_id"]) if pointer else None
         text = str(generation).strip()
-        if not GEN_SEQ_RE.fullmatch(text) and not GEN_HASH_RE.fullmatch(text):
+        sequence_alias = bool(GEN_SEQ_RE.fullmatch(text))
+        hash_alias = type(generation) is not int and bool(GEN_HASH_RE.fullmatch(text))
+        if not sequence_alias and not hash_alias:
             return None
-        explicit_sequence = type(generation) is int
-        full_id = not explicit_sequence and len(text) == 64 and GEN_HASH_RE.fullmatch(text)
+        # Decimal sequences have no hash-width limit. A numeric string can be
+        # both a sequence and a hash alias (even at 64 digits); reject ambiguity
+        # after validating both candidates. Explicit integers select only sequences.
         matches = []
         for path in self.store_dir.glob("bundle_*.json"):
+            name = self.FILE_RE.fullmatch(path.name)
+            # Filenames select candidates only. Content, full identity and
+            # alias ambiguity still require verification.
+            if name is None or not (
+                (sequence_alias and name[1] == text)
+                or (hash_alias and name[2] == text[:16].lower())
+            ):
+                continue
             value = self._load_file(path)
             if value is None:
                 continue
             manifest = value["manifest"]
             identity = digest(manifest)
-            if full_id:
-                matched = identity == text.lower()
-            elif explicit_sequence:
-                matched = str(manifest["sequence"]) == text
-            else:
-                matched = (bool(GEN_SEQ_RE.fullmatch(text)) and str(manifest["sequence"]) == text) or (bool(GEN_HASH_RE.fullmatch(text)) and identity.startswith(text.lower()))
+            matched = ((sequence_alias and str(manifest["sequence"]) == text)
+                       or (hash_alias and identity.startswith(text.lower())))
             if matched:
                 matches.append(value)
         # Sequence and short hash aliases must be unambiguous. No fallback to latest.
@@ -350,6 +409,9 @@ class LocalDisplayReader:
                 "read_model_version": CONTRACT_VERSION,
                 "contains_mock": False,
                 "is_stale": True,
+                "research_source": "local_bundle",
+                "consumer_contract_version": CONSUMER_VERSION,
+                "reason": "local_display_generation_unavailable",
             }
 
         manifest = bundle.get("manifest", {})
@@ -386,6 +448,8 @@ class LocalDisplayReader:
             "sector_timing": ov_part.get("sector_timing", {}),
             "generation": manifest.get("sequence"),
             "is_stale": is_stale,
+            "research_source": "local_bundle",
+            "consumer_contract_version": CONSUMER_VERSION,
         }
 
     def read_decision_board(
@@ -477,6 +541,8 @@ class LocalDisplayReader:
             **clean_detail,
             "generation": bundle.get("manifest", {}).get("sequence"),
             "is_stale": stale,
+            "research_source": "local_bundle",
+            "consumer_contract_version": CONSUMER_VERSION,
             "read_model_version": CONTRACT_VERSION,
         }
 
@@ -522,28 +588,57 @@ class LocalDisplayReader:
             "read_model_version": CONTRACT_VERSION,
         }
 
+    @staticmethod
+    def _panel_metadata(bundle: dict[str, Any] | None) -> dict[str, Any]:
+        stale = True
+        if bundle:
+            try:
+                stale = bool(bundle.get("historical_identity")) or datetime.now(timezone.utc) >= _parse_iso(bundle["manifest"]["expires_at"])
+            except (ValueError, TypeError, KeyError):
+                pass
+        return {"generation": bundle["manifest"]["sequence"] if bundle else None,
+                "research_source": "local_bundle", "consumer_contract_version": CONSUMER_VERSION,
+                "is_stale": stale, "actionable": False}
+
     def read_sectors(self, generation: str | int | None = None) -> dict[str, Any]:
         bundle = self.load_bundle(generation)
         if not bundle:
-            return {"sectors": [], "available": False}
-        sectors_part = bundle.get("parts", {}).get("sectors", {})
+            return {**self._panel_metadata(None), "sectors": [], "boards": [], "available": False,
+                    "availability": "unavailable", "reason": "local_display_generation_unavailable"}
+        part = bundle.get("parts", {}).get("sectors", {})
+        rows = part.get("sectors", [])
         result = {
-            "sectors": sectors_part.get("sectors", []),
-            "boards": [{**row, "sector_pct_change": row.get("pct_change")} for row in sectors_part.get("sectors", [])],
-            "available": sectors_part.get("availability") != "unavailable",
-            "generation": bundle.get("manifest", {}).get("sequence"),
+            **self._panel_metadata(bundle), "sectors": rows,
+            "boards": [{**row, "sector_pct_change": row.get("pct_change"),
+                        "source_as_of": row.get("source_as_of") or row.get("trade_date"),
+                        "breadth": row.get("breadth") or {name: row.get(field) for name, field in
+                            (("up", "up_count"), ("down", "down_count"), ("flat", "flat_count"), ("total", "total_count"))}}
+                       for row in rows],
+            "available": part.get("availability") != "unavailable" and bool(rows),
+            "availability": part.get("availability", "available" if rows else "unavailable"),
         }
-        # Pass the producer's honest status through so the page can say why it is empty.
-        for key in ("availability", "reason", "refreshed_at", "refreshed_in_slot", "source_as_of"):
-            if key in sectors_part:
-                result[key] = sectors_part[key]
+        for key in ("reason", "refreshed_at", "refreshed_in_slot", "source_as_of"):
+            if key in part:
+                result[key] = part[key]
+        return result
+
+    def read_market_context_view(self, generation: str | int | None = None) -> dict[str, Any]:
+        """Status-bearing view; empty, failed and carried-forward are not equivalent."""
+        bundle = self.load_bundle(generation)
+        part = bundle.get("parts", {}).get("market_context", {}) if bundle else {}
+        items = part.get("items", [])
+        result = {**self._panel_metadata(bundle), "items": list(items),
+                  "availability": part.get("availability", "available" if items else "unavailable")}
+        for key in ("reason", "refreshed_at", "refreshed_in_slot", "source_as_of"):
+            if key in part:
+                result[key] = part[key]
+        if not bundle:
+            result["reason"] = "local_display_generation_unavailable"
+        elif not items and "reason" not in result:
+            result["reason"] = "market_context_not_published"
         return result
 
     def read_market_context(self, generation: str | int | None = None) -> list[dict[str, Any]] | None:
-        bundle = self.load_bundle(generation)
-        if not bundle:
-            return None
-        part = bundle.get("parts", {}).get("market_context")
-        if not part or not isinstance(part.get("items"), list) or not part["items"]:
-            return None
-        return list(part["items"])
+        # Legacy bootstrap/list callers retain their existing return contract.
+        items = self.read_market_context_view(generation)["items"]
+        return items or None

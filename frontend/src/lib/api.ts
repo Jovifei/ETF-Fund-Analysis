@@ -20,7 +20,8 @@ export async function api<T>(path: string, options: { method?: string; body?: un
   if (options.signal?.aborted) controller.abort()
   options.signal?.addEventListener('abort', abort, { once: true })
   requests.add(controller)
-  const timer = setTimeout(abort, options.timeout ?? 20000)
+  let timedOut = false
+  const timer = setTimeout(() => { if (!controller.signal.aborted) { timedOut = true; controller.abort() } }, options.timeout ?? 20000)
   const method = options.method ?? 'GET'
   const headers: Record<string, string> = { Accept: 'application/json' }
   const form = options.body instanceof FormData
@@ -40,13 +41,20 @@ export async function api<T>(path: string, options: { method?: string; body?: un
     const value = options.blob ? await response.blob() : response.status === 204 ? undefined : await response.json()
     assertCurrent()
     return value as T
+  } catch (error) {
+    if (timedOut && epoch === sessionEpoch && !options.signal?.aborted) throw new ApiError(0, 'request_timeout')
+    throw error
   } finally { clearTimeout(timer); requests.delete(controller); options.signal?.removeEventListener('abort', abort) }
 }
 export function errorText(error: unknown): string {
-  if (error instanceof DOMException && error.name === 'AbortError') return '请求已取消或超时，请重试。'
+  if (error instanceof DOMException && error.name === 'AbortError') return '请求已取消。'
   if (error instanceof ApiError) {
+    if (error.code === 'request_timeout') return '请求超时，请重试；未切换到其他批次。'
     if (error.status === 401) return '登录已失效，请重新登录。'
     const workspaceErrors: Record<string, string> = {
+      local_display_generation_unavailable: '指定批次不可用或已回收；未自动切换到最新批次。',
+      local_display_data_unavailable: '本地展示包未发布该数据；请核对批次，或主动读取最新批次。',
+      index_chart_not_published_in_local_bundle: '本地展示包尚未发布指数 K 线；当前仅展示已发布的指数观测。',
       instrument_not_in_catalog: '该标的不在已同步证券目录；搜索目录不会自动抓取数据。',
       unsupported_instrument_type: '当前研究工作站只支持场内 ETF/LOF。',
       unsupported_chart_interval: '该图表周期暂不支持，请选择日、周、月或已接入的分钟周期。',

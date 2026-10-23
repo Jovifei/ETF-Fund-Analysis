@@ -14,7 +14,8 @@ describe('same-origin API boundary', () => {
   it('keeps authentication, server and timeout errors distinguishable', () => {
     expect(errorText(new ApiError(401, 'session_expired'))).toContain('登录已失效')
     expect(errorText(new ApiError(500, 'http_500'))).toContain('http_500')
-    expect(errorText(new DOMException('timeout', 'AbortError'))).toContain('超时')
+    expect(errorText(new ApiError(0, 'request_timeout'))).toContain('超时')
+    expect(errorText(new DOMException('cancelled', 'AbortError'))).not.toContain('超时')
   })
 })
 
@@ -42,4 +43,20 @@ it('a late 401 cannot expire a newer session', async () => {
     await expect(request).rejects.toMatchObject({ name: 'AbortError' })
     expect(listener).not.toHaveBeenCalled()
   } finally { window.removeEventListener('session-expired', listener) }
+})
+
+it('reports a real deadline separately from caller cancellation', async () => {
+  vi.useFakeTimers()
+  try {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((_path, options) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+    })))
+    const timeout = expect(api('/api/workspace/overview', { timeout: 25 })).rejects.toMatchObject({ code: 'request_timeout' })
+    await vi.advanceTimersByTimeAsync(25)
+    await timeout
+    const controller = new AbortController()
+    const cancelled = expect(api('/api/workspace/overview', { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' })
+    controller.abort()
+    await cancelled
+  } finally { vi.useRealTimers() }
 })
