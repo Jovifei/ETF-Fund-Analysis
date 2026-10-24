@@ -12,6 +12,54 @@ Jovi授权修复→测试→网页GPT复审→通过后受控部署；详细验�
 
 # 当前任务
 
+## 2026-10-24 PR55 上下文 availability P2 接手
+
+- [x] 完整读取另一 Agent 接手文件并核 PR51/52/54 最新 SHA、祖先关系、旧完整测试收据与 Owner 脏文件。
+- [x] 独立分支先 RED 后修复签名接收、已有坏包读取及两个 GET；新候选 `4476858` Windows 全量 2640 PASS/24 SKIP，Vue228、受控认证浏览器1、静态与高危安全门通过。
+- [x] Draft PR55 的两组完整 ci、两组 workspace 合同和跨平台检查在同一 SHA 全 SUCCESS；未部署。
+- [x] 网页 GPT 的最终回复不可加载后，经 Jovi 授权在私有 PR55 发布一条复审评论并从 GitHub 读回：SOURCE/CI/MAIN 三项 PASS，无可执行 P0/P1/P2；评论专用项目指令例外已撤销。
+- [ ] 复审 PASS 后再次核 main/PR55 指针与 Owner 备份，才按 Jovi 授权合 main；不自动部署。
+
+Review：固定 head `447685865ced4f7f5a05337b7652d5f4052c04e9`、tree `bab9d33d0055a69149add8a0f758dcf38be943bf`。根 main `1a4b665` 未变；当前结论与详细收据见 `docs/audits/PR55_LOCAL_ACCEPTANCE_20261024.md`。Hub revision WinError10061，未发送事件。
+
+## 2026-10-24 PR53 后继远端整合阶段（Jovi 已授权）
+
+- [x] 对账 PR53 `fdaf542`、PR51 `f6d0d33`、PR52 `9aa1f49` 与 `main`，形成完整大阶段接力输入。
+- [x] 核官方安全公告、PR51 Vite 7.3.7 精确补丁及认证浏览器失败位置；写 `docs/handoffs/REMOTE_INTEGRATION_STAGE_20261024.md` 并镜像 Obsidian。
+- [x] 在同一“基金决策”项目聊天交远端完整整合合同，要求独立新分支、失败测试、修复、CI、自审和固定 SHA/tree（Jovi 批准仅本次 GitHub-only 路线；`c2c_6b31` 已发送并显示在同一聊天）。
+- [x] 接收远端最终提交，独立核合并关系、完整 CI、受控浏览器与本地专项：PR54 `b98d683`/tree `9f533cf`，两组完整 ci、两组 workspace 合同、跨平台检查全 SUCCESS；本地 Windows 全量 2614 PASS/24 SKIP、Vue228、受控认证浏览器1 PASS。
+- [x] 更新本地审计和 Obsidian 进度，核对两份镜像文档哈希；移除“基金决策”项目指令中的一次性 `c2c_6b31` GitHub-only 例外并读回验证。Hub 此前 revision 因 Win10061 未发送，按其失败契约未自动重试；不合并或部署。
+
+Review：Jovi 授权的整合已在独立 Draft PR54 完成，原 PR51/52/53 与 `main` 未改写、未合并或部署。固定 SHA 的本地全量和 GitHub 当前检查均通过；PR 正文顶部已补最终 SHA/测试收据并读回，C2C 本地任务状态记为 DONE 且清除过时 checkpoint。受控 Mock/认证浏览器不替代生产账号、真实收盘/自然两个交易日、实体手机或数据许可/PIT/OOS/校准。C2C named tunnel 仍未在本阶段修复，本次按 Jovi 的单次 GitHub 插件授权完成；未变更代理/防火墙。完整收据见 `docs/audits/PR54_LOCAL_ACCEPTANCE_20261024.md`。
+
+“基金决策”项目指令的一次性 `c2c_6b31` GitHub-only 例外已移除并重开设置验证，长期远端主责/限仓库 GitHub 规则和“仅限项目”记忆保留。原长聊天目前无法加载，不影响已在 GitHub 核实的提交和 CI。主 checkout 的文档和任务记录保留未提交，生产与私有数据未触碰。
+
+## 2026-10-23 远端大阶段接力准备
+
+- [x] 核对旧会话、当前 main、运行与验收边界，形成五项精简接力信息。
+- [x] 阅读并归纳 Obsidian 本项目文章，按当前证据更新知识库。
+- [x] 写远端交接文档：审核旧阶段、修复真实缺陷、自主选择并完成下一阶段、测试复审、GitHub 固定 SHA 接收合同。
+- [x] 修复本项目 Codex with ChatGPT 连接并核对绑定项目；发送一次完整阶段任务（`c2c_a7f2`）。
+- [x] 收到远端方案后核对变更范围，代码改动前向 Jovi 征询授权；两次完整阶段均获授权，最终在独立 Draft PR54 固定 SHA `b98d683` 接收，完成本地 Windows 全量、前端与浏览器验证。
+
+### PR53 本地固定 SHA 接收
+
+- [x] 核 GitHub PR53 Draft、head `bdf3dd0caa07b37c9bdda3ddc02c5bda1e9a2f02`、tree `a00e620cd0ccb8578853795f3eb42a5033c97b94` 和 CI 最新状态（当前为候选，待新 SHA）。
+- [x] 在隔离 E 盘工作树检出精确 head，保护根目录及旧接收树的现有文件。
+- [x] 独立审查历史接收证明、固定代读取、API/网页状态与测试边界；两项 P2 已回传同一远端聊天待修复。
+- [x] 运行受影响后端、前端单测/类型/构建、静态与受控认证浏览器检查；本地全量两次中断，按 INTERRUPTED 记录，同 SHA GitHub 完整 ci 成功。
+- [x] 形成按固定 SHA 的本地接收结论 **CHANGES_REQUIRED**，复审发现已回传并经远端修复；依赖安全门仍未通过，不合并或部署。
+
+### Review
+
+当前 `main`/GitHub main 为 `1a4b6652f49c412145d12812fa02820ba0a80991`；接力文档 `docs/handoffs/REMOTE_LONG_STAGE_20261023.md`。Obsidian 五篇主笔记按逐篇 DryRun/checkpoint 更新，交接文档已镜像。远端 `c2c_a7f2` 已核对工作区并给出“精确包接收与有界消费闭环”的文件级方案，见交接文档第五节；Jovi 已授权本轮范围和限仓库 GitHub 插件。网页项目指令保存后已重新打开核对；远端 PR53 固定候选 SHA 已收到。根目录 `git diff --check` 通过；本地未改业务代码或部署。Hub revision 查询 WinError 10061，未生成事件或冒报成功。
+
+PR53 首轮候选 `bdf3dd0` 已在 `E:\project\ETF-Fund-Analysis\.local\c2c-a7f2-acceptance-20261023` 精确检出，tree `a00e620...`。本地五个后端相关测试文件 exit 0、Vue 210/210、类型、构建、compileall、静态 JS 和 diff check PASS。独立审查找到固定代大序列和主动 reload 复用旧 GET 两项 P2，已送远端同一任务继续修复。远端 CI：audit-platforms/postdeploy-ci PASS；workspace-ci 的依赖安全门 FAIL，后续前端/浏览器 SKIPPED；全量 ci 已 FAIL，两项容量滚动测试本地独立复现。详细收据：`docs/audits/PR53_LOCAL_ACCEPTANCE_20261024.md`。
+
+远端后继 `850c007` 先补两项 P2 回归，再以 `f89b3826b637df95e0310a5fdb2a36e21912f9b8` 修复；隔离树曾检出此 SHA/tree `309bb523b5c8d793e8f15b05a51bdae66d707e6d`。本地相关后端测试 exit0、`query.test.ts` 8/8、类型检查与增量 diff check PASS；当时容量滚动两例仍失败，随后由 `fdaf542` 修复。未合并或部署。
+
+最新远端 `fdaf5426585d64800dbff60656797cd75306f19e`/tree `6c2450558b2f862e4fc5fbd6929a1999c6ae7d33` 已将容量合成夹具与明确回收断言补齐。隔离树同 SHA 本地八后端模块149/149、Vue218/218、typecheck/build、受控认证 Playwright1/1、compileall/静态JS/diff检查通过；完整本地 pytest 两次执行中断，不记 PASS。GitHub 同 SHA 完整 ci、audit-platforms、postdeploy-ci 成功；workspace-ci 因既有依赖安全门 FAIL，前端/浏览器 CI 跳过。PR53仍 Draft，未合并或部署，正式结论和界限见 `docs/audits/PR53_LOCAL_ACCEPTANCE_20261024.md`。
+
 ## 2026-10-14 主分支整理（Jovi授权）
 
 - [x] 分支与脏工作树盘点；隔离整合树接收a2adee5，原Owner保留。
