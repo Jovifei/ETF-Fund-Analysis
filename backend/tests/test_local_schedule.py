@@ -37,6 +37,29 @@ def test_schedule_due_slots_include_settlement(monkeypatch):
     assert slot is not None and slot.endswith(SETTLEMENT_REFRESH_SLOT)
 
 
+def test_evening_settlement_retry_slots_planned(monkeypatch):
+    from app.workspace import shadow_schedule
+
+    class MockCalendar:
+        def __init__(self, settings):
+            pass
+
+        def decision(self, date):
+            return SimpleNamespace(verified=True, is_trade_day=True)
+
+    monkeypatch.setattr(shadow_schedule, "TradingCalendarService", MockCalendar)
+
+    # 16:41 -> newest due slot is the 16:40 retry
+    now_1641 = datetime(2026, 10, 12, 8, 41, tzinfo=timezone.utc)  # 16:41 Shanghai
+    slot = due_slot_local(None, now_1641)
+    assert slot is not None and slot.endswith("16:40")
+
+    # 17:41 -> newest due slot is the 17:40 retry
+    now_1741 = datetime(2026, 10, 12, 9, 41, tzinfo=timezone.utc)  # 17:41 Shanghai
+    slot = due_slot_local(None, now_1741)
+    assert slot is not None and slot.endswith("17:40")
+
+
 def test_local_run_lock_prevents_concurrency(tmp_path):
     lock_file = tmp_path / "run.lock"
     lock1 = LocalRunLock(lock_file)

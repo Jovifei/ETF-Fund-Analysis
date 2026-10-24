@@ -9,7 +9,7 @@ from app.core.config import get_settings
 from app.services.trading_calendar_service import TradingCalendarService
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
-LOCAL_SCHEDULE_SLOTS = ("11:40", "14:20", "14:30", "14:45", "14:50", "14:55", "15:00", "15:15", "16:10")
+LOCAL_SCHEDULE_SLOTS = ("11:40", "14:20", "14:30", "14:45", "14:50", "14:55", "15:00", "15:15", "16:10", "16:40", "17:40")
 SETTLEMENT_REFRESH_SLOT = "16:10"
 
 

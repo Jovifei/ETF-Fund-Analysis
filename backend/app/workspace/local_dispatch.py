@@ -14,7 +14,11 @@ from app.workspace.shadow_bundle import digest
 from app.workspace.refresh_policy import lunch_close_quote_fresh
 
 DISPATCH_SLOTS = tuple(sorted(('13:55', *LOCAL_SCHEDULE_SLOTS)))
-FULL_SLOTS = {'13:55', '15:15', '16:10'}
+FULL_SLOTS = {'13:55', '15:15', '16:10', '16:40', '17:40'}
+# Post-close settlement attempts; the upstream provider publishes daily bars
+# progressively (2026-10-22/23 ledger: 15:15 -> 0/34, 16:10 -> 3-6/34, full
+# 34/34 only by the next 11:40), so the evening retries land the same-day close.
+SETTLEMENT_SLOTS = {'16:10', '16:40', '17:40'}
 
 
 def utc_now():

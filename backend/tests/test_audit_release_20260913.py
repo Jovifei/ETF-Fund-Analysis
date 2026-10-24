@@ -2,16 +2,18 @@ import importlib.util
 import json
 from pathlib import Path
 import pytest
+import tomllib
 
 ROOT=Path(__file__).resolve().parents[2]
 spec=importlib.util.spec_from_file_location('release_inventory',ROOT/'scripts/release_manifest.py')
 release=importlib.util.module_from_spec(spec);spec.loader.exec_module(release)
+EXPECTED_VERSION=tomllib.loads((ROOT/'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
 
 
 def test_inventory_is_metadata_only_and_never_upgrades_data():
     value=release.inventory(ROOT)
     assert len(value['source_sha'])==40
-    assert value['application_version']==value['frontend_version']=='1.0.5'
+    assert value['application_version']==value['frontend_version']==EXPECTED_VERSION
     assert value['version_match']
     assert value['registry_image_digest'] is None
     assert 'published_image_digest_missing' in value['missing']

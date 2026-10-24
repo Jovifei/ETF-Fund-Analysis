@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 import json
 import pytest
 
-from app.workspace.local_dispatch import dispatch_once, DISPATCH_SLOTS
+from app.workspace.local_dispatch import dispatch_once, DISPATCH_SLOTS, FULL_SLOTS
 from app.workspace.local_job_ledger import LocalJobLedger
 from app.workspace.local_schedule import LocalRunLock
 from app.workspace.shadow_bundle import digest
@@ -65,6 +65,14 @@ def test_trade_day_skip_and_old_session_not_replayed(tmp_path):
     assert dispatch_once(tmp_path, IDENTITY, calendar=cal, run_job=lambda *a, **k: 0,
                          replay=lambda **k: None) == 0
     assert '13:55' in DISPATCH_SLOTS
+
+
+def test_evening_settlement_retry_slots_are_full():
+    # Provider daily bars publish progressively after close (15:15 -> 0/34,
+    # 16:10 -> 3-6/34 observed 2026-10-22/23); graded evening retries must
+    # exist and run in full mode so the settlement lands the same evening.
+    assert {'16:40', '17:40'} <= set(DISPATCH_SLOTS)
+    assert {'16:40', '17:40'} <= FULL_SLOTS
 
 
 def test_execution_failure_is_sanitized_and_retained(tmp_path):

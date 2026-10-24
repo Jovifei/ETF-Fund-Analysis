@@ -27,10 +27,10 @@ RESEARCH_TABLES = (
     "chan_observed_transitions", "chan_research_stream_heads",
 )
 METRICS = ("exact_count", "n_tup_ins", "n_tup_upd", "n_tup_del", "heap_bytes", "total_bytes")
-SLOTS = ("11:40", "13:55", "14:20", "14:30", "14:45", "14:50", "14:55", "15:00", "15:15", "16:10")
+SLOTS = ("11:40", "13:55", "14:20", "14:30", "14:45", "14:50", "14:55", "15:00", "15:15", "16:10", "16:40", "17:40")
 # 11:40 is a fast slot but may fall back to a full run when the settled base is not yet current.
-DEFAULT_DEADLINES = {slot: 600 if slot in {"11:40", "13:55", "15:15", "16:10"} else 120 for slot in SLOTS}
-FULL_SLOTS = {"13:55", "15:15", "16:10"}
+DEFAULT_DEADLINES = {slot: 600 if slot in {"11:40", "13:55", "15:15", "16:10", "16:40", "17:40"} else 120 for slot in SLOTS}
+FULL_SLOTS = {"13:55", "15:15", "16:10", "16:40", "17:40"}
 FAST_STAGES = {"refresh_quotes", "refresh_signals", "refresh_decision_board"}
 FULL_STAGES = FAST_STAGES | {"refresh_bars", "refresh_indicators", "refresh_forecasts"}
 OPTIONAL_STAGES = {"refresh_market_context", "refresh_sector_snapshots"}
@@ -266,7 +266,7 @@ def _delivery(session: date, ledger: dict, source_sha: str, config_hash: str,
                 # The dispatch callback records this only after validating its
                 # database-bound typed proof. Raw quality remains false here.
                 return (job.get("job_name") == "refresh_quotes"
-                        and slot == "16:10"
+                        and slot in {"16:10", "16:40", "17:40"}
                         and str(job.get("status")).lower() == "partial"
                         and job.get("details", {}).get("coverage_complete") is False
                         and job.get("details", {}).get("accepted_closed_session") is True)

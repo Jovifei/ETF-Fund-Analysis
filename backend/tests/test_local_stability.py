@@ -17,7 +17,7 @@ from app.workspace.shadow_bundle import digest
 SHA = "a" * 40
 CONFIG = "b" * 64
 IMAGE = "sha256:" + "c" * 64
-SLOTS = ("11:40", "13:55", "14:20", "14:30", "14:45", "14:50", "14:55", "15:00", "15:15", "16:10")
+SLOTS = ("11:40", "13:55", "14:20", "14:30", "14:45", "14:50", "14:55", "15:00", "15:15", "16:10", "16:40", "17:40")
 UNIVERSE = ["510300.SH"]
 SCOPE = digest(UNIVERSE)
 
@@ -68,7 +68,7 @@ def populate_ledger(root, day="2026-10-16"):
         mode = "full" if slot in FULL_SLOTS else "fast"
         stage_names = FULL_STAGES if mode == "full" else FAST_STAGES
         for stage in sorted(stage_names):
-            closed = slot == "16:10" and stage == "refresh_quotes"
+            closed = slot in {"16:10", "16:40", "17:40"} and stage == "refresh_quotes"
             ledger.record_job(attempt["attempt_id"], stage, status="partial" if closed else "succeeded",
                 now=planned + timedelta(seconds=20), required=True,
                 run_id=f"run_{sequence}_{stage}",
@@ -475,3 +475,11 @@ def test_execution_identity_must_be_unique_successful_and_bind_both_hashes(chang
     else:
         identity["details"][change] = "f" * 64
     assert session(ledger_summary=ledger)["state"] != "PASS"
+
+
+def test_evening_settlement_slots_have_full_deadlines():
+    from app.workspace import local_stability as ls
+    assert ls.DEFAULT_DEADLINES["16:40"] == 600
+    assert ls.DEFAULT_DEADLINES["17:40"] == 600
+    assert {"16:40", "17:40"} <= ls.FULL_SLOTS
+    assert {"16:40", "17:40"} <= set(ls.SLOTS)

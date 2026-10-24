@@ -19,6 +19,9 @@ from app.workspace import local_stability
 TZ = ZoneInfo("Asia/Shanghai")
 IDENTITY = {"code_sha": "a" * 40, "config_hash": "b" * 64, "scope_hash": "c" * 64}
 EXISTING = ("13:55", "14:20", "14:30", "14:45", "14:50", "14:55", "15:00", "15:15", "16:10")
+# Evening settlement retries (2026-10-25): the provider publishes daily bars
+# progressively after close, so 15:15/16:10 alone cannot land the same-day close.
+EVENING_RETRIES = ("16:40", "17:40")
 
 
 def at(hh, mm, ss=0, day=21):
@@ -30,15 +33,18 @@ class Calendar:
         return SimpleNamespace(verified=True, is_trade_day=True)
 
 
-def test_slot_sets_add_only_1140():
-    assert LOCAL_SCHEDULE_SLOTS == ("11:40",) + EXISTING[1:]
-    assert DISPATCH_SLOTS == ("11:40",) + EXISTING
-    assert FULL_SLOTS == {"13:55", "15:15", "16:10"} and "11:40" not in FULL_SLOTS
-    assert local_stability.SLOTS == ("11:40",) + EXISTING
-    assert local_stability.FULL_SLOTS == {"13:55", "15:15", "16:10"}
+def test_slot_sets_add_only_1140_and_evening_retries():
+    assert LOCAL_SCHEDULE_SLOTS == ("11:40",) + EXISTING[1:] + EVENING_RETRIES
+    assert DISPATCH_SLOTS == ("11:40",) + EXISTING + EVENING_RETRIES
+    assert FULL_SLOTS == {"13:55", "15:15", "16:10", "16:40", "17:40"} and "11:40" not in FULL_SLOTS
+    assert local_stability.SLOTS == ("11:40",) + EXISTING + EVENING_RETRIES
+    assert local_stability.FULL_SLOTS == {"13:55", "15:15", "16:10", "16:40", "17:40"}
+    full_deadline_slots = {"13:55", "15:15", "16:10", "16:40", "17:40"}
     assert {k: v for k, v in local_stability.DEFAULT_DEADLINES.items() if k != "11:40"} == {
-        slot: 600 if slot in {"13:55", "15:15", "16:10"} else 120 for slot in EXISTING}
+        slot: 600 if slot in full_deadline_slots else 120
+        for slot in EXISTING + EVENING_RETRIES}
     assert local_stability.DEFAULT_DEADLINES["11:40"] == 600
+    assert local_dispatch.SETTLEMENT_SLOTS == {"16:10", "16:40", "17:40"}
 
 
 def test_lunch_rule_bounds():

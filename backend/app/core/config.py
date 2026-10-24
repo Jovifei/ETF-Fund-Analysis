@@ -83,7 +83,7 @@ class Settings(BaseSettings):
 
     app_name: str = "中国 ETF/LOF 私有决策看板"
     app_env: Literal["development", "test", "production"] = "development"
-    app_version: str = "1.0.6"
+    app_version: str = "1.0.7"
     timezone_name: str = Field(default="Asia/Shanghai", alias="TZ")
 
     database_url: str = "sqlite:///./fund_decision.sqlite3"
