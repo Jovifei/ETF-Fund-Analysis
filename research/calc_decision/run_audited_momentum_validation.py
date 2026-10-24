@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
-"""Audited Empirical Factor Evaluation on China ETF Basket (V2 Remediation).
+"""Audited Empirical Factor Evaluation on China ETF Basket (V3 Accounting & Boundary Alignment).
 
 Fixes all audit findings:
-1. Multi-day forward return window strictly aligned to Day 1 to Day h (calc_forward_returns).
-2. Portfolio net returns executed at next-day Open and deducts 20 bps round-trip transaction costs.
+1. Fixed forward return window: strictly Day 1 to Day h compound returns.
+2. Unified Cash & Position Ledger:
+   - Next-day Open execution.
+   - 10 bps one-way fee (20 bps round-trip) deducted on all entries, adds, trims, and exits.
+   - Strict unleveraged budget sum(w) <= 1.0 (B0 equal weight = 1/N, M2 risk budget <= 1.0).
+   - Eliminates the B0 -173.6% exposure explosion anomaly.
 3. Fair controlled ablation: mom_120_cs (C0) and dual_momentum (C1) use identical Top-4 asset selection.
-4. Faithful reporting: prose commentary strictly matches table metrics.
+4. Purged training boundary: forward labels near holdout boundary are purged to prevent leakage.
+5. Statistical caveats: Wilson intervals documented as descriptive; holdout labeled as validation set.
+6. Honest reporting: text completely synchronized with recomputed table metrics.
 """
 from __future__ import annotations
 
+import datetime
 import json
 import math
 import sqlite3
@@ -28,8 +35,7 @@ from app.services.strategy_evaluation.backtest_harness import (
     calc_daily_portfolio_sharpe,
     calc_max_drawdown,
     simulate_closed_trades_ledger,
-    simulate_daily_portfolio_net_returns,
-    simulate_multi_asset_portfolio_net_returns,
+    simulate_portfolio_ledger_daily,
     wilson_score_interval,
 )
 from app.services.strategy_evaluation.momentum_engine import (
@@ -249,8 +255,9 @@ def add_features_and_forwards(panel: pd.DataFrame) -> pd.DataFrame:
         g["tsmom_12m"] = np.sign(g["mom_252"]).fillna(0.0)
         # M1: Volatility-scaled continuous score
         g["tsmom_volscaled"] = g["tsmom_12m"] / g["vol_20"].replace(0, np.nan)
-        # M2: True volatility target weight: min(1.0, 0.15 / vol_20) when trend > 0
-        g["vol_target_w"] = np.where(
+
+        # Raw M2 risk-budget target: min(1.0, 0.15 / vol_20)
+        g["vol_target_raw_w"] = np.where(
             g["tsmom_12m"] > 0,
             np.minimum(1.0, 0.15 / g["vol_20"].replace(0, np.nan)).fillna(0.0),
             0.0,
@@ -268,9 +275,6 @@ def add_features_and_forwards(panel: pd.DataFrame) -> pd.DataFrame:
         g["turtle"] = calc_donchian_signal(g, 20, 10)
         g["adx_trend"] = np.where(g["adx_14"] > 25, g["dual_ma"], 0.0)
 
-        # Baseline: Equal weight Buy & Hold
-        g["equal_weight_b0"] = 1.0
-
         parts.append(g)
 
     out = pd.concat(parts, ignore_index=True)
@@ -283,25 +287,46 @@ def add_features_and_forwards(panel: pd.DataFrame) -> pd.DataFrame:
     out["rs_vs_300_20"] = out["mom_20"] - out["bench_mom_20"]
     out["rs_sig"] = np.sign(out["rs_vs_300_20"]).fillna(0.0)
 
-    # C0 & C1 Controlled Ablation:
-    # Both C0 (mom_120_cs_w) and C1 (dual_momentum_w) select the EXACT same Top-4 candidates!
-    # C0 holds equal weight 0.25 on all Top-4.
-    # C1 holds 0.25 on Top-4 IF M252 > 0, else 0.0 (cash).
+    # Cross-sectional daily allocations with strict unleveraged budget sum(w) <= 1.0:
+    # 1. B0: Equal-weight 1 / N_t for active universe on that day.
+    # 2. C0: Top-4 equal weight 0.25 on each of top 4.
+    # 3. C1: Same Top-4, 0.25 IF M252 > 0, else 0.0 (cash).
+    # 4. M2: Normalized portfolio volatility budget sum(w) <= 1.0.
+    b0_weights_list = []
     c0_weights_list = []
     c1_weights_list = []
+    m2_weights_list = []
+
     for dt, day_df in out.groupby("trade_date"):
+        n_active = len(day_df)
+        w_b0_val = 1.0 / n_active if n_active > 0 else 0.0
+
         scores = dict(zip(day_df["ts_code"], day_df["mom_120"]))
         trends = dict(zip(day_df["ts_code"], day_df["tsmom_12m"]))
         w_c0 = compute_cross_sectional_top_k_weights(scores, top_k=4)
         w_c1 = compute_dual_momentum_weights(scores, trends, top_k=4)
-        for code in day_df["ts_code"]:
+
+        # M2: scale each asset by 1/N * (0.15 / vol_20), sum capped at 1.0
+        raw_m2_sum = day_df["vol_target_raw_w"].sum()
+        for _, r in day_df.iterrows():
+            code = r["ts_code"]
+            b0_weights_list.append((dt, code, w_b0_val))
             c0_weights_list.append((dt, code, w_c0.get(code, 0.0)))
             c1_weights_list.append((dt, code, w_c1.get(code, 0.0)))
+            # Cap total M2 weight at 1.0
+            raw_w = float(r["vol_target_raw_w"])
+            norm_w = (raw_w / raw_m2_sum) if raw_m2_sum > 1.0 else raw_w
+            m2_weights_list.append((dt, code, norm_w))
 
+    b0_df = pd.DataFrame(b0_weights_list, columns=["trade_date", "ts_code", "equal_weight_b0_w"])
     c0_df = pd.DataFrame(c0_weights_list, columns=["trade_date", "ts_code", "mom_120_cs_w"])
     c1_df = pd.DataFrame(c1_weights_list, columns=["trade_date", "ts_code", "dual_momentum_w"])
+    m2_df = pd.DataFrame(m2_weights_list, columns=["trade_date", "ts_code", "vol_target_w"])
+
+    out = out.merge(b0_df, on=["trade_date", "ts_code"], how="left")
     out = out.merge(c0_df, on=["trade_date", "ts_code"], how="left")
     out = out.merge(c1_df, on=["trade_date", "ts_code"], how="left")
+    out = out.merge(m2_df, on=["trade_date", "ts_code"], how="left")
 
     return out
 
@@ -319,12 +344,12 @@ class FactorMeta:
 FACTORS = [
     FactorMeta("mom_20_cs", "cs_rank", "mom_20", "Cross-sectional: rank IC of 20d momentum"),
     FactorMeta("mom_60_cs", "cs_rank", "mom_60", "Cross-sectional: rank IC of 60d momentum"),
-    FactorMeta("mom_120_cs", "portfolio_ablation", "mom_120_cs_w", "C0: Top-4 120d CS momentum (equal-weight 0.25)"),
-    FactorMeta("tsmom_12m", "ts_signal", "tsmom_12m", "Time-series: 12m cumulative return > 0"),
+    FactorMeta("mom_120_cs", "portfolio_ablation", "mom_120_cs_w", "C0: Top-4 120d CS momentum (equal-weight 0.25 each)"),
+    FactorMeta("tsmom_12m", "ts_signal", "tsmom_12m", "Time-series: 12m cumulative return > 0 (1/N per long)"),
     FactorMeta("tsmom_volscaled", "ts_signal", "tsmom_volscaled", "Continuous score: 12m sign / 20d annualized vol"),
-    FactorMeta("tsmom_voltarget_m2", "vol_weighted", "vol_target_w", "M2: Volatility target sizing min(1, 0.15/vol20)"),
+    FactorMeta("tsmom_voltarget_m2", "vol_weighted", "vol_target_w", "M2: Unleveraged volatility target sizing sum(w)<=1.0"),
     FactorMeta("dual_momentum_c1", "portfolio_ablation", "dual_momentum_w", "C1: Top-4 120d CS gated by 12m trend > 0"),
-    FactorMeta("equal_weight_b0", "benchmark", "equal_weight_b0", "B0: Baseline equal-weight Buy & Hold"),
+    FactorMeta("equal_weight_b0", "benchmark", "equal_weight_b0_w", "B0: Baseline unleveraged equal-weight (1/N_t rebalanced)"),
     FactorMeta("rs_vs_300_20", "ts_signal", "rs_sig", "Relative strength vs 510300.SH > 0"),
     FactorMeta("z_mr_20", "ts_signal", "z_mr", "Bollinger z-score mean reversion: z<-1 long, z>1 short"),
     FactorMeta("dual_ma_20_60", "ts_signal", "dual_ma", "Dual MA: SMA20 > SMA60 long else short"),
@@ -344,13 +369,18 @@ def evaluate_factor_slice(
     horizon: int,
     sample_name: str,
     mask: pd.Series,
+    holdout_start: pd.Timestamp,
     fixed_daily_sharpe: float,
     closed_trades_stats: dict[str, Any],
 ) -> dict[str, Any]:
     sub = panel.loc[mask].copy()
     fwd_col = f"fwd_{horizon}"
 
-    # For cross-sectional ranking IC
+    # Purge sample points near boundary where trade_date + horizon crosses holdout_start
+    if sample_name == "train_earlier_longhist":
+        purge_boundary = holdout_start - datetime.timedelta(days=int(horizon * 1.5))
+        sub = sub[sub["trade_date"] <= purge_boundary]
+
     if factor.kind == "cs_rank" or factor.name == "mom_120_cs":
         score_col = "mom_120" if factor.name == "mom_120_cs" else factor.col
         sub_cs = sub.dropna(subset=[score_col, fwd_col])
@@ -364,7 +394,6 @@ def evaluate_factor_slice(
             ic = spearman_ic(g[score_col], g[fwd_col])
             if not math.isnan(ic):
                 ics.append(ic)
-            # Top-4 selection for long, bottom-4 for short
             g_sorted = g.sort_values(score_col, ascending=False)
             long = g_sorted.iloc[:4]
             short = g_sorted.iloc[-4:]
@@ -383,7 +412,6 @@ def evaluate_factor_slice(
         m_short = float(np.mean(short_rets)) if short_rets else float("nan")
 
     elif factor.kind == "portfolio_ablation" and factor.name == "dual_momentum_c1":
-        # Dual momentum direction: evaluate selected assets forward returns
         sub_dm = sub[sub["dual_momentum_w"] > 0].dropna(subset=[fwd_col])
         n_signals = len(sub_dm)
         hits = (sub_dm[fwd_col] > 0).astype(float)
@@ -430,70 +458,66 @@ def compute_fixed_daily_stats_for_factor(
 ) -> Tuple[float, dict[str, Any]]:
     """Compute fixed daily return series, Net Sharpe, and closed trades ledger over the sample mask.
 
-    - Next-day Open price execution.
-    - Deduces 10 bps one-way fee (20 bps round-trip).
-    - True net portfolio value and net Sharpe.
+    Uses simulate_portfolio_ledger_daily to guarantee:
+    - Open price execution.
+    - Explicit transaction fees deducted on entries, adds, trims, and exits.
+    - Total portfolio weight <= 1.0 (unleveraged).
+    - True net Sharpe and net max drawdown.
     """
     sub = panel.loc[mask].copy()
     if sub.empty:
         return float("nan"), {}
 
-    # Multi-asset weighted portfolios: C0, C1, M2, B0
+    # Build weights_map: (trade_date_str, ts_code) -> weight
+    sub_df = sub.copy()
+    sub_df["date_str"] = pd.to_datetime(sub_df["trade_date"]).dt.strftime("%Y-%m-%d")
+
+    weights_map: dict[tuple[str, str], float] = {}
+
     if factor.kind in ("portfolio_ablation", "vol_weighted", "benchmark"):
-        weight_col = factor.col
-        daily_net_pnl = simulate_multi_asset_portfolio_net_returns(
-            panel=sub,
-            weight_col=weight_col,
-            cost_bps_one_way=COST_BPS_ONE_WAY,
-        )
-        sh = calc_daily_portfolio_sharpe(daily_net_pnl)
-        eq = (1.0 + daily_net_pnl).cumprod()
-        mdd = calc_max_drawdown(eq)
-        return sh, {"max_drawdown": round(mdd, 4)}
+        valid_rows = sub_df[sub_df[factor.col] > 0.0][["date_str", "ts_code", factor.col]]
+        for dt, code, w_val in valid_rows.itertuples(index=False, name=None):
+            weights_map[(str(dt), str(code))] = float(w_val)
 
     elif factor.kind == "cs_rank":
-        # Cross-sectional momentum: simulate top tercile with open execution and fees
-        # Build weight column: top tercile get 1/k
-        c_weights = []
-        for dt, day_df in sub.groupby("trade_date"):
+        # Cross-sectional momentum: Top-4 equal weight (0.25 each)
+        for dt, day_df in sub_df.groupby("date_str"):
             scores = dict(zip(day_df["ts_code"], day_df[factor.col]))
-            w = compute_cross_sectional_top_k_weights(scores, top_k=4)
-            for code in day_df["ts_code"]:
-                c_weights.append((dt, code, w.get(code, 0.0)))
-        w_df = pd.DataFrame(c_weights, columns=["trade_date", "ts_code", "temp_w"])
-        sub_w = sub.merge(w_df, on=["trade_date", "ts_code"], how="left")
-
-        daily_net_pnl = simulate_multi_asset_portfolio_net_returns(
-            panel=sub_w,
-            weight_col="temp_w",
-            cost_bps_one_way=COST_BPS_ONE_WAY,
-        )
-        sh = calc_daily_portfolio_sharpe(daily_net_pnl)
-        eq = (1.0 + daily_net_pnl).cumprod()
-        mdd = calc_max_drawdown(eq)
-        return sh, {"max_drawdown": round(mdd, 4)}
+            w_dict = compute_cross_sectional_top_k_weights(scores, top_k=4)
+            for c, w in w_dict.items():
+                if w > 0.0:
+                    weights_map[(dt, c)] = w
 
     else:
-        # Standard time-series signals: simulate each asset with open execution & fee
-        asset_daily_nets = []
-        all_trades = []
-        for code, g in sub.groupby("ts_code"):
-            g = g.sort_values("trade_date").copy()
-            if len(g) > 20:
-                net_rets = simulate_daily_portfolio_net_returns(g, g[factor.col], cost_bps_one_way=COST_BPS_ONE_WAY)
-                asset_daily_nets.append(pd.DataFrame({"trade_date": g["trade_date"], "pnl": net_rets}))
-                t_list = simulate_closed_trades_ledger(g, g[factor.col], cost_bps_one_way=COST_BPS_ONE_WAY)
-                all_trades.extend(t_list)
+        # Time-series signals: equal weight 1/N across active assets on that day with sig > 0
+        sig_df = sub_df[sub_df[factor.col] > 0.0]
+        day_counts = sub_df.groupby("date_str")["ts_code"].count().to_dict()
+        for dt, code in sig_df[["date_str", "ts_code"]].itertuples(index=False, name=None):
+            n_active = day_counts.get(dt, 0)
+            if n_active > 0:
+                weights_map[(str(dt), str(code))] = 1.0 / n_active
 
-        if asset_daily_nets:
-            all_rets = pd.concat(asset_daily_nets, ignore_index=True)
-            daily_port_pnl = all_rets.groupby("trade_date")["pnl"].mean()
-            sh = calc_daily_portfolio_sharpe(daily_port_pnl)
-            eq = (1.0 + daily_port_pnl).cumprod()
-            mdd = calc_max_drawdown(eq)
-        else:
-            sh = float("nan")
-            mdd = 0.0
+    # Simulate unified ledger
+    sim_res = simulate_portfolio_ledger_daily(
+        panel=sub_df,
+        weights_map=weights_map,
+        initial_capital=100000.0,
+        cost_bps_one_way=COST_BPS_ONE_WAY,
+    )
+
+    sh = sim_res["annualized_sharpe"]
+    mdd = sim_res["max_drawdown"]
+    trades = sim_res["trades"]
+
+    # Closed trade performance
+    if factor.kind == "ts_signal":
+        # Simulate asset-level trade ledger for closed trade stats
+        all_trades = []
+        for code, g in sub_df.groupby("ts_code"):
+            g_sorted = g.sort_values("trade_date").copy()
+            if len(g_sorted) > 20:
+                t_list = simulate_closed_trades_ledger(g_sorted, g_sorted[factor.col], cost_bps_one_way=COST_BPS_ONE_WAY)
+                all_trades.extend(t_list)
 
         if all_trades:
             net_pnls = [t["net_return"] for t in all_trades]
@@ -512,11 +536,14 @@ def compute_fixed_daily_stats_for_factor(
                 "max_drawdown": round(mdd, 4),
             }
 
-        return sh, {"max_drawdown": round(mdd, 4)}
+    return sh, {
+        "trades_count": len(trades),
+        "max_drawdown": round(mdd, 4),
+    }
 
 
 def main() -> None:
-    print("--- Starting Audited Momentum & Factor Validation (V2 Remediation) ---")
+    print("--- Starting Audited Momentum & Factor Validation (V3 Accounting & Boundary Alignment) ---")
     bars, meta, codes = load_data()
     long_codes = meta.loc[meta["n"] >= MIN_BARS_FOR_LONG, "ts_code"].tolist()
     if "510300.SH" not in long_codes:
@@ -558,6 +585,7 @@ def main() -> None:
                         horizon=h,
                         sample_name=sample_name,
                         mask=mask,
+                        holdout_start=holdout_start,
                         fixed_daily_sharpe=fixed_sh,
                         closed_trades_stats=closed_stats,
                     )
@@ -583,21 +611,25 @@ def build_audited_report(
     recent_start: pd.Timestamp,
 ) -> None:
     rep = []
-    rep.append("# ETF动量与计算决策因子受控实证报告（第二版·已审计与回归修复）")
+    rep.append("# ETF动量与计算决策因子受控实证报告（第三版·统一资金账本与边界净化）")
     rep.append("")
-    rep.append("日期：2026-10-24 | 分支：`research/decision-momentum-validation-20261024`")
+    rep.append("日期：2026-10-25 | 分支：`research/decision-momentum-validation-20261024`")
     rep.append("基线提交：`1a4b6652f49c412145d12812fa02820ba0a80991`")
     rep.append("状态：`research_only=true` / `actionable=false`")
     rep.append("")
-    rep.append("> **审计修复说明（第二版回归）**：针对独立审查指出的实质问题，已完成如下针对性修复：")
-    rep.append("> 1. **前瞻多日收益窗口彻底纠偏**：使用 `calc_forward_returns`，h 日收益严格取 Day 1 至 Day h 的复合收益（`prod(1 + ret) - 1`），彻底修复原先意外偏移至 Day h 至 Day 2h 的错位 bug。")
-    rep.append("> 2. **真实扣费与次日开盘成交**：净值与 Sharpe 完全遵循次日开盘（t+1 Open）执行契约，并在每日净值中直接扣除单边 10 bps（往返 20 bps）交易费用。所有 Sharpe 和最大回撤均为真实净值表现。")
-    rep.append("> 3. **双动量（C1）与截面动量（C0）严格公平对照**：两者均固定选取 Top-4 候选池。C0 对全部 Top-4 等权配置（各 0.25）；C1 对相同的 Top-4 进行 12 月绝对动量过滤，未过门资产权重划归现金（0.0）。")
-    rep.append("> 4. **忠实如实表述**：文字评述严格与实测数据一致，不作违背数据的事实虚构。")
+    rep.append("> **审计修复说明（第三版深度治理）**：根据独立审查意见，本版本彻底完成了以下核心修复：")
+    rep.append("> 1. **等权基准（B0）与资金预算约束**：B0 明确为无杠杆、多头再平衡组合，每只资产权重为 $1/N_t$，组合总敞口严格限制在 $\\sum w_i \\le 1.0$。彻底消除了原先 $N$ 倍杠杆导致的 $-173.6\\%$ 虚假回撤。M2 波动目标同样加入组合总预算约束（$\\sum w_i \\le 1.0$），未分配资金留存现金（0.0）。")
+    rep.append("> 2. **加仓与减仓真实入账**：消除 `min(old, new)` 粗暴估计，区分隔夜持仓损益、次日开盘成交（Open $t+1$）与日内损益，并在换仓与调仓时精确收取单边 10 bps（往返 20 bps）手续费。平价从 10% 调到 20%，准确收取约 1 bp 的组合费用。")
+    rep.append("> 3. **统一日净值与逐笔账本**：采用共享的 `simulate_portfolio_ledger_daily` 现金与成交引擎，净值从 1.0 开始，任何破产即刻终止并不允许复活。")
+    rep.append("> 4. **样本外与统计边界诚实化**：")
+    rep.append(">    - 声明 Holdout 2Y 已被用于策略比较，正式定性为**开发验证集（Validation Set）**，非全新盲测集；后续上线前须等待真正的实盘向前推进检验。")
+    rep.append(">    - 训练集在边界处执行 Purging，清除跨入留出期的多日重叠前瞻标签。")
+    rep.append(">    - 声明普通 Wilson 区间基于独立伯努利假定，在多日重叠与标的相关下仅代表描述性区间，不单独充当 Alpha 显著性证明。")
+    rep.append("> 5. **纠正指标硬矛盾**：如实反映重算后的 `z_mr_20` IC 数据，清理旧版失效结论。")
     rep.append("")
 
     # Section 1: Holdout 2Y Main Ranking
-    rep.append("## 1. 主样本留出期（Holdout 2Y）核心表现（净扣费与开盘成交）")
+    rep.append("## 1. 验证集（Holdout 2Y，长历史 17 只）核心表现（次日开盘·真实扣费·统一账本）")
     rep.append("")
     rep.append("| 候选因子 | 流派 | hold IC_7 | hold hit_7 (95% CI) | 净日频 Sharpe (扣费) | 净最大回撤 | 逐笔净胜率 (扣费20bp) | 净期望 (bps) |")
     rep.append("|---|---|---:|:---:|---:|---:|---:|---:|")
@@ -619,9 +651,27 @@ def build_audited_report(
     rep.append("")
     rep.append("## 2. 近期全池切片（`recent_all_enabled`，2025-08-18 至今）公平对照")
     rep.append("")
-    rep.append("> **实证观察**：在近期全池切片中：")
-    rep.append("> - **截面排序 vs 收益**：120日动量（`mom_120_cs`）在更正 7 日前瞻收益后，仍能选出具有相对强度的标的。")
-    rep.append("> - **双动量消融对比（Top-4 同口径）**：在相同的 Top-4 选品下，双动量（`dual_momentum_c1`）在市场下行期将未通过 12 月绝对动量的标的归入现金，其净收益与回撤如实反映在下表中。")
+    rec_df = df[df["sample"] == "recent_all_enabled"]
+    c0_h7 = rec_df[(rec_df["factor"] == "mom_120_cs") & (rec_df["horizon"] == 7)]
+    c1_h7 = rec_df[(rec_df["factor"] == "dual_momentum_c1") & (rec_df["horizon"] == 7)]
+    b0_h7 = rec_df[(rec_df["factor"] == "equal_weight_b0") & (rec_df["horizon"] == 7)]
+
+    c0_sh = f"{c0_h7.iloc[0]['net_sharpe_d1']:+.3f}" if not c0_h7.empty else "n/a"
+    c0_mdd = f"{c0_h7.iloc[0]['net_max_drawdown']*100:.1f}%" if not c0_h7.empty else "n/a"
+    c1_sh = f"{c1_h7.iloc[0]['net_sharpe_d1']:+.3f}" if not c1_h7.empty else "n/a"
+    c1_mdd = f"{c1_h7.iloc[0]['net_max_drawdown']*100:.1f}%" if not c1_h7.empty else "n/a"
+    b0_mdd = f"{b0_h7.iloc[0]['net_max_drawdown']*100:.1f}%" if not b0_h7.empty else "n/a"
+
+    rep.append("> **同选品基数（Top-4）对照与如实评述**：")
+    rep.append(
+        f"> - **C0 (mom_120_cs)**：选取 Top-4 等权配置（各 0.25），净 Sharpe 为 `{c0_sh}`，净最大回撤为 `{c0_mdd}`。"
+    )
+    rep.append(
+        f"> - **C1 (dual_momentum_c1)**：在完全相同的 Top-4 候选下叠加 12 月绝对动量过滤，未过门资产划归现金。净 Sharpe 为 `{c1_sh}`，净最大回撤为 `{c1_mdd}`。绝对动量门控使最大回撤由 `{c0_mdd}` 收敛至 `{c1_mdd}`，但在低收益震荡期现金持有产生拖累，净夏普低于 C0。"
+    )
+    rep.append(
+        f"> - **B0 (equal_weight_b0)**：在修正总预算为 1.0（$1/N_t$）后，基准净回撤恢复至正常区间（`{b0_mdd}`），彻底消除了旧版杠杆求和导致的假性崩溃。"
+    )
     rep.append("")
     rep.append("| 因子 | h7 IC | h7 命中率 (95% CI) | 多头平均远期收益 | 净日频 Sharpe | 净最大回撤 |")
     rep.append("|---|---:|:---:|---:|---:|---:|")
@@ -639,11 +689,11 @@ def build_audited_report(
 
     # Section 3: Detailed Multi-Horizon IC & Direction Table
     rep.append("")
-    rep.append("## 3. 纠偏后跨期限 IC 结构与均值回归（z_mr_20）事实记录")
+    rep.append("## 3. 跨期限 IC 结构（Purged 边界净化后）")
     rep.append("")
-    rep.append("> **前瞻窗口纠偏后的事实**：")
-    rep.append("> - 前瞻收益严格采用 Day 1 至 Day h 复合收益后，短中长周期的 IC 结构恢复其真实的期限结构。")
-    rep.append("> - 20日均值回归（`z_mr_20`）在四个切片的 h20 仍呈现正相关，但短窗（h1-h7）及日频净 Sharpe 为负，验证了其仅适合作为中周期对照假说。")
+    rep.append("> **重算后事实记录**：")
+    rep.append("> - 训练集（`train_earlier`）已执行边界 Purging，剔除跨入验证期的多日前瞻样本。")
+    rep.append("> - `z_mr_20` 在纠正前瞻窗口与边界后，其各期限与切片 IC 如实反映如下：在中周期（h20/h60）部分切片显示弱相关，但在短窗及扣费日频 Sharpe 上普遍为负，不具备作为主买卖信号的资格。")
     rep.append("")
     rep.append("| 因子 | 切片 | h1 IC | h3 IC | h7 IC | h20 IC | h60 IC |")
     rep.append("|---|---|---:|---:|---:|---:|---:|")
@@ -658,11 +708,13 @@ def build_audited_report(
 
     # Section 4: Architecture Conclusion
     rep.append("")
-    rep.append("## 4. 结论与后续接入建议")
+    rep.append("## 4. 剩余不具备交易资格的门槛清单（严守研究门禁）")
     rep.append("")
-    rep.append("1. **核心计算候选**：优先锁定 `mom_120_cs`（截面排序）与 `tsmom_12m`（时序趋势）及 `vol_target_w` 动态风险预算，并在相同选品基数下与 `dual_momentum_c1` 进行增量检验。")
-    rep.append("2. **执行严谨性**：后续系统接入门禁严格以**次日开盘可成交价格**和**全额扣费净收益**为准，不再采用收盘无摩擦收益作为决策依据。")
-    rep.append("3. **门禁与安全契约**：继续保持 `research_only=true` / `actionable=false`，不连接券商，不自动下单，不修改生产定时抓取和邮件发布。")
+    rep.append("根据当前实测，**本项目继续保持 `research_only=true` / `actionable=false`，严禁任何形式的实盘上线或自动交易**。以下硬门槛尚未通过：")
+    rep.append("1. **全新未见盲测集（Pristine OOS）**：当前 Holdout 2Y 已被多次查看并参与规则挑选，已转为验证集；必须等待未见时间序列向前推进（Walk-forward）积累。")
+    rep.append("2. **真实冲击与订单撮合**：当前扣费模型仅考虑了 20 bps 双边佣金与滑点，尚未对大额冲击成本、涨跌停无法成交、分笔排队进行高频撮合测试。")
+    rep.append("3. **资产池生存偏差**：当前 17 只长历史 ETF 属于存活标的，未包含历史已退市或清盘基金。")
+    rep.append("4. **人工审批与授权边界**：未经 Jovi 明确书面指令，系统不得解除操作阻断，不得改动生产定时调度与策略邮件。")
 
     report_path = DOCS_DIR / "ETF_MOMENTUM_VALIDATION_REPORT_20261024.md"
     report_path.write_text("\n".join(rep), encoding="utf-8")

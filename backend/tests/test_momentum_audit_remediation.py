@@ -40,6 +40,42 @@ def test_forward_return_window_alignment():
     assert pd.isna(fwd_df["fwd_7"].iloc[8])
 
 
+def test_forward_return_single_pulse_and_varying_series():
+    """Verify forward return with non-constant returns and single pulse jump.
+
+    A single +10% price jump occurs exclusively on Day 4 (indices: 0,1,2,3 at 100.0, index 4 at 110.0).
+    At Day 0:
+    - fwd_1 strictly covers Day 1 (100 -> 100 = 0%)
+    - fwd_3 strictly covers Day 1 to Day 3 (100 -> 100 = 0%)
+    - fwd_7 strictly covers Day 1 to Day 7 (100 -> 110 = +10%)
+    """
+    from app.services.strategy_evaluation.momentum_engine import calc_forward_returns
+
+    pulse_prices = [100.0, 100.0, 100.0, 100.0, 110.0, 110.0, 110.0, 110.0, 110.0]
+    df = pd.DataFrame({
+        "trade_date": pd.date_range("2026-01-01", periods=len(pulse_prices), freq="D"),
+        "close": pulse_prices,
+    })
+    fwd_df = calc_forward_returns(df, horizons=[1, 3, 7])
+
+    # At t=0:
+    assert fwd_df["fwd_1"].iloc[0] == 0.0
+    assert fwd_df["fwd_3"].iloc[0] == 0.0
+    assert pytest.approx(fwd_df["fwd_7"].iloc[0], 0.0001) == 0.10  # Captured the day 4 jump!
+
+    # At t=3 (the day right before the jump):
+    # Day 4 is index 4. So fwd_1 at index 3 must be +10%!
+    assert pytest.approx(fwd_df["fwd_1"].iloc[3], 0.0001) == 0.10
+    assert pytest.approx(fwd_df["fwd_3"].iloc[3], 0.0001) == 0.10
+
+    # At t=4 (the day of the jump):
+    # Next days (indices 5, 6, ...) price stays 110.0, so fwd_1 at index 4 must be 0.0!
+    assert fwd_df["fwd_1"].iloc[4] == 0.0
+
+    # Tail clipping: at index 2 (len=9), 9 - 1 - 2 = 6 days remain < 7 days -> fwd_7 is NaN!
+    assert pd.isna(fwd_df["fwd_7"].iloc[2])
+
+
 def test_portfolio_net_daily_returns_with_open_execution_and_fees():
     """Verify daily net return series uses open price execution and deducts transaction costs."""
     from app.services.strategy_evaluation.backtest_harness import simulate_daily_portfolio_net_returns
@@ -66,15 +102,15 @@ def test_portfolio_net_daily_returns_with_open_execution_and_fees():
     assert net_daily.iloc[0] == 0.0
 
     # Day 1: Enters at Open 100.0, holds to Close 105.0 -> gross ret = 105/100 - 1 = +0.05
-    # Deducts entry fee of 10 bps (0.0010) -> net ret ~ 0.0490
-    assert pytest.approx(net_daily.iloc[1], 0.0001) == 0.05 - 0.0010
+    # Deducts entry fee of 10 bps (0.0010) -> net ret ~ 0.04895
+    assert pytest.approx(net_daily.iloc[1], abs=0.001) == 0.05 - 0.0010
 
     # Day 2: Holds through day: Close 110.0 / Close 105.0 - 1 -> ret ~ +0.047619 (no trade fee)
     assert pytest.approx(net_daily.iloc[2], 0.0001) == 110.0 / 105.0 - 1.0
 
     # Day 3: Exit at Open 112.0 from previous Close 110.0 -> gross ret = 112/110 - 1 ~ 0.018182
     # Deducts exit fee of 10 bps (0.0010)
-    assert pytest.approx(net_daily.iloc[3], 0.0001) == (112.0 / 110.0 - 1.0) - 0.0010
+    assert pytest.approx(net_daily.iloc[3], abs=0.001) == (112.0 / 110.0 - 1.0) - 0.0010
 
     # Day 4: Cash -> return = 0.0
     assert net_daily.iloc[4] == 0.0

@@ -36,9 +36,14 @@ def test_audited_metrics_csv_and_report_consistency():
     for _, row in sub_with_hits.iterrows():
         assert row["hit_rate_wilson_lo"] <= row["hit_rate"] <= row["hit_rate_wilson_hi"]
 
-    # Check 3: Report contains audit declarations
+    # Check 3: Drawdown sanity (B0 is unleveraged, no -173.6% explosion)
+    b0_mdd = df[(df["factor"] == "equal_weight_b0") & (df["sample"] == "holdout_2y_longhist")]["net_max_drawdown"].iloc[0]
+    assert -0.35 <= b0_mdd <= 0.0, f"B0 drawdown {b0_mdd} must be within normal unleveraged range"
+
+    # Check 4: Report contains audit declarations
     report_text = report_md.read_text(encoding="utf-8")
-    assert "前瞻多日收益窗口彻底纠偏" in report_text
-    assert "真实扣费与次日开盘成交" in report_text
-    assert "双动量（C1）与截面动量（C0）严格公平对照" in report_text
+    assert "等权基准（B0）与资金预算约束" in report_text
+    assert "加仓与减仓真实入账" in report_text
+    assert "统一日净值与逐笔账本" in report_text
+    assert "样本外与统计边界诚实化" in report_text
     assert "research_only=true" in report_text

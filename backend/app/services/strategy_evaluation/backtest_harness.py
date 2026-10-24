@@ -17,6 +17,8 @@ def wilson_score_interval(
     """Calculate the Wilson score confidence interval for a binomial proportion.
 
     Used to avoid misleading point estimates when sample count is low (e.g. TD9 events).
+    Note: Standard Wilson interval assumes independent Bernoulli trials; for overlapping forward
+    horizons or cross-correlated assets, it represents descriptive uncertainty, not formal alpha proof.
     """
     if total <= 0 or hits < 0:
         return float("nan"), float("nan")
@@ -54,122 +56,232 @@ def calc_max_drawdown(equity_series: pd.Series) -> float:
     return float(dd.min())
 
 
+def simulate_portfolio_ledger_daily(
+    panel: pd.DataFrame,
+    weights_map: dict[tuple[str, str], float],
+    initial_capital: float = 100000.0,
+    cost_bps_one_way: float = 10.0,
+) -> dict[str, Any]:
+    """Simulate a rigorous, unified portfolio cash & position ledger with Open execution and fees.
+
+    - Unleveraged budget: sum(w_i) <= 1.0 at all times. Remaining is cash (earns 0.0).
+    - Decisions formed at Close(t); orders executed at Open(t+1).
+    - Positions experience overnight gap (Close(t) -> Open(t+1)) before rebalance.
+    - At Open(t+1):
+      * Trims/Exits execute first: proceeds increase cash, minus fee.
+      * Adds/Entries execute second: cost deducted from cash, minus fee.
+      * Fee is charged on actual delta traded: |delta_V| * fee_rate (10 bps = 0.0010).
+    - Positions then experience intraday return from Open(t+1) to Close(t+1).
+    - Daily net return = Equity(t+1) / Equity(t) - 1.
+    - Bankruptcy protection: if Equity <= 0, stops at 0.0 (no resurrection).
+    """
+    fee_rate = cost_bps_one_way / 10000.0
+
+    # Ensure date strings in YYYY-MM-DD
+    panel_df = panel.copy()
+    panel_df["date_str"] = pd.to_datetime(panel_df["trade_date"]).dt.strftime("%Y-%m-%d")
+
+    unique_dates = sorted(panel_df["date_str"].unique())
+    if len(unique_dates) < 2:
+        return {
+            "daily_net_returns": pd.Series(0.0, index=unique_dates),
+            "equity_series": pd.Series(initial_capital, index=unique_dates),
+            "trades": [],
+            "max_drawdown": 0.0,
+            "annualized_sharpe": float("nan"),
+            "is_bankrupt": False,
+        }
+
+    # Pre-index price lookup: (date_str, ts_code) -> (open, close)
+    price_lookup: dict[tuple[str, str], tuple[float, float]] = {}
+    for _, row in panel_df.iterrows():
+        d = str(row["date_str"])
+        c = str(row["ts_code"])
+        o_val = float(row["open"]) if not pd.isna(row["open"]) else float("nan")
+        c_val = float(row["close"]) if not pd.isna(row["close"]) else float("nan")
+        price_lookup[(d, c)] = (o_val, c_val)
+
+    # State tracking
+    curr_cash = float(initial_capital)
+    curr_equity = float(initial_capital)
+    # positions: ts_code -> shares (float)
+    positions: dict[str, float] = {}
+
+    equity_records: list[float] = [curr_equity]
+    return_records: list[float] = [0.0]
+    trades: list[dict[str, Any]] = []
+    is_bankrupt = False
+
+    # Pre-index weights by date for O(1) daily lookup
+    weights_by_date: dict[str, dict[str, float]] = {}
+    for (d, c), w in weights_map.items():
+        if w > 0.0 and math.isfinite(w):
+            weights_by_date.setdefault(d, {})[c] = float(w)
+
+    for k in range(len(unique_dates) - 1):
+        d_curr = unique_dates[k]
+        d_next = unique_dates[k + 1]
+
+        if is_bankrupt or curr_equity <= 0.0:
+            is_bankrupt = True
+            curr_equity = 0.0
+            equity_records.append(0.0)
+            return_records.append(0.0)
+            continue
+
+        # 1. Overnight gap on existing positions: Close(d_curr) -> Open(d_next)
+        pre_trade_positions_value = 0.0
+        pre_trade_asset_values: dict[str, float] = {}
+        for code, shares in list(positions.items()):
+            if shares <= 0.0:
+                continue
+            p_next = price_lookup.get((d_next, code))
+            if p_next is None or math.isnan(p_next[0]) or p_next[0] <= 0:
+                # Missing open: fallback to yesterday close
+                p_curr = price_lookup.get((d_curr, code))
+                open_val = p_curr[1] if (p_curr and not math.isnan(p_curr[1])) else 1.0
+            else:
+                open_val = p_next[0]
+
+            val = shares * open_val
+            pre_trade_asset_values[code] = val
+            pre_trade_positions_value += val
+
+        pre_trade_equity = curr_cash + pre_trade_positions_value
+        if pre_trade_equity <= 0.0:
+            is_bankrupt = True
+            curr_equity = 0.0
+            positions.clear()
+            equity_records.append(0.0)
+            return_records.append(0.0)
+            continue
+
+        # 2. Target weights decided at Close(d_curr)
+        raw_weights: dict[str, float] = weights_by_date.get(d_curr, {}).copy()
+
+        # Budget constraint: sum(w) <= 1.0
+        sum_w = sum(raw_weights.values())
+        if sum_w > 1.0:
+            target_weights = {c: w / sum_w for c, w in raw_weights.items()}
+        else:
+            target_weights = raw_weights.copy()
+
+        # Target value for each asset
+        target_asset_values: dict[str, float] = {
+            c: pre_trade_equity * target_weights.get(c, 0.0)
+            for c in set(list(pre_trade_asset_values.keys()) + list(target_weights.keys()))
+        }
+
+        # 3. Rebalance at Open(d_next)
+        # Sells/Trims first
+        for code, target_val in list(target_asset_values.items()):
+            pre_val = pre_trade_asset_values.get(code, 0.0)
+            delta = target_val - pre_val
+            if delta < -1e-6:
+                trade_amt = abs(delta)
+                p_next = price_lookup.get((d_next, code))
+                o_price = p_next[0] if (p_next and not math.isnan(p_next[0]) and p_next[0] > 0) else 1.0
+                fee = trade_amt * fee_rate
+                shares_sold = trade_amt / o_price
+                curr_cash += (trade_amt - fee)
+                positions[code] = max(0.0, positions.get(code, 0.0) - shares_sold)
+                if positions[code] <= 1e-6:
+                    del positions[code]
+                trades.append({
+                    "trade_date": d_next,
+                    "ts_code": code,
+                    "side": "sell",
+                    "price": o_price,
+                    "shares": shares_sold,
+                    "trade_amount": trade_amt,
+                    "fee": fee,
+                })
+
+        # Buys/Adds second
+        for code, target_val in list(target_asset_values.items()):
+            pre_val = pre_trade_asset_values.get(code, 0.0)
+            delta = target_val - pre_val
+            if delta > 1e-6:
+                trade_amt = delta
+                needed_cash = trade_amt * (1.0 + fee_rate)
+                if curr_cash < needed_cash:
+                    trade_amt = max(0.0, curr_cash / (1.0 + fee_rate))
+                if trade_amt > 1e-6:
+                    fee = trade_amt * fee_rate
+                    p_next = price_lookup.get((d_next, code))
+                    o_price = p_next[0] if (p_next and not math.isnan(p_next[0]) and p_next[0] > 0) else 1.0
+                    shares_bought = trade_amt / o_price
+                    curr_cash -= (trade_amt + fee)
+                    positions[code] = positions.get(code, 0.0) + shares_bought
+                    trades.append({
+                        "trade_date": d_next,
+                        "ts_code": code,
+                        "side": "buy",
+                        "price": o_price,
+                        "shares": shares_bought,
+                        "trade_amount": trade_amt,
+                        "fee": fee,
+                    })
+
+        # 4. Intraday price movement: Open(d_next) -> Close(d_next)
+        post_positions_value = 0.0
+        for code, shares in list(positions.items()):
+            p_next = price_lookup.get((d_next, code))
+            if p_next is None or math.isnan(p_next[1]) or p_next[1] <= 0:
+                # Fallback to open
+                c_price = p_next[0] if (p_next and not math.isnan(p_next[0])) else 1.0
+            else:
+                c_price = p_next[1]
+            post_positions_value += shares * c_price
+
+        new_equity = curr_cash + post_positions_value
+        if new_equity <= 0.0:
+            is_bankrupt = True
+            new_equity = 0.0
+
+        daily_ret = (new_equity / curr_equity - 1.0) if curr_equity > 0 else 0.0
+        curr_equity = new_equity
+        equity_records.append(curr_equity)
+        return_records.append(daily_ret)
+
+    eq_series = pd.Series(equity_records, index=unique_dates)
+    ret_series = pd.Series(return_records, index=unique_dates)
+
+    mdd = calc_max_drawdown(eq_series)
+    sh = calc_daily_portfolio_sharpe(ret_series)
+
+    return {
+        "daily_net_returns": ret_series,
+        "equity_series": eq_series,
+        "trades": trades,
+        "max_drawdown": mdd,
+        "annualized_sharpe": sh,
+        "is_bankrupt": is_bankrupt,
+    }
+
+
 def simulate_daily_portfolio_net_returns(
     df: pd.DataFrame,
     signals: pd.Series,
     cost_bps_one_way: float = 10.0,
 ) -> pd.Series:
-    """Simulate daily portfolio net returns with next-day open price execution and fee deduction.
-
-    - Signal at close of day t.
-    - Entry day t+1: Enters at Open[t+1], holds to Close[t+1]. Return = (Close/Open - 1) - fee.
-    - Intermediate holding days: Close[t+k] / Close[t+k-1] - 1.
-    - Exit day t+m+1: Exits at Open[t+m+1] from previous Close. Return = (Open/Close - 1) - fee.
-    - Cash days: Return = 0.0.
-    """
-    n = len(df)
-    net_returns = pd.Series(0.0, index=df.index)
-    if n < 2 or len(signals) != n:
-        return net_returns
-
-    one_way_fee = cost_bps_one_way / 10000.0
-
-    in_position = False
-    entry_idx = -1
-
-    for i in range(n - 1):
+    """Convenience single-asset wrapper over the unified portfolio ledger engine."""
+    ts_code = str(df["ts_code"].iloc[0]) if "ts_code" in df and not df.empty else "ASSET"
+    weights_map: dict[tuple[str, str], float] = {}
+    for i in range(len(df)):
+        d_str = pd.to_datetime(df["trade_date"].iloc[i]).strftime("%Y-%m-%d")
         sig = float(signals.iloc[i]) if not pd.isna(signals.iloc[i]) else 0.0
-        open_next = float(df["open"].iloc[i + 1])
-        close_next = float(df["close"].iloc[i + 1])
-        close_curr = float(df["close"].iloc[i])
+        weights_map[(d_str, ts_code)] = 1.0 if sig > 0 else 0.0
 
-        if not in_position and sig > 0:
-            # Enter at next open
-            in_position = True
-            entry_idx = i + 1
-            if open_next > 0:
-                gross = close_next / open_next - 1.0
-                net_returns.iloc[i + 1] = gross - one_way_fee
-        elif in_position and sig > 0:
-            # Hold through next day
-            if close_curr > 0:
-                net_returns.iloc[i + 1] = close_next / close_curr - 1.0
-        elif in_position and sig <= 0:
-            # Exit at next open (respecting T+1: cannot exit on same day as entry)
-            if i + 1 > entry_idx:
-                in_position = False
-                if close_curr > 0:
-                    gross = open_next / close_curr - 1.0
-                    net_returns.iloc[i + 1] = gross - one_way_fee
-            else:
-                # T+1 constraint forces holding until at least day after entry
-                if close_curr > 0:
-                    net_returns.iloc[i + 1] = close_next / close_curr - 1.0
-        else:
-            # Cash day
-            net_returns.iloc[i + 1] = 0.0
-
-    return net_returns
-
-
-def simulate_multi_asset_portfolio_net_returns(
-    panel: pd.DataFrame,
-    weight_col: str,
-    cost_bps_one_way: float = 10.0,
-) -> pd.Series:
-    """Simulate multi-asset daily net portfolio returns with open execution and fee deduction.
-
-    For each asset:
-    - Weight w[t] is determined at day t close.
-    - If entering from 0 to w[t] > 0: executes at open[t+1], return = (close[t+1]/open[t+1] - 1 - fee) * w[t].
-    - If holding: return = (close[t+1]/close[t] - 1) * min(w[t], w[t-1]).
-    - If exiting from w[t-1] to 0: executes at open[t+1], return = (open[t+1]/close[t] - 1 - fee) * w[t-1].
-    - Cash earns 0.0.
-    """
-    one_way_fee = cost_bps_one_way / 10000.0
-    asset_pnls: list[pd.DataFrame] = []
-
-    for code, g in panel.groupby("ts_code"):
-        g = g.sort_values("trade_date").copy()
-        n = len(g)
-        if n < 2:
-            continue
-        weights = g[weight_col].fillna(0.0).values
-        opens = g["open"].values
-        closes = g["close"].values
-        dates = g["trade_date"].values
-
-        pnl = np.zeros(n)
-        for i in range(n - 1):
-            w_curr = float(weights[i])
-            w_prev = float(weights[i - 1]) if i > 0 else 0.0
-            o_next = float(opens[i + 1])
-            c_next = float(closes[i + 1])
-            c_curr = float(closes[i])
-
-            if w_curr > 0 and w_prev == 0:
-                if o_next > 0:
-                    ret = (c_next / o_next - 1.0) - one_way_fee
-                    pnl[i + 1] = ret * w_curr
-            elif w_curr > 0 and w_prev > 0:
-                if c_curr > 0:
-                    ret = (c_next / c_curr - 1.0)
-                    pnl[i + 1] = ret * min(w_curr, w_prev)
-            elif w_curr == 0 and w_prev > 0:
-                if c_curr > 0:
-                    ret = (o_next / c_curr - 1.0) - one_way_fee
-                    pnl[i + 1] = ret * w_prev
-            else:
-                pnl[i + 1] = 0.0
-
-        asset_pnls.append(pd.DataFrame({"trade_date": dates, "pnl": pnl}))
-
-    if not asset_pnls:
-        return pd.Series(dtype=float)
-
-    all_pnls = pd.concat(asset_pnls, ignore_index=True)
-    daily_port_pnl = all_pnls.groupby("trade_date")["pnl"].sum()
-    return daily_port_pnl
+    df_named = df.copy()
+    df_named["ts_code"] = ts_code
+    res = simulate_portfolio_ledger_daily(
+        panel=df_named,
+        weights_map=weights_map,
+        initial_capital=100000.0,
+        cost_bps_one_way=cost_bps_one_way,
+    )
+    return res["daily_net_returns"]
 
 
 def simulate_closed_trades_ledger(
@@ -177,7 +289,7 @@ def simulate_closed_trades_ledger(
     signals: pd.Series,
     cost_bps_one_way: float = 10.0,
 ) -> list[dict[str, Any]]:
-    """Simulate a realistic closed-trade ledger for China ETFs."""
+    """Simulate realistic closed trades ledger for China ETFs."""
     if len(df) != len(signals):
         raise ValueError("df and signals must have the same length")
 
