@@ -48,6 +48,9 @@ trial-runtime/
 
 frontend/test-results-auth/
 frontend/playwright-report-auth/
+frontend/test-results-responsive/
+frontend/playwright-report-responsive/
+frontend/responsive-results.json
 
 # Runtime SQLite sidecars and interprocess leases are never source artifacts.
 *.sqlite3-wal

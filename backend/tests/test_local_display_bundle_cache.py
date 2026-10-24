@@ -4,9 +4,12 @@ import json
 import os
 import threading
 
+import pytest
+
 from app.workspace import local_display_read as ldr
 from app.workspace.local_display_contract import CONTRACT_VERSION, compute_parts_hashes
 from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
+from app.workspace.shadow_bundle import canonical, digest
 
 
 def _bundle(seq=1):
@@ -77,3 +80,32 @@ def test_cache_disabled_when_zero(tmp_path, monkeypatch):
     store.load_bundle(None)
     assert calls["n"] == 4
     assert len(ldr._BUNDLE_CACHE) == 0
+
+
+@pytest.mark.parametrize("alias", ["sequence", "integer", "full_hash", "short_hash"])
+def test_pinned_reads_do_not_parse_unrelated_retained_generations(tmp_path, monkeypatch, alias):
+    """A pinned page must not revalidate a whole day's 20 retained bundles."""
+    ldr.clear_bundle_cache()
+    store = LocalDisplayStore(tmp_path / "store")
+    for sequence in range(1, 21):
+        bundle = _bundle(sequence)
+        identity = digest(bundle["manifest"])
+        (store.store_dir / f"bundle_{sequence}_{identity[:16]}.json").write_bytes(canonical(bundle))
+    generation = {"sequence": "20", "integer": 20, "full_hash": identity,
+                  "short_hash": identity[:16]}[alias]
+    calls = _count_parses(monkeypatch)
+    reader = LocalDisplayReader(store)
+    # The same generation powers overview, sectors, context and decision-board.
+    assert reader.read_overview(generation=generation)["generation"] == 20
+    assert reader.read_sectors(generation=generation)["generation"] == 20
+    assert reader.read_decision_board(generation=generation)["generation"] == 20
+    assert calls["n"] == 1
+
+
+def test_missing_pinned_generation_does_not_parse_retained_bundles(tmp_path, monkeypatch):
+    ldr.clear_bundle_cache()
+    store = _store(tmp_path)
+    ldr.clear_bundle_cache()
+    calls = _count_parses(monkeypatch)
+    assert store.load_bundle("2") is None
+    assert calls["n"] == 0

@@ -1,15 +1,12 @@
-# 当前部署检查清单
+# 部署检查清单
 
-按已有授权及[总路线风险分级](docs/PROJECT_MASTER_ROADMAP.md)执行，版本以SHA与镜像证据为准。
+本批修复与文档整理不自动部署。最新身份和阻塞见[STATUS](STATUS.md)，完整操作见[阿里云手册](docs/ALIYUN_DEPLOYMENT.md)。
 
-1. 核源码、测试、当前线上版本、范围与阶段审查。
-2. 生产先备份并验证完整性，保留可执行回滚。schema变化/兼容性不确定时演练恢复迁移回滚；文档/样式不重复全套。
-3. 使用精确审核镜像和受审计Alembic迁移，不直接改生产业务表。源码同步git pull --ff-only。
-4. 查API/worker/scheduler、鉴权、Provider审计和受影响功能；需刷新衍生快照时用现有审计任务，核对最终版本。
-5. 失败按验证的方案回滚；记录源码/镜像/schema/功能证据，更新状态和进度，批次回传。
+1. 核精确源码/镜像、权限、测试和复审，不从版本标签或上传包推断已部署身份。
+2. 新一致备份校验且回滚可执行后，按获准范围部署；需要迁移时走受审Alembic，不能直接写生产表。
+3. API/worker/scheduler、鉴权、Provider audit、同代页面及资源分别核验，失败受控回滚。
+4. 保留失败收据、数据和用户修改；不清理另一AI的服务器备份或服务。
 
-## 数据库浏览器认证
+生产AUTH_ENABLED=true、持久DATABASE_URL、AUTO_CREATE_SCHEMA=false、AUTH_COOKIE_SECURE=true。首次管理员由auth-bootstrap-admin初始化；已有用户/持仓保持，浏览器正常登录，不读取或回显凭据。
 
-AUTH_ENABLED=true、AUTO_CREATE_SCHEMA=false、AUTH_COOKIE_SECURE=true；DATABASE_URL受保护配置，禁止读取/回显/提交真实值。正常初始化入口fund-decision auth-bootstrap-admin，仅有权限人员在确需时使用；已有账户通过浏览器正常登录。不得读密码、Cookie或Token、绕过鉴权或用生产测试账户替代验收。
-
-当前观察63c426a/f0/v109，完整独立接收待核对，真实数据UNKNOWN、actionable=false，无自动交易。见[身份](docs/audits/CURRENT_PRODUCTION_IDENTITY_20261002.md)、[阿里云说明](docs/ALIYUN_DEPLOYMENT.md)。[旧清单](docs/archive/project-simplification-20261002/CODEX_DEPLOYMENT_TASKS.md)归档，不是当前操作授权。
+文档/样式验证不冒充真实运行。正常登录消费、自然两交易日、手机与PIT/OOS资格单列；health200/accepted/CI不能互相代替。历史镜像/收据按其固定日期理解。

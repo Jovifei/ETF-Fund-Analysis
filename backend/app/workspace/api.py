@@ -45,7 +45,10 @@ def overview(db: DB, settings: Config, user: User, horizon: int = Query(default=
     if horizon not in DEFAULT_RESEARCH_HORIZONS:
         raise HTTPException(422, "horizon must be one of 1, 3, 7, 20, 60")
     if settings.workspace_research_source == "local_bundle":
-        return _local_reader(settings).read_overview(horizon, offset, limit, theme, generation=generation)
+        result = _local_reader(settings).read_overview(horizon, offset, limit, theme, generation=generation)
+        if generation is not None and result.get("generation") is None:
+            raise HTTPException(404, "local_display_generation_unavailable")
+        return result
     return read_model.overview(db, settings, horizon, offset, limit, theme)
 
 
@@ -54,7 +57,7 @@ def detail(code: str, db: DB, settings: Config, user: User, generation: str | No
     if settings.workspace_research_source == "local_bundle":
         res = _local_reader(settings).read_instrument_detail(code, user.id if user else None, generation=generation)
         if res is None:
-            raise HTTPException(404, _instrument_missing_reason(db, code))
+            raise HTTPException(404, "local_display_data_unavailable")
         return res
     result = read_model.instrument_detail(db, settings, code.upper(), user.id if user else None)
     if result is None:
@@ -83,7 +86,7 @@ def chart(code: str, db: DB, settings: Config, user: User, interval: str = "1d",
         try:
             res = _local_reader(settings).read_chart_data(code, interval, limit, generation=generation, as_of=as_of)
             if res is None:
-                raise HTTPException(404, _instrument_missing_reason(db, code))
+                raise HTTPException(404, "local_display_data_unavailable")
             return res
         except ValueError as exc:
             if "generation_time_mismatch" in str(exc):
@@ -159,10 +162,11 @@ def discovery_refresh(db: DB, admin: Annotated[AuthUser | None, Depends(require_
 
 
 @private_router.get("/workspace/indexes")
-def index_summaries(db: DB, settings: Config, user: User, generation: str | None = Query(default=None)) -> dict:
+def index_summaries(db: DB, settings: Config, user: User, response: Response, generation: str | None = Query(default=None)) -> dict:
+    response.headers["Cache-Control"] = "private, no-store"
     if settings.workspace_research_source == "local_bundle":
-        items = _local_reader(settings).read_market_context(generation=generation) or []
-        return {"items": [row for row in items if row.get("context_kind") == "index"], "provider_called": False, "actionable": False}
+        view = _local_reader(settings).read_market_context_view(generation=generation)
+        return {**view, "items": [row for row in view["items"] if row.get("context_kind") == "index"]}
     from sqlalchemy import select
 
     from app.models import MarketContextRegistry
@@ -235,11 +239,11 @@ def context_read_view(db: DB, settings: Config, response: Response, user: User, 
     now = datetime.now(settings.timezone)
     response.headers["Cache-Control"] = "private, no-store"
     if settings.workspace_research_source == "local_bundle":
-        mc_items = _local_reader(settings).read_market_context(generation=generation) or []
+        view = _local_reader(settings).read_market_context_view(generation=generation, now=now)
         result = [{**row, "display_time": context_display(
-            row.get("observation"), now=now, context_kind=row["context_kind"], timezone=settings.timezone
-        )} for row in mc_items]
-        return {"latest_view": result, "as_of": now.isoformat(), "provider_called": False}
+            row.get("observation"), now=now, context_kind=row.get("context_kind", "index"), timezone=settings.timezone
+        )} for row in view.pop("items")]
+        return {**view, "latest_view": result}
     rows = MarketContextService(provider=None, settings=settings).latest_view(db)
     result = [{**row, "display_time": context_display(
         row.get("observation"), now=now, context_kind=row["context_kind"], timezone=settings.timezone

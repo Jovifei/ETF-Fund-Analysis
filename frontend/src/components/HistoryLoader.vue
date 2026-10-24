@@ -4,7 +4,7 @@ import { useFavorites } from '../stores/favorites'
 import { api, errorText } from '../lib/api'
 import type { DataJob } from '../lib/types'
 const favorites=useFavorites()
-const props = defineProps<{code:string}>(), emit=defineEmits<{updated:[]}>(), busy=ref(false), message=ref('')
+const props = defineProps<{code:string;readOnly?:boolean}>(), emit=defineEmits<{updated:[]}>(), busy=ref(false), message=ref('')
 let timer: ReturnType<typeof setTimeout>|undefined, disposed=false
 async function poll(id:string, count=0) {
   try {
@@ -18,10 +18,10 @@ async function poll(id:string, count=0) {
   }catch(e){ if(!disposed){busy.value=false;message.value=errorText(e)} }
 }
 async function prepare(){
- if(busy.value)return;busy.value=true;message.value=''
+ if(busy.value||props.readOnly)return;busy.value=true;message.value=''
  try{const result=await api<{job:DataJob}>('/api/workspace/onboard',{method:'POST',body:{task:'onboard',codes:[props.code],lookback_days:1200,request_key:crypto.randomUUID()}});if(!disposed)void poll(result.job.job_id)}
  catch(e){if(!disposed){busy.value=false;message.value=errorText(e)}}
 }
 onBeforeUnmount(()=>{disposed=true;clearTimeout(timer)})
 </script>
-<template><div class="toolbar"><button class="button small" :disabled="busy" @click="prepare">{{busy?'正在准备历史…':'补齐历史并加入研究池'}}</button><small>明确点击才下载并更新该基金；同时加入自选，不自动调用 AI。已有历史无需重新下载即可看图。</small><span role="status">{{message}}</span></div></template>
+<template><div v-if="props.readOnly" class="toolbar" data-testid="local-history-read-only"><small>网站只读取本机发布的历史结果；请在本机补齐并发布，再主动读取最新批次。</small></div><div v-else class="toolbar"><button class="button small" :disabled="busy" @click="prepare">{{busy?'正在准备历史…':'补齐历史并加入研究池'}}</button><small>明确点击才下载并更新该基金；同时加入自选，不自动调用 AI。已有历史无需重新下载即可看图。</small><span role="status">{{message}}</span></div></template>
