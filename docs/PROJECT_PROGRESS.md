@@ -2,11 +2,11 @@
 
 > 本文件由 scripts/update_project_progress.py 从 PROJECT_PROGRESS.json 生成。修改台账后重新生成，勿直接修改本文件。
 
-更新：2026-10-25T01:30:00+08:00 · iteration 71 · 当前 v1.0.6 已受控发布：main 6a4aa10、生产三服务统一镜像 69e60fef、公网 etf.joviluma.com health=1.0.6；自然触发/两交易日/真人手机验收待验
+更新：2026-10-25T02:30:00+08:00 · iteration 71 · 当前 v1.0.7 已发布（dcffa8e/镜像d85d40cd）：晚间结算重试槽 16:40/17:40 + 依赖安全清零；周一真实验证新槽
 
 [总阶段路线图](PROJECT_MASTER_ROADMAP.md) · [图形进度板](PROJECT_PROGRESS.html) · [维护规则](PROJECT_PROGRESS_MAINTENANCE.md)
 
-**当前下一步：** 10-26（周一）起观察自然定时触发与两个真实交易日；Jovi 实测正常登录/手机专项；随后调度容量协调（6m38s vs 5min slots）
+**当前下一步：** 10-26（周一）验证 16:40/17:40 首次实跑与当日结算落地；两个真实交易日观察；Jovi 手机实测
 
 全项目验收分母尚未冻结；以下显示阶段状态和证据闭环，不能推算全项目完成百分比。
 
@@ -45,15 +45,15 @@
 
 ## 版本与卡点
 
-- 已部署代码：`6a4aa10b565c289a60c63ea16516f6d7f8c40844`；tree `f9d6bd5bc0798b808a4a25ba81811b75990c9e4b`。
+- 已部署代码：`dcffa8ebac1027d174b213915ff78a7e51b99097`；tree `v1.0.7 发布提交 tree 见收据`。
 - 历史发布证据基线：`ef287c06b4bd6b8ecd507149a0a0d7bd398e4162`。最新总览文档提交查询：`git log -1 -- docs/PROJECT_MASTER_ROADMAP.md docs/PROJECT_PROGRESS.json`。
-- Alembic：`f0e1d2c3b4a5 未变；9fe9fe8..6a4aa10 无新增迁移`。
+- Alembic：`f0e1d2c3b4a5 未变；44bad9c..dcffa8e 无迁移`。
 - 真实数据：UNKNOWN；actionable=false；运行时激活=false；自动交易=false。
-- 自然定时触发与两个真实交易日观察未开始（2026-10-25 周六无交易槽，自 10-26 起）
+- 16:40/17:40 新槽待 2026-10-26（周一）真实交易日首次实跑验证；两个真实交易日观察未开始
 - 正常认证用户页面与本人手机/DPR2/标签叠字/不等价价格口径专项待 Jovi 实测（入口 https://etf.joviluma.com）
-- 本机计算任务实测约 6 分 38 秒长于最密 5 分钟 slots，容量/频次协调未做
-- Hub 上报自 2026-10-11 起 WinError 10061 未发送，按契约保留 pending 不冒报
-- 云盘约 1.13GB 旧原始数据保留策略未定；npm 余 2 moderate/1 low
+- S8 数据资格保持 UNKNOWN/actionable=false/not_calibrated；PIT/OOS 与许可单独补证
+- 云盘约 1.13GB 旧原始数据保留策略未定
+- 子 agent 通道 GLM-5.3-Flash 供应商不可用（provider-not-found）
 
 ## 阶段候选任务与五维状态
 
@@ -272,3 +272,4 @@
 - 2026-10-24 / iteration71：独立复审新增latest丢失P1已签名RED后最小修复，135组合、18窄屏和6认证回放通过；固定后端ee6513a完整测试运行，ba86baf与其backend相同；不继承中断结果、不部署、不晋升正式阶段。
 - 2026-10-24 / iteration71：完整Windows暴露旧OCR spawn测试启动边界，保留失败；仅迁移测试worker、不延长2秒，模块67通过/2跳过，最终bdb556f完整与精确CI待结果。业务源码不变；网页复审后续更新429未送达，不合main不部署。
 - 2026-10-25 / iteration71：v1.0.6 受控发布：PR55 由 Jovi 合 main 后，本地对齐 2ae17a6 入册验收收据；6a4aa10 版本四处联动+CHANGELOG；DB 备份恢复校验通过；生产三服务统一镜像 69e60fef，公网 health=1.0.6/JS 一致/匿名 401；本机两任务仅迁 Action 至 6a4aa10 工作树，手动运行 0，view-sync 与新接收端 already_accepted 往返。更正：切换前生产实为 api 1a4b665（非文档所记 9fe）。子 agent 通道 GLM-5.3-Flash 不可用未用成。
+- 2026-10-25 / iteration71：v1.0.7 发布：台账证据显示 15:15 槽 0/34、16:10 槽 3-6/34 每日 FAILED（收盘后数据源渐进发布），新增 16:40/17:40 全量结算重试槽+触发器窗口 3h→4.5h；vitest 4.1.12/esbuild 0.28.2 官方修复后 npm audit 0 漏洞；修复 test_audit_release 硬编码版本；调度密集快槽实测 125s 无容量冲突（重新定性）。生产三容器统一镜像 d85d40cd，公网 1.0.7；本机任务迁移 dcffa8e 工作树手动运行 0。清理 76 条远端已合并分支。
