@@ -37,3 +37,15 @@ Jovi正常登录后总览决策板/板块/上下文超时，一次只读重试�
 CI实际发现Vite7.3.5命中GHSA-587h-7wmj-h5pm高危（上游公告：https://github.com/vitejs/launch-editor/security/advisories/GHSA-587h-7wmj-h5pm）。Jovi另行明确授权同大版本最小升级到7.3.7，不降低门禁。package-lock仅根Vite声明与node_modules/vite条目改变，其余锁定包原样。
 
 隔离安装ignore-scripts，初次npm ci因ECONNRESET失败保留日志；使用既有缓存重新执行成功。安全审计高危/严重均0，仍有2中危/1低危独立保留；205项Vue单测、TypeScript和生产构建通过。旧固定59fbb13的后端全量在独立未改工作树运行，后继补丁不改backend/scripts或测试；新SHA的精确CI另行核验，不冒充新SHA已本地全量通过。
+
+## 2026-10-24 可信接收与上下文整合
+
+网页GPT PR53 f89b382与本地版本化上下文整合为f6d0d332ab8bd27f34cb573b31a141f32cc57bac。后继独立复审以真实签名HTTP复现“latest缺失、previous保留时接受未知旧序号”（RED1、空存储正例1PASS）；两行一致性守卫冻结于ee6513a2fa8d4b60ad516abf9a9b6f250efd27be，135项组合测试通过。历史接收身份随latest原子提交，未采用增加状态的accepted.json候选。
+
+上下文合同local-display-context-read-v1区分采集失败/部分/沿用/未发布、历史身份与过期；来源/生成/刷新/读取时间分开，不以读取时钟重写as_of。保留旧列表接口，GET不调用研究SQL/Provider；本地模式不提供未发布的指数历史/云端写操作。完整manifest身份、HMAC、现行身份、时间和SyncDomain峰值门禁保持。
+
+实际本地：135项接收/上下文组合、228 Vue、类型/构建/静态、44隔离Mock smoke、18窄屏与6认证回放通过。后端守卫未改前端src/依赖；认证夹具使用真实版本化合同，补全部时间/状态断言与任何workspace POST检测；窄屏及首页测试使用现行1/3/7/20/60并验证7日保留。旧horizon5、旧fixture与容量合成余量失败均保留，不增超时、不跳断言、不降生产64MiB/320MiB门槛。
+
+最终完整后端仍在ee6513a固定源码运行；此前f6本地49%中断没有完整结果，r2又因新P1被明确取代，均不标PASS。f6的GitHub完整ci/PG/Windows/followup已通过，但workspace因旧认证夹具失败；最终提交必须重新核精确CI和网页GPT复审，才能按授权合main。本轮未部署，正式任务/数据/Owner修改保持。真实收盘34覆盖、正常公网同代消费、自然两日/云端零增长、手机和资格仍独立待验收。
+
+集中材料：E:\Claude_allow\Download\ETF-chain-fix-20261023，receipt-v2/context-v2/auth-final-20261024-1/responsive-current与最终完整测试收据。最初本地auth从根目录启动导致runtime身份未核，已加ENV_UNQUALIFIED注解，不能作为当前源码回归；正确frontend目录复现的CI同类RED及GREEN独立保留。

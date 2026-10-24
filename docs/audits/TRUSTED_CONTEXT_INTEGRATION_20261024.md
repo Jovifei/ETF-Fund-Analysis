@@ -2,7 +2,7 @@
 
 状态：IN_PROGRESS，未合main、未部署。仅记录真实完成项，不继承历史发布/旧SHA完整测试。
 
-源码：f6d0d332ab8bd27f34cb573b31a141f32cc57bac；tree f52c2900e7056e42e83cc8699880f28be03f7522。父版本fe0a615与网页GPT PR53 f89b382在独立分支整合。main仍1a4b665；PR51为源码，PR52为文档。
+当前源码：ba86baf9f10a43531e09538622cad825afbcc89d；tree 7b34ecedbd4d63f4483f92930eed9c64288645ed。后端固定ee6513a，frontend业务源码与f6d0d33一致；父版本fe0a615与网页GPT PR53 f89b382在独立分支整合，接续修复复审发现的latest缺失边界。main仍1a4b665；PR51为源码，PR52为文档。
 
 ## 实现与验证
 
@@ -13,8 +13,14 @@
 - 初轮整合70项中4FAIL（原因枚举、直接调用Response参数、两项旧容量夹具），及前端重复状态提示/类型错误保留后修复；整合后70后端专项与228Vue、类型/构建/静态通过。
 - 44项隔离Mock smoke通过，旧horizon5改为现行1/3/7/20/60并验证导航后7日选择保留，未提高超时或删断言。
 - 容量测试改为计入有界历史元数据的合成预算，显式3代强制旧包回收；os.replace前核实际磁盘+held峰值，每次不得超限，current/previous保留。生产64MiB/320MiB限制及不足预算拒绝负例未改。
-- 最终完整后端、精确CI、认证受控回放与窄屏：待结果。认证回放初次失败已保留，不能标PASS；不代表生产登录失败。
+- 135项接收/上下文组合、18项窄屏及6项认证回放已通过。认证新fixture含完整版本化时间/状态合同，禁止本地无历史卡片动作与任何workspace写入；旧RED保留。最终ee6513a完整后端与精确CI待结果；不代表生产验收。
 
 材料位于E:\Claude_allow\Download\ETF-chain-fix-20261023，包括receipt-v2、context-v2、integrated-first/targeted、pytest-f6d0d33、smoke-f6d0d33和auth-red-f6d0d33。源/测试与候选可从GitHub固定提交独立读取；私人数据/配置未上传。
 
 网页GPT最终复审待连接恢复与固定证据提交。真实收盘完整34覆盖、公网正常用户同代消费、手机、自然两交易日、云端零增长、PIT/OOS/许可分别未通过。保持UNKNOWN/actionable=false/not_calibrated，无自动交易。
+
+## 整合后独立边界复审
+
+签名HTTP先接收2/3后仅移除夹具latest，保留previous=2，旧实现会错误接受未知新鲜seq1；RED1/空存储正例1PASS保留。Store补两行一致性守卫，缺latest而有previous时拒绝激活；不从缓存猜接收历史，135项组合GREEN。真正空存储首发保持。
+
+此前f6完整本地测试49%执行通道中断，没有XML/退出结果；r2因上述新P1明确取代并留痕，不标通过。当前最终完整后端由独立证据驱动运行ee6513a，提交ba86baf只再改测试/忽略规则/文档，backend/scripts/pyproject与该固定源码相同。CI命名postdeploy仍只是测试，本轮无服务器部署。
