@@ -548,3 +548,25 @@
 ---
 
 *本报告仅供研究选型；不构成投资建议。所有公开绩效均可能含前瞻偏差、幸存者偏差与未充分扣费。*
+
+
+---
+
+## Appendix B — Literature deepen (2026-10-24 empirical pass)
+
+Previous honesty caveats in this catalog still apply (factor zoo / multiple testing / win-rate ≠ edge).
+
+### Added China / A-share ETF sources
+- 华宝证券《ETF策略：短期、中期还是长期动量效应有效？》(2024-12)：短窗 15–25 日更强；IC>0 仅略高于 50%。
+- Ma, Liao, Jiang (2022), Factor Momentum in the Chinese Stock Market：TSFM/CSFM 显著。
+- Cui & Li (2024), Pacific-Basin Finance Journal：中国动量形成 7–12 月；因子动量四因子。
+- Northbound predictability: Jorms 2024 (2/5/10/20D index); APJFS weekly holdings HPC ~61bps/week L-S; 2024 net outflow year → regime risk.
+- Lunar January effect in A-shares (AJFS 2022); solar January weak/absent for China ETFs in some samples.
+
+### Added US ETF sources (no local native panel this pass)
+- ETF flows / creation-redemption return predictability and reversals (Staer; Brown/Davies/Ringgenberg RoF line of work).
+- Premium/discount short-horizon predictability (Fulkerson & Jordan; Rompotis iShares).
+- Value & Momentum Everywhere remains the cross-asset baseline (Asness, Moskowitz, Pedersen).
+
+### Local empirical override
+See `docs/decision_factors_deep_empirical_20261024.md` for **measured** hit/IC/Sharpe on this watchlist’s long-history 17 ETFs. Literature win-rates are not substitutes for that table.
