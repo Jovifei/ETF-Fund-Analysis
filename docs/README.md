@@ -1,23 +1,27 @@
 # 文档地图
 
-## 当前总览
+常用入口只保留一条主线：
 
-[总路线](PROJECT_MASTER_ROADMAP.md) · [进度](PROJECT_PROGRESS.md) · [图形板](PROJECT_PROGRESS.html) · [维护规则](PROJECT_PROGRESS_MAINTENANCE.md) · [状态](../STATUS.md) · [交接](../HANDOFF.md)。
+| 目的 | 入口 |
+| --- | --- |
+| 产品与数据位置 | [README](../README.md) |
+| 当前事实与验收 | [STATUS](../STATUS.md) |
+| 启动/正常访问 | [QUICKSTART](../QUICKSTART.md) |
+| 工程接手 | [HANDOFF](../HANDOFF.md) |
+| 数据流与边界 | [ARCHITECTURE](ARCHITECTURE.md) |
+| 产品下一步 | [路线](PROJECT_MASTER_ROADMAP.md) |
+| 阶段证据计数 | [JSON台账](PROJECT_PROGRESS.json) · [生成视图](PROJECT_PROGRESS.md) · [维护规则](PROJECT_PROGRESS_MAINTENANCE.md) |
 
-近期优先[S8-F0数据可行性](planning/S8_F0_DATA_FEASIBILITY_SPIKE.md)，调查尚未执行。
+## 专业参考保留
 
-## 产品和数据合同
+- [AGENTS](../AGENTS.md)、[部署](ALIYUN_DEPLOYMENT.md)、[AI连接安全](AI_CONNECTION_SECURITY_V104.md)。
+- [支撑压力语义](SUPPORT_RESISTANCE_SEMANTICS.md)、[盘中刷新](INTRADAY_REFRESH_CADENCE.md)、[14:30工作台](ETF_1430_DECISION_WORKBENCH.md)。
+- [调度/恢复](contracts/LOCAL_CADENCE_V1.md)、[报价路由](contracts/QUOTE_ROUTE_DEFERRAL_V2.md)及contracts目录的其他接口合同。
+- [本轮链路验收](audits/LOCAL_FIRST_CHAIN_20261023.md)及audits目录的原始发布/失败/回滚证据，按日期和固定源码理解。
+- LICENSE、[第三方NOTICE](../THIRD_PARTY_LICENSES/NOTICE.md)、frontend/NOTICE和开源登记保留。
 
-[架构](ARCHITECTURE.md) · [数据接入/flow_share](DATA_ACCESS_V101.md) · [支撑压力/Chan语义](SUPPORT_RESISTANCE_SEMANTICS.md) · [盘中刷新](INTRADAY_REFRESH_CADENCE.md) · [用户指南](USER_GUIDE_V104.md) · [UI合同](UI_UX_CONTRACT.md) · [交付矩阵](DELIVERY_P0_P4.md) · [开源登记](OPEN_SOURCE_ADOPTION_REGISTER_V103.md)。
+## 历史与兼容
 
-## 部署和证据
+旧方案精华已归纳到当前架构和路线；[HISTORY](HISTORY.md)提供Git恢复方式。仍被程序、测试、生成器或保留收据引用的旧路径保留，是兼容/证据入口，不是今天的新操作说明。
 
-[当前生产身份](audits/CURRENT_PRODUCTION_IDENTITY_20261002.md)：63c426a/f0/v109元数据观察，独立接收待完成。
-[主线收尾](audits/MAIN_CONSOLIDATION_CLEANUP_20261002.md) · [部署清单](../CODEX_DEPLOYMENT_TASKS.md) · [阿里云部署](ALIYUN_DEPLOYMENT.md) · [AI安全](AI_CONNECTION_SECURITY_V104.md)。
-
-[旧3a发布收据](audits/R4C_M3B_C_PRODUCTION_RELEASE_20261002.md)只代表旧基线，不能追认当前新schema。
-
-## 历史
-
-[本轮归档](archive/project-simplification-20261002/README.md) · [版本索引](versions/README.md) · [其他历史](archive/)。
-旧状态数字按记录日期理解；第三方声明、审计和数据资格证据保留。
+不删除业务代码、有效测试、私有配置、数据库、备份、回滚资产或另一AI处理的服务器资料。

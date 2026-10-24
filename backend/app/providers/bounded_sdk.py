@@ -11,7 +11,11 @@ import json
 import multiprocessing as mp
 import os
 import re
+from datetime import date, datetime
 from functools import partial
+from types import FunctionType
+from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from app.providers.base import CapabilityUnavailable, ProviderError
 
@@ -27,6 +31,51 @@ AKSHARE_APIS = frozenset({
     'stock_zh_index_daily_em','index_zh_a_hist','stock_zh_index_daily_tx','stock_zh_a_hist_tx','index_us_stock_sina','stock_news_em','stock_info_global_em','stock_info_global_sina',
     'stock_info_global_cls','stock_info_global_ths',
 })
+
+_TENCENT_HISTORY_URL = 'https://proxy.finance.qq.com/ifzqgtimg/appstock/app/newfqkline/get'
+
+
+def _tencent_close_refresh(params):
+    from app.services.settlement import SETTLEMENT_CUTOFF
+    try:
+        target = date.fromisoformat(params.get('end_date', ''))
+    except (TypeError, ValueError):
+        return False
+    local = datetime.now(ZoneInfo('Asia/Shanghai'))
+    return target == local.date() and local.time().replace(tzinfo=None) >= SETTLEMENT_CUTOFF
+
+
+class _FreshTencentRequests:
+    def __init__(self, client):
+        self._client = client
+
+    def __getattr__(self, name):
+        return getattr(self._client, name)
+
+    def get(self, url, *args, **kwargs):
+        if url == _TENCENT_HISTORY_URL and isinstance(kwargs.get('params'), dict):
+            # AKShare uses a fixed r and yearly range even after today's close.
+            # Change only the cache key, never the date/adjustment or parser.
+            kwargs = {**kwargs, 'params': {**kwargs['params'], 'r': uuid4().hex}}
+        return self._client.get(url, *args, **kwargs)
+
+
+def _fresh_tencent_history(function):
+    """Confine the transport override to this SDK call in its owned child.
+
+    Clone its namespace instead of patching requests or the imported module.
+    Source availability and target-date coverage still belong to the caller.
+    """
+    if not isinstance(function, FunctionType):
+        raise CapabilityUnavailable('endpoint_unavailable')
+    client = function.__globals__.get('requests')
+    if not callable(getattr(client, 'get', None)):
+        raise CapabilityUnavailable('endpoint_unavailable')
+    namespace = {**function.__globals__, 'requests': _FreshTencentRequests(client)}
+    fresh = FunctionType(function.__code__, namespace, function.__name__,
+                         function.__defaults__, function.__closure__)
+    fresh.__kwdefaults__ = function.__kwdefaults__
+    return fresh
 
 
 class ProviderTimeout(ProviderError):
@@ -86,6 +135,8 @@ def _child(conn, module, name, params, token, timeout):
             else:
                 function=getattr(importlib.import_module('akshare'),name,None)
                 if not callable(function): raise CapabilityUnavailable('endpoint_unavailable')
+                if name == 'stock_zh_a_hist_tx' and _tencent_close_refresh(params):
+                    function = _fresh_tencent_history(function)
                 result=function(**params)
             frame = hasattr(result,'to_json')
             if frame:

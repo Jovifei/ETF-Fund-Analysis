@@ -14,6 +14,7 @@ VALIDATION_VERSION = "local-display-validation-v2.3"
 MAX_BUNDLE_BYTES = 64 * 1024 * 1024  # 64 MiB bounded quota
 REQUIRED_PARTS = {"overview", "details", "charts", "sectors"}
 OPTIONAL_PARTS = {"market_context", "chart_periods"}
+CONTEXT_AVAILABILITY = {"available", "partial", "carried_forward", "unavailable", "unpublished"}
 FORBIDDEN_PRIVATE_FIELDS = {"avg_cost", "holdings", "cost", "trades", "account_id", "user_id", "accounts", "cookie", "cookies", "token", "password", "authorization"}
 HEX_HASH_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 SHA_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
@@ -177,9 +178,14 @@ def verify_bundle_integrity(bundle: dict[str, Any], *, now: datetime | None = No
                     return False
                 validate_public_chart(chart, code=code, generated_at=generated, partial=True,
                                       expected_interval=interval)
-        if "market_context" in parts and (not isinstance(parts["market_context"], dict)
-                or not isinstance(parts["market_context"].get("items"), list)):
-            return False
+        if "market_context" in parts:
+            context = parts["market_context"]
+            if not isinstance(context, dict) or not isinstance(context.get("items"), list):
+                return False
+            if "availability" in context:
+                availability = context["availability"]
+                if not isinstance(availability, str) or availability not in CONTEXT_AVAILABILITY:
+                    return False
         for code, detail in parts["details"].items():
             if code not in universe or not isinstance(detail, dict):
                 return False

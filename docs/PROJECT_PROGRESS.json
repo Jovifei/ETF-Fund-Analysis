@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "roadmap_version": "2026-10-02-v2",
+  "roadmap_version": "2026-10-24-consolidated",
   "current_iteration": 71,
   "release_evidence_head": "ef287c06b4bd6b8ecd507149a0a0d7bd398e4162",
   "docs_commit_lookup": "git log -1 -- docs/PROJECT_MASTER_ROADMAP.md docs/PROJECT_PROGRESS.json",
@@ -2000,19 +2000,20 @@
   "release_counter_title": "历史iteration71发布清单（不代表当前候选验收）",
   "release_counter_note": "9/13仅为旧发布检查记录，不能代表当前候选、S3或全项目完成率；当前精确CI、部署与线上验收单独核验。",
   "release_evidence_label": "历史发布证据基线",
-  "updated_at": "2026-10-06T11:55:00+08:00",
-  "current_stage": "S4有界图表显示修复及必要前端安全更新：196项前端/类型/构建通过，精确CI与浏览器验收待核",
+  "updated_at": "2026-10-24T10:29:14+08:00",
+  "current_stage": "可信接收/同代上下文与读取收盘修复候选；最终测试和网页复审待完成",
   "planning_source": "docs/PROJECT_MASTER_ROADMAP.md",
   "deployed_code_sha": "本批未重新核验",
   "deployed_tree": "本批未重新核验",
   "alembic": "本批未重新核验；迁移未修改",
   "calibration_status": "not_calibrated",
-  "next_task": "从原分支已核基线8c7f342提交经过精简的两批显示修复；核新提交的三项CI和浏览器证据，之后单独核部署与线上验收。",
+  "next_task": "固定bdb556f完整后端与当前PR52精确CI；网页GPT最终复审通过后合main，本轮不部署。",
   "blockers": [
-    "本批精确远端CI及趋势修复的新浏览器/截图验收尚未完成；既有本地测试不替代这些门槛。",
-    "5m/15m真实权限、存储许可、量额单位、源时间、PIT/OOS及可行性仍待证据；优先S8-F0。",
-    "真实资格UNKNOWN、actionable=false、calibration_status=not_calibrated；运行时激活与自动交易均未启用。",
-    "正常私有读取/R10、实体手机和当前部署身份仍待独立验收；未访问账户或生产数据。"
+    "原Windows完整2613通过/24跳过/1失败，旧OCR spawn夹具已最小修正且模块67通过/2跳过；最终bdb556f完整及精确CI未完成，不能沿用局部PASS。",
+    "同一普通Chat的GitHub复审请求已送达；后续更新429 NOT_SENT，最终网页审查结果未确认。",
+    "10月23日已核接收包过期、收盘刷新不全与公网超时为保留原始失败；本批未部署。",
+    "尾盘120秒、自然两交易日云端零增长、正常线上同代/本人手机及当前生产身份未独立验收。",
+    "许可/源时间/单位/PIT/OOS/校准持续UNKNOWN/actionable=false/not_calibrated。"
   ],
   "sr_direction_display_current_batch": {
     "scope": "SHARED_EXACT_DIRECTION_DISPLAY_ONLY",
@@ -2067,6 +2068,31 @@
       "date": "2026-10-06",
       "iteration": 71,
       "description": "发布前完整依赖审计发现高危/严重项；仅更新必要Vue/Vitest闭包及source-map-js，保留其他依赖。隔离重跑196前端、类型/构建通过，audit0高危/严重/中危（余1低危）；本地浏览器启动受限，精确CI及真实截图仍待核，不提升资格。"
+    },
+    {
+      "date": "2026-10-23",
+      "iteration": 71,
+      "description": "核当前main1a4b665和真实slot/回执，正常登录总览超时、收盘刷新失败与过期分别留痕；独立分支获准TDD修复，不自动部署。归纳文档并按精确清单清理中间稿，不提升阶段PASS/计数。"
+    },
+    {
+      "date": "2026-10-23",
+      "iteration": 71,
+      "description": "项目安全连接恢复，向同一ETF普通Chat发送本阶段读取/复审请求；43项文档相关测试、链接/生成检查及独立文档审查通过，20份中间Markdown已按清单删除，不晋升业务/线上资格。"
+    },
+    {
+      "date": "2026-10-24",
+      "iteration": 71,
+      "description": "独立分支整合网页GPT PR53可信历史证明与本地版本化上下文，70后端/228Vue/44Mock smoke通过；完整后端、精确CI及网页复审待完成，不合main不部署，历史正式阶段计数保持。"
+    },
+    {
+      "date": "2026-10-24",
+      "iteration": 71,
+      "description": "独立复审新增latest丢失P1已签名RED后最小修复，135组合、18窄屏和6认证回放通过；固定后端ee6513a完整测试运行，ba86baf与其backend相同；不继承中断结果、不部署、不晋升正式阶段。"
+    },
+    {
+      "date": "2026-10-24",
+      "iteration": 71,
+      "description": "完整Windows暴露旧OCR spawn测试启动边界，保留失败；仅迁移测试worker、不延长2秒，模块67通过/2跳过，最终bdb556f完整与精确CI待结果。业务源码不变；网页复审后续更新429未送达，不合main不部署。"
     }
   ],
   "frontend_security_current_batch": {
@@ -2089,5 +2115,33 @@
     "local_browser": "NOT_RUN_BROWSER_LAUNCH_EPERM_BEFORE_PAGE_OR_ASSERTION",
     "exact_ci": "PENDING",
     "deployment": "NOT_PERFORMED"
+  },
+  "current_source_sha": "1a4b6652f49c412145d12812fa02820ba0a80991",
+  "current_chain_observation": {
+    "evidence": "docs/audits/LOCAL_FIRST_CHAIN_20261023.md",
+    "local_to_receipt": "OBSERVED_PASS_FOR_LISTED_SLOTS",
+    "authenticated_consumer": "BLOCKED_TIMEOUT",
+    "close_refresh": "FAILED",
+    "two_day_soak": "NOT_RUN_DISABLED",
+    "deployment_identity": "NOT_REVERIFIED"
+  },
+  "remote_review_task": {
+    "id": "c2c_chain_cleanup_20261023",
+    "iteration": 1,
+    "state": "GITHUB_REVIEW_DISPATCHED_FINAL_PENDING",
+    "last_update_send": "NOT_SENT_429"
+  },
+  "candidate_source_sha": "bdb556f9c60254b2e8e866f256386b062e2ab7ab",
+  "candidate_evidence": "docs/audits/TRUSTED_CONTEXT_INTEGRATION_20261024.md",
+  "candidate_backend_sha": "bdb556f9c60254b2e8e866f256386b062e2ab7ab",
+  "candidate_app_baseline_sha": "ee6513a2fa8d4b60ad516abf9a9b6f250efd27be",
+  "candidate_previous_full": {
+    "source_sha": "ee6513a2fa8d4b60ad516abf9a9b6f250efd27be",
+    "tests": 2638,
+    "passed": 2613,
+    "skipped": 24,
+    "failed": 1,
+    "status": "FAILED_RETAINED",
+    "failure": "test_paddle_response_then_sleep_worker_is_cleaned_up"
   }
 }
