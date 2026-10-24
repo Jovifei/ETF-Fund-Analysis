@@ -21,6 +21,22 @@ def calc_volatility_annualized(rets: pd.Series, window: int = 20) -> pd.Series:
     return rets.rolling(window, min_periods=window).std(ddof=1) * math.sqrt(252)
 
 
+def calc_forward_returns(df: pd.DataFrame, horizons: list[int] = [1, 3, 7, 20, 60]) -> pd.DataFrame:
+    """Calculate compound forward returns over exact future window Day 1 to Day h.
+
+    At index t (day t close), fwd_h strictly compounds returns from day t+1 to day t+h:
+    prod_{k=1}^h (1 + ret_{t+k}) - 1.
+    """
+    df = df.sort_values("trade_date").copy()
+    ret = df["ret_1"].fillna(0.0) if "ret_1" in df else df["close"].pct_change().fillna(0.0)
+    log1p = np.log1p(ret.clip(lower=-0.99))
+    for h in horizons:
+        # Sum future log returns from t+1 to t+h
+        fwd_log = log1p.iloc[::-1].rolling(h, min_periods=h).sum().iloc[::-1].shift(-1)
+        df[f"fwd_{h}"] = np.expm1(fwd_log)
+    return df
+
+
 def compute_volatility_target_weight(
     trend_state: int,
     vol: float,
@@ -49,7 +65,6 @@ def calc_cross_sectional_ranks(scores: dict[str, float]) -> dict[str, float]:
     if n == 1:
         return {next(iter(valid)): 1.0}
 
-    # Sort ascending so highest score gets highest rank
     sorted_items = sorted(valid.items(), key=lambda x: x[1])
     ranks: dict[str, float] = {}
     for idx, (code, _) in enumerate(sorted_items):
@@ -57,15 +72,34 @@ def calc_cross_sectional_ranks(scores: dict[str, float]) -> dict[str, float]:
     return ranks
 
 
+def compute_cross_sectional_top_k_weights(
+    scores: dict[str, float],
+    top_k: int = 4,
+) -> dict[str, float]:
+    """Select Top-K assets by cross-sectional momentum, assigning equal weight 1/top_k (C0)."""
+    valid = {k: v for k, v in scores.items() if v is not None and not pd.isna(v) and math.isfinite(v)}
+    weights: dict[str, float] = {k: 0.0 for k in scores}
+    if not valid or top_k <= 0:
+        return weights
+
+    sorted_candidates = sorted(valid.items(), key=lambda x: x[1], reverse=True)
+    selected = sorted_candidates[:top_k]
+    k_actual = min(top_k, len(selected))
+    slot_weight = 1.0 / k_actual
+    for code, _ in selected:
+        weights[code] = slot_weight
+    return weights
+
+
 def compute_dual_momentum_weights(
     cs_scores: dict[str, float],
     ts_trends: dict[str, int],
     top_k: int = 4,
 ) -> dict[str, float]:
-    """Dual Momentum (C1): Top-K by cross-sectional momentum, gated by absolute momentum.
+    """Dual Momentum (C1): Same Top-K candidate set as C0, gated by absolute 12m trend.
 
     If an asset is in the top-K but its 12m trend is flat/negative (ts_trends <= 0),
-    its slot is allocated to CASH (weight 0.0), avoiding holding falling assets in bear markets.
+    its slot is allocated to CASH (weight 0.0), providing a fair apples-to-apples ablation vs C0.
     """
     valid_scores = {k: v for k, v in cs_scores.items() if v is not None and not pd.isna(v) and math.isfinite(v)}
     weights: dict[str, float] = {k: 0.0 for k in cs_scores}
@@ -74,13 +108,14 @@ def compute_dual_momentum_weights(
 
     sorted_candidates = sorted(valid_scores.items(), key=lambda x: x[1], reverse=True)
     selected = sorted_candidates[:top_k]
-    slot_weight = 1.0 / top_k
+    k_actual = min(top_k, len(selected))
+    slot_weight = 1.0 / k_actual
 
     for code, _ in selected:
         if ts_trends.get(code, 0) > 0:
             weights[code] = slot_weight
         else:
-            weights[code] = 0.0  # Cash filter!
+            weights[code] = 0.0  # Fair Cash Filter!
 
     return weights
 
