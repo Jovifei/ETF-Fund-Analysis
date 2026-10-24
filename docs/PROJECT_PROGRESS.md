@@ -2,11 +2,11 @@
 
 > 本文件由 scripts/update_project_progress.py 从 PROJECT_PROGRESS.json 生成。修改台账后重新生成，勿直接修改本文件。
 
-更新：2026-10-24T10:04:51+08:00 · iteration 71 · 当前 可信接收/同代上下文与读取收盘修复候选；最终测试和网页复审待完成
+更新：2026-10-24T10:29:14+08:00 · iteration 71 · 当前 可信接收/同代上下文与读取收盘修复候选；最终测试和网页复审待完成
 
 [总阶段路线图](PROJECT_MASTER_ROADMAP.md) · [图形进度板](PROJECT_PROGRESS.html) · [维护规则](PROJECT_PROGRESS_MAINTENANCE.md)
 
-**当前下一步：** 收齐ee6513a完整后端与ba86baf/文档组合精确CI，同一普通Chat以GitHub固定证据复审；通过后合main，本轮不部署。
+**当前下一步：** 固定bdb556f完整后端与当前PR52精确CI；网页GPT最终复审通过后合main，本轮不部署。
 
 全项目验收分母尚未冻结；以下显示阶段状态和证据闭环，不能推算全项目完成百分比。
 
@@ -49,8 +49,8 @@
 - 历史发布证据基线：`ef287c06b4bd6b8ecd507149a0a0d7bd398e4162`。最新总览文档提交查询：`git log -1 -- docs/PROJECT_MASTER_ROADMAP.md docs/PROJECT_PROGRESS.json`。
 - Alembic：`本批未重新核验；迁移未修改`。
 - 真实数据：UNKNOWN；actionable=false；运行时激活=false；自动交易=false。
-- 135后端组合、228Vue/类型构建、44Mock smoke、18窄屏与6认证回放已通过；最终完整后端/精确CI仍待完成。
-- 网页GPT项目读取连接不可用；准备沿用户已授权的同一普通Chat接口，以GitHub固定源码独立复审，不创建Cloud Work。
+- 原Windows完整2613通过/24跳过/1失败，旧OCR spawn夹具已最小修正且模块67通过/2跳过；最终bdb556f完整及精确CI未完成，不能沿用局部PASS。
+- 同一普通Chat的GitHub复审请求已送达；后续更新429 NOT_SENT，最终网页审查结果未确认。
 - 10月23日已核接收包过期、收盘刷新不全与公网超时为保留原始失败；本批未部署。
 - 尾盘120秒、自然两交易日云端零增长、正常线上同代/本人手机及当前生产身份未独立验收。
 - 许可/源时间/单位/PIT/OOS/校准持续UNKNOWN/actionable=false/not_calibrated。
@@ -270,3 +270,4 @@
 - 2026-10-23 / iteration71：项目安全连接恢复，向同一ETF普通Chat发送本阶段读取/复审请求；43项文档相关测试、链接/生成检查及独立文档审查通过，20份中间Markdown已按清单删除，不晋升业务/线上资格。
 - 2026-10-24 / iteration71：独立分支整合网页GPT PR53可信历史证明与本地版本化上下文，70后端/228Vue/44Mock smoke通过；完整后端、精确CI及网页复审待完成，不合main不部署，历史正式阶段计数保持。
 - 2026-10-24 / iteration71：独立复审新增latest丢失P1已签名RED后最小修复，135组合、18窄屏和6认证回放通过；固定后端ee6513a完整测试运行，ba86baf与其backend相同；不继承中断结果、不部署、不晋升正式阶段。
+- 2026-10-24 / iteration71：完整Windows暴露旧OCR spawn测试启动边界，保留失败；仅迁移测试worker、不延长2秒，模块67通过/2跳过，最终bdb556f完整与精确CI待结果。业务源码不变；网页复审后续更新429未送达，不合main不部署。
