@@ -254,6 +254,8 @@ class LocalDisplayStore:
             current = self._load_pointer(self.latest_link) if self.latest_link.exists() else None
             if self.latest_link.exists() and current is None:
                 raise ValueError("invalid latest generation pointer")
+            if current is None and self.previous_link.exists():
+                raise ValueError("latest generation pointer missing from established store")
             history = self._acceptance_history(current) if current else []
             if current and "acceptance_history_version" not in current and self.previous_link.exists():
                 # Upgrade only validated pointer evidence; orphan cache files prove nothing.
