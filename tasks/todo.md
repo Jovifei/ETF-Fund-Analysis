@@ -5,7 +5,7 @@
 - [x] 完整读接手文档、AGENTS/STATUS/HANDOFF、旧全量 JUnit；核 PR51/52/54 最新 SHA 与祖先关系，保留三条原分支和根目录未提交文件。
 - [x] 在独立 `codex/context-availability-p2-20261024` 上先写 RED：签名接收、已有自洽坏包、两个 GET 与缺省兼容；原 `b98d683` 上 25 项中 8 FAIL/17 PASS，失败是接收200或 GET500，非测试环境错误。
 - [x] 最小修复可选上下文元数据验证：仅显式合法状态可接收，缺省旧包保留；25 项 GREEN，六模块 173 PASS，生产改动限 `local_display_contract.py`。
-- [ ] 固定新 SHA，运行 Windows 全量、前端/静态/安全门与精确 GitHub CI；复审差异和收据。
+- [ ] 固定新 SHA，运行 Windows 全量、前端/静态/安全门与精确 GitHub CI；复审差异和收据。首轮 `14c65a1` 在 27% 触发旧 `test_decision_board` 运行时钟夹具失败，单项 RED→夹具最小修复→GREEN；首轮在 54% 停止，不继承它的完整结果。
 - [ ] 在同一“基金决策”项目的普通 Chat 对新 SHA 作网页 GPT 复审，失败继续修复；全部门槛通过才合 main，先核 Owner 保护清单，不部署。
 
 Review：执行中。旧 bdb556f 与 PR54 b98d683 的既有完整测试收据已核且未重复运行；新 P2 的 RED/GREEN 与 173 项聚焦已留 XML，完整新 SHA/CI/网页复审仍待执行。

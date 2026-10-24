@@ -10,4 +10,8 @@
 
 本地未提交源码验证：新增 25 项 GREEN；六个相关后端模块 173 PASS/0 FAIL/0 SKIP。RED XML：`E:\Claude_allow\Download\ETF-chain-fix-20261023\context-p2-null-empty-red.xml`；聚焦 GREEN XML：同目录 `context-p2-focused-final-uncommitted.xml`，SHA-256 `86a77d2bee2d02424fd1549f1d4a938fb4df763bcc6de8f287e18445754d49b6`。旧 PR54 和 bdb556f 的 Windows 全量收据仅作基线，不能冒充新提交的完整验收。
 
+## 新 SHA 全量首轮发现的独立夹具问题
+
+`14c65a1` 的 Windows 完整 pytest 运行到 27% 出现 `test_decision_board.py::test_snapshot_marks_old_verified_quote_stale_and_keeps_anomaly_visible` 失败；单项重跑同样得到 `quote_unverified_or_degraded`，而测试期望 `quote_stale_at_snapshot_generation`。这个测试与上下文校验无代码交集。旧夹具使用当前 Mock 报价时间加 9 分钟，可能落入 11:40 午间收盘报价特例；且没有清除 Mock 自带的降级标记。仅修测试：显式设置已核时间/实时且无降级原因，把目标快照放到报价一小时后；单项重跑 PASS。原全量在 54% 经确认后仅停止本次测试子进程，退出 `-1`，没有最终 JUnit，不能称为全量失败统计或 PASS。新提交和新全量另行记录。
+
 下一门槛：提交固定 SHA/tree、该 SHA 的 Windows 完整测试、前端/静态/安全门与精确 CI、同一“基金决策”项目普通 Chat 独立源码复审。全部通过后才按授权合 main；不部署。正常私有网页、真实收盘、手机、两交易日和数据资格仍独立待验。

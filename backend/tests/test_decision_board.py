@@ -689,8 +689,9 @@ def test_snapshot_marks_old_verified_quote_stale_and_keeps_anomaly_visible(db_se
     try:
         indicator = db_session.scalar(select(IndicatorSnapshot).limit(1))
         quote = db_session.scalar(select(QuoteSnapshot).where(QuoteSnapshot.instrument_id == indicator.instrument_id).limit(1))
-        quote.timestamp_verified, quote.is_realtime = True, True
-        generated = (quote.fetched_at or quote.quote_time) + timedelta(minutes=9)
+        quote.timestamp_verified, quote.is_realtime, quote.degraded_reason = True, True, None
+        # Keep this stale-quote case outside the separate 11:40 lunch-close allowance.
+        generated = (quote.fetched_at or quote.quote_time) + timedelta(hours=1)
         payload = DecisionBoardService().refresh(db_session, generated_at=generated).payload
         row = next(item for item in payload["rows"] if item["instrument_id"] == indicator.instrument_id)
         assert row["freshness"] == "stale"
