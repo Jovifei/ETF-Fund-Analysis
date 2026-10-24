@@ -49,3 +49,13 @@ CI实际发现Vite7.3.5命中GHSA-587h-7wmj-h5pm高危（上游公告：https://
 最终完整后端仍在ee6513a固定源码运行；此前f6本地49%中断没有完整结果，r2又因新P1被明确取代，均不标PASS。f6的GitHub完整ci/PG/Windows/followup已通过，但workspace因旧认证夹具失败；最终提交必须重新核精确CI和网页GPT复审，才能按授权合main。本轮未部署，正式任务/数据/Owner修改保持。真实收盘34覆盖、正常公网同代消费、自然两日/云端零增长、手机和资格仍独立待验收。
 
 集中材料：E:\Claude_allow\Download\ETF-chain-fix-20261023，receipt-v2/context-v2/auth-final-20261024-1/responsive-current与最终完整测试收据。最初本地auth从根目录启动导致runtime身份未核，已加ENV_UNQUALIFIED注解，不能作为当前源码回归；正确frontend目录复现的CI同类RED及GREEN独立保留。
+
+### Windows完整回归发现的测试启动边界
+
+ee6513a完整本机后端已结束：2638项=2613通过/24跳过/1失败，1242.831秒JUnit，进程exit1且backend_scope_unchanged=true；唯一失败test_paddle_response_then_sleep_worker_is_cleaned_up返回unavailable，原断言未记录reason。原日志/XML保留，不能以单独重跑通过覆盖。
+
+独立实际spawn+原2秒adapter的6对对照：原重模块worker5/6完成、1/6明确timeout，耗时1.422–1.922秒成功窗；仅time的轻量worker6/6完成，0.188–0.562秒，12次均无新增子进程。单独导入探针测重测试模块1.610秒、启动到响应1.813秒；轻量模块启动0.250秒。原完整失败缺reason，不能追溯断言那一次一定为timeout；该机制已经实际复现。
+
+最小修复仅移动测试worker至backend/tests/_ocr_workers.py，保留相同发送/睡眠、真实spawn、2秒期限及before/after无泄漏断言，并使失败消息携带合成result.reason。OCR生产、模型、权限、策略和任何超时均不变。实际OCR模块69项=67通过/2跳过，0失败。材料ocr-ci-review/results.json、import_probe.json及holding-module-green.xml；两项先前不完整额外导入探针未用于通过结论，后续独立探针停止/无新增子进程已核。最终完整测试与精确CI仍需绑定新提交。
+
+网页GPT同一普通Chat已收到固定GitHub复审包；之后一条全量失败通知遭Too many requests，NOT_SENT，不冒称已送达/已审。等待通道恢复后集中回传最终GitHub收据；本轮仍不合main/部署。

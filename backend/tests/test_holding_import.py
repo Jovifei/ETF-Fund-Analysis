@@ -12,6 +12,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from _ocr_workers import response_then_sleep_worker as _response_then_sleep_worker
 from app.core.config import Settings
 from app.models import Holding, HoldingImportCandidate, HoldingImportSession
 from app.models.entities import _SafeImportText
@@ -39,12 +40,6 @@ def _sleeping_worker(conn, *args) -> None:
     time.sleep(2)
     conn.send({"status": "completed", "lines": []})
     conn.close()
-
-
-def _response_then_sleep_worker(conn, *args) -> None:
-    del args
-    conn.send({"status": "completed", "lines": []})
-    time.sleep(2)
 
 
 @pytest.mark.parametrize("fmt,mime", [("PNG", "image/png"), ("JPEG", "image/jpeg"), ("WEBP", "image/webp")])
@@ -241,7 +236,7 @@ def test_paddle_response_then_sleep_worker_is_cleaned_up() -> None:
     before = {child.pid for child in multiprocessing.active_children()}
     result = adapter._run_worker(b"payload")
     after = {child.pid for child in multiprocessing.active_children()}
-    assert result["status"] == "completed"
+    assert result["status"] == "completed", result
     assert after == before
 
 
