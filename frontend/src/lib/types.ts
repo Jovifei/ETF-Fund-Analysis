@@ -1,4 +1,13 @@
 export type Json = string | number | boolean | null | Json[] | { [key: string]: Json }
+export interface ContextReadView {
+  latest_view?: Record<string, unknown>[]; items?: Record<string, unknown>[];
+  availability?: string; reason?: string | null; available?: boolean;
+  source_as_of?: string | null; refreshed_at?: string | null; refreshed_in_slot?: boolean | null;
+  generation?: string | number | null; requested_generation?: string | number | null;
+  generated_at?: string | null; expires_at?: string | null; read_at?: string | null;
+  is_stale?: boolean; is_expired?: boolean | null; historical_identity?: boolean; read_contract?: string;
+  research_source?: 'local_bundle' | 'database'; index_history_available?: boolean;
+}
 export interface Metric { label?: string; kind?: string; status?: string; value?: number | null; j?: number | null; [key: string]: unknown }
 export interface Quote { price: number | null; change_ratio?: number | null; status: string; source_time?: string | null; fetched_at?: string | null; source?: string | null; is_mock?: boolean }
 export interface ModuleAvailability { status: string; reason_code: string | null; by_horizon?: Record<string, { status: string; reason_code: string | null }> }
