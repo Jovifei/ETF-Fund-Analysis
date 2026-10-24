@@ -194,6 +194,36 @@ def _signed_fresh_post(client, sequence, settings):
     return client.post("/api/shadow/sync", content=body, headers=headers)
 
 
+@pytest.mark.parametrize("availability", [{"state": "available"}, ["available"], 1, "unexpected", None, ""])
+def test_signed_receiver_rejects_invalid_context_availability_without_pointer_change(tmp_path, monkeypatch, availability):
+    settings = receiver_settings(tmp_path)
+    monkeypatch.setattr(api_module, "get_settings", lambda: settings)
+    app = FastAPI()
+    app.include_router(api_module.router)
+    client = TestClient(app)
+    assert _signed_fresh_post(client, 1, settings).status_code == 200
+    assert _signed_fresh_post(client, 2, settings).status_code == 200
+    store = Store(tmp_path / "v2")
+    before = snapshot(tmp_path / "v2")
+    invalid = candidate(3)
+    invalid["manifest"].update(code_sha=settings.shadow_sync_code_sha,
+                               config_hash=settings.shadow_sync_config_hash)
+    invalid["parts"]["market_context"] = {
+        "items": [{"context_id": "cn-csi300", "context_kind": "index", "actionable": False}],
+        "availability": availability,
+    }
+    rehash(invalid)
+    body = canonical(invalid)
+    headers = {**signed_headers(body, "synthetic", "s" * 32), "Authorization": "Bearer " + "x" * 32}
+
+    result = client.post("/api/shadow/sync", content=body, headers=headers)
+
+    assert result.status_code == 409, result.text
+    assert snapshot(tmp_path / "v2") == before
+    assert store.load_bundle()["manifest"]["sequence"] == 2
+    assert json.loads(store.previous_link.read_bytes())["sequence"] == 1
+
+
 def test_signed_api_missing_latest_with_previous_cannot_reset_sequence(tmp_path, monkeypatch):
     settings = receiver_settings(tmp_path)
     monkeypatch.setattr(api_module, "get_settings", lambda: settings)

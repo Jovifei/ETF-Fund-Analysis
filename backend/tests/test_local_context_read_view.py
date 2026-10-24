@@ -1,5 +1,7 @@
 """The published optional context status must survive the actual read path."""
+from copy import deepcopy
 from datetime import datetime, timezone
+import json
 
 import pytest
 from fastapi import FastAPI
@@ -12,6 +14,7 @@ from app.db.session import get_db
 from app.workspace.api import router
 from app.workspace.local_display_contract import CONTRACT_VERSION, compute_parts_hashes
 from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
+from app.workspace.shadow_bundle import canonical, digest
 
 
 GENERATED = "2026-10-12T06:30:00Z"
@@ -36,7 +39,70 @@ def publish(store, part=None, sequence=7):
     return bundle
 
 
+def install_hashed_bad_context(store, availability):
+    bad = deepcopy(publish(store, {"items": [ITEM], "availability": "available"}))
+    bad["parts"]["market_context"]["availability"] = availability
+    bad["manifest"]["parts_hashes"] = compute_parts_hashes(bad["parts"])
+    identity = digest(bad["manifest"])
+    original = next(store.store_dir.glob("bundle_7_*.json"))
+    target = store.store_dir / f"bundle_7_{identity[:16]}.json"
+    target.write_bytes(canonical(bad))
+    pointer = json.loads(store.latest_link.read_bytes())
+    pointer.update(bundle_file=target.name, bundle_id=identity)
+    pointer["accepted"][-1]["bundle_id"] = identity
+    store.latest_link.write_bytes(canonical(pointer))
+    original.unlink()
+
+
+@pytest.mark.parametrize("availability", [{"state": "available"}, ["available"], 1, "unexpected", None, ""])
+def test_hashed_bad_context_on_disk_is_unavailable_not_promoted(tmp_path, availability):
+    store = LocalDisplayStore(tmp_path / "store")
+    install_hashed_bad_context(store, availability)
+
+    assert store.load_bundle("7") is None
+    view = LocalDisplayReader(store).read_market_context_view("7", now=READ_AT)
+    assert view["availability"] == "unavailable"
+    assert view["reason"] == "local_display_generation_unavailable"
+    assert view["available"] is False and view["items"] == []
+    assert LocalDisplayReader(store).read_market_context("7") is None
+
+
+@pytest.mark.parametrize("availability", [{"state": "available"}, ["available"], 1, "unexpected", None, ""])
+@pytest.mark.parametrize("endpoint,item_key", [("market-context", "latest_view"), ("indexes", "items")])
+def test_hashed_bad_context_gets_return_unavailable_not_500(tmp_path, availability, endpoint, item_key):
+    store = LocalDisplayStore(tmp_path / "store")
+    install_hashed_bad_context(store, availability)
+    settings = Settings(_env_file=None, workspace_research_source="local_bundle", auth_enabled=False,
+                        local_display_v2_store_root=str(store.store_dir),
+                        shadow_sync_code_sha="a" * 40, shadow_sync_config_hash="c" * 64)
+    engine = create_engine("sqlite://")
+    with Session(engine) as db:
+        app = FastAPI()
+        app.include_router(router)
+        app.dependency_overrides[get_settings] = lambda: settings
+        app.dependency_overrides[get_db] = lambda: db
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.get(f"/api/workspace/{endpoint}?generation=7")
+            assert response.status_code == 200
+            view = response.json()
+            assert view["availability"] == "unavailable"
+            assert view["reason"] == "local_display_generation_unavailable"
+            assert view["available"] is False and view[item_key] == []
+            assert response.headers["cache-control"] == "private, no-store"
+    engine.dispose()
+
+
+def test_legacy_context_without_status_keeps_default_available(tmp_path):
+    store = LocalDisplayStore(tmp_path / "store")
+    publish(store, {"items": [ITEM]})
+    view = LocalDisplayReader(store).read_market_context_view("7", now=READ_AT)
+    assert view["availability"] == "available"
+    assert view["available"] is True
+    assert view["items"] == [ITEM]
+
+
 @pytest.mark.parametrize("part", [
+    {"items": [ITEM], "availability": "available"},
     {"items": [], "availability": "unavailable", "reason": "optional_refresh_failed"},
     {"items": [ITEM], "availability": "partial", "reason": "coverage_incomplete"},
     {"items": [ITEM], "availability": "carried_forward", "reason": "fast_slot_reuses_same_day_refresh",
