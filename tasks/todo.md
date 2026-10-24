@@ -12,13 +12,26 @@ Jovi授权修复→测试→网页GPT复审→通过后受控部署；详细验�
 
 # 当前任务
 
+## 2026-10-25 v1.0.6 受控发布与本机任务对齐（Jovi 授权"提交安装到手机测试"）
+
+- [x] 发现 PR55 已由 Jovi 合 main（`1e5294d`）；本地对齐 origin/main 并把 PR53/54/55 验收收据与远端交接文档入册（`2ae17a6`），代码与已测 1e5294d 逐字节一致。
+- [x] v1.0.6 版本四处联动（pyproject/config/package.json/lock）+ 根目录 `CHANGELOG.md` 版本记录入口；`test_release_version.py` 2/2、compileall、node check 通过（`6a4aa10`）。
+- [x] 部署前实测更正生产身份：切换前 api=`1a4b665`、worker/scheduler=`freshness-825767c`（旧记载 9fe 已过期）。
+- [x] 受控发布：DB 备份恢复校验通过 → 分层镜像 `sha256:69e60fef…` → candidate.yml 三服务统一 → compose 渲染验证后切换 → 公网/本机 health=1.0.6、JS 一致、匿名 401、容器稳定 0 重启。
+- [x] 本机两任务仅迁移 Action 至 `E:\worktrees\etf-v1-0-6-6a4aa10`（--expected-sha=6a4aa10…）；手动运行 LastResult=0；view-sync 与新接收端 `already_accepted` 往返。
+- [x] 收据 `docs/audits/RELEASE_1_0_6_20261025.md`、PROJECT_PROGRESS 台账更新并 --check 通过、STATUS/HANDOFF 刷新。
+- [ ] 10-26（周一）起自然定时触发与两个真实交易日观察；Jovi 手机实测（https://etf.joviluma.com）。
+- [ ] Hub Win10061 修复补报；调度容量协调；子 agent 通道（GLM-5.3-Flash 供应商不可用）恢复后再用。
+
+Review：本轮无策略/阈值改动；资格保持 UNKNOWN/actionable=false/not_calibrated。回滚：服务器 `release-v1-0-6-6a4aa10-20261025/rollback.sh` + 旧工作树 + DB 备份。
+
 ## 2026-10-24 PR55 上下文 availability P2 接手
 
 - [x] 完整读取另一 Agent 接手文件并核 PR51/52/54 最新 SHA、祖先关系、旧完整测试收据与 Owner 脏文件。
 - [x] 独立分支先 RED 后修复签名接收、已有坏包读取及两个 GET；新候选 `4476858` Windows 全量 2640 PASS/24 SKIP，Vue228、受控认证浏览器1、静态与高危安全门通过。
 - [x] Draft PR55 的两组完整 ci、两组 workspace 合同和跨平台检查在同一 SHA 全 SUCCESS；未部署。
 - [x] 网页 GPT 的最终回复不可加载后，经 Jovi 授权在私有 PR55 发布一条复审评论并从 GitHub 读回：SOURCE/CI/MAIN 三项 PASS，无可执行 P0/P1/P2；评论专用项目指令例外已撤销。
-- [ ] 复审 PASS 后再次核 main/PR55 指针与 Owner 备份，才按 Jovi 授权合 main；不自动部署。
+- [x] 复审 PASS 后由 Jovi 本人于 10-24 在 GitHub 合 main（`1e5294d`）；部署于 10-25 经 Jovi 新授权完成（见 2026-10-25 小节）。
 
 Review：固定 head `447685865ced4f7f5a05337b7652d5f4052c04e9`、tree `bab9d33d0055a69149add8a0f758dcf38be943bf`。根 main `1a4b665` 未变；当前结论与详细收据见 `docs/audits/PR55_LOCAL_ACCEPTANCE_20261024.md`。Hub revision WinError10061，未发送事件。
 

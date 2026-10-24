@@ -1,25 +1,22 @@
 # 当前工程交接
 
-2026-10-24。目标：本地 F 盘存真实数据并定时确定性计算，仅将有界展示结果推网站；后续 App 复用，账号与持仓保留云端隔离。
+2026-10-25。目标：本地 F 盘存真实数据并定时确定性计算，仅将有界展示结果推网站；账号与持仓保留云端隔离，不自动交易。
 
-## 接力状态
+## 当前事实
 
-- main/origin main：`1a4b6652f49c412145d12812fa02820ba0a80991`。
-- 已推整合源码：`bdb556f9c60254b2e8e866f256386b062e2ab7ab` / tree `4e0ce8c0f90f6cfb3552b026c829046821e8ccc2`，`codex/local-chain-repair-20261023` / PR51；包含网页 GPT PR53 `f89b382` 的接收证明、同代消费和请求隔离修复。PR52 是独立文档归纳，基于 PR51。
-- Jovi 已授权两项缺口、CI、原网站读取/收盘刷新及最小 Vite7.3.7 安全升级。先测后修，最终测试与网页 GPT 复审通过才合 main；**不自动部署**。
-- 本批135后端组合、228 Vue、类型/构建/静态、44隔离Mock smoke、18窄屏及6认证回放通过；原完整Windows测试1项OCR夹具失败已修，模块67通过/2跳过；最终bdb556f完整后端/精确CI未最终核定；不能继承旧2545/24为新源码结果。
-- 原目录用户文档/未提交文件、F盘数据库/私有配置、正式Windows任务、服务器另一AI备份搬迁及回滚资产保持；不reset/clean/stash，不回显凭据。
+- main/origin main：`6a4aa10b565c289a60c63ea16516f6d7f8c40844`（v1.0.6）。PR55 已由 Jovi 于 10-24 合 main（`1e5294d`）；本地验收收据（PR53/54/55）与远端交接文档已入册。
+- 生产：`etf.joviluma.com` 运行 v1.0.6，三容器统一镜像 `sha256:69e60fef…`；切换前实测为 api `1a4b665` + worker/scheduler `freshness-825767c`（旧文档所记 9fe 已过期，勿再引用）。服务器发布机制：`release-*/candidate.yml` 分层链，本批新增 `release-v1-0-6-6a4aa10-20261025/`（含 `up.sh`/`rollback.sh`）。
+- 本机任务：两任务 Action 已指向 `E:\worktrees\etf-v1-0-6-6a4aa10`，手动运行 0；`--expected-sha` 必须始终等于该工作树 HEAD。
+- 版本记录：根目录 `CHANGELOG.md` 为唯一版本入口，发布必须同步更新四处版本并跑 `test_release_version.py`。
 
 ## 下一顺序
 
-1. 认证6项与窄屏18项已通过，收齐bdb556f完整后端与最终精确CI；保留原RED/中断结果。
-2. 使用同一“基金决策”普通Chat，以GitHub固定提交与真实收据完成网页GPT复审；不能以连接成功代替审查通过。
-3. 精简文档与候选一并复核，按已授权条件合main，并保留原目录Owner改动；不部署、不切正式生产任务。
-4. 后续真实收盘34覆盖、公网正常同代消费、尾盘120秒、本人手机、自然两交易日和云端零增长单独验收；不把Mock/HTTP200/单次accepted冒称这些通过。
+1. 10-26（周一）起观察自然定时触发、真实收盘 34 覆盖、尾盘 120 秒与两个真实交易日云端零增长；用 job ledger 实测分项耗时。
+2. Jovi 手机/正常登录实测（入口 `https://etf.joviluma.com`）：总览同代读取、市场上下文状态、K 线、DPR2/标签叠字/不等价价格口径。
+3. 调度容量协调：任务约 6 分 38 秒长于最密 5 分钟 slots，基于 ledger 实测决定提速或快路径；不改算法阈值。
+4. Hub Win10061 修复后按契约补报；云盘旧数据保留策略、npm 余量（2 moderate/1 low）另行安排。
 
-数据根 `F:\ETF_Data\ETF-Fund-Analysis`：`db/research.sqlite3`、`state/schedule.sqlite3`、`outbox`分别为研究数据、执行台账、包与回执。10月23日已核包过期且收盘刷新失败的原始证据见保留审计；生产实际SHA本批未重验。
-
-核心：[README](README.md)、[运行指南](QUICKSTART.md)、[架构](docs/ARCHITECTURE.md)、[本批整合](docs/audits/TRUSTED_CONTEXT_INTEGRATION_20261024.md)。
+数据根 `F:\ETF_Data\ETF-Fund-Analysis`：`db/research.sqlite3`、`state/schedule.sqlite3`、`outbox` 分别为研究数据、执行台账、包与回执。保护 Owner 修改、私有配置/DB/持仓、任务及回滚资产；不 reset/clean/stash，不回显凭据。S0–S9 进度 JSON 是正式台账，生成 MD/HTML 不手改。
 
 ## 浏览器认证部署契约（必须保留）
 

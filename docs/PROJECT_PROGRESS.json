@@ -2000,20 +2000,20 @@
   "release_counter_title": "历史iteration71发布清单（不代表当前候选验收）",
   "release_counter_note": "9/13仅为旧发布检查记录，不能代表当前候选、S3或全项目完成率；当前精确CI、部署与线上验收单独核验。",
   "release_evidence_label": "历史发布证据基线",
-  "updated_at": "2026-10-24T10:29:14+08:00",
-  "current_stage": "可信接收/同代上下文与读取收盘修复候选；最终测试和网页复审待完成",
+  "updated_at": "2026-10-25T01:30:00+08:00",
+  "current_stage": "v1.0.6 已受控发布：main 6a4aa10、生产三服务统一镜像 69e60fef、公网 etf.joviluma.com health=1.0.6；自然触发/两交易日/真人手机验收待验",
   "planning_source": "docs/PROJECT_MASTER_ROADMAP.md",
-  "deployed_code_sha": "本批未重新核验",
-  "deployed_tree": "本批未重新核验",
-  "alembic": "本批未重新核验；迁移未修改",
+  "deployed_code_sha": "6a4aa10b565c289a60c63ea16516f6d7f8c40844",
+  "deployed_tree": "f9d6bd5bc0798b808a4a25ba81811b75990c9e4b",
+  "alembic": "f0e1d2c3b4a5 未变；9fe9fe8..6a4aa10 无新增迁移",
   "calibration_status": "not_calibrated",
-  "next_task": "固定bdb556f完整后端与当前PR52精确CI；网页GPT最终复审通过后合main，本轮不部署。",
+  "next_task": "10-26（周一）起观察自然定时触发与两个真实交易日；Jovi 实测正常登录/手机专项；随后调度容量协调（6m38s vs 5min slots）",
   "blockers": [
-    "原Windows完整2613通过/24跳过/1失败，旧OCR spawn夹具已最小修正且模块67通过/2跳过；最终bdb556f完整及精确CI未完成，不能沿用局部PASS。",
-    "同一普通Chat的GitHub复审请求已送达；后续更新429 NOT_SENT，最终网页审查结果未确认。",
-    "10月23日已核接收包过期、收盘刷新不全与公网超时为保留原始失败；本批未部署。",
-    "尾盘120秒、自然两交易日云端零增长、正常线上同代/本人手机及当前生产身份未独立验收。",
-    "许可/源时间/单位/PIT/OOS/校准持续UNKNOWN/actionable=false/not_calibrated。"
+    "自然定时触发与两个真实交易日观察未开始（2026-10-25 周六无交易槽，自 10-26 起）",
+    "正常认证用户页面与本人手机/DPR2/标签叠字/不等价价格口径专项待 Jovi 实测（入口 https://etf.joviluma.com）",
+    "本机计算任务实测约 6 分 38 秒长于最密 5 分钟 slots，容量/频次协调未做",
+    "Hub 上报自 2026-10-11 起 WinError 10061 未发送，按契约保留 pending 不冒报",
+    "云盘约 1.13GB 旧原始数据保留策略未定；npm 余 2 moderate/1 low"
   ],
   "sr_direction_display_current_batch": {
     "scope": "SHARED_EXACT_DIRECTION_DISPLAY_ONLY",
@@ -2093,6 +2093,11 @@
       "date": "2026-10-24",
       "iteration": 71,
       "description": "完整Windows暴露旧OCR spawn测试启动边界，保留失败；仅迁移测试worker、不延长2秒，模块67通过/2跳过，最终bdb556f完整与精确CI待结果。业务源码不变；网页复审后续更新429未送达，不合main不部署。"
+    },
+    {
+      "date": "2026-10-25",
+      "iteration": 71,
+      "description": "v1.0.6 受控发布：PR55 由 Jovi 合 main 后，本地对齐 2ae17a6 入册验收收据；6a4aa10 版本四处联动+CHANGELOG；DB 备份恢复校验通过；生产三服务统一镜像 69e60fef，公网 health=1.0.6/JS 一致/匿名 401；本机两任务仅迁 Action 至 6a4aa10 工作树，手动运行 0，view-sync 与新接收端 already_accepted 往返。更正：切换前生产实为 api 1a4b665（非文档所记 9fe）。子 agent 通道 GLM-5.3-Flash 不可用未用成。"
     }
   ],
   "frontend_security_current_batch": {

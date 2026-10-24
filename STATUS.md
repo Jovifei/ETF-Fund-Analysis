@@ -1,19 +1,13 @@
-# 当前状态
+# 当前项目状态
 
-核验：2026-10-24（北京时间）。目标：真实数据留在本机 F 盘，定时计算后上传有界展示包，网站与后续 App 共用结果；账号、持仓与研究存储隔离。
+2026-10-25 **v1.0.6 已受控发布**：main `6a4aa10`（PR53/54/55 修复链 + 验收收据入册 + CHANGELOG + 版本四处联动 1.0.6），生产 api/scheduler/worker 三容器统一镜像 `sha256:69e60fef…`，公网 `https://etf.joviluma.com` health `version=1.0.6`、JS 与本地构建一致、匿名 API 401。schema `f0e1d2c3b4a5` 未变；切换前 DB 备份恢复校验通过；`rollback.sh` 与旧工作树保留。收据：`docs/audits/RELEASE_1_0_6_20261025.md`；版本记录入口：根目录 `CHANGELOG.md`。
 
-- main/origin main：`1a4b6652f49c412145d12812fa02820ba0a80991`，尚未合入本批。
-- 独立整合候选：`bdb556f9c60254b2e8e866f256386b062e2ab7ab`，tree `4e0ce8c0f90f6cfb3552b026c829046821e8ccc2`；PR51 已纳入网页 GPT PR53 的提交及本地补充合同。PR52 另作核心文档整合。
-- 已修：固定批次读取只筛选候选再完整校验；收盘 SDK 请求缓存与目标日缺失的受审一次重试；历史重传须有服务器完整身份接收证明；上下文状态、来源日期、生成/刷新/读取时间同代传递。
-- 本批实测：135 项后端组合、228 项 Vue、类型/构建/静态、44项隔离Mock smoke、18项窄屏和6项认证回放通过。原ee6513a完整Windows结果2613通过/24跳过/1失败，旧OCR夹具启动边界已最小修正，模块67通过/2跳过；新bdb556f完整测试与精确CI继续，旧失败保留。
-- 网页 GPT 最终固定候选复审待完成；项目读取连接不可用，已通过获准的同一普通Chat送交GitHub复审；后续一条更新429未送达，最终结论尚未确认。测试与复审通过才合 main，**本轮不部署**。
+个人 ETF/LOF 研究工作台：真实历史与确定性计算保留本机 F 盘，网站消费有界展示包，账号与持仓隔离云端。不自动交易，未校准预测不是操作依据。
 
-## 运行证据与未完成门槛
+**重要更正**：此前"生产=9fe（10-16）"的记载已过期——服务器按主题镜像逐次推进，本轮切换前实测 api=`1a4b665`、worker/scheduler 更旧（freshness-825767c），已统一。服务器另有其他项目容器与另一 AI 备份服务，未触碰；api 历史 RestartCount=57（无 OOM、退出码 0）成因未深查，recreate 后归零观察。
 
-本机数据根：`F:\ETF_Data\ETF-Fund-Analysis`，研究库、调度库、outbox 分开。2026-10-23 的多个正式槽已生成并收到签名回执，但该日15:15/16:10收盘刷新失败；最后已核包generation `1792738850091`的34只日线截至10月22日，已在10月23日17:00:27过期。该历史证据不代表10月24日新采集或完整链路通过。
+本机计算任务 `ETF-Local-Live-Compute` 与 `ETF-Local-Reconcile-1630` 已仅迁移 Action 至干净工作树 `E:\worktrees\etf-v1-0-6-6a4aa10`（`--expected-sha=6a4aa10…`，Principal/触发器保留；reconcile 按 main 合同补 expected-sha）。手动运行 LastResult=0；view-sync 与新接收端 HTTPS 往返对历史包返回 `already_accepted`（PR53 合同端到端生效）。
 
-正常登录公网总览此前读取超时/502；上述源码修复尚未替换线上版本。生产镜像、配置、DB身份本批未重验，服务器另一 AI 的备份/搬迁服务保持。两交易日观察任务仍禁用；尾盘120秒、自然两交易日云端零增长、正常网页/本人手机与价格口径专项分别待验收。
+未完成门槛：自然定时触发与两个真实交易日（周六无槽，自 10-26 起）；正常认证用户页面与本人手机/DPR2/标签叠字/价格口径由 Jovi 实测；调度容量协调（约 6 分 38 秒 vs 最密 5 分钟 slots）；7–14 日 soak；S8 数据资格保持 `UNKNOWN / actionable=false / not_calibrated`；Hub 上报 WinError 10061；云盘约 1.13GB 旧数据保留策略。
 
-资格持续 UNKNOWN / research_only / actionable=false / not_calibrated，无自动交易。旧阶段 PASS、健康接口200和 accepted 回执均不能替代新候选或线上验收。
-
-证据：[本批整合与边界](docs/audits/TRUSTED_CONTEXT_INTEGRATION_20261024.md)、[原始链路核验](docs/audits/LOCAL_FIRST_CHAIN_20261023.md)。历史失败、发布、回滚与许可证保留；正式阶段计数不晋升。
+资格保持 UNKNOWN、actionable=false、calibration_status=not_calibrated；自动交易关闭。

@@ -2,11 +2,11 @@
 
 > 本文件由 scripts/update_project_progress.py 从 PROJECT_PROGRESS.json 生成。修改台账后重新生成，勿直接修改本文件。
 
-更新：2026-10-24T10:29:14+08:00 · iteration 71 · 当前 可信接收/同代上下文与读取收盘修复候选；最终测试和网页复审待完成
+更新：2026-10-25T01:30:00+08:00 · iteration 71 · 当前 v1.0.6 已受控发布：main 6a4aa10、生产三服务统一镜像 69e60fef、公网 etf.joviluma.com health=1.0.6；自然触发/两交易日/真人手机验收待验
 
 [总阶段路线图](PROJECT_MASTER_ROADMAP.md) · [图形进度板](PROJECT_PROGRESS.html) · [维护规则](PROJECT_PROGRESS_MAINTENANCE.md)
 
-**当前下一步：** 固定bdb556f完整后端与当前PR52精确CI；网页GPT最终复审通过后合main，本轮不部署。
+**当前下一步：** 10-26（周一）起观察自然定时触发与两个真实交易日；Jovi 实测正常登录/手机专项；随后调度容量协调（6m38s vs 5min slots）
 
 全项目验收分母尚未冻结；以下显示阶段状态和证据闭环，不能推算全项目完成百分比。
 
@@ -45,15 +45,15 @@
 
 ## 版本与卡点
 
-- 已部署代码：`本批未重新核验`；tree `本批未重新核验`。
+- 已部署代码：`6a4aa10b565c289a60c63ea16516f6d7f8c40844`；tree `f9d6bd5bc0798b808a4a25ba81811b75990c9e4b`。
 - 历史发布证据基线：`ef287c06b4bd6b8ecd507149a0a0d7bd398e4162`。最新总览文档提交查询：`git log -1 -- docs/PROJECT_MASTER_ROADMAP.md docs/PROJECT_PROGRESS.json`。
-- Alembic：`本批未重新核验；迁移未修改`。
+- Alembic：`f0e1d2c3b4a5 未变；9fe9fe8..6a4aa10 无新增迁移`。
 - 真实数据：UNKNOWN；actionable=false；运行时激活=false；自动交易=false。
-- 原Windows完整2613通过/24跳过/1失败，旧OCR spawn夹具已最小修正且模块67通过/2跳过；最终bdb556f完整及精确CI未完成，不能沿用局部PASS。
-- 同一普通Chat的GitHub复审请求已送达；后续更新429 NOT_SENT，最终网页审查结果未确认。
-- 10月23日已核接收包过期、收盘刷新不全与公网超时为保留原始失败；本批未部署。
-- 尾盘120秒、自然两交易日云端零增长、正常线上同代/本人手机及当前生产身份未独立验收。
-- 许可/源时间/单位/PIT/OOS/校准持续UNKNOWN/actionable=false/not_calibrated。
+- 自然定时触发与两个真实交易日观察未开始（2026-10-25 周六无交易槽，自 10-26 起）
+- 正常认证用户页面与本人手机/DPR2/标签叠字/不等价价格口径专项待 Jovi 实测（入口 https://etf.joviluma.com）
+- 本机计算任务实测约 6 分 38 秒长于最密 5 分钟 slots，容量/频次协调未做
+- Hub 上报自 2026-10-11 起 WinError 10061 未发送，按契约保留 pending 不冒报
+- 云盘约 1.13GB 旧原始数据保留策略未定；npm 余 2 moderate/1 low
 
 ## 阶段候选任务与五维状态
 
@@ -271,3 +271,4 @@
 - 2026-10-24 / iteration71：独立分支整合网页GPT PR53可信历史证明与本地版本化上下文，70后端/228Vue/44Mock smoke通过；完整后端、精确CI及网页复审待完成，不合main不部署，历史正式阶段计数保持。
 - 2026-10-24 / iteration71：独立复审新增latest丢失P1已签名RED后最小修复，135组合、18窄屏和6认证回放通过；固定后端ee6513a完整测试运行，ba86baf与其backend相同；不继承中断结果、不部署、不晋升正式阶段。
 - 2026-10-24 / iteration71：完整Windows暴露旧OCR spawn测试启动边界，保留失败；仅迁移测试worker、不延长2秒，模块67通过/2跳过，最终bdb556f完整与精确CI待结果。业务源码不变；网页复审后续更新429未送达，不合main不部署。
+- 2026-10-25 / iteration71：v1.0.6 受控发布：PR55 由 Jovi 合 main 后，本地对齐 2ae17a6 入册验收收据；6a4aa10 版本四处联动+CHANGELOG；DB 备份恢复校验通过；生产三服务统一镜像 69e60fef，公网 health=1.0.6/JS 一致/匿名 401；本机两任务仅迁 Action 至 6a4aa10 工作树，手动运行 0，view-sync 与新接收端 already_accepted 往返。更正：切换前生产实为 api 1a4b665（非文档所记 9fe）。子 agent 通道 GLM-5.3-Flash 不可用未用成。
