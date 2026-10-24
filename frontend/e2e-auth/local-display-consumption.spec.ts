@@ -1,16 +1,19 @@
 import { test, expect } from '@playwright/test'
 
 test('authenticated controlled replay pins one generation and hides cloud collection', async ({ page }, info) => {
-  const generation = 101, requested: string[] = [], writes: string[] = []
+  const generation = 101, requested: string[] = [], writes: string[] = [], indexCharts: string[] = []
   const asOf = '2026-10-23T07:00:00+00:00'
   const meta = { generation, research_source: 'local_bundle', is_stale: true, actionable: false }
   page.on('request', request => {
     if (/\/api\/(workspace\/(market-context|sectors|indexes)|decision-board)\?/.test(request.url())) requested.push(request.url())
+    if (/\/api\/workspace\/indexes\/[^/]+\/chart(?:\?|$)/.test(request.url())) indexCharts.push(request.url())
     if (request.method() === 'POST' && /\/api\/workspace\/(data-jobs|onboard|discovery\/refresh)/.test(request.url())) writes.push(request.url())
   })
   await page.route('**/api/workspace/overview?*', route => route.fulfill({ json: { ...meta, rows: [], total: 0 } }))
   await page.route('**/api/workspace/market-context?*', route => route.fulfill({ json: {
-    ...meta, latest_view: [{ context_id: 'cn-csi300', context_kind: 'index', label: '受控指数观测', observed_value: 100,
+    ...meta, read_contract: 'local-display-context-read-v1', index_history_available: false,
+    generated_at: asOf, read_at: asOf, source_as_of: '2026-10-23', refreshed_at: asOf,
+    latest_view: [{ context_id: 'cn-csi300', context_kind: 'index', label: '受控指数观测', observed_value: 100,
       source_timestamp: asOf, freshness: 'historical' }], availability: 'carried_forward', reason: 'fast_slot_reuses_same_day_refresh' } }))
   await page.route('**/api/workspace/sectors?*', route => route.fulfill({ json: {
     ...meta, boards: [], availability: 'unavailable', reason: 'optional_refresh_failed' } }))
@@ -26,12 +29,16 @@ test('authenticated controlled replay pins one generation and hides cloud collec
   await expect(page.getByTestId('market-context-status')).toContainText('沿用同日')
   await expect(page.getByTestId('sector-status')).toContainText('采集失败')
   await expect(page.getByRole('button', { name: '同步市场目录与板块' })).toHaveCount(0)
-  await page.getByRole('button', { name: '查看受控指数观测历史数据' }).click()
-  await expect(page.getByText('本地展示包尚未发布指数 K 线；保留指数观测，不发起云端下载。')).toBeVisible()
+  // In local-bundle mode, index observations are read-only cards, not a synthetic OHLC entrypoint.
+  await expect(page.getByRole('button', { name: '查看受控指数观测历史数据' })).toHaveCount(0)
+  await expect(page.locator('.market-context-card')).toContainText('本地展示包未发布指数历史')
+  await expect(page.locator('.market-context-detail')).toHaveCount(0)
+  expect(indexCharts).toEqual([])
   await expect(page.getByRole('button', { name: '下载指数历史' })).toHaveCount(0)
   await page.screenshot({ path: info.outputPath('controlled-local-bundle.png') })
   expect(requested.length).toBeGreaterThanOrEqual(4)
   expect(requested.every(url => new URL(url).searchParams.get('generation') === String(generation))).toBe(true)
+  expect(indexCharts).toEqual([])
   expect(writes).toEqual([])
 
   await page.route(/\/api\/workspace\/instruments\/510300\.SH(?:\?.*)?$/, route => route.fulfill({ json: {

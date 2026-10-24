@@ -36,13 +36,14 @@ def test_single_request_keeps_rolling_under_fixed_peak_budget(tmp_path, monkeypa
         item = deepcopy(value)
         item["manifest"]["sequence"] = sequence
         assert store.publish(item)["status"] == "accepted"
-        assert store.domain.used_bytes() <= store.max_bytes
+        assert store.domain.used_bytes() + store.domain.held_bytes <= store.domain.max_bytes == store.max_bytes
+        assert store.domain.held_bytes == 0
         assert store.load_bundle()["manifest"]["sequence"] == sequence
         if sequence > 1:
             assert store.load_bundle(sequence - 1) is not None
         if sequence > 3:
             assert store.load_bundle(sequence - 3) is None
-        assert len(list(tmp_path.glob("bundle_*.json"))) <= 3
+        assert len(list(tmp_path.glob("bundle_*.json"))) == min(sequence, 3)
     assert len(peaks) >= 11
 
 
@@ -100,8 +101,10 @@ def test_chunk_commit_reclaims_old_cache_without_discounting_staged_bytes(tmp_pa
     result = stage.commit(uid, 1, lambda body: store.publish(json.loads(body)))
     assert result["status"] == "accepted"
     assert store.load_bundle()["manifest"]["sequence"] == 4
-    assert store.load_bundle(3) is not None
+    assert store.load_bundle(3) is not None  # previous pointer protected
+    assert store.load_bundle(2) is not None  # retained validated generation
     assert store.load_bundle(1) is None
     assert len(list((tmp_path / "display").glob("bundle_*.json"))) == 3
+    assert domain.held_bytes == 0  # 1024 B chunk-commit hold released
     assert domain.used_bytes() <= domain.max_bytes
     assert peaks
