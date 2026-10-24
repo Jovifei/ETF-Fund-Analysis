@@ -1,34 +1,35 @@
-# c2c_6b31 — fixed-SHA integration handoff (2026-10-24)
+# c2c_6b31 — final fixed-SHA GitHub integration handoff (2026-10-24)
 
-**Branch:** `codex/c2c-6b31-integrated-20261024`, Draft PR54 targeting `main`. **Status at file creation:** reconciliation implemented; new merged SHA Actions verification pending. The definitive SHA/tree and CI results are read back from GitHub and appended to PR54 after completion, not invented here.
+**PR:** 54, Draft; `codex/c2c-6b31-integrated-20261024`. This file is SHA-agnostic by design: read the true final HEAD/tree from GitHub PR54 and its final CI after completion. **Never merge or deploy automatically.**
 
-## Exact inputs and ancestry
+## Stage identity, sequential failing-test-first evidence
 
-- `main`: `1a4b6652f49c412145d12812fa02820ba0a80991` (unchanged)
-- PR51: `ba86baf9f10a43531e09538622cad825afbcc89d` (newest Owner receiver guard/auth browser checks)
-- PR52: `82916e5acc9d036606b1bcd84bc0a9d17f9c690f` / tree `78fb1076de250382ef44bd08d923a5f83226ccf5` (includes PR51 newest + docs + Vite 7.3.7)
-- PR53: `fdaf5426585d64800dbff60656797cd75306f19e`; PR52 inherits earlier `f89b382` code, final fdaf fixture assertions integrated without replacing stronger PR51 test
-- Our independent RED-history commit: `64e9c5db11229dbb6825aa5ce0b8e3cf3074c433` from earlier PR52 `ea6e965a` (workspace-ci 40051857466: authenticated 5 PASS / 1 FAIL; missing `read_contract`); initial contract-fix candidate: `fac4d2b0d9aea12b5869b5b27d5b479ae74f5a20`.
-- Final integration is a two-parent commit with first parent `fac4d2b0` and second parent **newest PR52** `82916e5a`. Its Git tree is built from PR52 newest tree and overlays only our rolling test and new c2c_6b31 audit/handoff docs. This intentionally uses Owner's newer, **stronger** authenticated E2E in preference to our earlier trial fixture.
+- Base `main`: `1a4b6652f49c412145d12812fa02820ba0a80991` (unchanged).
+- PR51 latest freeze: `bdb556f9c60254b2e8e866f256386b062e2ab7ab`.
+- PR52 latest freeze: `109253e8c4ccb5c7c8e21b22d0911398cd8beb16` / tree `7e0e9b83f09067b757746e4a5caae2c879823254`, containing newest PR51 and consolidated docs/Vite 7.3.7.
+- PR53 final: `fdaf5426585d64800dbff60656797cd75306f19e`; its receiver/browser fixes through `f89b382` are in PR52 ancestry; its final rolling fixture assertions are **merged semantically into** PR51's stronger peak test, not by overwriting it.
+- This task's first parent is `0b63ce4bf0d468d5b816017ff3ee785ca4eebb55` (GitHub four-workflow SUCCESS; original RED audit first commit `64e9c5db11229dbb6825aa5ce0b8e3cf3074c433`); second parent is latest PR52 `109253e8`. New merged tree is built from the second parent's exact tree and overlays only the reviewed rolling test and this task's audit/handoff docs, preserving all Owner changes.
+- Initial test-first RED: unchanged PR52 `ea6e965a`, `workspace-ci` `40051857466`, 228 Vue PASS / 44 mock Chromium PASS / 5 auth PASS / 1 auth FAIL: `market-context-status` absent (mock missing `read_contract`) and latent clickable-index expectation. Earlier controlled fixture repair in this branch is retained in ancestry; final tree adopts Owner's **stronger** updated auth browser tests, including honest timestamps/historical/expired labels, pinned instrument/chart, absence of index/minute history and zero workspace writes.
+- Additional current-Windows test evidence / scope: [audit](../audits/C2C_6B31_WINDOWS_FINAL_FREEZE_20261024.md); former review [reconciliation](../audits/C2C_6B31_LATEST_RECONCILIATION_20261024.md); initial RED [receipt](../audits/C2C_6B31_RED_INTEGRATION_20261024.md).
 
-See [initial RED](../audits/C2C_6B31_RED_INTEGRATION_20261024.md) and [latest-delta reconciliation](../audits/C2C_6B31_LATEST_RECONCILIATION_20261024.md).
+## Code/tree delta relative to latest PR52
 
-## Source behavior / confined modifications
+Expected small delta: **only** `backend/tests/test_display_cache_rolling.py` plus the c2c_6b31 audit/handoff Markdown files. The rolling test still has PR51's `watch_atomic_peak` at `os.replace`, `used_bytes+held_bytes<=max`, 8KiB synthetic pointer headroom +1024B staged receipt reserve, `max_generations=3`, and negative rollback. Add PR53 fdaf final `held_bytes==0` at completion, protected previous/second generation and exact retention count. No changes to production `SyncDomain`, `LocalDisplayStore`, quotas, deadlines or other runtime source beyond the already inherited PR51/52 code.
 
-**No production source changes beyond those already integrated in newest PR52.** The PR52 ancestry contains PR51's bounded immutable generation cache, isolated same-origin/local display, actual receiver acceptance history and missing-latest fail-closed guard, close-session daily-bar cache/retry boundaries, Vite 7.3.7 security patch and consolidated docs. PR53's final fdaf adds only fixture budget metadata/held constraints; do not replay fdaf's entire fixture file and discard PR51's `watch_atomic_peak` used+held os.replace peak check.
+Latest PR52 additionally includes an isolated **test-only** Windows OCR spawn worker (`backend/tests/_ocr_workers.py`) and corresponding test `test_holding_import.py` adjustment; this is inherited **unchanged**. The original Windows full run had 1 failure; Owner documented focused corrected tests, but GitHub Windows bridge coverage is **not** full Windows pytest. Do not convert that historical RED or prior Ubuntu CI into current Windows full-pass approval.
 
-Our **only test change relative to newest PR52** is `backend/tests/test_display_cache_rolling.py`: exact three-generation count, zero held bytes on completion, current/previous preserved and second cached generation present, with existing 8KiB metadata +1024B chunk hold, and peak `used+held<=cap` untouched. Adopt the latest PR52 complete controlled authenticated E2E (full `read_contract`, timestamp provenance, read-only index/minute guard, generation and zero writes) and responsive checks unchanged. The original E2E RED is preserved as test-first evidence; cannot claim old failed mock was a real-user production login failure.
+No writes to original PR51/52/53 branch refs, `main`, protected Owner working tree, production, strategy, Provider, accounts, holdings, private DB, credentials or deployment. Repository access/writes through the GitHub plugin only; C2C tunnel deliberately not called.
 
-No edits to any original PR branch, main, production/database, strategy, Provider, account/holding, backups, release or dependency/CI workflow config. No C2C tunnel use. The GitHub connector is the only path used to access/write repository.
+## CI matrix and decision gates
 
-## Exact SHA acceptance & gates
+On the **new exact PR54 head SHA/tree** run/review existing GitHub Actions:
+1. `ci.yml` full backend `pytest -q`, Python compile, Node checks/tests, secret scan, Alembic, shellcheck/Compose, Docker source inventory and isolated image smoke.
+2. `workspace-ci.yml` npm audit-high (Vite 7.3.7), Workspace backend, TypeScript, Vue, frontend build, Mock/authenticated/responsive Playwright.
+3. `audit-platforms.yml` PostgreSQL/Windows bridge.
+4. `postdeploy-ci.yml` follow-up contracts/Windows archive (the workflow name does **not** mean deploy).
 
-Inspect the **final PR54 head and tree**, ensure branch fast-forward and exact GitHub two-parent tree. Then inspect **CI workflows linked to that SHA**:
+The previous integrated `0b63ce4b` **passed** all four workflows; JUnit 2638 total, 2627 PASS, 11 SKIP, 0 FAIL; Vue 228, mock browser 44, auth 6, responsive 18 all PASS. Those receipts are historical, **not** final-head receipts. Previous CI image inventory had `production_deployed=false`, data qualification not asserted, missing published registry digest; CI smoke is not a release. After newest PR52 parent, independently rerun and append actual checks/artifacts to PR54; report failures without bypass.
 
-1. `ci.yml`: full `pytest -q`, Python compile, static JS, security secrets, migrations, shellcheck, Compose, Docker image smoke and source identity;
-2. `workspace-ci.yml`: npm audit-high gate, backend contract cases, full Vue/Vitest unit suite, TypeScript, frontend production build, Chromium mock/authenticated/responsive runs;
-3. `audit-platforms.yml`: PostgreSQL/Windows bridge; `postdeploy-ci.yml`: independent tests, **not** production deployment.
+Human/production login, phone, natural 2 trading days, settled 34 prices and cloud zero-growth remain independently PENDING. Source/license/quantity units/PIT/OOS/calibration **UNKNOWN**, `actionable=false`, `not_calibrated`, no automatic trading. Local Codex receives fixed SHA only after remote SHA/tree/readback and CI review. Local Windows full pytest remains a separate required acceptance (especially corrected test-only OCR spawn contract).
 
-Only genuine completed SUCCESS for the exact head counts; keep failures/skips visible, no red→green by skipping tests. If any new browser failure, preserve trace and repair only confirmed root cause on *this* branch before new SHA. On final success, append factual GitHub-run receipt in PR54; no need to rewrite this SHA-agnostic committed handoff.
-
-Source/qualification/real operations remain **UNKNOWN / actionable=false / not_calibrated**. Production login, real Provider, 34 settled bars, phone, naturally scheduled two trading days, cloud resource zero growth and human release acceptance are **NOT_RUN/PENDING**. No auto-merge or deploy; local Codex independently receives SHA and verifies without disturbing Owner worktree. Hub report NOT_SENT (local Windows hub unavailable via broken C2C tunnel).
+Hub report NOT_SENT; Owner's Windows Hub CLI unavailable with C2C tunnel down. No credentials or private data requested or accessed.
