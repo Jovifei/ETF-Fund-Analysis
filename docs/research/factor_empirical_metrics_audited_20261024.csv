@@ -1,0 +1,321 @@
+factor,sample,horizon,kind,ic_spearman,hit_rate,hit_rate_wilson_lo,hit_rate_wilson_hi,n_signals,mean_fwd_long,mean_fwd_short,sharpe_fixed_d1,closed_trades,net_win_rate,net_expectancy_bps,profit_factor,max_drawdown,rule
+mom_20_cs,holdout_2y_longhist,1,cs_rank,0.020308,0.493462,0.475305,0.511636,2906,0.000638,-0.000174,0.663398,0,,,,-0.1972,Cross-sectional: top tercile 20d momentum
+mom_20_cs,holdout_2y_longhist,3,cs_rank,0.044154,0.531575,0.513327,0.549739,2882,0.001481,-0.000739,0.663398,0,,,,-0.1972,Cross-sectional: top tercile 20d momentum
+mom_20_cs,holdout_2y_longhist,7,cs_rank,0.060791,0.52964,0.511236,0.547964,2834,0.002443,-0.002038,0.663398,0,,,,-0.1972,Cross-sectional: top tercile 20d momentum
+mom_20_cs,holdout_2y_longhist,20,cs_rank,-0.077859,0.468633,0.449792,0.487565,2678,-0.005638,0.011193,0.663398,0,,,,-0.1972,Cross-sectional: top tercile 20d momentum
+mom_20_cs,holdout_2y_longhist,60,cs_rank,0.056882,0.563694,0.542868,0.584298,2198,0.032063,0.01344,0.663398,0,,,,-0.1972,Cross-sectional: top tercile 20d momentum
+mom_60_cs,holdout_2y_longhist,1,cs_rank,0.023784,0.502066,0.48389,0.520236,2904,0.000551,-0.000159,0.541457,0,,,,-0.2124,Cross-sectional: top tercile 60d momentum
+mom_60_cs,holdout_2y_longhist,3,cs_rank,0.033392,0.525347,0.507088,0.543539,2880,0.001135,-0.000111,0.541457,0,,,,-0.2124,Cross-sectional: top tercile 60d momentum
+mom_60_cs,holdout_2y_longhist,7,cs_rank,-0.004115,0.525424,0.507011,0.543768,2832,0.001054,0.001101,0.541457,0,,,,-0.2124,Cross-sectional: top tercile 60d momentum
+mom_60_cs,holdout_2y_longhist,20,cs_rank,0.022047,0.526532,0.50759,0.545398,2676,0.005707,0.00377,0.541457,0,,,,-0.2124,Cross-sectional: top tercile 60d momentum
+mom_60_cs,holdout_2y_longhist,60,cs_rank,0.027163,0.51867,0.497758,0.539517,2196,0.015889,0.021248,0.541457,0,,,,-0.2124,Cross-sectional: top tercile 60d momentum
+mom_120_cs,holdout_2y_longhist,1,cs_rank,0.032643,0.501722,0.483546,0.519893,2904,0.000457,-0.0,0.437454,0,,,,-0.1862,Cross-sectional: top tercile 120d momentum
+mom_120_cs,holdout_2y_longhist,3,cs_rank,0.05493,0.525347,0.507088,0.543539,2880,0.001098,4.1e-05,0.437454,0,,,,-0.1862,Cross-sectional: top tercile 120d momentum
+mom_120_cs,holdout_2y_longhist,7,cs_rank,0.055916,0.533192,0.514785,0.551509,2832,0.002166,-0.001122,0.437454,0,,,,-0.1862,Cross-sectional: top tercile 120d momentum
+mom_120_cs,holdout_2y_longhist,20,cs_rank,0.06115,0.532138,0.5132,0.550983,2676,0.007772,-0.001808,0.437454,0,,,,-0.1862,Cross-sectional: top tercile 120d momentum
+mom_120_cs,holdout_2y_longhist,60,cs_rank,0.06928,0.531876,0.510969,0.552672,2196,0.039841,0.012259,0.437454,0,,,,-0.1862,Cross-sectional: top tercile 120d momentum
+tsmom_12m,holdout_2y_longhist,1,ts_signal,0.04017,0.500486,0.489681,0.511291,8222,0.000396,-0.00031,0.475984,103,0.2621,19.4,1.085,-0.1364,Time-series: 12m cumulative return > 0
+tsmom_12m,holdout_2y_longhist,3,ts_signal,0.061584,0.530537,0.519693,0.541353,8154,0.001293,-0.001128,0.475984,103,0.2621,19.4,1.085,-0.1364,Time-series: 12m cumulative return > 0
+tsmom_12m,holdout_2y_longhist,7,ts_signal,0.060972,0.530432,0.519496,0.541338,8018,0.002306,-0.001903,0.475984,103,0.2621,19.4,1.085,-0.1364,Time-series: 12m cumulative return > 0
+tsmom_12m,holdout_2y_longhist,20,ts_signal,0.049454,0.524482,0.513228,0.535711,7577,0.006429,-0.000384,0.475984,103,0.2621,19.4,1.085,-0.1364,Time-series: 12m cumulative return > 0
+tsmom_12m,holdout_2y_longhist,60,ts_signal,0.016481,0.508041,0.495614,0.520459,6218,0.022117,0.019518,0.475984,103,0.2621,19.4,1.085,-0.1364,Time-series: 12m cumulative return > 0
+tsmom_volscaled,holdout_2y_longhist,1,ts_signal,0.042613,0.500486,0.489681,0.511291,8222,0.000396,-0.00031,0.475984,103,0.2621,19.4,1.085,-0.1364,Continuous score: 12m sign / 20d annualized vol
+tsmom_volscaled,holdout_2y_longhist,3,ts_signal,0.067745,0.530537,0.519693,0.541353,8154,0.001293,-0.001128,0.475984,103,0.2621,19.4,1.085,-0.1364,Continuous score: 12m sign / 20d annualized vol
+tsmom_volscaled,holdout_2y_longhist,7,ts_signal,0.100856,0.530432,0.519496,0.541338,8018,0.002306,-0.001903,0.475984,103,0.2621,19.4,1.085,-0.1364,Continuous score: 12m sign / 20d annualized vol
+tsmom_volscaled,holdout_2y_longhist,20,ts_signal,0.112435,0.524482,0.513228,0.535711,7577,0.006429,-0.000384,0.475984,103,0.2621,19.4,1.085,-0.1364,Continuous score: 12m sign / 20d annualized vol
+tsmom_volscaled,holdout_2y_longhist,60,ts_signal,0.041809,0.508041,0.495614,0.520459,6218,0.022117,0.019518,0.475984,103,0.2621,19.4,1.085,-0.1364,Continuous score: 12m sign / 20d annualized vol
+tsmom_voltarget_m2,holdout_2y_longhist,1,vol_weighted,0.040285,0.499092,0.485893,0.512293,5508,0.000396,,0.550619,0,,,,-0.0756,"True volatility target position sizing: min(1, 0.15/vol20)"
+tsmom_voltarget_m2,holdout_2y_longhist,3,vol_weighted,0.062819,0.528683,0.515465,0.541862,5491,0.001293,,0.550619,0,,,,-0.0756,"True volatility target position sizing: min(1, 0.15/vol20)"
+tsmom_voltarget_m2,holdout_2y_longhist,7,vol_weighted,0.102293,0.528007,0.514732,0.541243,5445,0.002306,,0.550619,0,,,,-0.0756,"True volatility target position sizing: min(1, 0.15/vol20)"
+tsmom_voltarget_m2,holdout_2y_longhist,20,vol_weighted,0.129643,0.523068,0.509567,0.536535,5267,0.006429,,0.550619,0,,,,-0.0756,"True volatility target position sizing: min(1, 0.15/vol20)"
+tsmom_voltarget_m2,holdout_2y_longhist,60,vol_weighted,0.025007,0.51991,0.505212,0.534574,4445,0.022117,,0.550619,0,,,,-0.0756,"True volatility target position sizing: min(1, 0.15/vol20)"
+dual_momentum_c1,holdout_2y_longhist,1,dual_momentum,0.021648,0.511656,0.487391,0.535867,1630,0.000409,,0.308283,0,,,,-0.2676,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+dual_momentum_c1,holdout_2y_longhist,3,dual_momentum,0.032723,0.524722,0.500359,0.548968,1618,0.000723,,0.308283,0,,,,-0.2676,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+dual_momentum_c1,holdout_2y_longhist,7,dual_momentum,0.038822,0.553605,0.529109,0.577844,1595,9.7e-05,,0.308283,0,,,,-0.2676,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+dual_momentum_c1,holdout_2y_longhist,20,dual_momentum,-0.010392,0.505844,0.48089,0.530769,1540,-0.004554,,0.308283,0,,,,-0.2676,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+dual_momentum_c1,holdout_2y_longhist,60,dual_momentum,0.11063,0.567407,0.540825,0.593608,1350,0.067369,,0.308283,0,,,,-0.2676,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+equal_weight_b0,holdout_2y_longhist,1,benchmark,,0.481045,0.470262,0.491846,8230,0.000162,,0.304227,0,,,,-0.1829,Baseline: equal-weight Buy & Hold
+equal_weight_b0,holdout_2y_longhist,3,benchmark,,0.508086,0.497239,0.518926,8162,0.000512,,0.304227,0,,,,-0.1829,Baseline: equal-weight Buy & Hold
+equal_weight_b0,holdout_2y_longhist,7,benchmark,,0.5076,0.496662,0.518532,8026,0.000957,,0.304227,0,,,,-0.1829,Baseline: equal-weight Buy & Hold
+equal_weight_b0,holdout_2y_longhist,20,benchmark,,0.507648,0.496395,0.518893,7584,0.004359,,0.304227,0,,,,-0.1829,Baseline: equal-weight Buy & Hold
+equal_weight_b0,holdout_2y_longhist,60,benchmark,,0.520566,0.508145,0.53296,6224,0.021426,,0.304227,0,,,,-0.1829,Baseline: equal-weight Buy & Hold
+rs_vs_300_20,holdout_2y_longhist,1,ts_signal,0.024227,0.487994,0.476871,0.499129,7746,0.000547,-0.000198,0.736472,358,0.3911,42.4,1.254,-0.0811,Relative strength vs 510300.SH > 0
+rs_vs_300_20,holdout_2y_longhist,3,ts_signal,0.051466,0.522911,0.511733,0.534066,7682,0.001881,-0.000777,0.736472,358,0.3911,42.4,1.254,-0.0811,Relative strength vs 510300.SH > 0
+rs_vs_300_20,holdout_2y_longhist,7,ts_signal,0.043701,0.519328,0.508054,0.530582,7554,0.002604,-0.00058,0.736472,358,0.3911,42.4,1.254,-0.0811,Relative strength vs 510300.SH > 0
+rs_vs_300_20,holdout_2y_longhist,20,ts_signal,-0.104289,0.453909,0.442387,0.46548,7138,-0.005841,0.013835,0.736472,358,0.3911,42.4,1.254,-0.0811,Relative strength vs 510300.SH > 0
+rs_vs_300_20,holdout_2y_longhist,60,ts_signal,0.042573,0.527996,0.515198,0.540757,5858,0.025541,0.016961,0.736472,358,0.3911,42.4,1.254,-0.0811,Relative strength vs 510300.SH > 0
+z_mr_20,holdout_2y_longhist,1,ts_signal,-0.015214,0.47764,0.462686,0.492634,4271,-0.000464,0.00062,-0.359215,428,0.5911,-36.3,0.699,-0.0979,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+z_mr_20,holdout_2y_longhist,3,ts_signal,-0.030106,0.485566,0.470517,0.50064,4226,-0.0009,0.001402,-0.359215,428,0.5911,-36.3,0.699,-0.0979,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+z_mr_20,holdout_2y_longhist,7,ts_signal,-0.060501,0.466795,0.451638,0.482014,4141,-0.002541,0.00359,-0.359215,428,0.5911,-36.3,0.699,-0.0979,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+z_mr_20,holdout_2y_longhist,20,ts_signal,0.068893,0.541401,0.52578,0.556942,3925,0.017359,-0.003238,-0.359215,428,0.5911,-36.3,0.699,-0.0979,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+z_mr_20,holdout_2y_longhist,60,ts_signal,-0.053288,0.469918,0.452558,0.487351,3158,0.011476,0.028906,-0.359215,428,0.5911,-36.3,0.699,-0.0979,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+dual_ma_20_60,holdout_2y_longhist,1,ts_signal,0.019664,0.495869,0.485071,0.50667,8230,0.000146,0.000182,0.142196,80,0.325,33.5,1.067,-0.1515,Dual MA: SMA20 > SMA60 long else short
+dual_ma_20_60,holdout_2y_longhist,3,ts_signal,0.028105,0.51458,0.503733,0.525413,8162,0.00047,0.000562,0.142196,80,0.325,33.5,1.067,-0.1515,Dual MA: SMA20 > SMA60 long else short
+dual_ma_20_60,holdout_2y_longhist,7,ts_signal,-0.035607,0.492275,0.481344,0.503214,8026,-0.001279,0.003708,0.142196,80,0.325,33.5,1.067,-0.1515,Dual MA: SMA20 > SMA60 long else short
+dual_ma_20_60,holdout_2y_longhist,20,ts_signal,-0.010839,0.497099,0.485851,0.508351,7584,0.002907,0.006128,0.142196,80,0.325,33.5,1.067,-0.1515,Dual MA: SMA20 > SMA60 long else short
+dual_ma_20_60,holdout_2y_longhist,60,ts_signal,-0.033197,0.482808,0.470408,0.49523,6224,0.015529,0.029849,0.142196,80,0.325,33.5,1.067,-0.1515,Dual MA: SMA20 > SMA60 long else short
+adx_trend,holdout_2y_longhist,1,ts_signal,0.027221,0.5,0.487085,0.512915,5754,0.000512,0.000222,0.447557,152,0.4605,97.7,1.395,-0.1023,Dual MA only when ADX14 > 25
+adx_trend,holdout_2y_longhist,3,ts_signal,0.034389,0.51622,0.503243,0.529174,5703,0.001887,0.001359,0.447557,152,0.4605,97.7,1.395,-0.1023,Dual MA only when ADX14 > 25
+adx_trend,holdout_2y_longhist,7,ts_signal,-0.018061,0.490757,0.477705,0.503822,5626,0.002398,0.00506,0.447557,152,0.4605,97.7,1.395,-0.1023,Dual MA only when ADX14 > 25
+adx_trend,holdout_2y_longhist,20,ts_signal,-0.060415,0.468097,0.454766,0.481473,5360,-0.008551,0.005604,0.447557,152,0.4605,97.7,1.395,-0.1023,Dual MA only when ADX14 > 25
+adx_trend,holdout_2y_longhist,60,ts_signal,-0.038527,0.470827,0.456175,0.485529,4439,0.01686,0.028006,0.447557,152,0.4605,97.7,1.395,-0.1023,Dual MA only when ADX14 > 25
+macd,holdout_2y_longhist,1,ts_signal,0.010745,0.481774,0.47099,0.492575,8230,0.000418,-7.6e-05,0.518371,306,0.3725,25.7,1.117,-0.0779,MACD histogram sign
+macd,holdout_2y_longhist,3,ts_signal,0.040837,0.51458,0.503733,0.525413,8162,0.001679,-0.000582,0.518371,306,0.3725,25.7,1.117,-0.0779,MACD histogram sign
+macd,holdout_2y_longhist,7,ts_signal,0.068592,0.525044,0.514109,0.535954,8026,0.00348,-0.001429,0.518371,306,0.3725,25.7,1.117,-0.0779,MACD histogram sign
+macd,holdout_2y_longhist,20,ts_signal,-0.073192,0.469409,0.458196,0.480654,7584,-0.002788,0.01127,0.518371,306,0.3725,25.7,1.117,-0.0779,MACD histogram sign
+macd,holdout_2y_longhist,60,ts_signal,0.081198,0.534222,0.521812,0.54659,6224,0.033751,0.009786,0.518371,306,0.3725,25.7,1.117,-0.0779,MACD histogram sign
+td9_setup,holdout_2y_longhist,1,ts_signal,0.015254,0.560669,0.497281,0.622139,239,0.00107,-0.001077,0.39917,112,0.4375,-25.7,0.659,-0.0145,DeMark Setup 9 completion pulse
+td9_setup,holdout_2y_longhist,3,ts_signal,-0.028621,0.435146,0.373809,0.498536,239,-0.005902,0.006694,0.39917,112,0.4375,-25.7,0.659,-0.0145,DeMark Setup 9 completion pulse
+td9_setup,holdout_2y_longhist,7,ts_signal,-0.006733,0.459227,0.396419,0.523358,233,0.000904,-0.002292,0.39917,112,0.4375,-25.7,0.659,-0.0145,DeMark Setup 9 completion pulse
+td9_setup,holdout_2y_longhist,20,ts_signal,0.016698,0.535088,0.470301,0.598711,228,0.014021,-0.004661,0.39917,112,0.4375,-25.7,0.659,-0.0145,DeMark Setup 9 completion pulse
+td9_setup,holdout_2y_longhist,60,ts_signal,-0.021786,0.432432,0.363135,0.504479,185,0.014259,0.034605,0.39917,112,0.4375,-25.7,0.659,-0.0145,DeMark Setup 9 completion pulse
+ichimoku_cloud,holdout_2y_longhist,1,ts_signal,0.025488,0.491654,0.479957,0.503359,7009,0.00066,-0.000148,0.696173,202,0.302,96.4,1.57,-0.0898,Above cloud long / below short
+ichimoku_cloud,holdout_2y_longhist,3,ts_signal,0.041864,0.518109,0.506361,0.529836,6958,0.00176,1.2e-05,0.696173,202,0.302,96.4,1.57,-0.0898,Above cloud long / below short
+ichimoku_cloud,holdout_2y_longhist,7,ts_signal,0.010935,0.509194,0.497356,0.521023,6852,0.000892,0.000968,0.696173,202,0.302,96.4,1.57,-0.0898,Above cloud long / below short
+ichimoku_cloud,holdout_2y_longhist,20,ts_signal,-0.005712,0.499001,0.486859,0.511145,6509,0.001345,0.005524,0.696173,202,0.302,96.4,1.57,-0.0898,Above cloud long / below short
+ichimoku_cloud,holdout_2y_longhist,60,ts_signal,-0.041224,0.47778,0.464395,0.491197,5333,0.010893,0.025061,0.696173,202,0.302,96.4,1.57,-0.0898,Above cloud long / below short
+turtle_20_10,holdout_2y_longhist,1,ts_signal,0.037216,0.50729,0.490214,0.52435,3292,0.000689,,0.687096,113,0.4513,178.7,1.566,-0.0902,Donchian 20d high entry / 10d low exit
+turtle_20_10,holdout_2y_longhist,3,ts_signal,0.058716,0.536519,0.519436,0.553516,3286,0.00217,,0.687096,113,0.4513,178.7,1.566,-0.0902,Donchian 20d high entry / 10d low exit
+turtle_20_10,holdout_2y_longhist,7,ts_signal,0.072046,0.544676,0.527559,0.561687,3268,0.004256,,0.687096,113,0.4513,178.7,1.566,-0.0902,Donchian 20d high entry / 10d low exit
+turtle_20_10,holdout_2y_longhist,20,ts_signal,-0.068845,0.471627,0.454299,0.489023,3172,-0.003521,,0.687096,113,0.4513,178.7,1.566,-0.0902,Donchian 20d high entry / 10d low exit
+turtle_20_10,holdout_2y_longhist,60,ts_signal,0.003996,0.513524,0.494531,0.532477,2662,0.019584,,0.687096,113,0.4513,178.7,1.566,-0.0902,Donchian 20d high entry / 10d low exit
+mom_20_cs,train_earlier_longhist,1,cs_rank,0.012609,0.494822,0.484136,0.505513,8401,0.000629,-0.000109,0.866714,0,,,,-0.2515,Cross-sectional: top tercile 20d momentum
+mom_20_cs,train_earlier_longhist,3,cs_rank,0.009611,0.508035,0.497343,0.518719,8401,0.001686,0.000347,0.866714,0,,,,-0.2515,Cross-sectional: top tercile 20d momentum
+mom_20_cs,train_earlier_longhist,7,cs_rank,-0.005859,0.499583,0.488894,0.510273,8401,0.001081,0.002233,0.866714,0,,,,-0.2515,Cross-sectional: top tercile 20d momentum
+mom_20_cs,train_earlier_longhist,20,cs_rank,0.011292,0.509701,0.499009,0.520384,8401,0.00406,0.009431,0.866714,0,,,,-0.2515,Cross-sectional: top tercile 20d momentum
+mom_20_cs,train_earlier_longhist,60,cs_rank,-0.02635,0.502202,0.491512,0.51289,8401,0.006942,0.019533,0.866714,0,,,,-0.2515,Cross-sectional: top tercile 20d momentum
+mom_60_cs,train_earlier_longhist,1,cs_rank,0.02016,0.496875,0.486032,0.507722,8161,0.00017,0.000127,0.460262,0,,,,-0.4273,Cross-sectional: top tercile 60d momentum
+mom_60_cs,train_earlier_longhist,3,cs_rank,0.01438,0.50288,0.492033,0.513723,8161,0.000636,0.000832,0.460262,0,,,,-0.4273,Cross-sectional: top tercile 60d momentum
+mom_60_cs,train_earlier_longhist,7,cs_rank,0.009932,0.512437,0.501589,0.523273,8161,0.001075,0.002141,0.460262,0,,,,-0.4273,Cross-sectional: top tercile 60d momentum
+mom_60_cs,train_earlier_longhist,20,cs_rank,0.015105,0.511212,0.500364,0.522049,8161,0.006134,0.00311,0.460262,0,,,,-0.4273,Cross-sectional: top tercile 60d momentum
+mom_60_cs,train_earlier_longhist,60,cs_rank,0.014035,0.507536,0.496688,0.518376,8161,0.001624,0.01801,0.460262,0,,,,-0.4273,Cross-sectional: top tercile 60d momentum
+mom_120_cs,train_earlier_longhist,1,cs_rank,0.025111,0.499167,0.488075,0.51026,7801,0.000325,0.000177,0.654301,0,,,,-0.4259,Cross-sectional: top tercile 120d momentum
+mom_120_cs,train_earlier_longhist,3,cs_rank,0.016274,0.506345,0.49525,0.517434,7801,0.000843,0.001292,0.654301,0,,,,-0.4259,Cross-sectional: top tercile 120d momentum
+mom_120_cs,train_earlier_longhist,7,cs_rank,0.016218,0.508909,0.497814,0.519996,7801,0.000992,0.002538,0.654301,0,,,,-0.4259,Cross-sectional: top tercile 120d momentum
+mom_120_cs,train_earlier_longhist,20,cs_rank,0.036838,0.51519,0.504095,0.52627,7801,0.002953,0.005556,0.654301,0,,,,-0.4259,Cross-sectional: top tercile 120d momentum
+mom_120_cs,train_earlier_longhist,60,cs_rank,-0.009001,0.515447,0.504352,0.526527,7801,-0.000443,0.022335,0.654301,0,,,,-0.4259,Cross-sectional: top tercile 120d momentum
+tsmom_12m,train_earlier_longhist,1,ts_signal,0.027265,0.503592,0.496741,0.510442,20461,1.3e-05,0.000277,0.077354,224,0.2366,-173.3,0.526,-0.2912,Time-series: 12m cumulative return > 0
+tsmom_12m,train_earlier_longhist,3,ts_signal,0.027788,0.515811,0.508961,0.522655,20461,8.8e-05,0.00089,0.077354,224,0.2366,-173.3,0.526,-0.2912,Time-series: 12m cumulative return > 0
+tsmom_12m,train_earlier_longhist,7,ts_signal,0.038818,0.525781,0.518935,0.532617,20461,0.000133,0.002067,0.077354,224,0.2366,-173.3,0.526,-0.2912,Time-series: 12m cumulative return > 0
+tsmom_12m,train_earlier_longhist,20,ts_signal,0.046112,0.530717,0.523874,0.537549,20461,-0.001995,0.007105,0.077354,224,0.2366,-173.3,0.526,-0.2912,Time-series: 12m cumulative return > 0
+tsmom_12m,train_earlier_longhist,60,ts_signal,0.063531,0.541762,0.534928,0.548581,20461,-0.001055,0.015959,0.077354,224,0.2366,-173.3,0.526,-0.2912,Time-series: 12m cumulative return > 0
+tsmom_volscaled,train_earlier_longhist,1,ts_signal,0.029982,0.503592,0.496741,0.510442,20461,1.3e-05,0.000277,0.077354,224,0.2366,-173.3,0.526,-0.2912,Continuous score: 12m sign / 20d annualized vol
+tsmom_volscaled,train_earlier_longhist,3,ts_signal,0.035408,0.515811,0.508961,0.522655,20461,8.8e-05,0.00089,0.077354,224,0.2366,-173.3,0.526,-0.2912,Continuous score: 12m sign / 20d annualized vol
+tsmom_volscaled,train_earlier_longhist,7,ts_signal,0.046886,0.525781,0.518935,0.532617,20461,0.000133,0.002067,0.077354,224,0.2366,-173.3,0.526,-0.2912,Continuous score: 12m sign / 20d annualized vol
+tsmom_volscaled,train_earlier_longhist,20,ts_signal,0.057301,0.530717,0.523874,0.537549,20461,-0.001995,0.007105,0.077354,224,0.2366,-173.3,0.526,-0.2912,Continuous score: 12m sign / 20d annualized vol
+tsmom_volscaled,train_earlier_longhist,60,ts_signal,0.05587,0.541762,0.534928,0.548581,20461,-0.001055,0.015959,0.077354,224,0.2366,-173.3,0.526,-0.2912,Continuous score: 12m sign / 20d annualized vol
+tsmom_voltarget_m2,train_earlier_longhist,1,vol_weighted,0.023097,0.501385,0.491271,0.511499,9384,1.3e-05,,0.196286,0,,,,-0.1846,"True volatility target position sizing: min(1, 0.15/vol20)"
+tsmom_voltarget_m2,train_earlier_longhist,3,vol_weighted,0.027022,0.511296,0.501179,0.521403,9384,8.8e-05,,0.196286,0,,,,-0.1846,"True volatility target position sizing: min(1, 0.15/vol20)"
+tsmom_voltarget_m2,train_earlier_longhist,7,vol_weighted,0.030871,0.525256,0.515144,0.535347,9384,0.000133,,0.196286,0,,,,-0.1846,"True volatility target position sizing: min(1, 0.15/vol20)"
+tsmom_voltarget_m2,train_earlier_longhist,20,vol_weighted,0.031824,0.528133,0.518023,0.53822,9384,-0.001995,,0.196286,0,,,,-0.1846,"True volatility target position sizing: min(1, 0.15/vol20)"
+tsmom_voltarget_m2,train_earlier_longhist,60,vol_weighted,0.055001,0.536978,0.526876,0.547049,9384,-0.001055,,0.196286,0,,,,-0.1846,"True volatility target position sizing: min(1, 0.15/vol20)"
+dual_momentum_c1,train_earlier_longhist,1,dual_momentum,0.015489,0.509751,0.495079,0.524406,4461,0.000128,,0.112683,0,,,,-0.4212,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+dual_momentum_c1,train_earlier_longhist,3,dual_momentum,0.012632,0.514459,0.499786,0.529106,4461,0.000122,,0.112683,0,,,,-0.4212,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+dual_momentum_c1,train_earlier_longhist,7,dual_momentum,0.015906,0.525891,0.511222,0.540515,4461,-0.000605,,0.112683,0,,,,-0.4212,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+dual_momentum_c1,train_earlier_longhist,20,dual_momentum,0.025428,0.546738,0.532096,0.5613,4461,0.000244,,0.112683,0,,,,-0.4212,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+dual_momentum_c1,train_earlier_longhist,60,dual_momentum,0.027718,0.555929,0.541307,0.570455,4461,-0.001847,,0.112683,0,,,,-0.4212,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+equal_weight_b0,train_earlier_longhist,1,benchmark,,0.481223,0.475003,0.487448,24764,0.000219,,0.373666,0,,,,-0.4515,Baseline: equal-weight Buy & Hold
+equal_weight_b0,train_earlier_longhist,3,benchmark,,0.497416,0.491189,0.503643,24764,0.000681,,0.373666,0,,,,-0.4515,Baseline: equal-weight Buy & Hold
+equal_weight_b0,train_earlier_longhist,7,benchmark,,0.504765,0.498538,0.510991,24764,0.001667,,0.373666,0,,,,-0.4515,Baseline: equal-weight Buy & Hold
+equal_weight_b0,train_earlier_longhist,20,benchmark,,0.50525,0.499022,0.511475,24764,0.004854,,0.373666,0,,,,-0.4515,Baseline: equal-weight Buy & Hold
+equal_weight_b0,train_earlier_longhist,60,benchmark,,0.501373,0.495146,0.5076,24764,0.012725,,0.373666,0,,,,-0.4515,Baseline: equal-weight Buy & Hold
+rs_vs_300_20,train_earlier_longhist,1,ts_signal,0.019187,0.495177,0.488661,0.501696,22602,0.000537,-7.7e-05,0.613087,1063,0.3942,26.8,1.152,-0.1643,Relative strength vs 510300.SH > 0
+rs_vs_300_20,train_earlier_longhist,3,ts_signal,0.017846,0.509601,0.503083,0.516116,22602,0.001462,-1.5e-05,0.613087,1063,0.3942,26.8,1.152,-0.1643,Relative strength vs 510300.SH > 0
+rs_vs_300_20,train_earlier_longhist,7,ts_signal,-0.009568,0.493098,0.486582,0.499616,22602,0.000942,0.002606,0.613087,1063,0.3942,26.8,1.152,-0.1643,Relative strength vs 510300.SH > 0
+rs_vs_300_20,train_earlier_longhist,20,ts_signal,-0.013285,0.49885,0.492332,0.505368,22602,0.001015,0.008906,0.613087,1063,0.3942,26.8,1.152,-0.1643,Relative strength vs 510300.SH > 0
+rs_vs_300_20,train_earlier_longhist,60,ts_signal,0.013308,0.515839,0.509322,0.522351,22602,0.008761,0.016205,0.613087,1063,0.3942,26.8,1.152,-0.1643,Relative strength vs 510300.SH > 0
+z_mr_20,train_earlier_longhist,1,ts_signal,-0.009635,0.491011,0.482444,0.499582,13071,-0.00038,0.001178,-0.178024,1398,0.5916,-32.4,0.745,-0.262,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+z_mr_20,train_earlier_longhist,3,ts_signal,0.000856,0.500803,0.492233,0.509373,13071,0.00037,0.001742,-0.178024,1398,0.5916,-32.4,0.745,-0.262,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+z_mr_20,train_earlier_longhist,7,ts_signal,-0.01054,0.497743,0.489173,0.506314,13071,0.002307,0.00304,-0.178024,1398,0.5916,-32.4,0.745,-0.262,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+z_mr_20,train_earlier_longhist,20,ts_signal,0.005771,0.497284,0.488715,0.505855,13071,0.010855,-0.000167,-0.178024,1398,0.5916,-32.4,0.745,-0.262,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+z_mr_20,train_earlier_longhist,60,ts_signal,-0.012681,0.477928,0.469373,0.486497,13071,0.016484,0.011684,-0.178024,1398,0.5916,-32.4,0.745,-0.262,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+dual_ma_20_60,train_earlier_longhist,1,ts_signal,0.016428,0.498142,0.491916,0.50437,24764,7.2e-05,0.000349,0.223015,226,0.3496,-60.2,0.881,-0.3227,Dual MA: SMA20 > SMA60 long else short
+dual_ma_20_60,train_earlier_longhist,3,ts_signal,0.010099,0.504886,0.498659,0.511112,24764,0.000168,0.001133,0.223015,226,0.3496,-60.2,0.881,-0.3227,Dual MA: SMA20 > SMA60 long else short
+dual_ma_20_60,train_earlier_longhist,7,ts_signal,0.002969,0.501131,0.494904,0.507357,24764,0.000374,0.002808,0.223015,226,0.3496,-60.2,0.881,-0.3227,Dual MA: SMA20 > SMA60 long else short
+dual_ma_20_60,train_earlier_longhist,20,ts_signal,0.012176,0.510539,0.504312,0.516763,24764,0.002392,0.007024,0.223015,226,0.3496,-60.2,0.881,-0.3227,Dual MA: SMA20 > SMA60 long else short
+dual_ma_20_60,train_earlier_longhist,60,ts_signal,0.058564,0.532265,0.526046,0.538474,24764,0.00795,0.016935,0.223015,226,0.3496,-60.2,0.881,-0.3227,Dual MA: SMA20 > SMA60 long else short
+adx_trend,train_earlier_longhist,1,ts_signal,0.01026,0.495283,0.48776,0.502808,16960,0.000157,0.000317,0.249179,396,0.4268,-2.1,0.992,-0.2062,Dual MA only when ADX14 > 25
+adx_trend,train_earlier_longhist,3,ts_signal,0.014602,0.506722,0.499197,0.514244,16960,0.000396,8.9e-05,0.249179,396,0.4268,-2.1,0.992,-0.2062,Dual MA only when ADX14 > 25
+adx_trend,train_earlier_longhist,7,ts_signal,0.00991,0.502594,0.49507,0.510118,16960,8.5e-05,0.000775,0.249179,396,0.4268,-2.1,0.992,-0.2062,Dual MA only when ADX14 > 25
+adx_trend,train_earlier_longhist,20,ts_signal,0.016238,0.510731,0.503206,0.518251,16960,0.000733,0.004739,0.249179,396,0.4268,-2.1,0.992,-0.2062,Dual MA only when ADX14 > 25
+adx_trend,train_earlier_longhist,60,ts_signal,0.054645,0.536498,0.528985,0.543993,16960,0.00853,0.014923,0.249179,396,0.4268,-2.1,0.992,-0.2062,Dual MA only when ADX14 > 25
+macd,train_earlier_longhist,1,ts_signal,0.009431,0.484857,0.478564,0.491155,24203,0.000807,-0.0004,0.847561,904,0.3606,62.5,1.308,-0.153,MACD histogram sign
+macd,train_earlier_longhist,3,ts_signal,0.011822,0.506425,0.500126,0.512722,24203,0.001764,-0.000456,0.847561,904,0.3606,62.5,1.308,-0.153,MACD histogram sign
+macd,train_earlier_longhist,7,ts_signal,0.003344,0.49779,0.491491,0.504088,24203,0.003031,0.000356,0.847561,904,0.3606,62.5,1.308,-0.153,MACD histogram sign
+macd,train_earlier_longhist,20,ts_signal,-0.019455,0.493286,0.486989,0.499585,24203,0.001394,0.008372,0.847561,904,0.3606,62.5,1.308,-0.153,MACD histogram sign
+macd,train_earlier_longhist,60,ts_signal,-0.028714,0.492253,0.485956,0.498552,24203,0.008814,0.014208,0.847561,904,0.3606,62.5,1.308,-0.153,MACD histogram sign
+td9_setup,train_earlier_longhist,1,ts_signal,0.001289,0.506775,0.470763,0.542717,738,0.000135,0.000926,-0.009422,359,0.4345,-20.4,0.741,-0.0308,DeMark Setup 9 completion pulse
+td9_setup,train_earlier_longhist,3,ts_signal,-0.001419,0.501355,0.465368,0.537328,738,0.001804,0.003636,-0.009422,359,0.4345,-20.4,0.741,-0.0308,DeMark Setup 9 completion pulse
+td9_setup,train_earlier_longhist,7,ts_signal,-0.008453,0.47019,0.434428,0.506261,738,0.001012,0.004702,-0.009422,359,0.4345,-20.4,0.741,-0.0308,DeMark Setup 9 completion pulse
+td9_setup,train_earlier_longhist,20,ts_signal,0.005488,0.495935,0.459977,0.531935,738,0.015261,-0.000325,-0.009422,359,0.4345,-20.4,0.741,-0.0308,DeMark Setup 9 completion pulse
+td9_setup,train_earlier_longhist,60,ts_signal,0.002138,0.48374,0.447863,0.519785,738,0.025781,0.0101,-0.009422,359,0.4345,-20.4,0.741,-0.0308,DeMark Setup 9 completion pulse
+ichimoku_cloud,train_earlier_longhist,1,ts_signal,0.011102,0.49456,0.487748,0.501375,20681,0.000125,0.000258,0.224778,623,0.236,-38.1,0.838,-0.2972,Above cloud long / below short
+ichimoku_cloud,train_earlier_longhist,3,ts_signal,0.000997,0.502925,0.496111,0.509739,20681,0.000233,0.001613,0.224778,623,0.236,-38.1,0.838,-0.2972,Above cloud long / below short
+ichimoku_cloud,train_earlier_longhist,7,ts_signal,0.009814,0.504714,0.4979,0.511527,20681,0.000835,0.003273,0.224778,623,0.236,-38.1,0.838,-0.2972,Above cloud long / below short
+ichimoku_cloud,train_earlier_longhist,20,ts_signal,0.022602,0.521203,0.514391,0.528007,20681,0.001122,0.007608,0.224778,623,0.236,-38.1,0.838,-0.2972,Above cloud long / below short
+ichimoku_cloud,train_earlier_longhist,60,ts_signal,0.085803,0.552343,0.545557,0.559109,20681,0.01129,0.007437,0.224778,623,0.236,-38.1,0.838,-0.2972,Above cloud long / below short
+turtle_20_10,train_earlier_longhist,1,ts_signal,0.014358,0.492909,0.482679,0.503144,9166,0.00068,,0.659578,364,0.3681,40.8,1.137,-0.1263,Donchian 20d high entry / 10d low exit
+turtle_20_10,train_earlier_longhist,3,ts_signal,0.000635,0.501636,0.491402,0.51187,9166,0.000552,,0.659578,364,0.3681,40.8,1.137,-0.1263,Donchian 20d high entry / 10d low exit
+turtle_20_10,train_earlier_longhist,7,ts_signal,-0.005921,0.497382,0.487149,0.507616,9166,-5.1e-05,,0.659578,364,0.3681,40.8,1.137,-0.1263,Donchian 20d high entry / 10d low exit
+turtle_20_10,train_earlier_longhist,20,ts_signal,-0.002625,0.508619,0.498383,0.518847,9166,-0.000207,,0.659578,364,0.3681,40.8,1.137,-0.1263,Donchian 20d high entry / 10d low exit
+turtle_20_10,train_earlier_longhist,60,ts_signal,0.027978,0.531093,0.520866,0.541294,9166,0.011377,,0.659578,364,0.3681,40.8,1.137,-0.1263,Donchian 20d high entry / 10d low exit
+mom_20_cs,recent_all_enabled,1,cs_rank,0.037761,0.500926,0.483719,0.518131,3240,0.000854,-0.000916,0.830973,0,,,,-0.2075,Cross-sectional: top tercile 20d momentum
+mom_20_cs,recent_all_enabled,3,cs_rank,0.044795,0.511905,0.49456,0.529221,3192,0.000942,-0.001044,0.830973,0,,,,-0.2075,Cross-sectional: top tercile 20d momentum
+mom_20_cs,recent_all_enabled,7,cs_rank,0.056123,0.485142,0.467567,0.502754,3096,-0.000795,-0.004257,0.830973,0,,,,-0.2075,Cross-sectional: top tercile 20d momentum
+mom_20_cs,recent_all_enabled,20,cs_rank,-0.099372,0.41056,0.392422,0.428945,2784,-0.022354,0.003162,0.830973,0,,,,-0.2075,Cross-sectional: top tercile 20d momentum
+mom_20_cs,recent_all_enabled,60,cs_rank,0.079825,0.439145,0.416521,0.462024,1824,-0.020668,-0.042429,0.830973,0,,,,-0.2075,Cross-sectional: top tercile 20d momentum
+mom_60_cs,recent_all_enabled,1,cs_rank,0.023157,0.498333,0.480455,0.516216,3000,-0.000105,-0.000522,-0.137362,0,,,,-0.332,Cross-sectional: top tercile 60d momentum
+mom_60_cs,recent_all_enabled,3,cs_rank,0.038313,0.503388,0.485358,0.521408,2952,-0.000751,-0.001087,-0.137362,0,,,,-0.332,Cross-sectional: top tercile 60d momentum
+mom_60_cs,recent_all_enabled,7,cs_rank,-0.003814,0.462885,0.44466,0.48121,2856,-0.00326,-0.001164,-0.137362,0,,,,-0.332,Cross-sectional: top tercile 60d momentum
+mom_60_cs,recent_all_enabled,20,cs_rank,0.010858,0.447327,0.4281,0.466713,2544,-0.014779,-0.002842,-0.137362,0,,,,-0.332,Cross-sectional: top tercile 60d momentum
+mom_60_cs,recent_all_enabled,60,cs_rank,0.086535,0.42803,0.403867,0.452542,1584,-0.024817,-0.037762,-0.137362,0,,,,-0.332,Cross-sectional: top tercile 60d momentum
+mom_120_cs,recent_all_enabled,1,cs_rank,0.041848,0.496212,0.477159,0.515276,2640,0.000121,-0.000652,0.091096,0,,,,-0.2451,Cross-sectional: top tercile 120d momentum
+mom_120_cs,recent_all_enabled,3,cs_rank,0.066154,0.505787,0.486545,0.525012,2592,-7.8e-05,-0.001469,0.091096,0,,,,-0.2451,Cross-sectional: top tercile 120d momentum
+mom_120_cs,recent_all_enabled,7,cs_rank,0.045321,0.463141,0.443651,0.482745,2496,-0.001971,-0.003268,0.091096,0,,,,-0.2451,Cross-sectional: top tercile 120d momentum
+mom_120_cs,recent_all_enabled,20,cs_rank,0.052101,0.471612,0.450744,0.492579,2184,-0.005598,-0.010042,0.091096,0,,,,-0.2451,Cross-sectional: top tercile 120d momentum
+mom_120_cs,recent_all_enabled,60,cs_rank,0.039539,0.380719,0.35393,0.408254,1224,-0.023689,-0.039104,0.091096,0,,,,-0.2451,Cross-sectional: top tercile 120d momentum
+tsmom_12m,recent_all_enabled,1,ts_signal,0.022449,0.49591,0.482403,0.509424,5257,-3.9e-05,-0.001069,-0.166098,80,0.2125,-165.4,0.343,-0.0878,Time-series: 12m cumulative return > 0
+tsmom_12m,recent_all_enabled,3,ts_signal,0.036541,0.524722,0.511025,0.538381,5117,-6.4e-05,-0.003134,-0.166098,80,0.2125,-165.4,0.343,-0.0878,Time-series: 12m cumulative return > 0
+tsmom_12m,recent_all_enabled,7,ts_signal,0.008747,0.501343,0.48726,0.515424,4839,-0.001698,-0.004773,-0.166098,80,0.2125,-165.4,0.343,-0.0878,Time-series: 12m cumulative return > 0
+tsmom_12m,recent_all_enabled,20,ts_signal,-0.032751,0.465178,0.450067,0.480353,4164,-0.007115,-0.003141,-0.166098,80,0.2125,-165.4,0.343,-0.0878,Time-series: 12m cumulative return > 0
+tsmom_12m,recent_all_enabled,60,ts_signal,0.010448,0.439216,0.420945,0.457653,2805,-0.022124,-0.029185,-0.166098,80,0.2125,-165.4,0.343,-0.0878,Time-series: 12m cumulative return > 0
+tsmom_volscaled,recent_all_enabled,1,ts_signal,0.024633,0.49591,0.482403,0.509424,5257,-3.9e-05,-0.001069,-0.166098,80,0.2125,-165.4,0.343,-0.0878,Continuous score: 12m sign / 20d annualized vol
+tsmom_volscaled,recent_all_enabled,3,ts_signal,0.041484,0.524722,0.511025,0.538381,5117,-6.4e-05,-0.003134,-0.166098,80,0.2125,-165.4,0.343,-0.0878,Continuous score: 12m sign / 20d annualized vol
+tsmom_volscaled,recent_all_enabled,7,ts_signal,0.016082,0.501343,0.48726,0.515424,4839,-0.001698,-0.004773,-0.166098,80,0.2125,-165.4,0.343,-0.0878,Continuous score: 12m sign / 20d annualized vol
+tsmom_volscaled,recent_all_enabled,20,ts_signal,-0.019533,0.465178,0.450067,0.480353,4164,-0.007115,-0.003141,-0.166098,80,0.2125,-165.4,0.343,-0.0878,Continuous score: 12m sign / 20d annualized vol
+tsmom_volscaled,recent_all_enabled,60,ts_signal,0.057733,0.439216,0.420945,0.457653,2805,-0.022124,-0.029185,-0.166098,80,0.2125,-165.4,0.343,-0.0878,Continuous score: 12m sign / 20d annualized vol
+tsmom_voltarget_m2,recent_all_enabled,1,vol_weighted,0.004425,0.480492,0.46356,0.497469,3332,-3.9e-05,,-0.016661,0,,,,-0.0492,"True volatility target position sizing: min(1, 0.15/vol20)"
+tsmom_voltarget_m2,recent_all_enabled,3,vol_weighted,0.012353,0.499697,0.482637,0.516757,3296,-6.4e-05,,-0.016661,0,,,,-0.0492,"True volatility target position sizing: min(1, 0.15/vol20)"
+tsmom_voltarget_m2,recent_all_enabled,7,vol_weighted,-0.005669,0.466252,0.449059,0.483526,3215,-0.001698,,-0.016661,0,,,,-0.0492,"True volatility target position sizing: min(1, 0.15/vol20)"
+tsmom_voltarget_m2,recent_all_enabled,20,vol_weighted,-0.025811,0.418471,0.400805,0.436349,2956,-0.007115,,-0.016661,0,,,,-0.0492,"True volatility target position sizing: min(1, 0.15/vol20)"
+tsmom_voltarget_m2,recent_all_enabled,60,vol_weighted,0.032306,0.383318,0.362917,0.404138,2134,-0.022124,,-0.016661,0,,,,-0.0492,"True volatility target position sizing: min(1, 0.15/vol20)"
+dual_momentum_c1,recent_all_enabled,1,dual_momentum,0.017961,0.519058,0.486258,0.551695,892,0.00048,,0.345743,0,,,,-0.267,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+dual_momentum_c1,recent_all_enabled,3,dual_momentum,0.035432,0.545662,0.512562,0.578363,876,0.001678,,0.345743,0,,,,-0.267,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+dual_momentum_c1,recent_all_enabled,7,dual_momentum,0.047672,0.556086,0.522267,0.589393,838,0.002408,,0.345743,0,,,,-0.267,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+dual_momentum_c1,recent_all_enabled,20,dual_momentum,-0.004201,0.464567,0.429421,0.500068,762,-0.011615,,0.345743,0,,,,-0.267,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+dual_momentum_c1,recent_all_enabled,60,dual_momentum,0.060349,0.465035,0.424529,0.506007,572,0.019867,,0.345743,0,,,,-0.267,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+equal_weight_b0,recent_all_enabled,1,benchmark,,0.478824,0.468944,0.488722,9799,-0.000133,,-0.132569,0,,,,-0.2284,Baseline: equal-weight Buy & Hold
+equal_weight_b0,recent_all_enabled,3,benchmark,,0.492287,0.482322,0.502258,9659,-0.000448,,-0.132569,0,,,,-0.2284,Baseline: equal-weight Buy & Hold
+equal_weight_b0,recent_all_enabled,7,benchmark,,0.472119,0.462029,0.482231,9379,-0.001743,,-0.132569,0,,,,-0.2284,Baseline: equal-weight Buy & Hold
+equal_weight_b0,recent_all_enabled,20,benchmark,,0.439957,0.429415,0.450554,8469,-0.005486,,-0.132569,0,,,,-0.2284,Baseline: equal-weight Buy & Hold
+equal_weight_b0,recent_all_enabled,60,benchmark,,0.399012,0.386337,0.411824,5669,-0.032908,,-0.132569,0,,,,-0.2284,Baseline: equal-weight Buy & Hold
+rs_vs_300_20,recent_all_enabled,1,ts_signal,0.033605,0.499126,0.488887,0.509366,9156,0.000348,-0.000828,0.509292,413,0.3608,6.6,1.034,-0.0948,Relative strength vs 510300.SH > 0
+rs_vs_300_20,recent_all_enabled,3,ts_signal,0.029538,0.514967,0.504649,0.525272,9020,-0.00025,-0.001269,0.509292,413,0.3608,6.6,1.034,-0.0948,Relative strength vs 510300.SH > 0
+rs_vs_300_20,recent_all_enabled,7,ts_signal,0.035526,0.516118,0.505641,0.526581,8748,-0.001747,-0.002736,0.509292,413,0.3608,6.6,1.034,-0.0948,Relative strength vs 510300.SH > 0
+rs_vs_300_20,recent_all_enabled,20,ts_signal,-0.116213,0.459435,0.448443,0.470467,7864,-0.023393,0.00806,0.509292,413,0.3608,6.6,1.034,-0.0948,Relative strength vs 510300.SH > 0
+rs_vs_300_20,recent_all_enabled,60,ts_signal,0.042133,0.550933,0.537308,0.564483,5144,-0.033809,-0.046671,0.509292,413,0.3608,6.6,1.034,-0.0948,Relative strength vs 510300.SH > 0
+z_mr_20,recent_all_enabled,1,ts_signal,-0.010058,0.48332,0.469618,0.497048,5096,-0.000689,0.000298,-0.699973,584,0.601,-35.5,0.735,-0.1157,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+z_mr_20,recent_all_enabled,3,ts_signal,-0.014337,0.499002,0.485163,0.512843,5010,-0.000967,0.000999,-0.699973,584,0.601,-35.5,0.735,-0.1157,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+z_mr_20,recent_all_enabled,7,ts_signal,-0.040384,0.468911,0.454884,0.482988,4841,-0.001551,0.002396,-0.699973,584,0.601,-35.5,0.735,-0.1157,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+z_mr_20,recent_all_enabled,20,ts_signal,0.109662,0.556612,0.541917,0.571209,4416,0.013646,-0.02386,-0.699973,584,0.601,-35.5,0.735,-0.1157,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+z_mr_20,recent_all_enabled,60,ts_signal,-0.062998,0.464008,0.445709,0.482406,2834,-0.058291,-0.015843,-0.699973,584,0.601,-35.5,0.735,-0.1157,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+dual_ma_20_60,recent_all_enabled,1,ts_signal,-0.002786,0.488927,0.479036,0.498827,9799,-0.000645,0.000239,-0.798478,96,0.2812,-375.4,0.396,-0.1762,Dual MA: SMA20 > SMA60 long else short
+dual_ma_20_60,recent_all_enabled,3,ts_signal,-0.005745,0.502122,0.492152,0.512091,9659,-0.002102,0.000768,-0.798478,96,0.2812,-375.4,0.396,-0.1762,Dual MA: SMA20 > SMA60 long else short
+dual_ma_20_60,recent_all_enabled,7,ts_signal,-0.056257,0.477556,0.467459,0.487672,9379,-0.006959,0.002132,-0.798478,96,0.2812,-375.4,0.396,-0.1762,Dual MA: SMA20 > SMA60 long else short
+dual_ma_20_60,recent_all_enabled,20,ts_signal,-0.081399,0.483646,0.473013,0.494294,8469,-0.018958,0.004232,-0.798478,96,0.2812,-375.4,0.396,-0.1762,Dual MA: SMA20 > SMA60 long else short
+dual_ma_20_60,recent_all_enabled,60,ts_signal,-0.049869,0.495502,0.482494,0.508516,5669,-0.040304,-0.027131,-0.798478,96,0.2812,-375.4,0.396,-0.1762,Dual MA: SMA20 > SMA60 long else short
+adx_trend,recent_all_enabled,1,ts_signal,0.006222,0.493027,0.480484,0.505579,6095,-0.000153,0.000189,-0.206901,161,0.4348,-34.3,0.893,-0.1085,Dual MA only when ADX14 > 25
+adx_trend,recent_all_enabled,3,ts_signal,0.000771,0.503665,0.491018,0.516308,6002,-0.001341,0.001193,-0.206901,161,0.4348,-34.3,0.893,-0.1085,Dual MA only when ADX14 > 25
+adx_trend,recent_all_enabled,7,ts_signal,-0.031413,0.480796,0.467989,0.493627,5832,-0.005341,0.001957,-0.206901,161,0.4348,-34.3,0.893,-0.1085,Dual MA only when ADX14 > 25
+adx_trend,recent_all_enabled,20,ts_signal,-0.104322,0.453716,0.440302,0.467198,5261,-0.038983,0.000573,-0.206901,161,0.4348,-34.3,0.893,-0.1085,Dual MA only when ADX14 > 25
+adx_trend,recent_all_enabled,60,ts_signal,-9.5e-05,0.505054,0.488162,0.521933,3364,-0.036617,-0.049913,-0.206901,161,0.4348,-34.3,0.893,-0.1085,Dual MA only when ADX14 > 25
+macd,recent_all_enabled,1,ts_signal,0.024687,0.492015,0.481808,0.502229,9205,0.000369,-0.000971,0.368963,340,0.3206,41.8,1.18,-0.0875,MACD histogram sign
+macd,recent_all_enabled,3,ts_signal,0.032891,0.510976,0.500683,0.52126,9065,0.001024,-0.002699,0.368963,340,0.3206,41.8,1.18,-0.0875,MACD histogram sign
+macd,recent_all_enabled,7,ts_signal,0.033848,0.520205,0.509751,0.530641,8785,-0.000599,-0.003943,0.368963,340,0.3206,41.8,1.18,-0.0875,MACD histogram sign
+macd,recent_all_enabled,20,ts_signal,-0.131272,0.452063,0.441097,0.463076,7875,-0.020216,0.00831,0.368963,340,0.3206,41.8,1.18,-0.0875,MACD histogram sign
+macd,recent_all_enabled,60,ts_signal,0.031984,0.510936,0.49718,0.524675,5075,-0.024164,-0.052931,0.368963,340,0.3206,41.8,1.18,-0.0875,MACD histogram sign
+td9_setup,recent_all_enabled,1,ts_signal,-0.006405,0.462633,0.405232,0.521042,281,0.00044,0.001228,-0.114267,140,0.4286,-38.9,0.53,-0.0106,DeMark Setup 9 completion pulse
+td9_setup,recent_all_enabled,3,ts_signal,-0.017957,0.448399,0.391335,0.506854,281,-0.001824,0.006001,-0.114267,140,0.4286,-38.9,0.53,-0.0106,DeMark Setup 9 completion pulse
+td9_setup,recent_all_enabled,7,ts_signal,-0.006937,0.454212,0.396194,0.513502,273,-2.1e-05,0.002563,-0.114267,140,0.4286,-38.9,0.53,-0.0106,DeMark Setup 9 completion pulse
+td9_setup,recent_all_enabled,20,ts_signal,0.040253,0.566406,0.505161,0.625688,256,0.015266,-0.028598,-0.114267,140,0.4286,-38.9,0.53,-0.0106,DeMark Setup 9 completion pulse
+td9_setup,recent_all_enabled,60,ts_signal,-0.01695,0.421965,0.350851,0.49647,173,-0.048241,-0.032491,-0.114267,140,0.4286,-38.9,0.53,-0.0106,DeMark Setup 9 completion pulse
+ichimoku_cloud,recent_all_enabled,1,ts_signal,0.021226,0.494926,0.483754,0.506103,7686,-8.9e-05,-0.000377,-0.162916,206,0.2379,-87.5,0.682,-0.1165,Above cloud long / below short
+ichimoku_cloud,recent_all_enabled,3,ts_signal,0.020993,0.510501,0.499238,0.521753,7571,-0.001048,-0.000818,-0.162916,206,0.2379,-87.5,0.682,-0.1165,Above cloud long / below short
+ichimoku_cloud,recent_all_enabled,7,ts_signal,-0.036034,0.4819,0.470487,0.493331,7348,-0.006591,0.000872,-0.162916,206,0.2379,-87.5,0.682,-0.1165,Above cloud long / below short
+ichimoku_cloud,recent_all_enabled,20,ts_signal,-0.063365,0.476995,0.464988,0.489028,6629,-0.018989,0.005814,-0.162916,206,0.2379,-87.5,0.682,-0.1165,Above cloud long / below short
+ichimoku_cloud,recent_all_enabled,60,ts_signal,0.015021,0.501889,0.486837,0.516937,4236,-0.031275,-0.047075,-0.162916,206,0.2379,-87.5,0.682,-0.1165,Above cloud long / below short
+turtle_20_10,recent_all_enabled,1,ts_signal,0.020681,0.502392,0.485453,0.519326,3344,5.5e-05,,0.041966,139,0.3813,-21.4,0.947,-0.0991,Donchian 20d high entry / 10d low exit
+turtle_20_10,recent_all_enabled,3,ts_signal,0.011199,0.499101,0.48215,0.516054,3338,-0.000299,,0.041966,139,0.3813,-21.4,0.947,-0.0991,Donchian 20d high entry / 10d low exit
+turtle_20_10,recent_all_enabled,7,ts_signal,-0.006394,0.466928,0.449983,0.483951,3311,-0.003745,,0.041966,139,0.3813,-21.4,0.947,-0.0991,Donchian 20d high entry / 10d low exit
+turtle_20_10,recent_all_enabled,20,ts_signal,-0.127026,0.379524,0.362511,0.396839,3067,-0.028156,,0.041966,139,0.3813,-21.4,0.947,-0.0991,Donchian 20d high entry / 10d low exit
+turtle_20_10,recent_all_enabled,60,ts_signal,0.016524,0.399695,0.378275,0.421506,1969,-0.02205,,0.041966,139,0.3813,-21.4,0.947,-0.0991,Donchian 20d high entry / 10d low exit
+mom_20_cs,all_longhist,1,cs_rank,0.014308,0.494472,0.48526,0.503688,11307,0.000631,-0.000123,0.818127,0,,,,-0.2515,Cross-sectional: top tercile 20d momentum
+mom_20_cs,all_longhist,3,cs_rank,0.017182,0.514048,0.504822,0.523264,11283,0.001641,0.000109,0.818127,0,,,,-0.2515,Cross-sectional: top tercile 20d momentum
+mom_20_cs,all_longhist,7,cs_rank,0.008559,0.507165,0.49792,0.516406,11235,0.001376,0.001309,0.818127,0,,,,-0.2515,Cross-sectional: top tercile 20d momentum
+mom_20_cs,all_longhist,20,cs_rank,-0.007151,0.499774,0.490466,0.509083,11079,0.002054,0.009795,0.818127,0,,,,-0.2515,Cross-sectional: top tercile 20d momentum
+mom_20_cs,all_longhist,60,cs_rank,-0.011676,0.514954,0.505436,0.524462,10599,0.011371,0.018459,0.818127,0,,,,-0.2515,Cross-sectional: top tercile 20d momentum
+mom_60_cs,all_longhist,1,cs_rank,0.020974,0.498238,0.488924,0.507553,11065,0.000256,6.3e-05,0.474644,0,,,,-0.4273,Cross-sectional: top tercile 60d momentum
+mom_60_cs,all_longhist,3,cs_rank,0.018624,0.50874,0.499414,0.51806,11041,0.000747,0.000622,0.474644,0,,,,-0.4273,Cross-sectional: top tercile 60d momentum
+mom_60_cs,all_longhist,7,cs_rank,0.006836,0.515783,0.506437,0.525118,10993,0.001071,0.001912,0.474644,0,,,,-0.4273,Cross-sectional: top tercile 60d momentum
+mom_60_cs,all_longhist,20,cs_rank,0.016568,0.514995,0.505582,0.524397,10837,0.006044,0.003249,0.474644,0,,,,-0.4273,Cross-sectional: top tercile 60d momentum
+mom_60_cs,all_longhist,60,cs_rank,0.016395,0.509897,0.500267,0.519519,10357,0.004188,0.018592,0.474644,0,,,,-0.4273,Cross-sectional: top tercile 60d momentum
+mom_120_cs,all_longhist,1,cs_rank,0.026852,0.49986,0.49039,0.50933,10705,0.000355,0.000136,0.591274,0,,,,-0.4259,Cross-sectional: top tercile 120d momentum
+mom_120_cs,all_longhist,3,cs_rank,0.025152,0.511469,0.501987,0.520943,10681,0.000902,0.001004,0.591274,0,,,,-0.4259,Cross-sectional: top tercile 120d momentum
+mom_120_cs,all_longhist,7,cs_rank,0.025218,0.515377,0.505874,0.524869,10633,0.001258,0.001709,0.591274,0,,,,-0.4259,Cross-sectional: top tercile 120d momentum
+mom_120_cs,all_longhist,20,cs_rank,0.042112,0.519519,0.509947,0.529077,10477,0.003999,0.003959,0.591274,0,,,,-0.4259,Cross-sectional: top tercile 120d momentum
+mom_120_cs,all_longhist,60,cs_rank,0.005499,0.519056,0.509256,0.528841,9997,0.007018,0.020469,0.591274,0,,,,-0.4259,Cross-sectional: top tercile 120d momentum
+tsmom_12m,all_longhist,1,ts_signal,0.030037,0.502702,0.496916,0.508487,28683,0.000154,0.000162,0.184844,327,0.2477,-86.7,0.727,-0.2912,Time-series: 12m cumulative return > 0
+tsmom_12m,all_longhist,3,ts_signal,0.036693,0.520007,0.514216,0.525793,28615,0.000533,0.000499,0.184844,327,0.2477,-86.7,0.727,-0.2912,Time-series: 12m cumulative return > 0
+tsmom_12m,all_longhist,7,ts_signal,0.042693,0.52709,0.521288,0.532885,28479,0.000931,0.001319,0.184844,327,0.2477,-86.7,0.727,-0.2912,Time-series: 12m cumulative return > 0
+tsmom_12m,all_longhist,20,ts_signal,0.045173,0.529032,0.523186,0.53487,28038,0.001033,0.005812,0.184844,327,0.2477,-86.7,0.727,-0.2912,Time-series: 12m cumulative return > 0
+tsmom_12m,all_longhist,60,ts_signal,0.057176,0.533903,0.527913,0.539884,26679,0.006393,0.01645,0.184844,327,0.2477,-86.7,0.727,-0.2912,Time-series: 12m cumulative return > 0
+tsmom_volscaled,all_longhist,1,ts_signal,0.033531,0.502702,0.496916,0.508487,28683,0.000154,0.000162,0.184844,327,0.2477,-86.7,0.727,-0.2912,Continuous score: 12m sign / 20d annualized vol
+tsmom_volscaled,all_longhist,3,ts_signal,0.045617,0.520007,0.514216,0.525793,28615,0.000533,0.000499,0.184844,327,0.2477,-86.7,0.727,-0.2912,Continuous score: 12m sign / 20d annualized vol
+tsmom_volscaled,all_longhist,7,ts_signal,0.05625,0.52709,0.521288,0.532885,28479,0.000931,0.001319,0.184844,327,0.2477,-86.7,0.727,-0.2912,Continuous score: 12m sign / 20d annualized vol
+tsmom_volscaled,all_longhist,20,ts_signal,0.061216,0.529032,0.523186,0.53487,28038,0.001033,0.005812,0.184844,327,0.2477,-86.7,0.727,-0.2912,Continuous score: 12m sign / 20d annualized vol
+tsmom_volscaled,all_longhist,60,ts_signal,0.059811,0.533903,0.527913,0.539884,26679,0.006393,0.01645,0.184844,327,0.2477,-86.7,0.727,-0.2912,Continuous score: 12m sign / 20d annualized vol
+tsmom_voltarget_m2,all_longhist,1,vol_weighted,0.027577,0.500537,0.492508,0.508567,14892,0.000154,,0.290818,0,,,,-0.187,"True volatility target position sizing: min(1, 0.15/vol20)"
+tsmom_voltarget_m2,all_longhist,3,vol_weighted,0.037929,0.517714,0.509681,0.525739,14875,0.000533,,0.290818,0,,,,-0.187,"True volatility target position sizing: min(1, 0.15/vol20)"
+tsmom_voltarget_m2,all_longhist,7,vol_weighted,0.045602,0.526266,0.518224,0.534295,14829,0.000931,,0.290818,0,,,,-0.187,"True volatility target position sizing: min(1, 0.15/vol20)"
+tsmom_voltarget_m2,all_longhist,20,vol_weighted,0.0505,0.526312,0.518221,0.534389,14651,0.001033,,0.290818,0,,,,-0.187,"True volatility target position sizing: min(1, 0.15/vol20)"
+tsmom_voltarget_m2,all_longhist,60,vol_weighted,0.05625,0.531492,0.523167,0.539799,13829,0.006393,,0.290818,0,,,,-0.187,"True volatility target position sizing: min(1, 0.15/vol20)"
+dual_momentum_c1,all_longhist,1,dual_momentum,0.016954,0.510261,0.497705,0.522805,6091,0.000203,,0.161989,0,,,,-0.4212,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+dual_momentum_c1,all_longhist,3,dual_momentum,0.017435,0.51719,0.504622,0.529737,6079,0.000282,,0.161989,0,,,,-0.4212,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+dual_momentum_c1,all_longhist,7,dual_momentum,0.021655,0.53319,0.520608,0.54573,6056,-0.00042,,0.161989,0,,,,-0.4212,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+dual_momentum_c1,all_longhist,20,dual_momentum,0.016482,0.536244,0.523608,0.548834,6001,-0.000987,,0.161989,0,,,,-0.4212,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+dual_momentum_c1,all_longhist,60,dual_momentum,0.044543,0.558596,0.545794,0.57132,5811,0.014233,,0.161989,0,,,,-0.4212,Dual Momentum: Top-4 120d CS gated by 12m trend > 0
+equal_weight_b0,all_longhist,1,benchmark,,0.481178,0.47579,0.486572,32994,0.000205,,0.361432,0,,,,-0.4515,Baseline: equal-weight Buy & Hold
+equal_weight_b0,all_longhist,3,benchmark,,0.500061,0.49466,0.505461,32926,0.000639,,0.361432,0,,,,-0.4515,Baseline: equal-weight Buy & Hold
+equal_weight_b0,all_longhist,7,benchmark,,0.505459,0.500047,0.51087,32790,0.001493,,0.361432,0,,,,-0.4515,Baseline: equal-weight Buy & Hold
+equal_weight_b0,all_longhist,20,benchmark,,0.505812,0.500363,0.511259,32348,0.004738,,0.361432,0,,,,-0.4515,Baseline: equal-weight Buy & Hold
+equal_weight_b0,all_longhist,60,benchmark,,0.505228,0.499661,0.510794,30988,0.014473,,0.361432,0,,,,-0.4515,Baseline: equal-weight Buy & Hold
+rs_vs_300_20,all_longhist,1,ts_signal,0.020366,0.493344,0.48772,0.498969,30348,0.00054,-0.000108,0.639347,1421,0.3934,39.5,1.227,-0.1643,Relative strength vs 510300.SH > 0
+rs_vs_300_20,all_longhist,3,ts_signal,0.025957,0.512977,0.507346,0.518605,30284,0.001567,-0.000209,0.639347,1421,0.3934,39.5,1.227,-0.1643,Relative strength vs 510300.SH > 0
+rs_vs_300_20,all_longhist,7,ts_signal,0.003689,0.499668,0.494026,0.505311,30156,0.001355,0.0018,0.639347,1421,0.3934,39.5,1.227,-0.1643,Relative strength vs 510300.SH > 0
+rs_vs_300_20,all_longhist,20,ts_signal,-0.03506,0.488063,0.482384,0.493745,29740,-0.000603,0.010109,0.639347,1421,0.3934,39.5,1.227,-0.1643,Relative strength vs 510300.SH > 0
+rs_vs_300_20,all_longhist,60,ts_signal,0.018648,0.518342,0.512534,0.524144,28460,0.012188,0.016361,0.639347,1421,0.3934,39.5,1.227,-0.1643,Relative strength vs 510300.SH > 0
+z_mr_20,all_longhist,1,ts_signal,-0.011019,0.487718,0.480282,0.495159,17342,-0.0004,0.001035,-0.214528,1826,0.5915,-33.3,0.735,-0.2904,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+z_mr_20,all_longhist,3,ts_signal,-0.006739,0.49708,0.489631,0.504531,17297,7.3e-05,0.001656,-0.214528,1826,0.5915,-33.3,0.735,-0.2904,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+z_mr_20,all_longhist,7,ts_signal,-0.022802,0.490297,0.482832,0.497767,17212,0.001205,0.003179,-0.214528,1826,0.5915,-33.3,0.735,-0.2904,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+z_mr_20,all_longhist,20,ts_signal,0.020574,0.507472,0.499955,0.514986,16996,0.012238,-0.000929,-0.214528,1826,0.5915,-33.3,0.735,-0.2904,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+z_mr_20,all_longhist,60,ts_signal,-0.021823,0.476369,0.468692,0.484058,16229,0.015632,0.015428,-0.214528,1826,0.5915,-33.3,0.735,-0.2904,"Bollinger z-score mean reversion: z<-1 long, z>1 short"
+dual_ma_20_60,all_longhist,1,ts_signal,0.017301,0.497575,0.492181,0.50297,32994,9.2e-05,0.000312,0.20718,306,0.3529,-11.3,0.978,-0.3497,Dual MA: SMA20 > SMA60 long else short
+dual_ma_20_60,all_longhist,3,ts_signal,0.01487,0.507289,0.501888,0.512688,32926,0.000252,0.001008,0.20718,306,0.3529,-11.3,0.978,-0.3497,Dual MA: SMA20 > SMA60 long else short
+dual_ma_20_60,all_longhist,7,ts_signal,-0.006414,0.498963,0.493552,0.504375,32790,-8.3e-05,0.003001,0.20718,306,0.3529,-11.3,0.978,-0.3497,Dual MA: SMA20 > SMA60 long else short
+dual_ma_20_60,all_longhist,20,ts_signal,0.007078,0.507388,0.50194,0.512835,32348,0.002528,0.00684,0.20718,306,0.3529,-11.3,0.978,-0.3497,Dual MA: SMA20 > SMA60 long else short
+dual_ma_20_60,all_longhist,60,ts_signal,0.042053,0.522331,0.516767,0.52789,30988,0.009768,0.01904,0.20718,306,0.3529,-11.3,0.978,-0.3497,Dual MA: SMA20 > SMA60 long else short
+adx_trend,all_longhist,1,ts_signal,0.014465,0.496478,0.489977,0.50298,22714,0.000255,0.000295,0.295975,548,0.4398,34.9,1.127,-0.2062,Dual MA only when ADX14 > 25
+adx_trend,all_longhist,3,ts_signal,0.019135,0.509112,0.502602,0.515618,22663,0.000807,0.000379,0.295975,548,0.4398,34.9,1.127,-0.2062,Dual MA only when ADX14 > 25
+adx_trend,all_longhist,7,ts_signal,0.002165,0.499646,0.493126,0.506166,22586,0.00072,0.001736,0.295975,548,0.4398,34.9,1.127,-0.2062,Dual MA only when ADX14 > 25
+adx_trend,all_longhist,20,ts_signal,-0.001548,0.500493,0.493934,0.507052,22320,-0.001716,0.004927,0.295975,548,0.4398,34.9,1.127,-0.2062,Dual MA only when ADX14 > 25
+adx_trend,all_longhist,60,ts_signal,0.0368,0.522875,0.516179,0.529562,21399,0.010542,0.017194,0.295975,548,0.4398,34.9,1.127,-0.2062,Dual MA only when ADX14 > 25
+macd,all_longhist,1,ts_signal,0.009669,0.484075,0.478638,0.489515,32433,0.000714,-0.000313,0.787365,1212,0.3672,75.2,1.365,-0.153,MACD histogram sign
+macd,all_longhist,3,ts_signal,0.018741,0.508481,0.503034,0.513927,32365,0.001744,-0.00049,0.787365,1212,0.3672,75.2,1.365,-0.153,MACD histogram sign
+macd,all_longhist,7,ts_signal,0.019555,0.504577,0.499118,0.510034,32229,0.003138,-0.00011,0.787365,1212,0.3672,75.2,1.365,-0.153,MACD histogram sign
+macd,all_longhist,20,ts_signal,-0.03233,0.487589,0.482096,0.493085,31787,0.000434,0.009091,0.787365,1212,0.3672,75.2,1.365,-0.153,MACD histogram sign
+macd,all_longhist,60,ts_signal,-0.00699,0.500838,0.49522,0.506456,30427,0.013667,0.013257,0.787365,1212,0.3672,75.2,1.365,-0.153,MACD histogram sign
+td9_setup,all_longhist,1,ts_signal,0.004805,0.519959,0.488615,0.551147,977,0.000358,0.000423,0.055395,471,0.4352,-21.6,0.722,-0.0308,DeMark Setup 9 completion pulse
+td9_setup,all_longhist,3,ts_signal,-0.008033,0.485159,0.45394,0.516494,977,-2.9e-05,0.004404,0.055395,471,0.4352,-21.6,0.722,-0.0308,DeMark Setup 9 completion pulse
+td9_setup,all_longhist,7,ts_signal,-0.008048,0.467559,0.436366,0.499008,971,0.000987,0.002957,0.055395,471,0.4352,-21.6,0.722,-0.0308,DeMark Setup 9 completion pulse
+td9_setup,all_longhist,20,ts_signal,0.008089,0.505176,0.473689,0.536622,966,0.014983,-0.001394,0.055395,471,0.4352,-21.6,0.722,-0.0308,DeMark Setup 9 completion pulse
+td9_setup,all_longhist,60,ts_signal,-0.002677,0.473456,0.441422,0.505711,923,0.023617,0.015296,0.055395,471,0.4352,-21.6,0.722,-0.0308,DeMark Setup 9 completion pulse
+ichimoku_cloud,all_longhist,1,ts_signal,0.014583,0.493824,0.487937,0.499714,27690,0.000273,0.000164,0.324603,825,0.2545,11.6,1.053,-0.2972,Above cloud long / below short
+ichimoku_cloud,all_longhist,3,ts_signal,0.011153,0.506748,0.500853,0.51264,27639,0.000654,0.001247,0.324603,825,0.2545,11.6,1.053,-0.2972,Above cloud long / below short
+ichimoku_cloud,all_longhist,7,ts_signal,0.010102,0.505829,0.499923,0.511734,27533,0.000851,0.002756,0.324603,825,0.2545,11.6,1.053,-0.2972,Above cloud long / below short
+ichimoku_cloud,all_longhist,20,ts_signal,0.016045,0.515888,0.509946,0.521826,27190,0.001181,0.007163,0.324603,825,0.2545,11.6,1.053,-0.2972,Above cloud long / below short
+ichimoku_cloud,all_longhist,60,ts_signal,0.061921,0.537057,0.530993,0.54311,26014,0.011194,0.010399,0.324603,825,0.2545,11.6,1.053,-0.2972,Above cloud long / below short
+turtle_20_10,all_longhist,1,ts_signal,0.020143,0.496709,0.487932,0.505488,12458,0.000682,,0.668436,477,0.4088,126.7,1.427,-0.1263,Donchian 20d high entry / 10d low exit
+turtle_20_10,all_longhist,3,ts_signal,0.015221,0.510842,0.50206,0.519617,12452,0.000979,,0.668436,477,0.4088,126.7,1.427,-0.1263,Donchian 20d high entry / 10d low exit
+turtle_20_10,all_longhist,7,ts_signal,0.013535,0.509812,0.501023,0.518594,12434,0.001081,,0.668436,477,0.4088,126.7,1.427,-0.1263,Donchian 20d high entry / 10d low exit
+turtle_20_10,all_longhist,20,ts_signal,-0.018405,0.499108,0.490288,0.50793,12338,-0.001059,,0.668436,477,0.4088,126.7,1.427,-0.1263,Donchian 20d high entry / 10d low exit
+turtle_20_10,all_longhist,60,ts_signal,0.024185,0.527139,0.518134,0.536126,11828,0.013224,,0.668436,477,0.4088,126.7,1.427,-0.1263,Donchian 20d high entry / 10d low exit
