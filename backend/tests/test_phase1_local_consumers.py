@@ -106,3 +106,129 @@ def test_holdings_reject_unapproved_local_quote(monkeypatch, tmp_path):
     result = read_model.holdings_view(db, settings, 1)
     assert result["items"][0]["quote"]["price"] is None
     assert result["total_market_value"] is None
+
+
+def test_watchlist_local_bundle_never_uses_frozen_cloud_quotes(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    from app.workspace import actions_api, local_display_read, read_model
+
+    bundle = {"manifest": {"sequence": 8, "code_sha": "a" * 40, "config_hash": "b" * 64,
+                           "expires_at": "2026-10-24T00:00:00Z"},
+              "parts": {"details": {"510300.SH": {"quote": {
+                  "price": 4.2, "status": "observed", "is_realtime": True,
+                  "source_time": "2026-10-23T15:00:00+08:00", "actionable": False}}}}}
+    monkeypatch.setattr(local_display_read.LocalDisplayStore, "load_bundle", lambda *a: bundle)
+    cloud_reads = []
+    monkeypatch.setattr(read_model, "latest_rows", lambda *a, **k: cloud_reads.append(True) or {})
+    pairs = [(SimpleNamespace(id=index, note=None),
+              SimpleNamespace(id=index, ts_code=code, name="test", kind="ETF", theme_l1="test", enabled=True))
+             for index, code in enumerate(("510300.SH", "510500.SH"), 1)]
+    db = SimpleNamespace(execute=lambda *a: SimpleNamespace(all=lambda: pairs))
+    settings = Settings(_env_file=None, workspace_research_source="local_bundle",
+                        shadow_sync_code_sha="a" * 40, shadow_sync_config_hash="b" * 64,
+                        local_display_v2_store_root=str(tmp_path / "store"))
+
+    items = actions_api.watchlist(db, settings, SimpleNamespace(id=1))["items"]
+    assert cloud_reads == []
+    assert items[0]["quote"]["price"] == 4.2
+    assert items[0]["quote"]["source_time"] == "2026-10-23T15:00:00+08:00"
+    assert items[0]["quote"]["status"] == "stale"
+    assert items[0]["quote"]["is_realtime"] is False
+    assert items[1]["quote"]["price"] is None
+    assert items[1]["quote"]["status"] == "missing"
+
+
+def test_holdings_expired_local_bundle_quote_is_not_current(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    from app.workspace import local_display_read, read_model
+
+    bundle = {"manifest": {"sequence": 8, "code_sha": "a" * 40, "config_hash": "b" * 64,
+                           "expires_at": "2026-10-24T00:00:00Z"},
+              "parts": {"overview": {"rows": []}, "details": {"510300.SH": {"quote": {
+                  "price": 4.2, "status": "observed", "is_realtime": True,
+                  "source_time": "2026-10-23T15:00:00+08:00", "actionable": False}}}}}
+    monkeypatch.setattr(local_display_read.LocalDisplayStore, "load_bundle", lambda *a: bundle)
+    holding = SimpleNamespace(shares=2, cost_price=4, target_weight=None, notes=None, updated_at=None)
+    instrument = SimpleNamespace(ts_code="510300.SH", name="test", kind="ETF", theme_l1="test", id=1)
+    db = SimpleNamespace(execute=lambda *a: SimpleNamespace(all=lambda: [(holding, instrument)]))
+    settings = Settings(_env_file=None, workspace_research_source="local_bundle",
+                        shadow_sync_code_sha="a" * 40, shadow_sync_config_hash="b" * 64,
+                        local_display_v2_store_root=str(tmp_path / "store"))
+
+    quote = read_model.holdings_view(db, settings, 1)["items"][0]["quote"]
+    assert quote["price"] == 4.2
+    assert quote["source_time"] == "2026-10-23T15:00:00+08:00"
+    assert quote["status"] == "stale"
+    assert quote["is_realtime"] is False
+
+
+def test_search_local_bundle_does_not_show_frozen_cloud_price(monkeypatch, tmp_path):
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    from app.db.base import Base
+    from app.models import Instrument
+    from app.workspace import local_display_read, read_model
+
+    bundle = {"manifest": {"sequence": 8, "code_sha": "a" * 40, "config_hash": "b" * 64,
+                           "expires_at": "2026-10-24T00:00:00Z"},
+              "parts": {"details": {"510300.SH": {"quote": {
+                  "price": 4.2, "status": "observed", "is_realtime": True,
+                  "source_time": "2026-10-23T15:00:00+08:00", "actionable": False}}}}}
+    monkeypatch.setattr(local_display_read.LocalDisplayStore, "load_bundle", lambda *a: bundle)
+    cloud_reads = []
+    monkeypatch.setattr(read_model, "latest_rows", lambda *a, **k: cloud_reads.append(True) or {})
+    settings = Settings(_env_file=None, workspace_research_source="local_bundle",
+                        shadow_sync_code_sha="a" * 40, shadow_sync_config_hash="b" * 64,
+                        local_display_v2_store_root=str(tmp_path / "store"))
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    try:
+        with Session(engine) as db:
+            db.add_all([Instrument(ts_code=code, symbol=code[:6], name="test", kind="ETF", enabled=True)
+                        for code in ("510300.SH", "510500.SH")])
+            db.flush()
+            result = read_model.search_instruments(db, settings, "510", 20, None)
+    finally:
+        engine.dispose()
+
+    quotes = {item["ts_code"]: item["quote"] for item in result["items"]}
+    assert cloud_reads == []
+    assert quotes["510300.SH"]["price"] == 4.2
+    assert quotes["510300.SH"]["status"] == "stale"
+    assert quotes["510500.SH"]["price"] is None
+
+
+@pytest.mark.parametrize("source_time", [None, {}, 42, "not-a-date"])
+def test_local_bundle_bad_quote_time_is_stale_not_server_error(monkeypatch, tmp_path, source_time):
+    from app.workspace import local_display_read, read_model
+
+    bundle = {"manifest": {"sequence": 8, "code_sha": "a" * 40, "config_hash": "b" * 64,
+                           "expires_at": "2030-10-25T00:00:00Z"},
+              "parts": {"details": {"510300.SH": {"quote": {
+                  "price": 4.2, "status": "observed", "is_realtime": True,
+                  "source_time": source_time, "actionable": False}}}}}
+    monkeypatch.setattr(local_display_read.LocalDisplayStore, "load_bundle", lambda *a: bundle)
+    settings = Settings(_env_file=None, workspace_research_source="local_bundle",
+                        shadow_sync_code_sha="a" * 40, shadow_sync_config_hash="b" * 64,
+                        local_display_v2_store_root=str(tmp_path / "store"))
+
+    quote = read_model.local_bundle_pricing(settings)[1]["510300.SH"]
+    assert quote["status"] == "stale"
+    assert quote["is_realtime"] is False
+
+
+def test_local_bundle_non_observed_quote_cannot_claim_realtime(monkeypatch, tmp_path):
+    from app.workspace import local_display_read, read_model
+
+    bundle = {"manifest": {"sequence": 8, "code_sha": "a" * 40, "config_hash": "b" * 64,
+                           "expires_at": "2030-10-25T00:00:00Z"},
+              "parts": {"details": {"510300.SH": {"quote": {
+                  "price": 4.2, "status": "stale", "is_realtime": True,
+                  "source_time": "2026-10-23T15:00:00+08:00", "actionable": False}}}}}
+    monkeypatch.setattr(local_display_read.LocalDisplayStore, "load_bundle", lambda *a: bundle)
+    settings = Settings(_env_file=None, workspace_research_source="local_bundle",
+                        shadow_sync_code_sha="a" * 40, shadow_sync_config_hash="b" * 64,
+                        local_display_v2_store_root=str(tmp_path / "store"))
+    quote = read_model.local_bundle_pricing(settings)[1]["510300.SH"]
+    assert quote["status"] == "stale"
+    assert quote["is_realtime"] is False

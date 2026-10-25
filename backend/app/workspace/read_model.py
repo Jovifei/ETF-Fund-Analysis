@@ -80,6 +80,41 @@ def latest_rows(db: Session, model, ids: list[int], *ordering, partitions=None) 
     return {row.instrument_id: row for row in rows}
 
 
+def local_bundle_pricing(settings: Settings) -> tuple[dict | None, dict[str, dict], int | None]:
+    """Read approved public quotes once; never substitute frozen cloud quotes."""
+    from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
+
+    try:
+        store = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=settings.local_display_v2_max_bytes)
+        bundle = LocalDisplayReader(store, code_sha=settings.shadow_sync_code_sha,
+                                    config_hash=settings.shadow_sync_config_hash).load_bundle(None)
+    except (OSError, ValueError):
+        bundle = None
+    if not bundle:
+        return None, {}, None
+
+    manifest = bundle["manifest"]
+    now = datetime.now(UTC)
+    try:
+        expired = now >= datetime.fromisoformat(manifest["expires_at"].replace("Z", "+00:00"))
+    except (KeyError, TypeError, ValueError):
+        expired = True
+    generation = manifest.get("sequence")
+    quotes = {}
+    for code, detail in bundle.get("parts", {}).get("details", {}).items():
+        raw = detail.get("quote") if isinstance(detail, dict) else None
+        if not isinstance(raw, dict):
+            continue
+        source_value = raw.get("source_time")
+        source_time = market_time(source_value) if isinstance(source_value, (str, datetime)) else None
+        age = (now - source_time.astimezone(UTC)).total_seconds() if source_time else None
+        stale = expired or (raw.get("status") == "observed" and (age is None or age < 0 or age > 600))
+        quotes[code] = {**raw, "status": "stale" if stale else raw.get("status", "missing"),
+                        "is_realtime": bool(raw.get("is_realtime")) and raw.get("status") == "observed" and not stale,
+                        "actionable": False, "generation": generation}
+    return bundle, quotes, generation
+
+
 def quote_view(quote, settings: Settings, *, as_of: datetime | None = None) -> dict:
     if quote is None:
         return {"price": None, "status": "missing", "source_time": None, "source": None, "actionable": False}
@@ -151,12 +186,14 @@ def search_instruments(db: Session, settings: Settings, q: str, limit: int, user
     query = query.order_by(*priority, Instrument.ts_code).offset(offset).limit(limit)
     instruments = list(db.scalars(query))
     ids = [row.id for row in instruments]
-    quotes = latest_rows(db, QuoteSnapshot, ids, QuoteSnapshot.quote_time.desc())
+    local_only = settings.workspace_research_source == "local_bundle"
+    bundle_quotes = local_bundle_pricing(settings)[1] if local_only else {}
+    quotes = {} if local_only else latest_rows(db, QuoteSnapshot, ids, QuoteSnapshot.quote_time.desc())
     watched = set(db.scalars(select(UserWatchlistEntry.instrument_id).where(UserWatchlistEntry.user_id == user_id, UserWatchlistEntry.instrument_id.in_(ids)))) if ids else set()
     held = set(db.scalars(select(Holding.instrument_id).where(Holding.user_id == user_id, Holding.instrument_id.in_(ids)))) if ids else set()
     return {
         "scope": "synced_catalog", "match_context": match_context, "provider_called": False, "total": total, "offset": offset, "limit": limit, "has_more": offset + len(instruments) < total,
-        "items": [{"ts_code": row.ts_code, "name": row.name, "kind": row.kind, "theme": row.theme_l1, "theme_detail": row.theme_l2, "enabled": row.enabled, "quote": quote_view(quotes.get(row.id), settings), "match_reason": matching_reason(row, terms), "market_cap_cny": (row.metadata_json or {}).get("market_cap_cny"), "turnover_cny": (row.metadata_json or {}).get("turnover_cny"), "metadata_as_of": (row.metadata_json or {}).get("catalog_as_of"), "watched": row.id in watched, "held": row.id in held} for row in instruments],
+        "items": [{"ts_code": row.ts_code, "name": row.name, "kind": row.kind, "theme": row.theme_l1, "theme_detail": row.theme_l2, "enabled": row.enabled, "quote": bundle_quotes.get(row.ts_code) or quote_view(quotes.get(row.id), settings), "match_reason": matching_reason(row, terms), "market_cap_cny": (row.metadata_json or {}).get("market_cap_cny"), "turnover_cny": (row.metadata_json or {}).get("turnover_cny"), "metadata_as_of": (row.metadata_json or {}).get("catalog_as_of"), "watched": row.id in watched, "held": row.id in held} for row in instruments],
         "note": "仅搜索已同步证券目录。新增目录/历史数据由独立任务处理，不阻塞搜索。",
     }
 
@@ -193,30 +230,16 @@ def holdings_view(db: Session, settings: Settings, user_id: int | None) -> dict:
     local_only = settings.workspace_research_source == "local_bundle"
     quotes = {} if local_only else latest_rows(db, QuoteSnapshot, [inst.id for _, inst in pairs], QuoteSnapshot.quote_time.desc())
 
-    bundle_board = None
-    bundle_details = {}
-    generation = None
-    if getattr(settings, "workspace_research_source", "database") == "local_bundle":
-        try:
-            from app.workspace.local_display_read import LocalDisplayStore, LocalDisplayReader
-            store = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=settings.local_display_v2_max_bytes)
-            bundle = LocalDisplayReader(store, code_sha=settings.shadow_sync_code_sha, config_hash=settings.shadow_sync_config_hash).load_bundle(None)
-            if bundle:
-                bundle_board = bundle.get("parts", {}).get("overview", {})
-                bundle_details = bundle.get("parts", {}).get("details", {})
-                generation = bundle.get("manifest", {}).get("sequence")
-        except Exception:
-            pass
+    bundle, bundle_quotes, generation = local_bundle_pricing(settings) if local_only else (None, {}, None)
+    bundle_board = bundle.get("parts", {}).get("overview", {}) if bundle else None
+    bundle_details = bundle.get("parts", {}).get("details", {}) if bundle else {}
 
     board = (bundle_board or {}) if local_only else (DecisionBoardService(settings).read_latest(db) or {})
     decisions = {row["ts_code"]: row for row in board.get("rows", [])}
     items = []
     for holding, inst in pairs:
         det = bundle_details.get(inst.ts_code) or {}
-        bundle_quote = det.get("quote")
-        quote = bundle_quote if isinstance(bundle_quote, dict) else quote_view(None if local_only else quotes.get(inst.id), settings)
-        if local_only:
-            quote = {**quote, "generation": generation}
+        quote = (bundle_quotes.get(inst.ts_code) or quote_view(None, settings)) if local_only else quote_view(quotes.get(inst.id), settings)
         price = quote.get("price") if isinstance(quote, dict) else None
         shares, cost = float(holding.shares), float(holding.cost_price)
         market_value = shares * price if price is not None else None
