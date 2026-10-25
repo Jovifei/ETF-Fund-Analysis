@@ -40,3 +40,26 @@ def test_research_scheme_and_audit_documents_exist_and_valid():
     assert "A2" in chk_text
     assert "A3" in chk_text
     assert "A4" in chk_text
+
+
+def test_version_v1011_document_exists_and_valid():
+    worktree_root = Path(__file__).resolve().parents[2]
+    versions_dir = worktree_root / "docs" / "versions"
+    v1011_doc = versions_dir / "V1.0.11.md"
+    readme_doc = versions_dir / "README.md"
+
+    assert v1011_doc.exists(), f"Missing version release document: {v1011_doc}"
+    assert readme_doc.exists(), f"Missing versions README: {readme_doc}"
+
+    readme_text = readme_doc.read_text(encoding="utf-8")
+    assert "V1.0.11" in readme_text
+
+    content = v1011_doc.read_text(encoding="utf-8")
+    assert "V1.0.11" in content
+    assert "research_only=true" in content
+    assert "actionable=false" in content
+    assert "simulate_portfolio_ledger_daily" in content
+    assert "2534 passed" in content
+    assert "Holdout 2Y" in content
+    assert "Purging" in content
+
