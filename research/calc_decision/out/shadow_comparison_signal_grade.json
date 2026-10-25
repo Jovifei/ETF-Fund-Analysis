@@ -1,0 +1,94 @@
+{
+  "contract": "A3.3-shadow-signal-grade-comparison-v1",
+  "total_evaluated_bars": 32516,
+  "grade_counts": {
+    "可入场": 9938,
+    "减仓": 9886,
+    "观望": 7127,
+    "可试探": 5041,
+    "可加仓": 524
+  },
+  "grade_percentages": {
+    "可入场": 30.56,
+    "减仓": 30.4,
+    "观望": 21.92,
+    "可试探": 15.5,
+    "可加仓": 1.61
+  },
+  "c1_long_grade_breakdown_pct": {
+    "减仓": 29.08,
+    "可入场": 27.48,
+    "观望": 26.08,
+    "可试探": 15.21,
+    "可加仓": 2.15
+  },
+  "c1_cash_grade_breakdown_pct": {
+    "可入场": 31.31,
+    "减仓": 30.72,
+    "观望": 20.92,
+    "可试探": 15.57,
+    "可加仓": 1.48
+  },
+  "performance_by_signal_grade": {
+    "减仓": {
+      "count": 9886,
+      "mean_fwd_7": 0.327,
+      "win_rate_7": 51.3,
+      "mean_fwd_20": 0.561,
+      "win_rate_20": 50.15
+    },
+    "可入场": {
+      "count": 9938,
+      "mean_fwd_7": 0.078,
+      "win_rate_7": 50.15,
+      "mean_fwd_20": 0.505,
+      "win_rate_20": 50.67
+    },
+    "可加仓": {
+      "count": 524,
+      "mean_fwd_7": 0.359,
+      "win_rate_7": 49.81,
+      "mean_fwd_20": 0.813,
+      "win_rate_20": 50.96
+    },
+    "可试探": {
+      "count": 5041,
+      "mean_fwd_7": -0.173,
+      "win_rate_7": 47.8,
+      "mean_fwd_20": -0.197,
+      "win_rate_20": 47.13
+    },
+    "观望": {
+      "count": 7127,
+      "mean_fwd_7": 0.234,
+      "win_rate_7": 52.4,
+      "mean_fwd_20": 0.746,
+      "win_rate_20": 53.36
+    }
+  },
+  "performance_by_c1_state": {
+    "c1_long": {
+      "count": 6311,
+      "mean_fwd_7": 0.063,
+      "win_rate_7": 52.86
+    },
+    "c1_cash": {
+      "count": 26205,
+      "mean_fwd_7": 0.175,
+      "win_rate_7": 50.08
+    }
+  },
+  "divergence_and_false_alarm_analysis": {
+    "sg_bullish_c1_approved": {
+      "count": 2830,
+      "mean_fwd_7": 0.027,
+      "win_rate_7": 52.37
+    },
+    "sg_bullish_c1_filtered_out": {
+      "count": 12673,
+      "mean_fwd_7": 0.001,
+      "win_rate_7": 48.7,
+      "filtering_alpha": 0.027
+    }
+  }
+}
