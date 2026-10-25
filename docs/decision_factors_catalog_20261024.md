@@ -1,0 +1,572 @@
+# 开源/公开买卖决策因子目录（面向中国 A 股 ETF）
+
+**日期**：2026-10-24（Asia/Shanghai）  
+**范围**：公开学术、开源库、可复核回测博客；**不**声称实盘可直接照抄胜率  
+**用途**：把系统重心从「存数/发信」转向「计算准不准」的选型与部署草案  
+**原则**：有出处才写数字；没有可靠复现就写「公开胜率未可靠复现」；优先区间与 caveat，拒绝假精确
+
+---
+
+## 0. 读之前必须知道的四件事
+
+1. **因子动物园（Factor Zoo）**  
+   Harvey / Liu / Zhu（RFS 2016）指出：几百个已发表截面因子里，传统 t>2 门槛过低；新因子宜要求 **t>3** 左右，且多数宣称发现可能是假发现。  
+   源：https://people.duke.edu/~charvey/Research/Published_Papers/P118_and_the_cross.PDF
+
+2. **「胜率」≠「赚钱」**  
+   趋势类（海龟、一目均衡）常 **胜率 28–35%**，靠少数大赢家；均值回归类（九转）可有 **~60% 方向命中**，但风险调整后常输给买入持有。看 Sharpe / IC / 扣费后收益，比看胜率重要。
+
+3. **股票因子 ≠ ETF 因子**  
+   - **直接可用（ETF 自身 OHLCV）**：动量、时间序列动量、波动、均线、突破、资金流/折溢价、日历效应（弱）  
+   - **需成分股再聚合**：价值、盈利质量、个股微结构、多数 WorldQuant 101 中的行业中性项  
+   - **在指数/ETF 上常变弱**：九转、海龟突破（Be The Puck：Indexes & ETFs 风险调整战胜持有约 **0%**）
+
+4. **美股/期货证据 → A 股 ETF 需重做 walk-forward**  
+   涨跌停、T+1、交易税/佣金、风格轮动更快、北向/政策冲击，都会改变 IC 与可交易性。下文数字均为「文献/公开回测参考量级」，不是你们篮子的实盘保证。
+
+---
+
+## 1. 证据质量等级（本报告统一标签）
+
+| 标签 | 含义 |
+|------|------|
+| **peer** | 同行评审期刊 / 知名工作论文，有清晰样本与统计 |
+| **open_lib** | 开源库公式可复现，绩效需自测 |
+| **backtest_blog** | 多标的系统回测站点（有成本意识，但非期刊） |
+| **vendor** | 券商研报 / 平台 demo，易过拟合 |
+| **folklore** | 教材/社区口耳相传，缺稳健样本外 |
+
+**IC 实务门槛（行业惯例，非硬科学）**  
+截面日频 |IC| ≈ 0.02–0.05 可筛；>0.05 较强；ICIR（均值/标准差）更重要。源：Alphalens 社区实践，https://github.com/quantopian/alphalens
+
+---
+
+## 2. 因子族总览（45+）
+
+下列每条含：定义 → 典型买卖规则草图 → 公开指标（若有）→ 证据等级 → **ETF 适用性**。
+
+### A. 趋势 / 通道（Trend & Breakout）
+
+#### A1. 双均线交叉（SMA/EMA crossover）
+- **定义**：短均线上穿/下穿长均线。  
+- **规则草图**：EMA(12)>EMA(26) 偏多；反向偏空；可加价格在 MA(60) 上方过滤。  
+- **公开指标**：单独规则在发达市场样本外常难稳定跑赢买入持有；新兴市场偶有正结果但衰减快（技术规则预测力综述）。  
+- **证据**：peer / folklore 混杂 → 写「公开胜率未可靠复现」更诚实。  
+- **ETF**：适用（OHLCV only）。宽基弱于主题/行业 ETF 轮动场景。
+
+#### A2. MACD 柱线拐点
+- **定义**：DIF=EMA12−EMA26，DEA=EMA(DIF,9)；柱线=DIF−DEA。  
+- **规则**：柱线由负转正买；由正转负卖；或零轴上下过滤。  
+- **公开指标**：流行美股 ETF 算法研究显示 **单独 MACD 难稳定战胜持有**（Bollinger 等部分规则相对更好）。  
+  源：https://www.tandfonline.com/doi/full/10.1080/23322039.2020.1720056  
+- **证据**：peer  
+- **ETF**：适用；作辅助过滤优于单独触发。
+
+#### A3. ADX / DMI 趋势强度
+- **定义**：ADX 衡量趋势是否「够强」；+DI/−DI 定方向。  
+- **规则**：ADX>25 且 +DI>−DI 才做多；ADX 低则禁开仓或改用均值回归。  
+- **公开指标**：公开胜率未可靠复现（多为过滤器用）。  
+- **证据**：open_lib（TA-Lib / pandas-ta）  
+- **ETF**：适用；适合你们「有没有趋势」门控。
+
+#### A4. 一目均衡表（Ichimoku Cloud）
+- **定义**：转换线(9)、基准线(26)、先行带A/B 云层；收盘相对云的位置。  
+- **规则**：收盘在云上且转换>基准 → 多；收盘破云下 → 平/空。  
+- **公开指标**（Be The Puck，373 标的）：方向命中约 **28%**；风险调整战胜持有约 **26%**；**Indexes & ETFs 组约 57%** 风险调整战胜持有（相对其它组最好）；多数情况降回撤但牺牲收益。  
+  源：https://bethepuck.com/guides/ichimoku-cloud/  
+- **证据**：backtest_blog  
+- **ETF**：**较适合 ETF/指数**（该回测族里 ETF 子集相对最好）；仍是「安全带」而非超额发动机。
+
+#### A5. Donchian / 海龟突破（Turtle System 1）
+- **定义**：收盘突破前 N 日高点入场，破 M 日低点或 2ATR 止损离场。  
+- **规则**：典型 N=20 入、M=10 出；上一笔盈利突破可跳过改等 55 日。  
+- **公开指标**：命中约 **31%**；风险调整战胜持有约 **16%**；**Indexes & ETFs = 0%**。  
+  源：https://bethepuck.com/guides/turtle-system-1/  
+- **证据**：backtest_blog  
+- **ETF**：**弱**；更适合波动大的个股/商品期货，不建议作为中国宽基 ETF 主信号。
+
+#### A6. 抛物线 SAR / Supertrend
+- **定义**：跟踪止损式趋势翻转点。  
+- **规则**：点翻到价下方做多，上方做空/平。  
+- **公开指标**：公开胜率未可靠复现。  
+- **证据**：open_lib / folklore  
+- **ETF**：可用作出场规则，不宜单独入场。
+
+#### A7. 趋势线 / 枢轴高低点结构（Swing HH/HL）
+- **定义**：摆动高点抬高+低点抬高=上升结构。  
+- **规则**：结构破坏（破前低）减仓；结构确认加仓。  
+- **公开指标**：公开胜率未可靠复现（实现歧义大）。  
+- **证据**：folklore  
+- **ETF**：适用但需严格算法化定义，否则不可回测。
+
+---
+
+### B. 动量（Momentum）
+
+#### B1. 截面动量（Jegadeesh–Titman）
+- **定义**：按过去 3–12 个月收益排序，买赢家空输家；常跳过最近 1 个月。  
+- **规则**：对 ETF 篮子：持有 Top-K 动量 ETF，定期再平衡。  
+- **公开指标**：原论文 1965–1989，6–6 策略年化超额约 **12%**（美股个股，未扣今成本）。后续综述：跨资产仍存在，但有动量崩溃期；原始动量 Sharpe 量级约 **0.45**，残差/波动管理可抬至约 **0.9–1.2**（依赖实现）。  
+  源：https://www.bauer.uh.edu/rsusmel/phd/jegadeesh-titman93.pdf ；综述 https://link.springer.com/article/10.1007/s11408-022-00417-8  
+- **证据**：peer  
+- **ETF**：**非常适合行业/主题 ETF 轮动**（截面在 ETF 之间）。宽基单品种无截面可用。
+
+#### B2. 时间序列动量（Moskowitz–Ooi–Pedersen TSMOM）
+- **定义**：看自身过去 12 个月超额收益符号决定多空，常做波动缩放。  
+- **规则**：若过去 12m 收益>0 → 做多该 ETF，否则空/空仓；仓位 ∝ 1/σ。  
+- **公开指标**：58 个期货 Diversified TSMOM 年化 Sharpe 约 **>1（约 1.1）**，波动约 12%（论文样本，期货，非 A 股 ETF）。  
+  源：https://w4.stern.nyu.edu/facdir/lpederse/papers/TimeSeriesMomentum.pdf  
+- **证据**：peer  
+- **ETF**：单只 ETF 可直接用；A 股需改「空仓/降仓」代替做空，并自测。
+
+#### B3. 残差动量 / 行业动量
+- **定义**：先剔除市场/行业暴露再算动量；或直接用行业指数收益动量。  
+- **规则**：行业动量 Top 映射到对应行业 ETF。  
+- **公开指标**：文献称行业/因子动量是股票动量的重要成分；具体 IC 依赖样本。A 股券商/开源轮动框架常见，但 **公开胜率常过拟合**。  
+- **证据**：peer（概念）+ vendor（实现数字）  
+- **ETF**：行业 ETF **天然载体**。
+
+#### B4. 相对强弱 RS vs 基准（如 vs 沪深300）
+- **定义**：ETF 收益 − 基准收益的滚动和或比率。  
+- **规则**：RS 新高且价格趋势向上 → 加分；RS 破位 → 降级。  
+- **公开指标**：公开胜率未可靠复现（实现依赖基准选择）。  
+- **证据**：folklore / open_lib  
+- **ETF**：适用；你们多 ETF 决策场景核心特征之一。
+
+#### B5. ROC / 多窗口收益（Qlib Alpha158 族）
+- **定义**：ROC_N = Ref(close,N)/close 等；多 horizon 收益特征。  
+- **规则**：作 ML/线性模型输入，而非单一阈值。  
+- **公开指标**：Qlib 在 A 股 Alpha158/360 上有官方流水线；单因子 IC 需自算。  
+  源：https://github.com/microsoft/qlib/  
+- **证据**：open_lib  
+- **ETF**：OHLCV 可直接移植；标签建议用未来 1/5/20 日收益对齐你们五期限。
+
+---
+
+### C. 均值回归 / 超买超卖（Mean Reversion）
+
+#### C1. RSI（Wilder）
+- **定义**：相对强弱 0–100。  
+- **规则**：RSI<30 关注买入；>70 关注卖出；趋势市需反着用或禁用。  
+- **公开指标**：单独规则对美股 ETF **难稳定战胜持有**（同上 ETF 技术规则论文）。  
+- **证据**：peer  
+- **ETF**：适用；作震荡市辅助。
+
+#### C2. 布林带（Bollinger）触及/挤压
+- **定义**：中轨 MA±k·σ。  
+- **规则**：触及下轨且不破趋势 → 反弹买；挤压后带宽放大 → 突破跟进。  
+- **公开指标**：该 ETF 研究中 Bollinger 相关规则 **相对其它技术指标利润因子更好**（尤其低波动 ETF），但仍非稳健圣杯。  
+  源：https://www.tandfonline.com/doi/full/10.1080/23322039.2020.1720056  
+- **证据**：peer  
+- **ETF**：适用。
+
+#### C3. TD Sequential / 九转（DeMark Setup 9）
+- **定义**：连续 9 根收盘价低于（高于）4 日前收盘 → 卖出（买入）耗尽 Setup。  
+- **规则**：Buy Setup 完成偏多；Sell Setup 完成偏空；可加 Perfected 条件。  
+- **公开指标**（Be The Puck）：方向命中约 **62%**；风险调整战胜持有仅 **17%**；**Indexes & ETFs = 0%**；主要作用是降回撤。另一站点 4h 屏 5 日命中约 **54.4%**（短样本、幸存者偏差、无费用）。  
+  源：https://bethepuck.com/guides/demark-setup-9/ ；https://setuphits.com/screens/td-sequential-9-buy-4h/  
+- **证据**：backtest_blog  
+- **ETF**：**弱作主信号**；可作「过热/过冷」标签，不可单独定买卖。
+
+#### C4. 短期反转（1 周 / 1 月）
+- **定义**：上周/上月大跌者下期反弹（个股更强）。  
+- **规则**：截面买输家卖赢家（短持有）；ETF 上可做「昨日大跌后的反弹概率」特征。  
+- **公开指标**：Jegadeesh 早期月度反转很强；**1990 后显著衰减**（有复制显示近零）。Be The Puck：方向约 59%，风险调整战胜持有约 21%。  
+  源：https://alphaarchitect.com/quantitative-momentum-research-short-term-return-reversal/ ；https://bethepuck.com/guides/short-term-reversal/  
+- **证据**：peer + backtest_blog  
+- **ETF**：效应弱于个股；可用 1–5 日反转作短 horizon 特征，预期 IC 低。
+
+#### C5. VWAP / 收盘相对 VWAP 偏离（含 WQ Alpha#42 思路）
+- **定义**：close vs vwap；盘后半段拉升常均值回归。  
+- **规则**：close≫vwap 偏空（delay-0）；反之偏多——需能贴近收盘交易才有意义。  
+- **公开指标**：属 WorldQuant 101 家族；论文报告 **101 个 alpha 中位 Sharpe≈2.22（2010–2013，扣费前，股票组合）**；独立美股复制中位 rank IC≈0.0039、Sharpe≈0.52，显著低于原报告。  
+  源：https://arxiv.org/abs/1601.00991  
+- **证据**：peer（公式）+ 复制落差  
+- **ETF**：有 VWAP/均价才可；A 股 ETF 日频可用；**delay-0 难在实盘完美执行**。
+
+#### C6. z-score 偏离均线（价格通道回归）
+- **定义**：(close−MA)/σ。  
+- **规则**：z<-2 买、z>2 卖；或作为连续特征。  
+- **公开指标**：公开胜率未可靠复现。  
+- **证据**：open_lib  
+- **ETF**：适用；与布林带同类。
+
+---
+
+### D. 波动 / 风险（Volatility & Risk）
+
+#### D1. 历史波动率分位 / 低波异象
+- **定义**：过去 20/60/120 日收益波动；截面偏好低波。  
+- **规则**：ETF 轮动中惩罚高波，或波动目标定仓。  
+- **公开指标**：Baker–Haugen 等多市场：低波组合风险调整更优（低波异象）。对 ETF：用股票低波选股再建 ETF 才完整；**国家/行业 ETF 组合主要拿宏观层低波，丢失个股选择收益**。  
+  源：https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2055431  
+- **证据**：peer  
+- **ETF**：波动目标/风险平价 **直接适用**；低波截面异象在「行业 ETF 之间」部分适用。
+
+#### D2. ATR 仓位与止损
+- **定义**：真实波幅均值。  
+- **规则**：仓位 = 风险预算 / ATR；止损 = k·ATR。  
+- **公开指标**：属风控工程，非预测 alpha；公开胜率不适用。  
+- **证据**：open_lib  
+- **ETF**：强烈建议部署（执行层）。
+
+#### D3. 已实现波动率变动 / vol-of-vol
+- **定义**：波动上升常伴随负向风险溢价或趋势加速。  
+- **规则**：σ 急升 → 降仓或提高开仓门槛。  
+- **公开指标**：公开胜率未可靠复现（作风险状态）。  
+- **证据**：peer（波动风险溢价文献族）  
+- **ETF**：适用。
+
+#### D4. VIX / 期权隐含波动期限结构（或中国 50ETF 期权 IV）
+- **定义**：恐惧指数水平与期限结构斜率。  
+- **规则**：IV 极端高且开始回落 → 逆向关注；期限结构含风险溢价信息。  
+- **公开指标**：VIX 期限结构对股指中期收益有预测信息（如季度 adj.R² 量级约数个百分点，依赖设定）。  
+  源：https://doi.org/10.1017/s0022109017000825  
+- **证据**：peer（美股）；A 股需用本地期权替代  
+- **ETF**：对宽基/相关行业有宏观过滤价值；主题 ETF 间接。
+
+---
+
+### E. 量价 / 微观结构（Volume & Microstructure）
+
+#### E1. 量比 / 异常成交额
+- **定义**：今日额 / 过去 N 日均额。  
+- **规则**：放量突破跟；放量下跌谨慎；缩量新高警惕。  
+- **公开指标**：公开胜率未可靠复现；ETF 成交量可与成分股脱节。  
+- **证据**：folklore + vendor  
+- **ETF**：可用但噪声大；优先「份额」而非「成交额」见 E4。
+
+#### E2. OBV / 能量潮
+- **定义**：价涨加量、价跌减量的累积。  
+- **规则**：OBV 与价背离作警示。  
+- **公开指标**：Fidelity 等指出 **ETF 成交量与成分股流量可严重背离**，OBV 类易误导。  
+  源：https://www.fidelity.com/bin-public/060_www_fidelity_com/documents/ETFVolumeAnalysis_04_2010_V2.pdf  
+- **证据**：vendor/industry note  
+- **ETF**：**弱**；慎用基金层 OBV。
+
+#### E3. 价量相关（WQ Alpha#2/#3 类）
+- **定义**：rank(Δlog volume) 与 rank((c−o)/o) 的相关等。  
+- **规则**：作截面/时间序列特征。  
+- **公开指标**：见 WQ101 家族中位 Sharpe（原报告高、独立复制低）。  
+- **证据**：peer 公式 + 复制 caveat  
+- **ETF**：可算；解释力通常弱于动量。
+
+#### E4. ETF 份额变动 / 净申赎（Creation-Redemption Flow）
+- **定义**：份额增减率、净流入。  
+- **规则**：意外净流入偏多；纯套利流可能预示反转。  
+- **公开指标**：Xu et al.（Financial Management）：**非预期流量预测次日 ETF 收益为正**；套利流常伴随反转。中国研报亦用份额变动做行业轮动。  
+  源：https://onlinelibrary.wiley.com/doi/10.1111/fima.12396  
+- **证据**：peer  
+- **ETF**：**ETF 专属、高优先级**。
+
+#### E5. ETF 折溢价（Premium/Discount vs IOPV/NAV）
+- **定义**：(市价−IOPV)/IOPV。  
+- **规则**：高溢价预期未来收益偏低（错误定价修正）；高折价相反。  
+- **公开指标**：中文期刊研究：折溢价对未来收益有预测；多空周收益约 **0.9% 量级**（样本依赖、需扣成本）。  
+  源：https://xbbjb.cufe.edu.cn/CN/Y2023/V0/I9/44  
+- **证据**：peer（中文）  
+- **ETF**：**ETF 专属、高优先级**（注意 IOPV 延迟与套利限制）。
+
+#### E6. 订单流不平衡 / 买卖盘（若有 Level-2）
+- **定义**：主动买−主动卖。  
+- **规则**：短 horizon 微 alpha；成本常吃掉。  
+- **公开指标**：学术有短预测力，**交易成本后常消失**。  
+- **证据**：peer  
+- **ETF**：仅当你们有稳定 L2；否则跳过。
+
+---
+
+### F. 日历 / 季节性（Calendar）
+
+#### F1. 月初效应（Turn-of-Month）
+- **定义**：上月末—下月初数日平均收益偏高。  
+- **规则**：窗口内提高风险预算或偏好权益 ETF。  
+- **公开指标**：多国股票有记录；ETF 时代效应仍在但形态可迁移到月初首日。  
+  源：https://www.tandfonline.com/doi/abs/10.2469/faj.v64.n2.11  
+- **证据**：peer  
+- **ETF**：弱边际；作季节虚拟变量即可。
+
+#### F2. Halloween / Sell-in-May
+- **定义**：11–4 月 vs 5–10 月。  
+- **公开指标**：全球约有数个百分点季节差（文献依赖）；衰减与制度变化风险高。  
+  源：https://www.sciencedirect.com/science/article/abs/pii/S0261560620302242  
+- **证据**：peer  
+- **ETF**：弱；A 股政策日历可能更重要。
+
+#### F3. 一月效应 / 财报季 / A 股特色日历
+- **定义**：小盘一月、两会、节假日、季报披露窗口等。  
+- **公开指标**：一月效应在大盘/ETF 上 **不可靠**；A 股特色需本地实证。  
+- **证据**：mixed  
+- **ETF**：作特征，不单独立项买卖。
+
+---
+
+### G. 跨资产 / 宏观（Cross-asset & Macro）
+
+#### G1. 利率 / 期限利差 / 信用利差
+- **定义**：国债收益率、曲线斜率、信用利差变动。  
+- **规则**：利差走阔风险偏好下降 → 降权益仓或轮动防御行业 ETF。  
+- **公开指标**：经典宏观预测文献多；对单一主题 ETF 的「胜率」公开胜率未可靠复现。  
+- **证据**：peer（宏观）  
+- **ETF**：作状态变量（regime）。
+
+#### G2. PMI / 社融 / M2 增速
+- **定义**：景气与流动性。  
+- **规则**：改善→周期/金融 ETF；恶化→防御/债券 ETF。  
+- **公开指标**：开源 ETF 平台常列此类因子；**需防发布滞后与修订**。  
+- **证据**：vendor / open_lib 实践  
+- **ETF**：行业轮动有用；日频决策噪声大，宜周/月。
+
+#### G3. 股债性价比（股债溢价）
+- **定义**：盈利收益率 − 债收益率等。  
+- **规则**：极高→偏权益；极低→降仓。  
+- **公开指标**：公开胜率未可靠复现（阈值漂移）。  
+- **证据**：vendor  
+- **ETF**：宽基择时辅助。
+
+#### G4. 商品 / 美元 / 原油交叉
+- **定义**：相关商品趋势对上游行业 ETF。  
+- **规则**：原油动量确认 → 能源相关 ETF 加分。  
+- **公开指标**：Asness 等「Value and Momentum Everywhere」显示跨资产动量/价值广泛存在；价值与动量相关约 **−0.6**，组合 Sharpe 可显著抬升（论文全球组合 Sharpe 约 **1.45** 样本内）。  
+  源：https://pages.stern.nyu.edu/~lpederse/papers/ValMomEverywhere.pdf  
+- **证据**：peer  
+- **ETF**：主题/商品类 ETF 适用。
+
+---
+
+### H. 情绪 / 新闻 / 资金面（Sentiment & Flow）
+
+#### H1. 北向资金（Stock Connect）持股变动
+- **定义**：周度北向持股变化。  
+- **规则**：大幅流入个股/行业 → 映射行业 ETF 加分。  
+- **公开指标**：研究称周度北向变化有信息含量；Top−Bottom 组合周收益约 **0.61%** 量级（个股层，样本与改革后衰减需注意）。  
+  源：https://apjfs.org/file/download/6590?view=1  
+- **证据**：peer  
+- **ETF**：经行业聚合后可用；2018 后可辨识度变化需滚动验证。
+
+#### H2. 新闻/舆情情绪得分
+- **定义**：NLP 对标题/研报情感。  
+- **规则**：极端负面后反转或趋势确认（两种对立设定，必须实证选）。  
+- **公开指标**：公开胜率未可靠复现（高度依赖语料与延迟）。  
+- **证据**：mixed academic  
+- **ETF**：主题 ETF（新能源、白酒等）叙事敏感，可试点。
+
+#### H3. 换手率 / 投资者情绪代理
+- **定义**：市场或 ETF 换手分位。  
+- **规则**：情绪过热降低追涨权重。  
+- **公开指标**：公开胜率未可靠复现。  
+- **证据**：peer（情绪代理文献族）  
+- **ETF**：适用。
+
+#### H4. 融资融券余额变化
+- **定义**：两融余额增速。  
+- **规则**：急升常伴随拥挤；急降或有抛压。  
+- **公开指标**：公开胜率未可靠复现。  
+- **证据**：vendor  
+- **ETF**：宽基相关；行业 ETF 间接。
+
+---
+
+### I. 基本面 / 指数编制（Fundamentals — 多需成分股）
+
+#### I1. 价值（E/P、B/P、股息率）映射到指数/ETF
+- **定义**：指数 PE/PB 分位或成分加权价值得分。  
+- **规则**：低估分位提高配置；或价值×动量组合。  
+- **公开指标**：Fama–French HML 长期溢价月均约 **0.3%+** 量级（美股全样本，近年不稳定）。  
+  源：https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.HTML  
+- **证据**：peer  
+- **ETF**：宽基/风格 ETF 可用指数估值；行业 ETF 可用行业 PE 分位。
+
+#### I2. 盈利质量 / RMW、投资/CMA
+- **定义**：盈利能力与投资风格因子。  
+- **规则**：多需成分股财务再聚合到行业 ETF。  
+- **公开指标**：FF5 中 RMW/CMA 长期正溢价，近十年部分转负。  
+- **证据**：peer  
+- **ETF**：间接（需 constituents）。
+
+#### I3. 盈余动量（Earnings momentum）
+- **定义**：分析师上调/盈余惊喜延续。  
+- **规则**：行业净上调 → 对应 ETF。  
+- **公开指标**：与价格动量并列的经典效应；ETF 层公开胜率未可靠复现。  
+- **证据**：peer（个股）  
+- **ETF**：需一致预期数据。
+
+---
+
+### J. 公式化 Alpha 库 / 工程特征集（Libraries）
+
+#### J1. WorldQuant 101 Formulaic Alphas
+- **定义**：101 个价量公式（多数 delay-1，少数 delay-0）。  
+- **规则**：批量算因子 → IC 筛选 → 合成。  
+- **公开指标**：原报告中位年化 Sharpe **2.224**（2010–2013，**未扣交易成本**，股票 alpha 流）；独立复制显著更低。平均两两相关约 **15.9%**。  
+  源：https://arxiv.org/pdf/1601.00991  
+- **证据**：peer（披露）+ 过拟合/成本 caveat  
+- **ETF**：子集可移植到 ETF 截面；含 industry neutralize / cap 的条目需成分或跳过。
+
+#### J2. Qlib Alpha158 / Alpha360
+- **定义**：158 工程特征（ROC/MA/STD/BETA/RSV/量价统计等）与 360 原始价量窗。  
+- **规则**：LightGBM 等预测未来收益 → 排序 ETF 或股票再映射。  
+- **公开指标**：平台论文与示例；**具体 IC 视数据与标签**，勿引用博客夸张数字。  
+  源：https://github.com/microsoft/qlib/  
+- **证据**：open_lib  
+- **ETF**：可直接把标的换成 ETF 代码做横截面（样本量小于股票，过拟合风险更大）。
+
+#### J3. TA-Lib / pandas-ta / Tulip / freqtrade 策略库
+- **定义**：上百技术指标与社区策略。  
+- **规则**：当作特征工厂，禁止「默认参数直接实盘」。  
+- **公开指标**：库本身不提供稳健胜率。  
+- **证据**：open_lib  
+- **ETF**：适用。
+
+#### J4. vnpy / Backtrader / Zipline / Alphalens
+- **定义**：回测与因子分析框架，不是因子本身。  
+- **用途**：IC、分层收益、换手、成本、撕毁检验。  
+- **证据**：open_lib  
+- **ETF**：部署验证层必备。
+
+#### J5. A 股开源「股票因子→行业 ETF」流水线（如 AlphaLab 类）
+- **定义**：101/191 因子 → IC → IR 加权 → 申万行业得分 → 行业 ETF。  
+- **公开指标**：仓库自述完整；**其回测数字视为 vendor/作者自报，需你们复现**。  
+  源：https://github.com/Healermm/AlphaLab  
+- **证据**：open_lib + vendor-like results  
+- **ETF**：架构上与你们目标高度同构，值得作对照实现。
+
+---
+
+## 3. 中国流动性行业/主题 ETF：Top 12–15 优先候选
+
+按「可算、可解释、ETF 契合、有相对可靠文献/逻辑」排序（不是保证赚钱名单）：
+
+| 优先级 | 因子 | 理由 |
+|--------|------|------|
+| 1 | **截面动量（多窗口 5/20/60/120）** | ETF 轮动最直接；学术最扎实；只需 OHLCV |
+| 2 | **时间序列动量 + 波动缩放** | 单品种也可用；与截面互补 |
+| 3 | **ETF 份额净流入（意外流）** | ETF 专属信息；有同行评审支持 |
+| 4 | **折溢价 vs IOPV** | A 股文献支持错误定价预测；注意执行 |
+| 5 | **相对强弱 vs 沪深300/中证500** | 决策分级自然特征 |
+| 6 | **波动率目标 / ATR 风控** | 不提高「胜率」但提高可活过回撤的概率 |
+| 7 | **布林/ z-score 均值回归（短 horizon）** | 与动量做成 regime 切换 |
+| 8 | **ADX 趋势门控** | 决定用动量还是回归 |
+| 9 | **行业动量（成分或行业指数）** | 主题 ETF 核心 |
+| 10 | **北向行业资金聚合** | A 股特色；要滚动衰减检验 |
+| 11 | **指数估值分位（PE/PB）** | 中长 horizon（1–3 月） |
+| 12 | **一目均衡（仅作趋势过滤）** | 公开回测在 ETF 子集相对不差，但仍是安全带 |
+| 13 | **宏观状态（利率/PMI/股债）** | 慢变量，改风险预算 |
+| 14 | **WQ101 / Alpha158 子集经 IC 筛选后合成** | 工程化挖潜；严控多重检验 |
+| 15 | **日历虚拟变量** | 边际特征，防过拟合权重 |
+
+**明确降权/暂缓作主信号**：九转、海龟突破、OBV、复杂形态学、未校准新闻 NLP。
+
+---
+
+## 4. 部署到「计算管线」的草图
+
+```
+原始数据
+  ├─ ETF OHLCV + 复权/拆分（已有）
+  ├─ IOPV/净值、份额（新增，ETF 专属）
+  ├─ 指数估值、北向、宏观（可选慢频）
+  └─ （可选）成分股面板 → 行业聚合
+        ↓
+特征计算（日频/盘中快槽）
+  - 动量族、波动族、量价族、折溢价/份额、宏观滞后对齐
+  - 严格点-in-time：只用当时可得数据（防前瞻）
+        ↓
+信号层
+  - 连续分位数 / z-score
+  - regime：ADX 或波动分位 → 选「趋势模型」或「回归模型」
+  - 截面：ETF 篮子内排序
+        ↓
+期限收益预测（对齐现有五期限）
+  - 标签：未来 1d / 3d / 7d / 20d / 60d 超额或绝对收益
+  - 模型：先线性/加权 IC 合成，再考虑非线性（样本不够别上复杂 ML）
+        ↓
+决策等级（可入场 / 试探 / 观望 / 减仓）
+  - 多因子一致度 + 不确定性（预测区间）+ 流动性/成本闸门
+  - 保持 actionable=false 直到校准完成（与现网一致）
+        ↓
+离线验证（上线前硬门槛）
+  - Walk-forward（如 3y 训 / 1y 测滚动）
+  - Purged / embargo CV（防标签泄漏）
+  - 扣费：佣金+滑点+冲击；A 股 T+1
+  - 多重检验：Harvey 思维，报告 t 与折扣后 t
+  - 分体制：牛/熊/震荡；2015、2018、2020、2024… 
+```
+
+### 4.1 数据需求速查
+
+| 类型 | 因子例 | 数据 |
+|------|--------|------|
+| 仅 OHLCV | 动量、均线、布林、ADX、Ichimoku、ATR | 已有 |
+| ETF 专属 | 份额、折溢价 | 份额序列、IOPV/NAV |
+| 指数/宏观 | 估值、PMI、利率、VIX/IV | 低频外源 |
+| 成分股 | 质量/盈余动量/精细行业中性 | 成分面板+财务 |
+| 另类 | 新闻 NLP、L2 | 语料/行情深度 |
+
+### 4.2 建议的「第一期计算分支」只做这 8 个特征
+
+1. `mom_20`, `mom_60`, `mom_120`  
+2. `tsmom_sign_12m` + `vol_20` 目标权重  
+3. `rs_vs_300_20`  
+4. `zscore_20`（均值回归）  
+5. `adx_14`（regime）  
+6. `share_chg_5d`（份额）  
+7. `premium_iopv`  
+8. `atr_14`（仓位/止损）
+
+用 Alphalens 风格输出：**IC、ICIR、分层收益、换手、扣费后净值**；过门再进邮件等级，不过门只进研究页。
+
+---
+
+## 5. 诚实结论（给产品决策）
+
+- 开源社区和学术确实提供了 **几十到上百** 可计算决策因子；**真正对流动性 A 股行业/主题 ETF 既可算又有证据支撑的，大约十几类**。  
+- **没有**「抄一个九转胜率就能准」的捷径；九转在指数/ETF 上公开回测甚至是最差组之一。  
+- 提高「买卖与涨跌幅预测」准度的现实路径是：  
+  1）把 **动量 + ETF 资金流/折溢价 + 波动门控** 做成可审计的计算层；  
+  2）用 **walk-forward + 成本 + 多重检验** 杀掉假因子；  
+  3）消息面/宏观作慢变量，不与日频噪音硬拼。  
+- 股票因子多数 **可迁移思路**，但价值/质量/微结构需成分或会在 ETF 上衰减；**ETF 专属因子（份额、折溢价）是股票框架里缺的一块**。
+
+---
+
+## 6. 主要来源（精选）
+
+1. Harvey, Liu, Zhu (2016) Factor Zoo — https://people.duke.edu/~charvey/Research/Published_Papers/P118_and_the_cross.PDF  
+2. Kakushadze (2016) 101 Formulaic Alphas — https://arxiv.org/abs/1601.00991  
+3. Jegadeesh & Titman (1993) Momentum — https://www.bauer.uh.edu/rsusmel/phd/jegadeesh-titman93.pdf  
+4. Moskowitz, Ooi, Pedersen — Time Series Momentum — https://w4.stern.nyu.edu/facdir/lpederse/papers/TimeSeriesMomentum.pdf  
+5. Asness, Moskowitz, Pedersen — Value and Momentum Everywhere — https://pages.stern.nyu.edu/~lpederse/papers/ValMomEverywhere.pdf  
+6. Microsoft Qlib — https://github.com/microsoft/qlib/  
+7. Be The Puck：九转 / 一目 / 海龟 — https://bethepuck.com/guides/demark-setup-9/ 等  
+8. ETF 技术规则 — https://www.tandfonline.com/doi/full/10.1080/23322039.2020.1720056  
+9. ETF flows — https://onlinelibrary.wiley.com/doi/10.1111/fima.12396  
+10. 折溢价预测（中财大学报）— https://xbbjb.cufe.edu.cn/CN/Y2023/V0/I9/44  
+11. 北向信息 — https://apjfs.org/file/download/6590?view=1  
+12. AlphaLab（股票→行业 ETF）— https://github.com/Healermm/AlphaLab  
+
+---
+
+*本报告仅供研究选型；不构成投资建议。所有公开绩效均可能含前瞻偏差、幸存者偏差与未充分扣费。*
+
+
+---
+
+## Appendix B — Literature deepen (2026-10-24 empirical pass)
+
+Previous honesty caveats in this catalog still apply (factor zoo / multiple testing / win-rate ≠ edge).
+
+### Added China / A-share ETF sources
+- 华宝证券《ETF策略：短期、中期还是长期动量效应有效？》(2024-12)：短窗 15–25 日更强；IC>0 仅略高于 50%。
+- Ma, Liao, Jiang (2022), Factor Momentum in the Chinese Stock Market：TSFM/CSFM 显著。
+- Cui & Li (2024), Pacific-Basin Finance Journal：中国动量形成 7–12 月；因子动量四因子。
+- Northbound predictability: Jorms 2024 (2/5/10/20D index); APJFS weekly holdings HPC ~61bps/week L-S; 2024 net outflow year → regime risk.
+- Lunar January effect in A-shares (AJFS 2022); solar January weak/absent for China ETFs in some samples.
+
+### Added US ETF sources (no local native panel this pass)
+- ETF flows / creation-redemption return predictability and reversals (Staer; Brown/Davies/Ringgenberg RoF line of work).
+- Premium/discount short-horizon predictability (Fulkerson & Jordan; Rompotis iShares).
+- Value & Momentum Everywhere remains the cross-asset baseline (Asness, Moskowitz, Pedersen).
+
+### Local empirical override
+See `docs/decision_factors_deep_empirical_20261024.md` for **measured** hit/IC/Sharpe on this watchlist’s long-history 17 ETFs. Literature win-rates are not substitutes for that table.

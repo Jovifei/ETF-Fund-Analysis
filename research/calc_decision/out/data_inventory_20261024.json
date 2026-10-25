@@ -1,0 +1,44 @@
+{
+  "db_path": "F:\\ETF_Data\\ETF-Fund-Analysis\\db\\research.sqlite3",
+  "db_mtime": "1792743489.2078986",
+  "watchlist_n": 35,
+  "bars_n": 38015,
+  "date_min": "2017-03-22",
+  "date_max": "2026-10-23",
+  "sources": {
+    "tencent:stock_zh_a_hist_tx:v101": 38014,
+    "akshare:em:v101": 1
+  },
+  "adjust": {
+    "none": 38015
+  },
+  "long_history_codes": [
+    "159819.SZ",
+    "159869.SZ",
+    "159928.SZ",
+    "510300.SH",
+    "512010.SH",
+    "512170.SH",
+    "512200.SH",
+    "512400.SH",
+    "512480.SH",
+    "512690.SH",
+    "512800.SH",
+    "512880.SH",
+    "513100.SH",
+    "515220.SH",
+    "515790.SH",
+    "518880.SH",
+    "562500.SH"
+  ],
+  "long_history_n": 17,
+  "share_scales_rows": 0,
+  "premium_iopv_historical": false,
+  "us_native_etf_bars": false,
+  "us_proxy_in_watchlist": [
+    "513100.SH",
+    "513500.SH"
+  ],
+  "holdout_start": "2024-10-23",
+  "cost_assumption_bps_one_way": 10
+}

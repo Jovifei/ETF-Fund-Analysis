@@ -1,0 +1,49 @@
+id,family,name,zh_name,etf_fit,evidence_quality,reported_metric,source_url,deploy_data_needs
+A1,trend,SMA_EMA_crossover,双均线交叉,works_on_etf,peer_mixed,公开胜率未可靠复现（样本外常难稳赢买入持有）,https://www.econstor.eu/bitstream/10419/312389/1/s11408-023-00433-2.pdf,OHLCV
+A2,trend,MACD,MACD柱线拐点,works_on_etf,peer,单独规则难稳赢持有；作过滤更合适,https://www.tandfonline.com/doi/full/10.1080/23322039.2020.1720056,OHLCV
+A3,trend,ADX_DMI,ADX趋势强度门控,works_on_etf,open_lib,公开胜率未可靠复现（过滤器用）,https://github.com/TA-Lib/ta-lib,OHLCV
+A4,trend,Ichimoku_Cloud,一目均衡表,works_on_etf,backtest_blog,命中~28%；风险调整战胜持有~26%；Indexes&ETFs子集~57%,https://bethepuck.com/guides/ichimoku-cloud/,OHLCV
+A5,trend,Donchian_Turtle_S1,海龟/唐奇安突破,weak_on_etf,backtest_blog,命中~31%；风险调整战胜持有~16%；Indexes&ETFs=0%,https://bethepuck.com/guides/turtle-system-1/,OHLCV
+A6,trend,Parabolic_SAR_Supertrend,SAR/Supertrend跟踪止损,works_on_etf,open_lib,公开胜率未可靠复现,https://github.com/TA-Lib/ta-lib,OHLCV
+A7,trend,Swing_structure_trendlines,摆动结构/趋势线,works_on_etf,folklore,公开胜率未可靠复现（定义歧义大）,n/a,OHLCV
+B1,momentum,Cross_sectional_momentum_JT,截面动量(JT),works_on_etf,peer,原样本6-6约年化超额~12%；现代Sharpe量级~0.45(原始)~0.9-1.2(改进),https://www.bauer.uh.edu/rsusmel/phd/jegadeesh-titman93.pdf,OHLCV_cross_section
+B2,momentum,Time_series_momentum_TSMOM,时间序列动量,works_on_etf,peer,58期货diversified年化Sharpe~1.1(论文样本),https://w4.stern.nyu.edu/facdir/lpederse/papers/TimeSeriesMomentum.pdf,OHLCV
+B3,momentum,Industry_residual_momentum,行业/残差动量,works_on_etf,peer_vendor,公开胜率常过拟合；概念有学术支持,https://link.springer.com/article/10.1007/s11408-022-00417-8,OHLCV_or_industry_index
+B4,momentum,Relative_strength_vs_benchmark,相对强弱vs基准,works_on_etf,folklore,公开胜率未可靠复现,n/a,OHLCV+benchmark
+B5,momentum,ROC_multi_horizon_Alpha158,多窗口ROC/Alpha158动量族,works_on_etf,open_lib,单因子IC需自测；|IC|~0.02-0.05为常见筛线,https://github.com/microsoft/qlib/,OHLCV
+C1,mean_reversion,RSI,RSI超买超卖,works_on_etf,peer,单独难稳赢持有,https://www.tandfonline.com/doi/full/10.1080/23322039.2020.1720056,OHLCV
+C2,mean_reversion,Bollinger_Bands,布林带触及/挤压,works_on_etf,peer,相对其它技术规则利润因子更好(尤低波ETF)；非圣杯,https://www.tandfonline.com/doi/full/10.1080/23322039.2020.1720056,OHLCV
+C3,mean_reversion,TD_Sequential_Setup9,TD九转Setup9,weak_on_etf,backtest_blog,方向命中~62%；风险调整战胜持有~17%；Indexes&ETFs=0%,https://bethepuck.com/guides/demark-setup-9/,OHLCV
+C4,mean_reversion,Short_term_reversal,短期反转(周/月),weak_on_etf,peer,早期很强；1990后显著衰减；方向~59%但少赢持有,https://alphaarchitect.com/quantitative-momentum-research-short-term-return-reversal/,OHLCV_cross_section
+C5,mean_reversion,VWAP_close_deviation,收盘相对VWAP偏离,works_on_etf,peer,属WQ101族；原中位Sharpe~2.22扣费前；独立复制中位IC~0.0039 Sharpe~0.52,https://arxiv.org/abs/1601.00991,OHLCV+VWAP
+C6,mean_reversion,Price_zscore_to_MA,价格相对均线z-score,works_on_etf,open_lib,公开胜率未可靠复现,n/a,OHLCV
+D1,volatility,Low_vol_anomaly_histvol,历史波动/低波异象,works_on_etf_partial,peer,多市场低波组风险调整更优；行业ETF只获宏观层,https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2055431,OHLCV
+D2,volatility,ATR_sizing_stops,ATR仓位与止损,works_on_etf,open_lib,风控工程非预测胜率,https://github.com/TA-Lib/ta-lib,OHLCV
+D3,volatility,Vol_of_vol_regime,波动变化/风险状态,works_on_etf,peer,公开胜率未可靠复现（状态变量）,n/a,OHLCV
+D4,volatility,VIX_IV_term_structure,VIX/隐含波动期限结构,works_on_etf_indirect,peer,期限结构对股指中期收益有预测信息(设定依赖),https://doi.org/10.1017/s0022109017000825,options_IV_or_VIX
+E1,volume,Volume_spike_ratio,量比/异常成交额,works_on_etf,folklore,公开胜率未可靠复现；ETF量噪声大,n/a,OHLCV
+E2,volume,OBV,能量潮OBV,weak_on_etf,vendor,ETF成交量可与成分股脱节易误导,https://www.fidelity.com/bin-public/060_www_fidelity_com/documents/ETFVolumeAnalysis_04_2010_V2.pdf,OHLCV
+E3,volume,Price_volume_correlation_WQ,价量相关(WQ风格),works_on_etf,peer,见WQ101家族；复制落差大,https://arxiv.org/pdf/1601.00991,OHLCV
+E4,etf_specific,ETF_share_creation_flow,ETF份额净申赎/意外流,works_on_etf,peer,非预期流量预测次日收益为正；套利流常反转,https://onlinelibrary.wiley.com/doi/10.1111/fima.12396,ETF_shares
+E5,etf_specific,ETF_premium_discount,ETF折溢价vs IOPV,works_on_etf,peer,中文研究多空周收益约0.9%量级(需扣成本),https://xbbjb.cufe.edu.cn/CN/Y2023/V0/I9/44,IOPV_NAV_price
+E6,volume,Order_flow_imbalance,订单流不平衡,weak_on_etf,peer,短预测力常被成本吃掉,n/a,L2_microstructure
+F1,calendar,Turn_of_month,月初效应,works_on_etf,peer,多国有记录；ETF时代形态可迁移,https://www.tandfonline.com/doi/abs/10.2469/faj.v64.n2.11,calendar
+F2,calendar,Halloween_Sell_in_May,Halloween/Sell-in-May,works_on_etf,peer,全球季节差约数个百分点量级；衰减风险高,https://www.sciencedirect.com/science/article/abs/pii/S0261560620302242,calendar
+F3,calendar,January_Ashare_event_calendar,一月/A股事件日历,weak_on_etf,mixed,大盘ETF上不可靠；需本地实证,n/a,calendar
+G1,macro,Rates_term_credit_spreads,利率/期限/信用利差,works_on_etf_regime,peer,公开单ETF胜率未可靠复现,n/a,macro_rates
+G2,macro,PMI_credit_M2,PMI/社融/M2,works_on_etf_regime,vendor,公开胜率未可靠复现；防发布滞后,n/a,macro_releases
+G3,macro,Equity_bond_yield_gap,股债性价比,works_on_etf_regime,vendor,公开胜率未可靠复现（阈值漂移）,n/a,valuation+rates
+G4,macro,Cross_asset_mom_value,跨资产动量与价值,works_on_etf,peer,价值与动量相关约-0.6；全球组合样本内Sharpe约1.45,https://pages.stern.nyu.edu/~lpederse/papers/ValMomEverywhere.pdf,multi_asset_OHLCV
+H1,sentiment,Northbound_Stock_Connect_flow,北向资金持股变动,works_on_etf_via_sector,peer,个股层Top-Bottom周收益约0.61%量级；改革后或衰减,https://apjfs.org/file/download/6590?view=1,northbound_holdings
+H2,sentiment,News_NLP_sentiment,新闻舆情情绪,works_on_etf_theme,mixed,公开胜率未可靠复现,n/a,news_NLP
+H3,sentiment,Turnover_sentiment_proxy,换手率情绪代理,works_on_etf,peer,公开胜率未可靠复现,n/a,OHLCV
+H4,sentiment,Margin_balance_change,融资融券余额变化,works_on_etf_indirect,vendor,公开胜率未可靠复现,n/a,margin_stats
+I1,fundamental,Value_EP_BP_divyield,价值(E/P B/P 股息),works_on_etf_via_index,peer,HML长期月均溢价约0.3%+量级(美股全样本近十年不稳),https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.HTML,index_valuation
+I2,fundamental,RMW_CMA_quality_investment,盈利质量/投资因子,needs_constituents,peer,FF5长期正溢价；近十年部分转负,https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.HTML,fundamentals_constituents
+I3,fundamental,Earnings_momentum,盈余动量,needs_constituents,peer,个股经典效应；ETF层公开胜率未可靠复现,n/a,analyst_estimates
+J1,library,WorldQuant_101_alphas,WorldQuant101公式因子,works_on_etf_subset,peer,原中位Sharpe2.224(2010-13扣费前)；独立复制显著更低；相关~15.9%,https://arxiv.org/abs/1601.00991,OHLCV(+industry/cap for some)
+J2,library,Qlib_Alpha158_360,Qlib Alpha158/360,works_on_etf,open_lib,IC需自测；A股官方流水线可用,https://github.com/microsoft/qlib/,OHLCV
+J3,library,TALib_pandas_ta_freqtrade,TA-Lib/pandas-ta/freqtrade指标库,works_on_etf,open_lib,库不提供稳健胜率,https://github.com/TA-Lib/ta-lib,OHLCV
+J4,library,Alphalens_Zipline_vnpy_Backtrader,因子分析/回测框架,infra,open_lib,基础设施非alpha,https://github.com/quantopian/alphalens,research_stack
+J5,library,AlphaLab_stock_to_sector_ETF,股票因子聚合行业ETF流水线,works_on_etf,open_lib,架构同构；作者回测数字需自复现,https://github.com/Healermm/AlphaLab,stock_panel+ETF_map
+X1,meta,Harvey_multiple_testing_hurdle,多重检验/t>3门槛,infra,peer,新因子宜t>3；多数发表发现或为假,https://people.duke.edu/~charvey/Research/Published_Papers/P118_and_the_cross.PDF,validation_method
