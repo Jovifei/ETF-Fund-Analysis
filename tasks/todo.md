@@ -12,6 +12,15 @@ Jovi授权修复→测试→网页GPT复审→通过后受控部署；详细验�
 
 # 当前任务
 
+## 2026-10-25 最新代码查收与交接事实对齐
+
+- [x] 核 main `18686f1` 与 PR55 合并 `1e5294d` 的祖先/差异；查 v1.0.7 调度、依赖与版本，聚焦 114 PASS/1 SKIP、npm audit 0、进度视图校验及公网 health `1.0.7`。
+- [x] 仅修 `STATUS.md`、`HANDOFF.md` 当前身份/版本/任务/待验门槛与 PR55 验收文档旧时点文字；保留原发布收据和历史证据。
+- [ ] 自审文档差异，运行进度视图/版本合同与 diff check；独立文档分支提交、GitHub PR/CI 后合入最新 main。
+- [ ] 将 Obsidian 本项目当前进度更新到 v1.0.7，并核镜像文档；不启动 S8、云盘删除或生产变更。
+
+Review：执行中。此批只做文档事实对齐；新业务代码和生产状态均不改。
+
 ## 2026-10-25 v1.0.7 收盘结算重试槽 + 依赖安全清零（Jovi 授权"继续完成和修改，然后提交部署"）
 
 - [x] 台账取证：15:15 槽 0/34、16:10 槽 3–6/34 每日 FAILED（数据源收盘后渐进发布）；密集快槽实测 ~125s 无容量冲突——"容量协调"重新定性为"结算重试缺失"。
@@ -48,7 +57,7 @@ Review：本轮无策略/阈值改动；资格保持 UNKNOWN/actionable=false/no
 - [x] 网页 GPT 的最终回复不可加载后，经 Jovi 授权在私有 PR55 发布一条复审评论并从 GitHub 读回：SOURCE/CI/MAIN 三项 PASS，无可执行 P0/P1/P2；评论专用项目指令例外已撤销。
 - [x] 复审 PASS 后由 Jovi 本人于 10-24 在 GitHub 合 main（`1e5294d`）；部署于 10-25 经 Jovi 新授权完成（见 2026-10-25 小节）。
 
-Review：固定 head `447685865ced4f7f5a05337b7652d5f4052c04e9`、tree `bab9d33d0055a69149add8a0f758dcf38be943bf`。根 main `1a4b665` 未变；当前结论与详细收据见 `docs/audits/PR55_LOCAL_ACCEPTANCE_20261024.md`。Hub revision WinError10061，未发送事件。
+Review：PR55 固定 head `447685865ced4f7f5a05337b7652d5f4052c04e9`、tree `bab9d33d0055a69149add8a0f758dcf38be943bf`；10-24 合并提交 `1e5294d` 同 tree。10-25 文档更正基线 main@`18686f1` 另含后续 v1.0.6/v1.0.7 发布与文档提交；PR55 收据见 `docs/audits/PR55_LOCAL_ACCEPTANCE_20261024.md`，生产以版本收据为准。Hub 当轮 revision WinError10061，未发送事件。
 
 ## 2026-10-24 PR53 后继远端整合阶段（Jovi 已授权）
 
