@@ -6,6 +6,8 @@
 
 本机窗口治理：`ETF-Local-Live-Compute` 曾按 Jovi 要求删除，随后依 Jovi 明确的“保留执行、不弹窗”更正，用备份 XML 恢复原触发器/参数，仅将执行器换为 `pythonw.exe`；17:15 首次自然触发退出码 0、无新增 Windows Terminal。`ETF-Local-Reconcile-1630` 同样只换为 `pythonw.exe`，下次自然运行待 10-26 验证。药箱的 `MedboxPrivateModel` 改用无控制台 `wscript.exe` 启动原 PowerShell 脚本，17:24 自然触发后 Node/SSH 进程与状态文件正常更新、无新增终端；其 `FORWARD_STARTED_NOT_HEALTH_VERIFIED` 仍不能视为模型健康证明。孤立的 `agent-browser` 自动化 Chrome 已结束，日常 Chrome 保留。
 
+存储位置已只读核账：F 盘研究库最新日线为 10-23（68,962 行），云端 PostgreSQL 的旧日线止于 10-09（22,327 行）；云端仍有旧研究数据，最大 `decision_board_snapshots` 表约 661 MiB。服务器展示包约 232 MiB、上限 320 MiB；发布备份约 1.56 GiB。根盘 40 GiB 中约 28 GiB 已用，主要是 Docker 约 13 GiB、非 Docker 约 15 GiB（含 4 GiB swap 文件）；余约 10 GiB。详见 `docs/audits/STORAGE_LOCATION_AND_DISK_20261025.md`，未做清理。
+
 当前收藏共 6 项：1 项在批准展示包内有历史报价，5 项因不在包内明确缺价；不再读取冻结于 10-09 的云端价格。Jovi 暂以收藏维护所持基金代码；生产持仓表仍为空，份额、成本与持仓盈亏未知，不自动把收藏转换成持仓。因子诊断仍是 09-09 的手动历史工件。
 
 验证：本机完整后端 2,652 PASS / 24 SKIP、退出码 0；最终候选聚焦 17 PASS，前端 228 PASS、类型/构建通过、npm audit 0；PR57 固定 SHA 的全部 CI 成功。生产备份经 `pg_restore --list` 与 SHA-256 校验，回滚入口为 `release-v1-0-9-1c1a500-20261025/rollback.sh`（回 v1.0.8）。候选镜像沿用既有 overlay 发布路径，安装包元数据仍继承旧版 `0.7.0`；运行源码、镜像标签与应用版本已核对，完整重建镜像由 CI 成功证明，后续应统一运行包元数据。

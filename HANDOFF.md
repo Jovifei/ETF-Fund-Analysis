@@ -8,6 +8,7 @@
 - 公网健康 `ok/1.0.9/auth_enabled=true`；生产 Reader 默认 34 条、批次 `1792913919058`，报价实时声明 0。自选 6 项中 1 项有批准包历史报价、5 项缺价；不再使用云端 10-09 报价。当前持仓记录 0，Jovi 以收藏暂记所持代码，不提供份额/成本，也不自动导入。
 - 已接收展示包到期只标历史，原空白与代码身份不匹配有关；临时周末重复封包任务停用。`ETF-Local-Live-Compute` 已按 Jovi 更正恢复，原触发器/参数不变、执行器换 `pythonw.exe`，17:15 自然触发退出码 0 且无弹窗；`ETF-Local-Reconcile-1630` 也换为 `pythonw.exe`，10-26 自然运行待验。药箱独立任务改由 `wscript.exe` 隐藏启动，17:24 无新终端；自动化 Chrome 实例已结束。源数据资格仍 UNKNOWN/actionable=false/not_calibrated。
 - 生产 `SCHEDULER_ENABLED=false`，近 10 分钟 Provider audit 0 新事件；三服务统一新镜像、重启数 0，匿名自选 GET 为 401。正常登录/本人手机尚未验收。
+- 存储核账：F 盘活跃研究库 68,962 条日线、最新 10-23；云端遗留日线 22,327 条、最新 10-09，最大决策快照表约 661 MiB。服务器展示包约 232 MiB/320 MiB 上限，PostgreSQL 卷约 1.6 GiB、项目备份约 1.56 GiB；根盘约剩 10 GiB，RAM 约 1.8 GiB、检查时可用约 452 MiB。完整分账见 `docs/audits/STORAGE_LOCATION_AND_DISK_20261025.md`；不能把本机归档算成云端内存，也不能声称云端没有旧原始数据。
 
 ## 下一顺序
 
