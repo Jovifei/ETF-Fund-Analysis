@@ -19,6 +19,7 @@
 - **版本纪律**：补录 [1.0.11]/[1.0.10] 两节——此前 `docs/versions/` 有文档但 CHANGELOG 缺节，且四处置版本号停在 1.0.9。
 - **发布身份**：提交 `e21bccf7ae3fd3b76156dfda0b953848297ae459`，生产镜像 `sha256:1863c32d…`（基镜像 v1.0.9），公网 health `version=1.0.12` 核验通过；展示包身份保持 `dcffa8e…/041a1286…` 并已登记。收据：`docs/audits/RELEASE_1_0_12_20261025.md`。
 - **门禁实测**：全量后端 2686 通过 / 24 跳过 / 0 失败（EXIT=0）；前端 typecheck 0 错误、vitest 228 通过、构建成功；`compileall`/`node --check` 通过；部署前后身份门禁 `approved`；默认读取 `total=34`，详情与定价对同一报价返回相同状态。
+- **文档记录**：版本说明 `docs/versions/V1.0.12.md`；审查记录（含逐项处置）`docs/audits/CODE_REVIEW_1A4B665_8E062B7_20261025.md`；发布收据 `docs/audits/RELEASE_1_0_12_20261025.md`；运维手册 `docs/BUNDLE_IDENTITY_AND_WEEKEND_RUNBOOK.md`。
 
 ## [1.0.11] — 2026-10-25（补录）
 
