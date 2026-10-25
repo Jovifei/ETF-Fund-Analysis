@@ -90,3 +90,24 @@ def test_portfolio_correlation_rejects_unexplained_split(isolated,monkeypatch):
     result=read_model.portfolio_risk(db,get_settings(),None)
     assert result['history_issues'][inst.ts_code]=='unexplained_price_discontinuity'
     assert result['correlations'][0]['correlation'] is None
+
+
+def test_portfolio_risk_local_bundle_never_presents_stale_cloud_history_as_current(isolated,monkeypatch):
+    from app.core.config import Settings
+    db,inst=isolated
+    other=Instrument(ts_code='998873.SH',symbol='998873',name='peer',kind='ETF',enabled=True)
+    db.add(other);db.flush()
+    for i in range(55):
+        day=date(2026,8,1)+timedelta(days=i)
+        bar(db,inst,day,2+i*.001)
+        bar(db,other,day,2+i*.002)
+    monkeypatch.setattr(read_model,'holdings_view',lambda *a,**k:{'items':[
+        {'ts_code':inst.ts_code,'weight':.5,'theme':'test'},
+        {'ts_code':other.ts_code,'weight':.5,'theme':'test'}], 'pricing_complete':True})
+    settings=Settings(_env_file=None,market_provider='mock',workspace_research_source='local_bundle')
+    result=read_model.portfolio_risk(db,settings,None)
+    assert result['correlations']==[] and result['history_issues']=={}
+    assert result['correlations_reason']=='local_bundle_cloud_daily_history_stale'
+    assert result['cloud_history_as_of']=='2026-09-24'
+    assert result['is_stale'] is True and result['actionable'] is False
+    assert any('local_bundle' in text or '云端' in text for text in result['limitations'])

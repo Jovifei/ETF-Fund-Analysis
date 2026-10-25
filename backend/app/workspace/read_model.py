@@ -665,6 +665,26 @@ def portfolio_risk(db: Session, settings: Settings, user_id: int | None) -> dict
     portfolio = holdings_view(db, settings, user_id)
     items = portfolio["items"][:60]
     codes = [item["ts_code"] for item in items]
+    if getattr(settings, "workspace_research_source", "database") == "local_bundle":
+        # Cloud daily bars are not the active research dataset in local_bundle mode; correlating
+        # them would present frozen history (e.g. halted cloud scheduler) as current context.
+        last = db.execute(select(DailyBar.trade_date).join(Instrument, Instrument.id == DailyBar.instrument_id)
+                          .where(Instrument.ts_code.in_(codes)).order_by(DailyBar.trade_date.desc()).limit(1)).scalar() if codes else None
+        last_iso = last.isoformat() if last is not None else None
+        theme_weights: dict[str, float] = {}
+        for item in items:
+            if item["weight"] is not None:
+                key = item["theme"] or "未分类"
+                theme_weights[key] = theme_weights.get(key, 0) + item["weight"]
+        return {"pricing_complete": portfolio["pricing_complete"],
+                "max_weight": max((item["weight"] or 0 for item in items), default=0) if portfolio["pricing_complete"] else None,
+                "theme_weights": theme_weights, "correlations": [], "history_issues": {},
+                "correlations_reason": "local_bundle_cloud_daily_history_stale",
+                "cloud_history_as_of": last_iso, "is_stale": True, "basis": "unavailable_local_bundle",
+                "limitations": ["不含未录入现金和资产", "收益相关性不是成分股重叠", "未复权收益会受分红影响",
+                                "个人成本不参与共享市场信号",
+                                f"local_bundle 模式不基于云端日线计算收益相关性（云端历史截至 {last_iso or '无数据'}）"],
+                "actionable": False}
     pairs = db.execute(select(Instrument.ts_code, DailyBar).join(DailyBar, DailyBar.instrument_id == Instrument.id).where(Instrument.ts_code.in_(codes), DailyBar.adjust == "none").order_by(DailyBar.trade_date.desc()).limit(20000)).all() if codes else []
     from app.providers.data_contract import price_history_issue
     grouped = {code: [] for code in codes}

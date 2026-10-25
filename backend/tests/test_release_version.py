@@ -5,10 +5,13 @@ from app.core.config import Settings
 
 
 def test_release_versions_agree_with_canonical_package(monkeypatch):
+    import re
     monkeypatch.delenv("APP_VERSION", raising=False)
     root = Path(__file__).resolve().parents[2]
     expected = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
-    assert expected == "1.0.7"
+    changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
+    latest = re.search(r"^## \[(\d+\.\d+\.\d+)\] — ", changelog, re.MULTILINE)
+    assert latest is not None and latest.group(1) == expected, "pyproject version must match latest CHANGELOG section"
     assert Settings(_env_file=None).app_version == expected
     package = json.loads((root / "frontend/package.json").read_text(encoding="utf-8"))
     lock = json.loads((root / "frontend/package-lock.json").read_text(encoding="utf-8"))

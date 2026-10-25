@@ -9,6 +9,12 @@
 - 发布提交的精确 SHA 在部署完成后回填于当次发布收据（`docs/audits/RELEASE_*.md`），本文件引用该收据。
 - 数据源策略串（如 `daily-batch-v1.0.5-audited-target-retry`）是数据口径版本，与应用版本独立，不随本文件变更。
 
+## [1.0.8] — 2026-10-25
+
+- **变更分组（后端）**：`portfolio_risk` 在 `workspace_research_source=local_bundle` 模式下不再把云端日线（云端调度停用后冻结于 2026-10-09）当作当前研究数据计算收益相关性：相关性置空、`correlations_reason=local_bundle_cloud_daily_history_stale`、`cloud_history_as_of` 报告云端历史真实截止日、`is_stale=true`、limitations 注入明确说明。database 模式行为不变。来源：2026-10-25 网站空白事件复审（Reader 验收要求 3）；先失败测试后实现（`test_portfolio_risk_local_bundle_never_presents_stale_cloud_history_as_current`）。
+- **测试证据**：`backend/tests/test_postdeploy_read_consistency.py` 5 项通过；全量后端/静态门禁见当次发布收据（部署后回填 SHA）。
+- **背景**：当日事件诊断确认展示包默认读取已随 `bundle_1792907023598`（code dcffa8e）恢复 34 条；持仓表为空与云端历史冻结为独立事实。收据：`docs/audits/INCIDENT_20261025_WEEKEND_BLANK_SITE.md`、`docs/audits/RELEASE_1_0_8_20261025.md`。
+
 ## [1.0.7] — 2026-10-25
 
 - **发布提交**：`dcffa8ebac1027d174b213915ff78a7e51b99097`，生产镜像 `sha256:d85d40cd…`，公网核验通过；详见 `docs/audits/RELEASE_1_0_7_20261025.md`。基线为 `44bad9c`（= v1.0.6 发布 `6a4aa10` + 发布收据文档）。
