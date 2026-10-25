@@ -1,6 +1,6 @@
 # 当前项目状态
 
-2026-10-25 **v1.0.7 已受控发布**（当日第二版）：main `dcffa8e`，生产三容器统一镜像 `sha256:d85d40cd…`，公网 `https://etf.joviluma.com` health `version=1.0.7`。本版内容：**16:40/17:40 晚间结算重试槽**（台账证据：15:15 槽收盘 0/34、16:10 槽 3–6/34 每日 FAILED，收盘后数据源渐进发布；密集快槽实测约 125 秒无容量冲突）；vitest 4.1.12/esbuild 0.28.2 官方安全修复后 **npm audit 0 漏洞**；修复 `test_audit_release` 硬编码版本。schema `f0e1d2c3b4a5` 未变；DB 备份恢复校验通过；`rollback.sh` 一键回 v1.0.6。收据：`docs/audits/RELEASE_1_0_7_20261025.md`；版本记录入口：根目录 `CHANGELOG.md`。
+2026-10-25 **v1.0.7 已受控发布**（当日第二版）：发布源码 `dcffa8e`（main 已有后续文档提交），生产三容器统一镜像 `sha256:d85d40cd…`，10-25 本次只读公网 `https://etf.joviluma.com` health `version=1.0.7`。本版内容：**16:40/17:40 晚间结算重试槽**（台账证据：15:15 槽收盘 0/34、16:10 槽 3–6/34 每日 FAILED，收盘后数据源渐进发布；密集快槽实测约 125 秒无容量冲突）；vitest 4.1.12/esbuild 0.28.2 官方安全修复后 **npm audit 0 漏洞**；修复 `test_audit_release` 硬编码版本。schema `f0e1d2c3b4a5` 未变；DB 备份恢复校验通过；`rollback.sh` 一键回 v1.0.6。收据：`docs/audits/RELEASE_1_0_7_20261025.md`；版本记录入口：根目录 `CHANGELOG.md`。
 
 2026-10-25 早间 **v1.0.6 已发布**：PR53/54/55 修复链上线（`6a4aa10`，镜像 `69e60fef…`），收据 `docs/audits/RELEASE_1_0_6_20261025.md`。重要更正：切换前生产实为 api `1a4b665`（旧文档所记 9fe 已过期），已统一并如实记载。
 

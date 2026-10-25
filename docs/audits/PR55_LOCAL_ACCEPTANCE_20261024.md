@@ -1,6 +1,6 @@
 # PR55 新增上下文状态类型修复：本地接收记录
 
-状态：**SOURCE_AND_REVIEW_PASS / MAIN_MERGE_PENDING**。此文件只绑定 Draft [PR55](https://github.com/Jovifei/ETF-Fund-Analysis/pull/55) head `447685865ced4f7f5a05337b7652d5f4052c04e9`、tree `bab9d33d0055a69149add8a0f758dcf38be943bf`。GitHub `main` 及根目录仍为 `1a4b6652f49c412145d12812fa02820ba0a80991`；PR51 `bdb556f`、PR52 `109253e`、PR54 `b98d683` 均为此候选祖先，未被本地改写。生产未部署。
+状态：**SOURCE_AND_REVIEW_PASS / MAIN_MERGED**。此固定源码收据绑定 [PR55](https://github.com/Jovifei/ETF-Fund-Analysis/pull/55) head `447685865ced4f7f5a05337b7652d5f4052c04e9`、tree `bab9d33d0055a69149add8a0f758dcf38be943bf`。10-24 合并提交 `1e5294d935ce3b08ab282a96e438706505b222d7` 的 tree 与该 head 完全一致；10-25 查收基线 main@`18686f112d04e91756ebed2ca6e865aae7c58dcf` 还包含后续 v1.0.6/v1.0.7 发布及文档提交。PR51 `bdb556f`、PR52 `109253e`、PR54 `b98d683` 均为此候选祖先，未被本地改写。本收据本身不证明生产部署，后续发布见独立版本收据。
 
 ## 修复与失败先行证据
 
@@ -21,6 +21,6 @@
 
 网页 GPT 两次普通 Chat 的最终回复在页面/应用中不可加载，因此没有沿用不可见文本。经 Jovi 单独授权，第二个同项目 Chat 将结果写入私有 [PR55 复审评论](https://github.com/Jovifei/ETF-Fund-Analysis/pull/55#issuecomment-6380319441)，并由 GitHub 插件读回：固定 head/tree/base 一致，`SOURCE_GATE=PASS`、`CI_GATE=PASS`、`MAIN_MERGE_GUARD=PASS`，无可执行 P0/P1/P2。评论明确只放行代码合并，不表示生产验收或部署。仅本次评论专用项目指令例外已移除，长期指令与“仅限项目”记忆保留。
 
-根目录当时的 6 份 Owner 未提交/未跟踪文件已逐份备份并核 SHA-256 至 `E:\Claude_allow\Download\ETF-chain-fix-20261023\owner-preservation-pre-pr55-main-20261024`；本记录另有补充备份。此后任务清单与本记录仍有编辑，**合并前须按最新根目录状态重新核全部文件哈希**。未 reset、clean、stash 或覆盖。F 盘研究数据、账户/持仓、配置、正式任务和回滚资产未改。Hub revision 仍 WinError10061，本轮未发送事件、未自动重试。
+合并前根目录 7 份 Owner 未提交/未跟踪文件已逐份备份并核 SHA-256 至 `E:\Claude_allow\Download\ETF-chain-fix-20261023\owner-preservation-pre-pr55-merge-final-20261024`；合并后哈希未变，未 reset、clean、stash 或覆盖。后续另一会话已将验收文档入册并推进版本发布；本收据不把那轮动作算作 PR55 的直接测试。F 盘研究数据、账户/持仓与回滚资产资格仍按各自收据判定。Hub 当轮 revision WinError10061，未发送事件。
 
-下一步再次确认 PR55/main 精确指针、十项检查及 Owner 最新备份，再按本批授权合 main；不自动部署。真实账号、实体手机、实际收盘/自然两交易日、许可/PIT/OOS/校准仍独立待验，保持 UNKNOWN、actionable=false、not_calibrated。
+PR55 已在网页 GPT 评论 `SOURCE/CI/MAIN` 三项 PASS 和十项精确检查通过后合入 main；10-25 的 v1.0.6、v1.0.7 部署属于后续独立授权和收据。真实账号、实体手机、16:40/17:40 首次自然运行、实际当晚收盘及两个交易日、许可/PIT/OOS/校准仍独立待验，保持 UNKNOWN、actionable=false、not_calibrated。
