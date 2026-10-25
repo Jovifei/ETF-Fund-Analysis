@@ -6,7 +6,7 @@
 
 - main `23c20b6`（PR57 Head `1c1a500`，两者文件树相同），v1.0.9 已发布到统一镜像 `sha256:259181a5…`；schema `f0e1d2c3b4a5` 未变。发布、备份、测试与回滚收据：`docs/audits/RELEASE_1_0_9_20261025.md`。
 - 公网健康 `ok/1.0.9/auth_enabled=true`；生产 Reader 默认 34 条、批次 `1792913919058`，报价实时声明 0。自选 6 项中 1 项有批准包历史报价、5 项缺价；不再使用云端 10-09 报价。当前持仓记录 0，Jovi 以收藏暂记所持代码，不提供份额/成本，也不自动导入。
-- 已接收展示包到期只标历史，原空白与代码身份不匹配有关；临时周末重复封包任务停用，交易日任务保持原状。源数据资格仍 UNKNOWN/actionable=false/not_calibrated。
+- 已接收展示包到期只标历史，原空白与代码身份不匹配有关；临时周末重复封包任务停用。`ETF-Local-Live-Compute` 已按 Jovi 更正恢复，原触发器/参数不变、执行器换 `pythonw.exe`，17:15 自然触发退出码 0 且无弹窗；`ETF-Local-Reconcile-1630` 也换为 `pythonw.exe`，10-26 自然运行待验。药箱独立任务改由 `wscript.exe` 隐藏启动，17:24 无新终端；自动化 Chrome 实例已结束。源数据资格仍 UNKNOWN/actionable=false/not_calibrated。
 - 生产 `SCHEDULER_ENABLED=false`，近 10 分钟 Provider audit 0 新事件；三服务统一新镜像、重启数 0，匿名自选 GET 为 401。正常登录/本人手机尚未验收。
 
 ## 下一顺序

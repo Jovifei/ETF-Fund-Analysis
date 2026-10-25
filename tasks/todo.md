@@ -12,6 +12,15 @@ Jovi授权修复→测试→网页GPT复审→通过后受控部署；详细验�
 
 # 当前任务
 
+## 2026-10-25 本机定时任务静默恢复
+
+- [x] 核原 ETF 任务 XML 备份、动作参数与无控制台解释器，保留回滚路径。
+- [x] 按原触发器恢复 ETF 调度，只替换可见控制台启动方式；17:15 自然运行退出码 0、无新增 Windows Terminal。
+- [x] 药箱通道换为 `wscript.exe` 隐藏启动；隔离验证退出码传递，17:24 自然运行 Node/SSH 与状态文件更新、无新增终端。
+- [x] 复核参数/触发器未变并记录限制：ETF 对账任务下次自然运行待 10-26；药箱转发启动不等于模型健康。
+
+Review：Jovi 明确允许自动执行，但要求不弹窗、不抢聊天输入。原 ETF Live XML 与 Reconcile XML 均备份于 `E:\Claude_allow\Download\ETF-chain-fix-20261023`；Live 曾删除后恢复为 `pythonw.exe`，对账任务仅替换执行器。药箱原 XML 同处备份，GUI 启动器为 `E:\AI_Tools\Codex\data\medbox-model-channel\launch-hidden.vbs`，退出码传递测试与自然运行通过；连接健康未晋升。`agent-browser` 空白 Chrome 自动化实例已定点结束，日常 Chrome 未动；无法凭已复用 PID 追溯到具体聊天任务。未改数据、策略或计算代码。
+
 ## 2026-10-25 自选旧报价纠正与线上复验
 
 - [x] 固定 v1.0.8 基线、线上展示包和自选/持仓旧报价根因；保留 Owner、F 盘与生产持仓。
