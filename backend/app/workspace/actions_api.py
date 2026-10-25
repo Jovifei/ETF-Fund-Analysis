@@ -55,7 +55,13 @@ def watchlist(db: DB, settings: Config, user: User):
     local_only = settings.workspace_research_source == "local_bundle"
     bundle_quotes = read_model.local_bundle_pricing(settings)[1] if local_only else {}
     quotes = {} if local_only else read_model.latest_rows(db, QuoteSnapshot, [inst.id for _, inst in pairs], QuoteSnapshot.quote_time.desc())
-    return {"items": [{"id": entry.id, "ts_code": inst.ts_code, "name": inst.name, "kind": inst.kind, "theme": inst.theme_l1, "note": entry.note, "enabled": inst.enabled, "quote": bundle_quotes.get(inst.ts_code) or read_model.quote_view(quotes.get(inst.id), settings)} for entry, inst in pairs],
+    def row(entry, inst):
+        quote = bundle_quotes.get(inst.ts_code) or read_model.quote_view(quotes.get(inst.id), settings)
+        unpriced = quote.get("price") is None
+        return {"id": entry.id, "ts_code": inst.ts_code, "name": inst.name, "kind": inst.kind,
+                "theme": inst.theme_l1, "note": entry.note, "enabled": inst.enabled, "quote": quote,
+                "unpriced_reason": ("not_published_in_bundle" if local_only else "no_quote") if unpriced else None}
+    return {"items": [row(entry, inst) for entry, inst in pairs],
             "pricing_note": "仅显示已发布展示包覆盖的历史报价；未覆盖标的不使用停更的云端价格。" if local_only else None}
 
 

@@ -40,6 +40,13 @@ def _local_reader(settings: Settings):
     return LocalDisplayReader(store, code_sha=settings.shadow_sync_code_sha, config_hash=settings.shadow_sync_config_hash)
 
 
+def _local_missing_reason(reader, generation: str | None) -> str:
+    """Distinguish "no usable batch" from "this batch never covered the code"."""
+    if reader.load_bundle(generation) is None:
+        return "local_display_generation_unavailable" if generation is not None else "local_bundle_unavailable"
+    return "local_display_instrument_not_published"
+
+
 @private_router.get("/workspace/overview")
 def overview(db: DB, settings: Config, user: User, horizon: int = Query(default=1), offset: int = Query(default=0, ge=0, le=10000), limit: int = Query(default=100, ge=1, le=500), theme: str | None = Query(default=None, max_length=128), generation: str | None = Query(default=None)) -> dict:
     if horizon not in DEFAULT_RESEARCH_HORIZONS:
@@ -55,9 +62,10 @@ def overview(db: DB, settings: Config, user: User, horizon: int = Query(default=
 @private_router.get("/workspace/instruments/{code}")
 def detail(code: str, db: DB, settings: Config, user: User, generation: str | None = Query(default=None)) -> dict:
     if settings.workspace_research_source == "local_bundle":
-        res = _local_reader(settings).read_instrument_detail(code, user.id if user else None, generation=generation)
+        reader = _local_reader(settings)
+        res = reader.read_instrument_detail(code, user.id if user else None, generation=generation)
         if res is None:
-            raise HTTPException(404, "local_display_data_unavailable")
+            raise HTTPException(404, _local_missing_reason(reader, generation))
         return res
     result = read_model.instrument_detail(db, settings, code.upper(), user.id if user else None)
     if result is None:
@@ -83,10 +91,11 @@ def chart(code: str, db: DB, settings: Config, user: User, interval: str = "1d",
     if as_of is not None and read_model.market_time(as_of) > read_model.market_time(datetime.now(read_model.SHANGHAI)):
         raise HTTPException(422, "as_of_in_future")
     if settings.workspace_research_source == "local_bundle":
+        reader = _local_reader(settings)
         try:
-            res = _local_reader(settings).read_chart_data(code, interval, limit, generation=generation, as_of=as_of)
+            res = reader.read_chart_data(code, interval, limit, generation=generation, as_of=as_of)
             if res is None:
-                raise HTTPException(404, "local_display_data_unavailable")
+                raise HTTPException(404, _local_missing_reason(reader, generation))
             return res
         except ValueError as exc:
             if "generation_time_mismatch" in str(exc):
@@ -240,10 +249,11 @@ def context_read_view(db: DB, settings: Config, response: Response, user: User, 
     response.headers["Cache-Control"] = "private, no-store"
     if settings.workspace_research_source == "local_bundle":
         view = _local_reader(settings).read_market_context_view(generation=generation, now=now)
+        items = view.get("items") or []
         result = [{**row, "display_time": context_display(
             row.get("observation"), now=now, context_kind=row.get("context_kind", "index"), timezone=settings.timezone
-        )} for row in view.pop("items")]
-        return {**view, "latest_view": result}
+        )} for row in items]
+        return {**{key: value for key, value in view.items() if key != "items"}, "latest_view": result}
     rows = MarketContextService(provider=None, settings=settings).latest_view(db)
     result = [{**row, "display_time": context_display(
         row.get("observation"), now=now, context_kind=row["context_kind"], timezone=settings.timezone

@@ -433,5 +433,13 @@ def main() -> int:
     return 1
 
 
+def emit_exit(rc: int) -> int:
+    """Machine-readable failure sentinel: `| tail` hides the process exit code."""
+    if rc:
+        print(json.dumps({"exit_code": rc, "status": "failed",
+                          "note": "管道会掩盖退出码；请用 PIPESTATUS 或读取本行"}, ensure_ascii=False))
+    return rc
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(emit_exit(main()))

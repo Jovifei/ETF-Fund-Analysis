@@ -80,9 +80,18 @@ def latest_rows(db: Session, model, ids: list[int], *ordering, partitions=None) 
     return {row.instrument_id: row for row in rows}
 
 
-def local_bundle_pricing(settings: Settings) -> tuple[dict | None, dict[str, dict], int | None]:
-    """Read approved public quotes once; never substitute frozen cloud quotes."""
-    from app.workspace.local_display_read import LocalDisplayReader, LocalDisplayStore
+def local_bundle_pricing(settings: Settings, *, now: datetime | None = None) -> tuple[dict | None, dict[str, dict], int | None]:
+    """Read approved public quotes once; never substitute frozen cloud quotes.
+
+    Freshness comes from the single display-read authority so detail pages and
+    personal views cannot disagree about the same quote.
+    """
+    from app.workspace.local_display_read import (
+        LocalDisplayReader,
+        LocalDisplayStore,
+        bundle_expired,
+        quote_display_state,
+    )
 
     try:
         store = LocalDisplayStore(settings.local_display_v2_store_root, max_bytes=settings.local_display_v2_max_bytes)
@@ -94,24 +103,15 @@ def local_bundle_pricing(settings: Settings) -> tuple[dict | None, dict[str, dic
         return None, {}, None
 
     manifest = bundle["manifest"]
-    now = datetime.now(UTC)
-    try:
-        expired = now >= datetime.fromisoformat(manifest["expires_at"].replace("Z", "+00:00"))
-    except (KeyError, TypeError, ValueError):
-        expired = True
+    reference = now or datetime.now(UTC)
+    expired = bool(bundle_expired(bundle, now=reference))
     generation = manifest.get("sequence")
     quotes = {}
     for code, detail in bundle.get("parts", {}).get("details", {}).items():
         raw = detail.get("quote") if isinstance(detail, dict) else None
         if not isinstance(raw, dict):
             continue
-        source_value = raw.get("source_time")
-        source_time = market_time(source_value) if isinstance(source_value, (str, datetime)) else None
-        age = (now - source_time.astimezone(UTC)).total_seconds() if source_time else None
-        stale = expired or (raw.get("status") == "observed" and (age is None or age < 0 or age > 600))
-        quotes[code] = {**raw, "status": "stale" if stale else raw.get("status", "missing"),
-                        "is_realtime": bool(raw.get("is_realtime")) and raw.get("status") == "observed" and not stale,
-                        "actionable": False, "generation": generation}
+        quotes[code] = {**quote_display_state(raw, expired=expired, now=reference), "generation": generation}
     return bundle, quotes, generation
 
 
@@ -244,6 +244,8 @@ def holdings_view(db: Session, settings: Settings, user_id: int | None) -> dict:
         shares, cost = float(holding.shares), float(holding.cost_price)
         market_value = shares * price if price is not None else None
         decision = decisions.get(inst.ts_code) or det.get("decision") or {}
+        # "数据异常" is a board-wide grade; a code the batch never covered is simply unpublished.
+        grade = decision.get("grade") or ("数据异常" if decision else "无快照")
         items.append({
             "ts_code": inst.ts_code, "name": inst.name, "kind": inst.kind, "theme": inst.theme_l1,
             "shares": shares, "cost_price": cost, "quote": quote,
@@ -251,7 +253,8 @@ def holdings_view(db: Session, settings: Settings, user_id: int | None) -> dict:
             "pnl": round(market_value - shares * cost, 2) if market_value is not None else None,
             "pnl_ratio": price / cost - 1 if price is not None and cost > 0 else None,
             "target_weight": holding.target_weight, "notes": holding.notes, "updated_at": iso(holding.updated_at),
-            "grade": decision.get("grade", "数据异常"), "decision_snapshot_id": board.get("snapshot_id"),
+            "grade": grade, "snapshot_available": bool(decision),
+            "decision_snapshot_id": board.get("snapshot_id"),
             "forecasts": decision.get("forecasts", {}), "support_resistance": decision.get("support_resistance"),
             "actionable": False,
         })

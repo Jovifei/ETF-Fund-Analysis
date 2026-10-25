@@ -54,6 +54,8 @@ export function errorText(error: unknown): string {
     const workspaceErrors: Record<string, string> = {
       local_display_generation_unavailable: '指定批次不可用或已回收；未自动切换到最新批次。',
       local_display_data_unavailable: '本地展示包未发布该数据；请核对批次，或主动读取最新批次。',
+      local_display_instrument_not_published: '该标的未包含在已发布批次中；请在本机加入展示范围后重新发布。',
+      local_bundle_unavailable: '尚无可读取的展示包；请先在本机完成发布。',
       index_chart_not_published_in_local_bundle: '本地展示包尚未发布指数 K 线；当前仅展示已发布的指数观测。',
       instrument_not_in_catalog: '该标的不在已同步证券目录；搜索目录不会自动抓取数据。',
       unsupported_instrument_type: '当前研究工作站只支持场内 ETF/LOF。',

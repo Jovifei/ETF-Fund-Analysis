@@ -28,6 +28,54 @@ GEN_HASH_RE = re.compile(r"^[0-9a-fA-F]{16,64}$")
 ACCEPTANCE_HISTORY_VERSION = "local-acceptance-v1"
 ACCEPTANCE_HISTORY_LIMIT = 256
 CONSUMER_VERSION = "local-display-consumer-v1"
+QUOTE_OBSERVATION_MAX_AGE_SECONDS = 600
+
+
+def bundle_expired(bundle: dict[str, Any] | None, *, now: datetime | None = None) -> bool | None:
+    """True/False for a stored generation; None when there is no bundle.
+
+    An unreadable expiry fails closed (True) instead of raising: a stored bundle
+    without a usable window cannot prove that its content is current.
+    """
+    if not bundle:
+        return None
+    try:
+        return (now or datetime.now(timezone.utc)) >= _parse_iso(bundle["manifest"]["expires_at"])
+    except (KeyError, TypeError, ValueError):
+        return True
+
+
+def bundle_is_stale(bundle: dict[str, Any] | None, *, now: datetime | None = None) -> bool:
+    if not bundle:
+        return True
+    return bool(bundle.get("historical_identity")) or bool(bundle_expired(bundle, now=now))
+
+
+def quote_display_state(raw: dict[str, Any], *, expired: bool, now: datetime | None = None) -> dict[str, Any]:
+    """Single authority for whether a published quote is still an observation.
+
+    Bundle expiry and per-quote source age are independent: a bundle can sit inside
+    its publication window while every quote in it is hours old (weekend, halted
+    upstream publication). Detail reads and personal pricing must not apply
+    separate thresholds to the same quote.
+    """
+    reference = now or datetime.now(timezone.utc)
+    source_time = None
+    value = raw.get("source_time")
+    try:
+        if isinstance(value, str):
+            source_time = _parse_iso(value)
+        elif isinstance(value, datetime) and value.tzinfo is not None:
+            source_time = value.astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        source_time = None
+    age = (reference - source_time).total_seconds() if source_time else None
+    observed = raw.get("status") == "observed"
+    stale = bool(expired) or (observed and (age is None or age < 0 or age > QUOTE_OBSERVATION_MAX_AGE_SECONDS))
+    return {**raw,
+            "status": "stale" if stale else raw.get("status", "missing"),
+            "is_realtime": bool(raw.get("is_realtime")) and observed and not stale,
+            "actionable": False}
 
 # Process-wide cache of validated, immutable bundle files.  A bundle is ~16 MB
 # of JSON and ~70 MB once parsed; the overview page fires 5-8 reads at once,
@@ -420,19 +468,10 @@ class LocalDisplayReader:
             }
 
         manifest = bundle.get("manifest", {})
-        expires_at_str = manifest.get("expires_at")
-        is_stale = False
-        if expires_at_str:
-            try:
-                exp_dt = _parse_iso(expires_at_str)
-                is_stale = bool(bundle.get("historical_identity")) or datetime.now(timezone.utc) >= exp_dt
-            except Exception:
-                is_stale = True
-        else:
-            is_stale = True
+        is_stale = bundle_is_stale(bundle)
 
         ov_part = bundle.get("parts", {}).get("overview", {})
-        rows = list(ov_part.get("rows", []))
+        rows = [dict(row) for row in ov_part.get("rows", [])]
         if theme:
             rows = [r for r in rows if r.get("theme_l1") == theme or r.get("theme_l2") == theme]
 
@@ -471,16 +510,7 @@ class LocalDisplayReader:
             return None
 
         manifest = bundle.get("manifest", {})
-        expires_at_str = manifest.get("expires_at")
-        is_stale = False
-        if expires_at_str:
-            try:
-                exp_dt = _parse_iso(expires_at_str)
-                is_stale = bool(bundle.get("historical_identity")) or datetime.now(timezone.utc) >= exp_dt
-            except Exception:
-                is_stale = True
-        else:
-            is_stale = True
+        is_stale = bundle_is_stale(bundle)
 
         ov_part = bundle.get("parts", {}).get("overview", {})
         if snapshot_id is not None and str(ov_part.get("snapshot_id")) != snapshot_id:
@@ -528,6 +558,8 @@ class LocalDisplayReader:
         code: str,
         user_id: int | None = None,
         generation: str | int | None = None,
+        *,
+        now: datetime | None = None,
     ) -> dict[str, Any] | None:
         bundle = self.load_bundle(generation)
         if not bundle:
@@ -540,9 +572,10 @@ class LocalDisplayReader:
 
         # Clean detail of any private holding/avg_cost info before return
         clean_detail = {k: v for k, v in detail.items() if k not in {"avg_cost", "trades", "account_id"}}
-        stale = bool(bundle.get("historical_identity")) or datetime.now(timezone.utc) >= _parse_iso(bundle["manifest"]["expires_at"])
-        if stale and isinstance(clean_detail.get("quote"), dict):
-            clean_detail["quote"] = {**clean_detail["quote"], "status": "stale"}
+        now = now or datetime.now(timezone.utc)
+        stale = bundle_is_stale(bundle, now=now)
+        if isinstance(clean_detail.get("quote"), dict):
+            clean_detail["quote"] = quote_display_state(clean_detail["quote"], expired=stale, now=now)
         return {
             **clean_detail,
             "generation": bundle.get("manifest", {}).get("sequence"),
@@ -596,15 +629,9 @@ class LocalDisplayReader:
 
     @staticmethod
     def _panel_metadata(bundle: dict[str, Any] | None) -> dict[str, Any]:
-        stale = True
-        if bundle:
-            try:
-                stale = bool(bundle.get("historical_identity")) or datetime.now(timezone.utc) >= _parse_iso(bundle["manifest"]["expires_at"])
-            except (ValueError, TypeError, KeyError):
-                pass
         return {"generation": bundle["manifest"]["sequence"] if bundle else None,
                 "research_source": "local_bundle", "consumer_contract_version": CONSUMER_VERSION,
-                "is_stale": stale, "actionable": False}
+                "is_stale": bundle_is_stale(bundle), "actionable": False}
 
     def read_sectors(self, generation: str | int | None = None) -> dict[str, Any]:
         bundle = self.load_bundle(generation)
@@ -659,7 +686,7 @@ class LocalDisplayReader:
             availability = part.get("availability") or ("available" if items else "unavailable")
             reason = part.get("reason") or (None if items else "market_context_empty")
         historical = bool(bundle and bundle.get("historical_identity"))
-        expired = now >= _parse_iso(manifest["expires_at"]) if bundle else None
+        expired = bundle_expired(bundle, now=now)
         stale = not bundle or historical or bool(expired)
         return {
             "items": items,

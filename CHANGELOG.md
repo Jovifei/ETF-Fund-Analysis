@@ -9,6 +9,27 @@
 - 发布提交的精确 SHA 在部署完成后回填于当次发布收据（`docs/audits/RELEASE_*.md`），本文件引用该收据。
 - 数据源策略串（如 `daily-batch-v1.0.5-audited-target-retry`）是数据口径版本，与应用版本独立，不随本文件变更。
 
+## [1.0.12] — 2026-10-25
+
+- **触发**：`1a4b665..8e062b7` 独立代码审查（4 项 Important、6 项 Minor）。全部先失败测试后修复；定向 61 项通过。
+- **后端（读取链）**：新增展示包读取的三个单一权威——`bundle_expired` / `bundle_is_stale` / `quote_display_state`（`local_display_read.py`）。详情页与自选/持仓定价不再各用一套过期判据（此前整包 2h TTL vs 单报价 600 秒）；详情页现在也按源龄降级，`is_realtime` 不再可能为真。缺 `expires_at` 或不可解析时 fail-closed 返回 stale，不再抛 `KeyError`；`read_instrument_detail` 增加只读时钟注入（与 `read_market_context_view` 同惯例）供确定性测试。
+- **后端（诚实标签）**：local_bundle 404 细分为 `local_display_generation_unavailable` / `local_bundle_unavailable` / `local_display_instrument_not_published`；持仓视图未被批次覆盖的行 grade 由「数据异常」改为「无快照」并附 `snapshot_available`；自选返回行级 `unpriced_reason`；`read_overview` 行对象逐行浅拷贝；market-context 读取显式剔除 `items` 而非 `pop`。
+- **工具与治理**：`run_local_compute.py` 非零退出在 stdout 追加机器可读哨兵 `{"exit_code":N,"status":"failed"}`（`emit_exit`），防止 `| tail` 掩盖退出码；新增 `config/bundle_identity_registry.json` + `app/workspace/bundle_identity.py` + `scripts/check_bundle_identity.py`（展示包身份登记与部署门禁）；新增 `docs/BUNDLE_IDENTITY_AND_WEEKEND_RUNBOOK.md`（身份推进、周末 board-only 发布、空网站排障顺序）。
+- **前端**：新增两个错误码中文文案；自选行级显示「本批次未覆盖 / 暂无报价」。
+- **版本纪律**：补录 [1.0.11]/[1.0.10] 两节——此前 `docs/versions/` 有文档但 CHANGELOG 缺节，且四处置版本号停在 1.0.9。
+- **发布身份**：待部署回填（见 `docs/audits/RELEASE_1_0_12_20261025.md`）。
+
+## [1.0.11] — 2026-10-25（补录）
+
+- **来源**：`docs/versions/V1.0.11.md`；合入 `f056c70` / `8e062b7`（动量与计算决策因子第三版：资金预算约束、逐笔账本、Purging、A3.3 影子比对、美股 ETF 实证）。
+- **运行时影响**：新增 `backend/app/services/strategy_evaluation/`（contracts / momentum_engine / backtest_harness）但**无运行时调用方**；研究脚本在 `research/`；`research_only=true` / `actionable=false`。生产首次随 1.0.12 承载该目录，不改变调度、Provider 或页面数据。
+- **记录缺口**：该版本当时只有版本文档，未写入 CHANGELOG、未升四处置版本号、未单独部署。
+
+## [1.0.10] — 2026-10-25（补录）
+
+- **来源**：`docs/versions/V1.0.10.md`；盘中临时 OHLCV 视图进入只读图表与决策读模型，结算指标仍只由收盘任务生成；数据契约 `cn-fund-shares-cny-v1.0.10-intraday-indicator-view`。
+- **发布事实**：该契约与相关代码已包含在 v1.0.9 生产镜像的源码树中（`1c1a500` 树），**未单独以 1.0.10 版本号部署**。补录本节只为消除版本号与文档的断层。
+
 ## [1.0.9] — 2026-10-25
 
 - **变更**：本地展示包模式下，自选与搜索改为只读取已批准展示包的报价；包未覆盖的标的不再显示已停更的云端报价。持仓与自选对过期包、异常源时间统一标记历史状态，禁止声称实时。持仓份额与成本没有改动。

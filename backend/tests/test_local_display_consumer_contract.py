@@ -292,10 +292,30 @@ def test_api_missing_local_data_does_not_query_cloud_catalog(tmp_path):
             pytest.fail('missing local data must not query cloud catalog: ' + name)
     with pytest.raises(HTTPException) as error:
         api.detail('510300.SH', NoDatabase(), settings, None, generation='999')
-    assert error.value.status_code == 404 and error.value.detail == 'local_display_data_unavailable'
+    assert error.value.status_code == 404 and error.value.detail == 'local_display_generation_unavailable'
+    with pytest.raises(HTTPException) as error:
+        api.detail('510300.SH', NoDatabase(), settings, None, generation=None)
+    assert error.value.status_code == 404 and error.value.detail == 'local_bundle_unavailable'
     with pytest.raises(HTTPException) as error:
         api.overview(NoDatabase(), settings, None, horizon=1, offset=0, limit=1, theme=None, generation='999')
     assert error.value.status_code == 404 and error.value.detail == 'local_display_generation_unavailable'
+
+
+def test_api_names_a_code_the_published_bundle_does_not_cover(tmp_path):
+    from types import SimpleNamespace
+    from fastapi import HTTPException
+    from app.workspace import api
+    store = LocalDisplayStore(tmp_path)
+    store.publish(bundle(1), now=NOW)
+    settings = SimpleNamespace(workspace_research_source='local_bundle',
+        local_display_v2_store_root=tmp_path, local_display_v2_max_bytes=64 * 1024 * 1024,
+        shadow_sync_code_sha='a' * 40, shadow_sync_config_hash='b' * 64)
+    class NoDatabase:
+        def __getattr__(self, name):
+            pytest.fail('missing local data must not query cloud catalog: ' + name)
+    with pytest.raises(HTTPException) as error:
+        api.detail('159999.SZ', NoDatabase(), settings, None, generation=None)
+    assert error.value.status_code == 404 and error.value.detail == 'local_display_instrument_not_published'
 
 
 def test_acceptance_history_byte_limit_never_commits_unreadable_pointer(tmp_path):

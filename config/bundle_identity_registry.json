@@ -1,0 +1,18 @@
+{
+  "registry_version": "bundle-producer-identities-v1",
+  "note": "Approved local-display producer identities. The ECS api compares SHADOW_SYNC_CODE_SHA/SHADOW_SYNC_CONFIG_HASH with each bundle manifest; a mismatch is not shown as current data. Application releases are deliberately decoupled from the producer identity (a website-only release must keep an existing bundle readable), so advancing the producer is a separate, recorded act: publish from a clean worktree at this exact code_sha/config_hash, then update the ECS env in the same change window. Never copy a SHA from a bundle into the env without a fresh 34/34 qualified compute run.",
+  "identities": [
+    {
+      "code_sha": "dcffa8ebac1027d174b213915ff78a7e51b99097",
+      "config_hash": "041a12867ac3588be1c45588bfcff5de8b28d6667c3ab3a42b90d20f28deac61",
+      "approved_at": "2026-10-25",
+      "approved_scope": "v1.0.7 producer (evening settlement retry slots, dcffa8e); consumer expectation for app releases 1.0.7 through 1.0.12",
+      "superseded": [
+        {
+          "code_sha": "1a4b6652f49c412145d12812fa02820ba0a80991",
+          "note": "v1.0.6-era producer; its bundles stay readable only when explicitly requested and are tagged historical_identity"
+        }
+      ]
+    }
+  ]
+}
