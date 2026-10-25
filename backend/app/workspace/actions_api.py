@@ -52,8 +52,11 @@ def data_sources(db: DB, settings: Config, user: Admin):
 @router.get("/watchlist")
 def watchlist(db: DB, settings: Config, user: User):
     pairs = db.execute(select(UserWatchlistEntry, Instrument).join(Instrument, UserWatchlistEntry.instrument_id == Instrument.id).where(UserWatchlistEntry.user_id == (user.id if user else None)).order_by(UserWatchlistEntry.id.desc()).limit(500)).all()
-    quotes = read_model.latest_rows(db, QuoteSnapshot, [inst.id for _, inst in pairs], QuoteSnapshot.quote_time.desc())
-    return {"items": [{"id": entry.id, "ts_code": inst.ts_code, "name": inst.name, "kind": inst.kind, "theme": inst.theme_l1, "note": entry.note, "enabled": inst.enabled, "quote": read_model.quote_view(quotes.get(inst.id), settings)} for entry, inst in pairs]}
+    local_only = settings.workspace_research_source == "local_bundle"
+    bundle_quotes = read_model.local_bundle_pricing(settings)[1] if local_only else {}
+    quotes = {} if local_only else read_model.latest_rows(db, QuoteSnapshot, [inst.id for _, inst in pairs], QuoteSnapshot.quote_time.desc())
+    return {"items": [{"id": entry.id, "ts_code": inst.ts_code, "name": inst.name, "kind": inst.kind, "theme": inst.theme_l1, "note": entry.note, "enabled": inst.enabled, "quote": bundle_quotes.get(inst.ts_code) or read_model.quote_view(quotes.get(inst.id), settings)} for entry, inst in pairs],
+            "pricing_note": "仅显示已发布展示包覆盖的历史报价；未覆盖标的不使用停更的云端价格。" if local_only else None}
 
 
 @router.get("/preferences")

@@ -9,6 +9,12 @@
 - 发布提交的精确 SHA 在部署完成后回填于当次发布收据（`docs/audits/RELEASE_*.md`），本文件引用该收据。
 - 数据源策略串（如 `daily-batch-v1.0.5-audited-target-retry`）是数据口径版本，与应用版本独立，不随本文件变更。
 
+## [1.0.9] — 2026-10-25
+
+- **变更**：本地展示包模式下，自选与搜索改为只读取已批准展示包的报价；包未覆盖的标的不再显示已停更的云端报价。持仓与自选对过期包、异常源时间统一标记历史状态，禁止声称实时。持仓份额与成本没有改动。
+- **验收**：先失败测试、受影响回归和完整测试绑定候选提交；生产切换与回滚证据另记发布收据。
+- **未完成**：Jovi 暂以收藏列表维护所持基金代码；份额与成本未知，不能据此生成持仓市值或盈亏。正常认证页面与手机验收、交易日自然调度及长期观察分别记录。
+
 ## [1.0.8] — 2026-10-25
 
 - **变更分组（后端）**：`portfolio_risk` 在 `workspace_research_source=local_bundle` 模式下不再把云端日线（云端调度停用后冻结于 2026-10-09）当作当前研究数据计算收益相关性：相关性置空、`correlations_reason=local_bundle_cloud_daily_history_stale`、`cloud_history_as_of` 报告云端历史真实截止日、`is_stale=true`、limitations 注入明确说明。database 模式行为不变。来源：2026-10-25 网站空白事件复审（Reader 验收要求 3）；先失败测试后实现（`test_portfolio_risk_local_bundle_never_presents_stale_cloud_history_as_current`）。
