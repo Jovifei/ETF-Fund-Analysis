@@ -8,7 +8,7 @@ import pytest
 from app.workspace import bundle_identity
 
 ROOT = Path(__file__).resolve().parents[2]
-CURRENT_CODE_SHA = "c39ab09aa5ab26b814015f0844a6aaa45a05ffd4"
+CURRENT_CODE_SHA = "a0d52e44ba58f34e0ed335d7bcb6409a3ecd7362"
 CURRENT_CONFIG_HASH = "a12c6ea1c812d2cd4b5365c3fa383dbd6c6e4296e004806897d9545008b8e5c8"
 
 
