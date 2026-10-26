@@ -3,6 +3,12 @@
 
 Calculates multi-horizon ICs, directional accuracy, net Sharpe (with Open execution & 20 bps friction),
 and closed-trade ledger performance specifically for US equity exposure.
+
+Remediations applied (2026-10-26 audit):
+1. Corporate action split adjustment: prices scaled across 1:5 split on 513100.SH (2022-01-14).
+2. Volatility scale invariance: calc_volatility_annualized takes percentage returns, NOT price series.
+3. Directional hit rate: bound strictly to factor signal direction (positive signal -> positive fwd return).
+4. Small sample disclosures: explicit warning for 513500.SH (278 bars / 3 trades); removed "strongly recommended" wording.
 """
 from __future__ import annotations
 
@@ -10,7 +16,9 @@ import json
 import math
 import sqlite3
 import sys
+from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -19,11 +27,13 @@ import pandas as pd
 WORKTREE_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(WORKTREE_ROOT / "backend"))
 
+from app.providers.corporate_action_contract import research_history_rows
 from app.services.strategy_evaluation.backtest_harness import (
     calc_daily_portfolio_sharpe,
     calc_max_drawdown,
     simulate_closed_trades_ledger,
     simulate_daily_portfolio_net_returns,
+    simulate_portfolio_ledger_daily,
     wilson_score_interval,
 )
 from app.services.strategy_evaluation.momentum_engine import (
@@ -73,7 +83,8 @@ def load_us_etf_bars() -> pd.DataFrame:
     try:
         df = pd.read_sql_query(
             """
-            SELECT i.ts_code, i.name, d.trade_date, d.open, d.high, d.low, d.close, d.volume
+            SELECT i.ts_code, i.name, d.trade_date, d.open, d.high, d.low, d.close,
+                   d.pre_close, d.volume, d.amount, d.adjust, d.source
             FROM daily_bars d
             JOIN instruments i ON i.id = d.instrument_id
             WHERE i.ts_code IN ('513100.SH', '513500.SH')
@@ -84,8 +95,26 @@ def load_us_etf_bars() -> pd.DataFrame:
     finally:
         conn.close()
 
-    df["trade_date"] = pd.to_datetime(df["trade_date"])
-    return df
+    # Apply official corporate action adjustments (e.g. 513100.SH 1:5 split on 2022-01-14)
+    parts = []
+    for code, g in df.groupby("ts_code"):
+        name_val = g["name"].iloc[0]
+        raw_dict = g.to_dict("records")
+        rows = []
+        for r in raw_dict:
+            r_copy = r.copy()
+            r_copy["trade_date"] = pd.to_datetime(r_copy["trade_date"]).date()
+            rows.append(SimpleNamespace(**r_copy))
+        adj_rows = research_history_rows(rows, code)
+        adj_df = pd.DataFrame([vars(r) for r in adj_rows])
+        adj_df["ts_code"] = code
+        adj_df["name"] = name_val
+        parts.append(adj_df)
+
+    res_df = pd.concat(parts, ignore_index=True)
+    res_df["trade_date"] = pd.to_datetime(res_df["trade_date"])
+    res_df["ret_1"] = res_df["pct_change"] / 100.0 if "pct_change" in res_df else res_df["close"].pct_change()
+    return res_df
 
 
 def add_us_factors(df: pd.DataFrame) -> pd.DataFrame:
@@ -104,8 +133,9 @@ def add_us_factors(df: pd.DataFrame) -> pd.DataFrame:
         g["mom_252"] = calc_momentum(c, 252)
         g["tsmom_12m"] = np.where(g["mom_252"] > 0, 1.0, 0.0)
 
-        # Volatility
-        vol20 = calc_volatility_annualized(c, 20)
+        # Volatility: computed on percentage returns, NOT price level!
+        daily_rets = c.pct_change()
+        vol20 = calc_volatility_annualized(daily_rets, 20)
         g["tsmom_volscaled"] = np.where(g["mom_252"] > 0, 1.0 / vol20.replace(0, np.nan), 0.0)
 
         # Moving average
@@ -153,10 +183,7 @@ def evaluate_asset_factor(df: pd.DataFrame, factor_col: str, factor_kind: str) -
         return {}
 
     # Signal mapping: for continuous, signal = 1 if score > 0
-    if factor_kind == "continuous":
-        sig_series = pd.Series(np.where(sub[factor_col] > 0, 1.0, 0.0), index=sub.index)
-    else:
-        sig_series = pd.Series(np.where(sub[factor_col] > 0, 1.0, 0.0), index=sub.index)
+    sig_series = pd.Series(np.where(sub[factor_col] > 0, 1.0, 0.0), index=sub.index)
 
     # 1. Daily net returns with Next-day Open execution & 10 bps one-way fee
     net_daily = simulate_daily_portfolio_net_returns(sub, sig_series, cost_bps_one_way=COST_BPS_ONE_WAY)
@@ -179,20 +206,39 @@ def evaluate_asset_factor(df: pd.DataFrame, factor_col: str, factor_kind: str) -
             "net_expectancy_bps": round(float(np.mean(net_pnls)) * 10000.0, 1) if tot > 0 else 0.0,
         }
 
-    # 3. Multi-horizon IC and hit rate
+    # 3. Multi-horizon IC and directional hit rate
     horizon_metrics = {}
     for h in HORIZONS:
         fwd_col = f"fwd_{h}"
         valid = sub.dropna(subset=[factor_col, fwd_col])
         if len(valid) > 20:
             ic = float(valid[factor_col].corr(valid[fwd_col], method="spearman"))
-            pos_count = int((valid[fwd_col] > 0).sum())
-            n = len(valid)
-            hr = pos_count / n if n > 0 else float("nan")
-            ci_lo, ci_hi = wilson_score_interval(pos_count, n)
+
+            # Directional hit rate bound strictly to factor signal direction
+            if factor_kind == "binary":
+                active = valid[valid[factor_col] > 0]
+                if len(active) > 0:
+                    pos_count = int((active[fwd_col] > 0).sum())
+                    n = len(active)
+                    hr = pos_count / n
+                    ci_lo, ci_hi = wilson_score_interval(pos_count, n)
+                else:
+                    hr, ci_lo, ci_hi = float("nan"), 0.0, 0.0
+            else:
+                active = valid[valid[factor_col] != 0]
+                if len(active) > 0:
+                    pos_count = int(
+                        ((active[factor_col] > 0) & (active[fwd_col] > 0) | (active[factor_col] < 0) & (active[fwd_col] < 0)).sum()
+                    )
+                    n = len(active)
+                    hr = pos_count / n
+                    ci_lo, ci_hi = wilson_score_interval(pos_count, n)
+                else:
+                    hr, ci_lo, ci_hi = float("nan"), 0.0, 0.0
+
             horizon_metrics[f"h{h}"] = {
                 "ic": round(ic, 4) if not math.isnan(ic) else 0.0,
-                "hit_rate": round(hr * 100, 2),
+                "hit_rate": round(hr * 100, 2) if not math.isnan(hr) else 0.0,
                 "wilson_ci": [round(ci_lo * 100, 2), round(ci_hi * 100, 2)],
             }
 
@@ -224,6 +270,7 @@ def main() -> None:
     for code, g in df_feat.groupby("ts_code"):
         name = g["name"].iloc[0]
         n_bars = len(g)
+        is_small = n_bars < 500
         print(f"\nEvaluating {code} ({name}) - {n_bars} bars:")
         asset_res = {}
         for fac_name, fac_kind in factors:
@@ -238,6 +285,10 @@ def main() -> None:
             "name": name,
             "bars": n_bars,
             "date_range": [g["trade_date"].min().strftime("%Y-%m-%d"), g["trade_date"].max().strftime("%Y-%m-%d")],
+            "sample_limitations": {
+                "is_small_sample": is_small,
+                "warning": "样本量较小（少于500根日线或闭合交易极少），结果仅供探索性参考，不可据此形成强烈推荐。" if is_small else "样本期较为充分，但需考虑跨境交易溢价及海外市场休市影响。"
+            },
             "factors": asset_res,
         }
 

@@ -34,6 +34,8 @@ def calc_forward_returns(df: pd.DataFrame, horizons: list[int] = [1, 3, 7, 20, 6
         # Sum future log returns from t+1 to t+h
         fwd_log = log1p.iloc[::-1].rolling(h, min_periods=h).sum().iloc[::-1].shift(-1)
         df[f"fwd_{h}"] = np.expm1(fwd_log)
+        # Store exact ending trade date of forward horizon window for precise leakage purging
+        df[f"label_end_{h}"] = df["trade_date"].shift(-h)
     return df
 
 
@@ -42,17 +44,18 @@ def compute_volatility_target_weight(
     vol: float,
     target_vol: float = 0.15,
     max_weight: float = 1.0,
+    base_weight: float = 1.0,
 ) -> float:
     """Compute true volatility target position weight (M2).
 
-    w = 1[trend_state > 0] * min(max_weight, target_vol / vol)
+    w = 1[trend_state > 0] * base_weight * min(max_weight, target_vol / vol)
     If trend is flat or down, weight is 0.0 (cash).
     """
     if trend_state <= 0:
         return 0.0
     if pd.isna(vol) or vol <= 0.0 or not math.isfinite(vol):
         return 0.0
-    raw_w = target_vol / vol
+    raw_w = base_weight * (target_vol / vol)
     return float(min(max_weight, raw_w))
 
 
