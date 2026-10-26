@@ -44,7 +44,7 @@ def source_files():
 
 findings = []
 for path in source_files():
-    if not path.is_file() or any(part in SKIP for part in path.parts):
+    if not path.is_file() or any(part in SKIP for part in path.relative_to(ROOT).parts):
         continue
     if path.name in {'.env', '.env.production', '.env.local', 'workspace.env', 'device.secret'}:
         continue
