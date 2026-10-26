@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[4]
 SKIP = {'.git', '.venv', 'vendor', 'reports', 'backups', '__pycache__', 'node_modules', 'workspace_dist', 'test-results', 'playwright-report', 'runner-home', '.codex'}
 PATTERNS = [
-    re.compile(r'(?i)(api[_-]?key|token|password)\s*[:=]\s*["\']?[A-Za-z0-9_\-]{24,}'),
+    re.compile(r'(?i)(api[_-]?key|token|password)\s*[:=]\s*["\']?([A-Za-z0-9_\-]{24,})'),
     re.compile(r'\bsk-[A-Za-z0-9_-]{20,}\b'),
 ]
 # These literals are intentionally committed negative-test fixtures.  Keep the
@@ -23,14 +23,19 @@ TEST_FIXTURE_LITERALS = (
 )
 
 
-def is_known_test_fixture(path: Path, line: str) -> bool:
+def is_allowed_match(path: Path, line: str, match: re.Match) -> bool:
+    # Exempt one candidate value, never an entire line containing other values.
+    value = match.group(2) if match.re.groups >= 2 else match.group(0)
+    placeholder = value[3:] if value.startswith('sk-') else value
+    if re.match(r'(?i)^(?:CHANGE_ME(?:_|$)|your_|replace_with(?:_|$))', placeholder):
+        return True
     relative = path.relative_to(ROOT)
-    return (
-        len(relative.parts) >= 2
-        and relative.parts[0] == 'backend'
-        and relative.parts[1] == 'tests'
-        and any(value in line for value in TEST_FIXTURE_LITERALS)
-    )
+    if not (len(relative.parts) >= 2 and relative.parts[:2] == ('backend', 'tests')
+            and match.re.groups >= 2 and value in TEST_FIXTURE_LITERALS):
+        return False
+    start, end = match.span(2)
+    quote = line[start - 1:start] if start else ''
+    return quote in {"'", '"'} and line[end:end + 1] == quote
 
 
 def source_files():
@@ -53,11 +58,8 @@ for path in source_files():
     except (UnicodeDecodeError, OSError):
         continue
     for lineno, line in enumerate(text.splitlines(), 1):
-        if 'CHANGE_ME' in line or 'your_' in line.lower() or 'replace_with' in line.lower():
-            continue
-        if is_known_test_fixture(path, line):
-            continue
-        if any(pattern.search(line) for pattern in PATTERNS):
+        if any(not is_allowed_match(path, line, match)
+               for pattern in PATTERNS for match in pattern.finditer(line)):
             findings.append(f'{path.relative_to(ROOT)}:{lineno}')
 if findings:
     print('\n'.join(findings))
