@@ -1,0 +1,139 @@
+{
+  "receipt_version": "daily-pipeline-production-v1",
+  "status": "MANUAL_PIPELINE_ACCEPTED_AND_PRODUCTION_READER_VERIFIED",
+  "source_code_review_head": "2f4e8ccca957b4a156c490c14fabeafd293b1a84",
+  "main_merge": "0ceec87883285ac4b09745548bbd7c303696e090",
+  "producer_sha": "a0d52e44ba58f34e0ed335d7bcb6409a3ecd7362",
+  "config_hash": "a12c6ea1c812d2cd4b5365c3fa383dbd6c6e4296e004806897d9545008b8e5c8",
+  "generation": 1793045670621,
+  "source_session": "2026-10-26",
+  "input_type": "settled_daily_research",
+  "universe_count": 34,
+  "forecast_horizons_count": 170,
+  "actionable_count": 0,
+  "generated_at": "2026-10-26T20:13:53.903389+00:00",
+  "expires_at": "2026-10-26T22:13:53.903389+00:00",
+  "bundle_file_bytes": 16346627,
+  "bundle_file_sha256": "7973e4232dc560ba6aa388230dd70f14c2f7a24bd9447e290e7a92d20627790e",
+  "https_receipt": {
+    "bundle_id": "11c20126260b5c53d9f0b9b75d6e4e5b0299b15a11af2d20aad756f976153b6b",
+    "manifest_hash": "11c20126260b5c53d9f0b9b75d6e4e5b0299b15a11af2d20aad756f976153b6b",
+    "status": "accepted",
+    "sequence": 1793045670621,
+    "received_at": "2026-10-26T20:17:06.093069+00:00"
+  },
+  "second_attempt_seconds": 578.215,
+  "first_attempt": {
+    "exit_code": 1,
+    "seconds": 460.788,
+    "bars_requested": 34,
+    "bars_completed": 33,
+    "reason": "ProviderError",
+    "incomplete_bundle_uploaded": false,
+    "failure_retained": true
+  },
+  "reader": {
+    "scope": "production container read-only Reader; separate from authenticated HTTPS GET",
+    "version": "1.0.13",
+    "producer_sha": "a0d52e44ba58f34e0ed335d7bcb6409a3ecd7362",
+    "generation": 1793045670621,
+    "source_session": "2026-10-26",
+    "input_type": "settled_daily_research",
+    "overview_count": 34,
+    "detail_count": 34,
+    "daily_count": 34,
+    "period_count": 68,
+    "legacy_count": 34,
+    "is_stale": false,
+    "actionable": false,
+    "same_generation": true,
+    "same_input_observation": true
+  },
+  "cloud_research_short_window": {
+    "scope": "short release window only; not natural multi-session acceptance",
+    "at": "2026-10-26T20:19:24.207153+00:00",
+    "exact_unchanged": true,
+    "read_only": true,
+    "counts": {
+      "daily_bars": 22327,
+      "quote_snapshots": 15513,
+      "indicator_snapshots": 603,
+      "forecast_snapshots": 2412,
+      "signal_snapshots": 21105,
+      "decision_board_snapshots": 733,
+      "provider_audits": 33323,
+      "task_runs": 9268
+    },
+    "latest_daily_bar": "2026-10-09",
+    "write_counters_unchanged": true
+  },
+  "tasks": [
+    {
+      "task_name": "refresh_market_context",
+      "status": "partial",
+      "requested": 7,
+      "completed": 6,
+      "required": false
+    },
+    {
+      "task_name": "refresh_bars",
+      "status": "succeeded",
+      "requested": 34,
+      "completed": 34,
+      "required": true
+    },
+    {
+      "task_name": "refresh_quotes",
+      "status": "partial",
+      "requested": 34,
+      "required": true
+    },
+    {
+      "task_name": "refresh_sector_snapshots",
+      "status": "failed",
+      "required": false
+    },
+    {
+      "task_name": "refresh_indicators",
+      "status": "succeeded",
+      "requested": 34,
+      "completed": 34,
+      "required": true
+    },
+    {
+      "task_name": "refresh_forecasts",
+      "status": "succeeded",
+      "requested": 34,
+      "completed": 34,
+      "required": true
+    },
+    {
+      "task_name": "refresh_signals",
+      "status": "succeeded",
+      "requested": 34,
+      "completed": 34,
+      "required": true
+    },
+    {
+      "task_name": "refresh_decision_board",
+      "status": "succeeded",
+      "required": true
+    }
+  ],
+  "windows_actions_migrated": 2,
+  "windows_other_settings_preserved": true,
+  "launcher_probe": "manual idle exit0; daily acceptance NOT_EVALUATED",
+  "smtp": "DISABLED_OWNER_DEFERRED",
+  "production_authenticated_get": "NOT_RUN_LOGIN_REQUIRED",
+  "natural_sessions": "NOT_VERIFIED",
+  "fast_slot_4_minute_target": "NOT_VERIFIED",
+  "research_qualification": "UNKNOWN",
+  "calibration": "not_calibrated",
+  "historical_prefix_check": "FAIL_2_OF_3",
+  "preparation_api_restart": "one; cause not fully confirmed; evidence retained",
+  "post_cutover_restart_counts": [
+    0,
+    0,
+    0
+  ]
+}
