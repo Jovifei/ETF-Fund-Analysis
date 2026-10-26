@@ -141,7 +141,7 @@ python -m pytest -q backend/tests/test_local_display_contract.py backend/tests/t
 python -m pytest -q backend/tests/test_local_digest.py backend/tests/test_local_notifications.py backend/tests/test_analysis_gateway.py backend/tests/test_local_reconcile.py
 ```
 
-以上是未来命令，尚未运行。新增通知测试仅在P3模块存在后执行；Python须解析到同一项目依赖环境。精确 GitHub CI 必须绑定最终候选；独立只读复审和同一“基金决策”项目普通网页GPT复审通过后才合main，不新建Cloud Work。网页不可用不冒称通过。
+上述命令已在对应固定候选执行，不能将各候选收据混作同一次运行：C39 本地完整测试 2796/26；最终 Head `2f4e8cc` 精确 CI 为 2813 通过/16 跳过/0 失败，十项检查全部成功，含前端/安全/认证浏览器。独立与同项目网页复审关闭扫描器缺陷后，PR58 合 main `0ceec87`。实际运行源码固定 a0d，应用/策略字节与最后控制 Head 相同；详见发布收据，不重跑旧候选来制造新验证。
 
 - [ ] 受控发布前做一致性备份并验证 hash/可列目录；保留旧镜像、展示包、任务 XML、接收身份及回滚脚本。主任务迁移必须核producer SHA/config/执行身份/登记表和接收端，不能只改Windows工作目录或一边先切身份。
 - [ ] 候选/新旧身份切换需先在隔离store验证，迁移过程保持单写者；不为让页面有数而把任意SHA登记为批准。
@@ -155,8 +155,8 @@ python -m pytest -q backend/tests/test_local_digest.py backend/tests/test_local_
 
 ## 8. 本轮交付与停止点
 
-本轮交付本计划和tasks/todo勾选项；未修改业务代码/版本/任务/配置/数据，未执行采集、发信、提交、合并或部署。计划经两个独立方向复核：优先复用full/base证明、补查下游报价输入及TaskService/DecisionBoard上下文传递、区分诊断phase与业务stage、分离AI/网站/邮件结果及唯一发送owner。
+最初只读计划阶段未改代码/任务或生产；Jovi 随后“执行吧”授权后，本轮已实际实现、失败优先测试、精确 CI/网页复审、合并和受控发布。计划经两个独立方向复核，实施阶段另做规格/质量复核；各阶段原始失败和未完成门槛保留。
 
-执行更新：P0–P2已产生候选与聚焦证据，正在整合固定版本验收；P3代码完成默认停用准备，SMTP真实配置/发送按Jovi后续指示。当前不得以计划或聚焦测试宣称发布/自然链路/收件完成。
+执行更新：P0/P1 及 P2 投影实现通过；v1.0.13、身份配对与两项原任务 Action 已切换，生产 Reader 34 只同代读取通过，真实手动有限重试已取得 accepted `1793045670621`，生产 Reader 同代34只/170预测及短窗八表零增长通过；首轮33/34失败保留。快槽 ≤4 分钟目标、认证生产消费、18:15 最终对账、两交易日和7–14日自然观察未验，不一起勾完。现有 reconcile 保持 INCOMPLETE/consumer NOT_RUN 合同；在没有合格消费证明前，不增设一个永远不能 PASS 的活动对账任务。P3 默认停用准备通过，SMTP 按 Jovi 暂缓；不声称自然链路或收件完成。
 
-项目Hub：本次计划阶段revision查询仍为WinError10061，未上报，未自动重试；不影响本地计划交付。此计划是临时执行工件，不同步为Obsidian已完成成果（NO_MEMORY_UPDATE）。
+项目Hub：revision 查询 WinError10061，未上报、未自动重试。计划本身不作为 Obsidian 已完成成果；实际发布的证据和未完成边界另同步项目知识入口。
