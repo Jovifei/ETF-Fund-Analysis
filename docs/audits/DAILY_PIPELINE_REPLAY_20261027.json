@@ -1,0 +1,152 @@
+{
+  "candidate_sha": "c39ab09aa5ab26b814015f0844a6aaa45a05ffd4",
+  "candidate_tree": "d82440c7bf8fb455ebbaf06555f571b83f21e551",
+  "baseline_sha": "7b3a5757b9e0cc140e904b67bcbeb31c1eb3830b",
+  "scope": "offline public-market research evidence only; current unchanged engines with old/new config, not old executable; no live input-selection branch acceptance",
+  "source_read_only": {
+    "mode": "ro",
+    "query_only": true,
+    "consistent_transaction_snapshot": true,
+    "authorizer_allowed_tables": [
+      "instruments",
+      "daily_bars",
+      "unit_certification_evidence"
+    ],
+    "source_private_account_runtime_quote_tables_read": false,
+    "source_writes": false
+  },
+  "scratch": {
+    "source_table_rows": {
+      "instruments": 53,
+      "daily_bars": 68996,
+      "unit_certification_evidence": 0
+    },
+    "source_table_sha256": {
+      "instruments": "132046bb6d45de41ad11ed8bec6497203ceeb26e02de490a5c0980ca6c4b7568",
+      "daily_bars": "dc3fcbb42192bc66b4a99b1b4d1e4f3e58b90c29897e7b7cd4a5d4e10c9102bf",
+      "unit_certification_evidence": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "copied_public_market_tables_unchanged_after_replay": true,
+    "only_other_generated_data": "4 report_artifacts + 4 event_log records; other Base.metadata tables created empty"
+  },
+  "comparison": {
+    "status": "PASS",
+    "all_semantic_checks_equal": true,
+    "forecast_instruments": 52,
+    "forecast_origins_by_horizon": {
+      "1": 4440,
+      "3": 4440,
+      "7": 4422,
+      "20": 4368,
+      "60": 4051
+    },
+    "all_backtest_metric_deltas_zero": true,
+    "numeric_config_changed": false,
+    "engine_files_changed": false,
+    "only_config_changes": [
+      "market_data_contract_version",
+      "version",
+      "signal_grade_version"
+    ]
+  },
+  "event_ledger": {
+    "status": "PASS",
+    "decisions_checked": 442,
+    "decision_errors": [],
+    "trades_checked": 2048,
+    "trade_error_counts": {},
+    "equity_dates_checked": 2209,
+    "ledger_error_counts": {},
+    "max_cash_rounding_error": 0.0,
+    "max_equity_rounding_error": 0.0,
+    "pass": true,
+    "included": 36,
+    "excluded_corporate_action_accounting": 16,
+    "start": "2017-09-13",
+    "end": "2026-10-26",
+    "total_return": -0.059237,
+    "benchmark_return": 0.070715,
+    "excess_return": -0.129952,
+    "max_drawdown": -0.362946
+  },
+  "prefixLeak": {
+    "status": "FAIL",
+    "pre_existing_shared_unchanged_engine_qualification_blocker": true,
+    "not_fixed": true,
+    "observations": [
+      {
+        "cutoff": "2025-10-31",
+        "prefix_panel_instruments": 34,
+        "full_panel_instruments": 52,
+        "feature_mismatch_columns": {
+          "rps20": 34
+        },
+        "forecast_mismatch_count": 137,
+        "forecast_comparisons": 170
+      },
+      {
+        "cutoff": "2026-04-30",
+        "prefix_panel_instruments": 34,
+        "full_panel_instruments": 52,
+        "feature_mismatch_columns": {
+          "rps120": 34,
+          "rps20": 34,
+          "rps60": 34
+        },
+        "forecast_mismatch_count": 154,
+        "forecast_comparisons": 170
+      },
+      {
+        "cutoff": "2026-09-30",
+        "prefix_panel_instruments": 52,
+        "full_panel_instruments": 52,
+        "feature_mismatch_columns": {},
+        "forecast_mismatch_count": 0,
+        "forecast_comparisons": 260
+      }
+    ],
+    "cause_inference": "ForecastService._frames applies len(history)>=min_history to entire currently available history before building date-local RPS. Earlier origin panels can therefore include instruments whose then-available history was too short to enter a genuine truncated formal run. Only RPS features differed in the measured prefixes; the prefix panel rose from34 to52 and all tested predictions then matched."
+  },
+  "existing_validation_limitation": "validation does not pass minimum_effective_windows=10, whereas formal production forecast and supplementary prefix check do; do not treat rolling-origin metrics as production sufficiency proof",
+  "qualification": "UNKNOWN",
+  "actionable": false,
+  "calibration_status": "not_calibrated",
+  "strategy_seal": false,
+  "calibration_promotion": false,
+  "production_touched": false,
+  "repo_modified": false,
+  "provider_network_llm_smtp_calls": false,
+  "reports": {
+    "candidate-validation": {
+      "sha256": "02ba31a1a2b33c0c6cb963c4211d907bf84032aa7f75de0cb64361bf37dcc6e8",
+      "elapsed_seconds": 155.724,
+      "returncode": 0,
+      "runtime_config_hash": "a12c6ea1c812d2cd4b5365c3fa383dbd6c6e4296e004806897d9545008b8e5c8"
+    },
+    "candidate-backtest": {
+      "sha256": "9e7bc3bec701a564fbfecec619497c7c691fca1a6b2b09997166233d94ea1d52",
+      "elapsed_seconds": 68.026,
+      "returncode": 0,
+      "runtime_config_hash": "a12c6ea1c812d2cd4b5365c3fa383dbd6c6e4296e004806897d9545008b8e5c8"
+    },
+    "baseline-validation": {
+      "sha256": "a641477dda2f919721e5f17d568ed068ed3d7b9632461627d3c1025f07c7050c",
+      "elapsed_seconds": 158.603,
+      "returncode": 0,
+      "runtime_config_hash": "041a12867ac3588be1c45588bfcff5de8b28d6667c3ab3a42b90d20f28deac61"
+    },
+    "baseline-backtest": {
+      "sha256": "f6506f19a0e4da33583fc1fddc24ff172e48a33650c5e6811cff78f3aee50f65",
+      "elapsed_seconds": 68.826,
+      "returncode": 0,
+      "runtime_config_hash": "041a12867ac3588be1c45588bfcff5de8b28d6667c3ab3a42b90d20f28deac61"
+    }
+  },
+  "summary": {
+    "markdown": "summary.md",
+    "json": "summary.json",
+    "markdown_sha256": "1962bed0857099d1d6db6a4c0a940d04f490816724c60ec343e67af8253e2f53",
+    "json_sha256": "1fb112156b51d05d16cb7b93266c68c291b174adddf2ac16ef1d2a8a14ce5876"
+  },
+  "follow_up": "parent will present preserved qualification failures for remote review and separate design; any data-sync/research-display release must not claim strategy qualification or calibration"
+}

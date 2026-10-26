@@ -8,8 +8,8 @@ import pytest
 from app.workspace import bundle_identity
 
 ROOT = Path(__file__).resolve().parents[2]
-CURRENT_CODE_SHA = "dcffa8ebac1027d174b213915ff78a7e51b99097"
-CURRENT_CONFIG_HASH = "041a12867ac3588be1c45588bfcff5de8b28d6667c3ab3a42b90d20f28deac61"
+CURRENT_CODE_SHA = "a0d52e44ba58f34e0ed335d7bcb6409a3ecd7362"
+CURRENT_CONFIG_HASH = "a12c6ea1c812d2cd4b5365c3fa383dbd6c6e4296e004806897d9545008b8e5c8"
 
 
 def load_cli(name):
@@ -19,7 +19,7 @@ def load_cli(name):
     return module
 
 
-def test_registry_approves_the_running_consumer_expectation():
+def test_registry_approves_the_validated_next_consumer_expectation():
     identities = bundle_identity.load_identities()
     assert bundle_identity.approved_identity(CURRENT_CODE_SHA, CURRENT_CONFIG_HASH) is not None
     assert identities[-1]["code_sha"] == CURRENT_CODE_SHA
@@ -52,3 +52,8 @@ def test_check_script_reports_unregistered_identity(tmp_path, capsys):
     assert cli.main(["--code-sha", "f" * 40, "--config-hash", CURRENT_CONFIG_HASH]) == 1
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "unregistered"
+
+
+def test_previous_producer_remains_approved_for_controlled_rollback():
+    assert bundle_identity.approved_identity("dcffa8ebac1027d174b213915ff78a7e51b99097",
+        "041a12867ac3588be1c45588bfcff5de8b28d6667c3ab3a42b90d20f28deac61") is not None

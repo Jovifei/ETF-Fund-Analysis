@@ -1,0 +1,98 @@
+{
+  "scope": "isolated real-data compute/export/official StoreReader; no canonical or online acceptance",
+  "status": "PASS_ISOLATED_REAL_COMPUTE_EXPORT_READER",
+  "candidate_sha": "c39ab09aa5ab26b814015f0844a6aaa45a05ffd4",
+  "candidate_tree": "d82440c7bf8fb455ebbaf06555f571b83f21e551",
+  "config_hash": "a12c6ea1c812d2cd4b5365c3fa383dbd6c6e4296e004806897d9545008b8e5c8",
+  "universe_config_file_hash": "0637fa216f8f18ea27dce08d1230b19121d231d31900c5e775a9883c8796cf07",
+  "source_producer_sha": "dcffa8ebac1027d174b213915ff78a7e51b99097",
+  "source_producer_config_hash": "041a12867ac3588be1c45588bfcff5de8b28d6667c3ab3a42b90d20f28deac61",
+  "source_bundle_id": "687c796251f2dc939bd9d3ab08371aaf2b1b489398bb496fd62a167eacf3088d",
+  "source_inputs_unchanged": true,
+  "generation": 1793035935639,
+  "bundle_id": "4a279a7445b5a17e9ffc50816194082d5248b1674441c6c4bc0964c0e04714bb",
+  "bundle_file_sha256": "acb77368c5a783960d44b9a49878aea16f87cd3402a2b822063bd1c88c0e3974",
+  "bundle_generated_at": "2026-10-26T17:31:50.411466+00:00",
+  "publication_completed_at": "2026-10-26T17:33:17.619031+00:00",
+  "expires_at": "2026-10-26T19:31:50.411466+00:00",
+  "source_session": "2026-10-26",
+  "input_basis": "settled_daily_bars",
+  "input_type": "settled_daily_research",
+  "mode": "full",
+  "target_count": 34,
+  "indicator_count": 34,
+  "forecasts_per_horizon": {
+    "1": 34,
+    "3": 34,
+    "7": 34,
+    "20": 34,
+    "60": 34
+  },
+  "signal_count": 34,
+  "reader": {
+    "overview_count": 34,
+    "board_count": 34,
+    "detail_count": 34,
+    "daily_chart_count": 34,
+    "daily_chart_target_date_count": 34,
+    "period_chart_count": 68,
+    "generation": 1793035935639,
+    "same_input_observation": true
+  },
+  "quote_raw_task_status": "partial",
+  "typed_settled_daily_accepted": true,
+  "quote_realtime_count": 0,
+  "actionable_signal_count": 0,
+  "source_qualification": "UNKNOWN",
+  "calibration_status": "not_calibrated",
+  "market_context_requested": 7,
+  "market_context_received": 6,
+  "market_context_status": "partial",
+  "compute_wall_seconds": 396.383,
+  "phase_seconds": {
+    "base_validation": 2.514739,
+    "projection_export": 61.386578,
+    "bundle_write": 0.591917
+  },
+  "task_seconds": {
+    "refresh_market_context": 18.48997,
+    "refresh_bars": 213.900819,
+    "refresh_quotes": 0.127957,
+    "refresh_sector_snapshots": 43.458794,
+    "refresh_indicators": 6.801748,
+    "refresh_forecasts": 15.119928,
+    "refresh_signals": 5.870481,
+    "refresh_decision_board": 19.873919
+  },
+  "budget": {
+    "producer_limit_bytes": 16777216,
+    "bundle_canonical_bytes": 15070431,
+    "bundle_file_bytes": 16368621,
+    "parts_canonical_bytes": {
+      "overview": 492032,
+      "details": 853034,
+      "charts": 10713107,
+      "sectors": 16623,
+      "market_context": 7300,
+      "chart_periods": 2985608
+    },
+    "parts_sum_bytes": 15067704,
+    "manifest_and_container_bytes": 2727,
+    "remaining_budget_bytes": 1706785,
+    "budget_pass": true
+  },
+  "base_file_sha256": "19318005712f331bd85e77b4f2a8eff0860737f5e265bc8f75f13cb570584eb4",
+  "artifacts": {
+    "bundle": "bundle_1793035935639.json",
+    "private_detailed_validation_summary_sha256": "c47409b7624b587b1a3f49bb2baf50d31ada7c40ac0cb6537c447103b2094169"
+  },
+  "attempt1_classification": "validation harness Windows spawn re-entry; preserved; not a candidate/provider failure",
+  "limitations": [
+    "isolated validation only",
+    "no upload or signature/online acceptance proof",
+    "canonical producer/task/config unchanged",
+    "natural two-session and 7-14-day observation not covered",
+    "source_qualification UNKNOWN; actionable false; not_calibrated",
+    "attempt1 was a validation-harness Windows spawn re-entry failure; guarded run is separately evidenced"
+  ]
+}

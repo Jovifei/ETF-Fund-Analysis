@@ -5,6 +5,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.models import ForecastSnapshot, IndicatorSnapshot, Instrument, QuoteSnapshot
+from app.services.settled_daily_input import SettledDailyInput
 from app.services.signal_service import CandidateSignal, SignalService
 from app.utils.numbers import clamp
 
@@ -54,8 +55,10 @@ class SignalV05Service(SignalService):
         holding: object | None,
         current_weight: float,
         now: datetime,
+        *, research_input: SettledDailyInput | None = None,
     ) -> CandidateSignal:
-        item = super()._build_candidate(db, instrument, quote, indicator, forecasts, holding, current_weight, now)
+        item = super()._build_candidate(db, instrument, quote, indicator, forecasts, holding, current_weight, now,
+            **({"research_input": research_input} if research_input is not None else {}))
         if not indicator:
             return item
         values = indicator.values_json or {}

@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import PROJECT_ROOT, Settings, get_settings
+from app.services.settled_daily_input import SettledDailyInput, require_settled_daily_input
 from app.models import EtfShareScale, ForecastSnapshot, IndicatorSnapshot, Instrument, QuoteSnapshot
 from app.services.flow_share_research import (
     FLOW_CONTRACT,
@@ -259,9 +260,12 @@ class SignalGradeService:
             "board_type": None,
         }
 
-    def build(self, db: Session, *, as_of: datetime | None = None) -> dict[str, Any]:
+    def build(self, db: Session, *, as_of: datetime | None = None,
+              research_input: SettledDailyInput | None = None) -> dict[str, Any]:
         reference = as_of or datetime.now(self.settings.timezone)
         reference = reference.astimezone(SHANGHAI) if reference.tzinfo else reference.replace(tzinfo=SHANGHAI)
+        if research_input is not None:
+            require_settled_daily_input(db, self.settings, research_input, at=reference)
         instruments = db.scalars(
             select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code)
         ).all()
@@ -276,8 +280,13 @@ class SignalGradeService:
             indicator = latest_indicators.get(instrument.id)
             values = dict(indicator.values_json) if indicator and indicator.values_json else {}
             quote = latest_quotes.get(instrument.id)
-            flow_share = build_flow_share_view(quote, latest_scales.get(instrument.id), as_of=reference)
+            flow_share = build_flow_share_view(quote if research_input is None else None,
+                                              latest_scales.get(instrument.id), as_of=reference)
             pct = quote_percent_points_to_ratio(quote.pct_change) if quote else _f(values, "return_1d")
+            if research_input is not None:
+                from app.services.return_observation import observed_returns
+                observation = observed_returns(db, self.settings, instrument.id, None, reference)
+                pct = observation["value"] if observation["as_of_date"] == research_input.base["target_trade_date"] else None
             previous = previous_indicators.get(instrument.id)
             row = classify_row(values, pct_change=pct, previous=previous, cfg=self.config)
             forecast = latest_forecasts.get(instrument.id)

@@ -327,6 +327,114 @@ def closed_session_result_accepted(result):
             and digest(result.get("closed_session_research")) == result.evidence_hash)
 
 
+class _SettledDailyQuoteResult(dict):
+    def __init__(self, result, context):
+        super().__init__({**result, "settled_daily_research": context.observation})
+        self.context = context
+        self.result_hash = digest(dict(self))
+        self.full_base = None
+        self.full_base_hash = None
+        self.board_hash = None
+
+
+def settled_daily_result_accepted(result):
+    return (type(result) is _SettledDailyQuoteResult and result.get("status") == "partial"
+            and digest({key: value for key, value in result.items() if key not in {"task_name", "required"}})
+                == result.result_hash
+            and result.get("settled_daily_research") == result.context.observation)
+
+
+def settled_daily_control(result, *, scope_hash, run_id):
+    if (not settled_daily_result_accepted(result) or result.context.run_id != run_id
+            or result.context.observation["scope_hash"] != scope_hash):
+        return None
+    return {"accepted_settled_daily": True, "input_basis": "settled_daily_bars",
+            "settled_daily_input_hash": result.context.base["input_hash"],
+            "settled_daily_quote_hash": result.context.quote_hash}
+
+
+def _settled_receipt_hash(context):
+    return digest({"base": context.base, "quote_hash": context.quote_hash, "task_hash": context.task_hash,
+        "run_id": context.run_id, "after_id": context.after_id,
+        "started_at": context.started_at.isoformat(), "finished_at": context.finished_at.isoformat()})
+
+
+def _latest_board_hash(db):
+    from app.models import DecisionBoardSnapshot
+    row = db.scalar(select(DecisionBoardSnapshot).order_by(DecisionBoardSnapshot.generated_at.desc(), DecisionBoardSnapshot.id.desc()))
+    return stable_hash({c.name: getattr(row, c.name) for c in DecisionBoardSnapshot.__table__.columns}) if row else None
+
+
+def _settled_quote_capture(db, settings, context):
+    from app.services.snapshot_contract import _normalize_time
+    size = len(context.base["target_codes"])
+    run = db.scalar(select(TaskRun).where(TaskRun.run_id == context.run_id, TaskRun.task_name == "refresh_quotes"))
+    if (run is None or run.status != "partial" or run.finished_at is None
+            or not context.started_at <= _normalize_time(run.started_at, settings)
+                <= _normalize_time(run.finished_at, settings) <= context.finished_at
+            or stable_hash({c.name: getattr(run, c.name) for c in TaskRun.__table__.columns}) != context.task_hash):
+        raise ValueError("settled-daily quote task changed")
+    raw = run.result_json or {}
+    if (raw.get("status") != "partial" or raw.get("coverage_complete") is not False
+            or raw.get("missing_codes") != [] or raw.get("missing") != 0
+            or any(type(raw.get(key)) is not int or raw[key] != size for key in ("requested", "received", "inserted"))):
+        raise ValueError("settled-daily complete display quote batch required")
+    rows = db.scalars(select(QuoteSnapshot).where(QuoteSnapshot.id > context.after_id)).all()
+    selected = _selected_quotes(db, context.base["target_codes"])
+    if (len(rows) != size or {q.id for q in rows} != {q.id for q in selected.values()}
+            or _quote_batch_hash(selected, settings) != context.quote_hash):
+        raise ValueError("settled-daily quote batch changed")
+    for quote in rows:
+        fetched, source = _normalize_time(quote.fetched_at, settings), _normalize_time(quote.quote_time, settings)
+        if (fetched is None or source is None or source > fetched or source.date().isoformat() > context.base["target_trade_date"]
+                or not context.started_at <= fetched <= context.finished_at
+                or not isinstance(quote.source, str) or not quote.source.strip() or "mock" in quote.source.lower()
+                or type(quote.price) not in (int, float) or not isfinite(quote.price) or quote.price <= 0
+                or not isinstance(quote.quality_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", quote.quality_hash)):
+            raise ValueError("settled-daily invalid display quote input")
+    return selected
+
+
+def _revalidate_settled_daily_input(db, settings, context, now, *, codes=None):
+    from app.services.snapshot_contract import _normalize_time
+    if (_settled_receipt_hash(context) != context.receipt_hash
+            or _normalize_time(now, settings) < context.finished_at
+            or str(_closed_research_session(now, settings)) != context.base["target_trade_date"]
+            or codes is not None and sorted(codes) != context.base["target_codes"]):
+        raise ValueError("settled-daily receipt scope/time mismatch")
+    current = _base_state(settings, context.base["target_codes"], context.base["code_sha"], now,
+                          _bars_only=True, _db=db)
+    if current != context.base:
+        raise ValueError("settled-daily database/session/input changed")
+    return _settled_quote_capture(db, settings, context)
+
+
+def _settled_daily_quote_result(db, settings, *, universe, result, after_id, started_at,
+                                finished_at, private_research, enabled):
+    from dataclasses import replace
+    from app.services.settled_daily_input import SettledDailyInput
+    from app.services.snapshot_contract import _normalize_time
+    if (not enabled or not private_research or settings.market_provider not in {"public_composite", "akshare"}
+            or result.get("status") != "partial" or not universe):
+        return result
+    try:
+        start, end = _normalize_time(started_at, settings), _normalize_time(finished_at, settings)
+        if start is None or end is None or start > end or _closed_research_session(end, settings) is None:
+            return result
+        base = _base_state(settings, universe, os.environ.get("GIT_COMMIT_SHA"), end, _bars_only=True, _db=db)
+        run = db.scalar(select(TaskRun).where(TaskRun.run_id == result.get("run_id"), TaskRun.task_name == "refresh_quotes"))
+        if run is None:
+            return result
+        context = SettledDailyInput(base=base, quote_hash=_quote_batch_hash(_selected_quotes(db, universe), settings),
+            task_hash=stable_hash({c.name: getattr(run, c.name) for c in TaskRun.__table__.columns}),
+            run_id=run.run_id, after_id=after_id, started_at=start, finished_at=end, receipt_hash="")
+        context = replace(context, receipt_hash=_settled_receipt_hash(context))
+        _revalidate_settled_daily_input(db, settings, context, end, codes=universe)
+        return _SettledDailyQuoteResult(result, context)
+    except (ValueError, TypeError):
+        return result
+
+
 def _closed_database_identity(db):
     if db.get_bind().dialect.name != "sqlite":
         raise ValueError("closed-session evidence requires owned SQLite")
@@ -672,6 +780,7 @@ def compute_local(settings: Settings, universe: list[str] | None = None, *, admi
     service = (TaskService(settings, execution_policy=TaskExecutionPolicy(resolve_runtime_provider=False))
                if private_research else TaskService(settings))
     results = []
+    research_input = None
     try:
         task_names = [
             "refresh_market_context",
@@ -704,12 +813,20 @@ def compute_local(settings: Settings, universe: list[str] | None = None, *, admi
                     before_quote_id = ((db.scalar(select(func.max(QuoteSnapshot.id))) or 0)
                                        if task == "refresh_quotes" else 0)
                     started = datetime.now(settings.timezone)
+                    if research_input is not None and task in {"refresh_signals", "refresh_decision_board"}:
+                        kwargs["research_input"] = research_input
                     result = dict(service.run(db, task, run_id=run_id, **kwargs))
                     if task == "refresh_quotes":
                         raw_result = result
-                        result = _closed_session_quote_result(db, settings, universe=universe, result=result,
+                        result = _settled_daily_quote_result(db, settings, universe=universe, result=result,
                             after_id=before_quote_id, started_at=started, finished_at=datetime.now(settings.timezone),
                             private_research=private_research, enabled=closed_session_research)
+                        if not settled_daily_result_accepted(result):
+                            result = _closed_session_quote_result(db, settings, universe=universe, result=result,
+                                after_id=before_quote_id, started_at=started, finished_at=datetime.now(settings.timezone),
+                                private_research=private_research, enabled=closed_session_research)
+                        if settled_daily_result_accepted(result):
+                            research_input = result.context
                         result = _captured_quote_result(db, settings, universe=universe, result=result,
                             raw_result=raw_result, run_id=run_id, after_id=before_quote_id, started_at=started,
                             finished_at=datetime.now(settings.timezone))
@@ -726,8 +843,15 @@ def compute_local(settings: Settings, universe: list[str] | None = None, *, admi
             if not required and not optional_result_available(result):
                 result["availability"] = "unavailable"
             results.append(result)
-            if required and result.get("status") != "succeeded" and not closed_session_result_accepted(result):
+            if (required and result.get("status") != "succeeded" and not closed_session_result_accepted(result)
+                    and not settled_daily_result_accepted(result)):
                 break
+        if research_input is not None and results[-1].get("task_name") == "refresh_decision_board" and results[-1].get("status") == "succeeded":
+            proof = next(item for item in results if settled_daily_result_accepted(item))
+            proof.full_base = create_base_manifest(settings, universe, code_sha=research_input.base["code_sha"])
+            proof.full_base_hash = digest(proof.full_base)
+            with Session(engine) as db:
+                proof.board_hash = _latest_board_hash(db)
     finally:
         service.close()
         engine.dispose()
@@ -737,7 +861,7 @@ def compute_local(settings: Settings, universe: list[str] | None = None, *, admi
 SETTLED_BASE_VERSION = "local-settled-base-v1"
 
 
-def _base_state(settings, universe, code_sha, now):
+def _base_state(settings, universe, code_sha, now, *, _bars_only=False, _db=None):
     """Read actual immutable daily inputs; never hash mutable signal/board tables."""
     from app.models import DailyBar, ForecastSnapshot, IndicatorSnapshot, UnitCertificationEvidence
     from app.services.execution_scope import target_instruments, execution_scope
@@ -760,10 +884,12 @@ def _base_state(settings, universe, code_sha, now):
     target_decision = calendar.decision(target)
     if not target_decision.verified or not target_decision.is_trade_day:
         raise ValueError("base requires verified settled session")
-    engine = create_engine(settings.database_url)
+    from contextlib import nullcontext
+    engine = create_engine(settings.database_url) if _db is None else None
     try:
-        with Session(engine) as db:
-            db.connection().exec_driver_sql("BEGIN")
+        with (Session(engine) if _db is None else nullcontext(_db)) as db:
+            if _db is None:
+                db.connection().exec_driver_sql("BEGIN")
             identity = _closed_database_identity(db)
             if identity[0] != "sqlite-file":
                 raise ValueError("base requires owned file database")
@@ -786,47 +912,35 @@ def _base_state(settings, universe, code_sha, now):
             if any(row.trade_date > target for row in bars):
                 raise ValueError("base contains unsettled history")
             inputs["daily_bars"] = stable_hash([columns(row) for row in bars])
+            bars_by_instrument = {item.id: [] for item in instruments}
+            for row in bars:
+                bars_by_instrument[row.instrument_id].append(row)
             strategy = settings.load_strategy()
             history_hashes = {"indicator": {}, "forecast": {}}
+            minimums = (("indicator", 30), ("forecast", int(strategy["forecast"].get("min_history", 180))))
             for item in instruments:
-                raw = [row for row in bars if row.instrument_id == item.id]
+                raw = bars_by_instrument[item.id]
                 research = raw if settings.market_provider == "mock" else research_history_rows(raw, item.ts_code)
                 stale = trailing_unverified_history(research) if item.id in quality else None
                 if item.id in quality and stale is None:
                     continue
                 if stale:
                     research = [row for row in research if row.trade_date <= stale["qualified_through"]]
-                for kind, minimum in (("indicator", 30), ("forecast", int(strategy["forecast"].get("min_history", 180)))):
-                    if len(research) >= minimum:
-                        history_hashes[kind][item.id] = history_digest(research)
+                if len(research) >= min(minimum for _, minimum in minimums):
+                    research_hash = history_digest(research)
+                    for kind, minimum in minimums:
+                        if len(research) >= minimum:
+                            history_hashes[kind][item.id] = research_hash
             panel_hashes = {kind: calculation_digest(values, strategy, f"{kind}-panel-v2")
                             for kind, values in history_hashes.items()}
             inputs["unit_evidence"] = stable_hash([columns(row) for row in db.scalars(
                 select(UnitCertificationEvidence).order_by(UnitCertificationEvidence.id))])
-            snapshots = []
-            horizons = formal_forecast_horizons(settings.load_strategy())
             for item in targets:
-                own_bars = [row for row in bars if row.instrument_id == item.id]
+                own_bars = bars_by_instrument[item.id]
                 if not own_bars or own_bars[-1].trade_date != target:
                     raise ValueError("base target history session incomplete")
-                indicator = db.scalar(select(IndicatorSnapshot).where(IndicatorSnapshot.instrument_id == item.id)
-                    .order_by(IndicatorSnapshot.as_of_date.desc(), IndicatorSnapshot.generated_at.desc(), IndicatorSnapshot.id.desc()))
-                selected = [(indicator, "indicator")]
-                for horizon in horizons:
-                    row = db.scalar(select(ForecastSnapshot).where(ForecastSnapshot.instrument_id == item.id,
-                        ForecastSnapshot.horizon == horizon).order_by(ForecastSnapshot.as_of_date.desc(),
-                        ForecastSnapshot.generated_at.desc(), ForecastSnapshot.id.desc()))
-                    selected.append((row, "forecast"))
-                for row, kind in selected:
-                    if (snapshot_issues(row, settings, target, kind=kind, at=local)
-                            or row.git_commit_sha != code_sha
-                            or row.input_hash != stable_hash({"panel": panel_hashes[kind], "instrument_id": item.id,
-                                                              "local": history_hashes[kind].get(item.id)})):
-                        raise ValueError("base snapshot identity invalid")
-                    snapshots.append(columns(row))
-            inputs["snapshots"] = stable_hash(snapshots)
             tasks = []
-            for name in ("refresh_bars", "refresh_indicators", "refresh_forecasts"):
+            for name in (("refresh_bars",) if _bars_only else ("refresh_bars", "refresh_indicators", "refresh_forecasts")):
                 run = db.scalar(select(TaskRun).where(TaskRun.task_name == name).order_by(
                     TaskRun.started_at.desc(), TaskRun.id.desc()))
                 result = run.result_json if run is not None else {}
@@ -842,6 +956,29 @@ def _base_state(settings, universe, code_sha, now):
                         or not scope_ok):
                     raise ValueError("base successful scoped stages required")
                 tasks.append(columns(run))
+            if not _bars_only:
+                snapshots = []
+                horizons = formal_forecast_horizons(settings.load_strategy())
+                for item in targets:
+                    own_bars = bars_by_instrument[item.id]
+                    if not own_bars or own_bars[-1].trade_date != target:
+                        raise ValueError("base target history session incomplete")
+                    indicator = db.scalar(select(IndicatorSnapshot).where(IndicatorSnapshot.instrument_id == item.id)
+                        .order_by(IndicatorSnapshot.as_of_date.desc(), IndicatorSnapshot.generated_at.desc(), IndicatorSnapshot.id.desc()))
+                    selected = [(indicator, "indicator")]
+                    for horizon in horizons:
+                        row = db.scalar(select(ForecastSnapshot).where(ForecastSnapshot.instrument_id == item.id,
+                            ForecastSnapshot.horizon == horizon).order_by(ForecastSnapshot.as_of_date.desc(),
+                            ForecastSnapshot.generated_at.desc(), ForecastSnapshot.id.desc()))
+                        selected.append((row, "forecast"))
+                    for row, kind in selected:
+                        if (snapshot_issues(row, settings, target, kind=kind, at=local)
+                                or row.git_commit_sha != code_sha
+                                or row.input_hash != stable_hash({"panel": panel_hashes[kind], "instrument_id": item.id,
+                                                                  "local": history_hashes[kind].get(item.id)})):
+                            raise ValueError("base snapshot identity invalid")
+                        snapshots.append(columns(row))
+                inputs["snapshots"] = stable_hash(snapshots)
             inputs["tasks"] = stable_hash(tasks)
             return {"contract_version": SETTLED_BASE_VERSION, "code_sha": code_sha,
                 "database_identity": list(identity), "provider": settings.market_provider,
@@ -849,7 +986,8 @@ def _base_state(settings, universe, code_sha, now):
                 "background_count": len(instruments), "target_trade_date": target.isoformat(),
                 "input_hash": stable_hash(inputs), "actionable": False, "calibration_status": "not_calibrated"}
     finally:
-        engine.dispose()
+        if engine is not None:
+            engine.dispose()
 
 
 def _require_hash(value, name):
@@ -1049,7 +1187,8 @@ def build_execution_lineage(settings, universe, results, *, base_manifest, execu
     selected = [item for item in results if isinstance(item, dict) and item.get("task_name") in required]
     if (len(selected) != len(required) or {item["task_name"] for item in selected} != required
             or any(item.get("status") != "succeeded" and not (
-                mode == "full" and item["task_name"] == "refresh_quotes" and closed_session_result_accepted(item))
+                mode == "full" and item["task_name"] == "refresh_quotes"
+                and (closed_session_result_accepted(item) or settled_daily_result_accepted(item)))
                    for item in selected)):
         raise ValueError("execution lineage requires successful current stages")
     if mode == "fast":
@@ -1114,6 +1253,7 @@ def export_local_v2(
     private_research: bool = False,
     unavailable_parts: list[str] | None = None,
     closed_session_result: dict | None = None,
+    settled_daily_result: dict | None = None,
     execution_lineage: dict | None = None,
     carry_optional: bool = False,
 ) -> dict[str, Any]:
@@ -1126,6 +1266,8 @@ def export_local_v2(
             raise ValueError("execution lineage base input changed")
     if closed_session_result is not None and (not private_research or not closed_session_result_accepted(closed_session_result)):
         raise ValueError("validated in-process closed-session evidence required")
+    if settled_daily_result is not None and (not private_research or not settled_daily_result_accepted(settled_daily_result)):
+        raise ValueError("validated in-process settled-daily evidence required")
     if settings.market_provider != "mock" and not validate_provider_admission(
         settings.market_provider, evidence=admission, now=now, private_research=private_research
     )["operation_permitted"]:
@@ -1136,6 +1278,15 @@ def export_local_v2(
             db.connection().exec_driver_sql("BEGIN")
             captured_quotes = (_revalidate_closed_session_capture(db, settings, closed_session_result, universe, now)
                                if closed_session_result is not None else None)
+            if settled_daily_result is not None:
+                proof = settled_daily_result
+                selected = _revalidate_settled_daily_input(db, settings, proof.context, now, codes=universe)
+                full_base = _base_state(settings, universe, code_sha, now, _db=db)
+                if (proof.full_base is None or digest(proof.full_base) != proof.full_base_hash
+                        or full_base != proof.full_base or proof.board_hash != _latest_board_hash(db)):
+                    raise ValueError("settled-daily completed base changed or unavailable")
+                codes_by_id = dict(db.execute(select(Instrument.id, Instrument.ts_code)).all())
+                captured_quotes = {codes_by_id[key]: value for key, value in selected.items()}
             if lineage is not None:
                 selected_quotes = _selected_quotes(db, universe)
                 if _quote_batch_hash(selected_quotes, settings) != lineage["quote_batch_hash"]:
@@ -1149,7 +1300,13 @@ def export_local_v2(
             generated = timestamp(original.get("generated_at")) or now
             if captured_quotes is not None:
                 from app.services.snapshot_contract import _normalize_time
-                if (str(_closed_research_session(generated, settings)) != closed_session_result["closed_session_research"]["source_session"]
+                if settled_daily_result is not None:
+                    context = settled_daily_result.context
+                    if (original.get("input_observation") != context.observation
+                            or original.get("target_trade_date") != context.base["target_trade_date"]
+                            or not context.finished_at <= generated <= now):
+                        raise ValueError("settled-daily evidence does not match board generation")
+                elif (str(_closed_research_session(generated, settings)) != closed_session_result["closed_session_research"]["source_session"]
                         or generated < closed_session_result.capture["finished_at"] or generated > now):
                     raise ValueError("closed-session evidence does not match board generation")
 
@@ -1191,8 +1348,9 @@ def export_local_v2(
 
             indicator_config = settings.load_strategy().get("indicator", {})
             for code in selected_codes:
+                c_data = chart_data(db, settings, code, "1d", 250, as_of=generated)
                 # Detail (Fix-2: provide complete consumer contract for Detail.vue)
-                det = instrument_detail(db, settings, code, user_id=None, as_of=generated)
+                det = instrument_detail(db, settings, code, user_id=None, as_of=generated, _display_chart=c_data)
                 read_as_of_val = generated.isoformat()
                 if captured_quotes is not None and (not det or det.get("quote") != quote_view(captured_quotes[code], settings, as_of=generated)):
                     raise ValueError("closed-session evidence does not match actual detail quote")
@@ -1228,7 +1386,6 @@ def export_local_v2(
                     }
 
                 # Chart (1d primary, max 250 bars; ensure as_of matches read_as_of for Detail.vue query match)
-                c_data = chart_data(db, settings, code, "1d", 250, as_of=generated) or {}
                 if c_data:
                     transformed = transform_chart(c_data, "1d", indicator_config, limit=250, now=generated)
                     projected = project_chart(transformed)
@@ -1382,6 +1539,8 @@ def export_local_v2(
             }
             if closed_session_result is not None:
                 manifest["input_observation"] = dict(closed_session_result["closed_session_research"])
+            if settled_daily_result is not None:
+                manifest["input_observation"] = settled_daily_result.context.observation
             if lineage is not None:
                 manifest["execution_lineage"] = lineage
 

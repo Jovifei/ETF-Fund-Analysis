@@ -137,3 +137,112 @@ def test_full_mode_keeps_partial_market_context_and_flags_failed_sectors(cli, ru
         return {'manifest': {'sequence': k['sequence']}}
     monkeypatch.setattr(cli, 'export_local_v2', export)
     assert cli.cmd_run(run_args) == 0
+
+
+@pytest.mark.parametrize('failure_stage', ['pre_upload_validation', 'transport_receipt'])
+def test_upload_failure_reports_actual_safe_diagnostic(cli, run_args, monkeypatch, failure_stage):
+    from app.workspace import shadow_client
+    run_args.no_upload = False
+    run_args.cadence_mode = 'full'
+    events = []
+    run_args._on_diagnostic = lambda phase, **event: events.append({'phase': phase, **event})
+    monkeypatch.setattr(cli, 'get_current_git_sha', lambda: 'b' * 40)
+    monkeypatch.setattr(cli, 'compute_local', lambda *a, **k: [{'status': 'succeeded'}])
+    monkeypatch.setattr(cli, 'create_base_manifest', lambda *a, **k: {'validated': True})
+    checks = []
+    original_read = cli.read_execution
+    def read(args):
+        checks.append('check')
+        if len(checks) == 3 and failure_stage == 'pre_upload_validation':
+            raise TypeError('secret=private-payload https://private.invalid')
+        return original_read(args)
+    monkeypatch.setattr(cli, 'read_execution', read)
+    monkeypatch.setattr(cli, 'build_execution_lineage', lambda *a, **k: {})
+    monkeypatch.setattr(cli, 'export_local_v2', lambda *a, **k: {'manifest': {'sequence': k['sequence']}})
+    def upload(*a):
+        assert failure_stage == 'transport_receipt', 'validation must block transport'
+        raise TimeoutError('secret=private-payload https://private.invalid')
+    monkeypatch.setattr(shadow_client, 'upload_bundle_auto', upload)
+    # Synthetic authentication is confined to pytest's temporary root.
+    (Path(run_args.root) / 'config' / 'producer_auth.json').write_text(json.dumps({
+        'producer_token': 'test-only', 'key_id': 'test-only', 'signing_secret': 'test-only'}))
+    for key in ('SHADOW_PRODUCER_TOKEN', 'SHADOW_SIGNING_KEY_ID', 'SHADOW_SIGNING_SECRET'):
+        monkeypatch.setenv(key, 'test-only')
+    assert cli.cmd_run(run_args) == 1
+    failed = [event for event in events if event['status'] == 'failed']
+    assert len(failed) == 1
+    assert failed[0]['phase'] == failure_stage
+    assert failed[0]['error_type'] == ('TypeError' if failure_stage == 'pre_upload_validation' else 'TimeoutError')
+    assert failed[0]['reason'] == f'{failure_stage}_failed'
+    assert failed[0]['duration_seconds'] >= 0
+    assert 'private-payload' not in str(events)
+    assert {'base_validation', 'projection_export', 'bundle_write'} <= {event['phase'] for event in events}
+
+
+def test_dispatch_cli_persists_first_upload_error_through_real_ledger(cli, run_args, monkeypatch, capsys):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    from app.utils.hashing import stable_hash
+    from app.workspace import local_dispatch, shadow_client
+    from app.workspace.local_job_ledger import LocalJobLedger
+    at = datetime(2026, 10, 16, 16, 10, tzinfo=ZoneInfo('Asia/Shanghai'))
+    run_args.no_upload = False
+    run_args.cadence_mode = 'full'
+    monkeypatch.setattr(cli, 'get_current_git_sha', lambda: 'b' * 40)
+    monkeypatch.setattr(cli, 'compute_local', lambda *a, **k: [{'status': 'succeeded'}])
+    monkeypatch.setattr(cli, 'create_base_manifest', lambda *a, **k: {'validated': True})
+    monkeypatch.setattr(cli, 'build_execution_lineage', lambda *a, **k: {
+        'contract_version': 'local-execution-lineage-v1', 'mode': k['mode'],
+        'execution_hash': k['execution_hash'], 'config_file_hash': k['config_file_hash'],
+        'base_input_hash': 'c'*64, 'quote_batch_hash': 'd'*64})
+    def export(settings, **kwargs):
+        return {'manifest': {'contract_version': 'local-display-v2', 'sequence': kwargs['sequence'],
+            'code_sha': kwargs['code_sha'], 'config_hash': stable_hash(settings.load_strategy()),
+            'universe': kwargs['universe'], 'generated_at': at.isoformat(),
+            'expires_at': (at + timedelta(hours=2)).isoformat(), 'execution_lineage': kwargs['execution_lineage']}}
+    monkeypatch.setattr(cli, 'export_local_v2', export)
+    (Path(run_args.root) / 'config' / 'producer_auth.json').write_text(json.dumps({
+        'producer_token': 'test-only', 'key_id': 'test-only', 'signing_secret': 'test-only'}))
+    for key in ('SHADOW_PRODUCER_TOKEN', 'SHADOW_SIGNING_KEY_ID', 'SHADOW_SIGNING_SECRET'):
+        monkeypatch.setenv(key, 'test-only')
+    def upload(*a):
+        raise TypeError('private-payload must not persist')
+    monkeypatch.setattr(shadow_client, 'upload_bundle_auto', upload)
+    dispatch_once = local_dispatch.dispatch_once
+    def dispatch(root, identity, **kwargs):
+        kwargs.update(calendar=SimpleNamespace(decision=lambda day: SimpleNamespace(verified=True, is_trade_day=True)),
+                      now=lambda: at)
+        return dispatch_once(root, identity, **kwargs)
+    monkeypatch.setattr(local_dispatch, 'dispatch_once', dispatch)
+    assert cli.cmd_dispatch(run_args) == 1
+    summary = LocalJobLedger(Path(run_args.root)).summary()
+    upload_job = next(job for job in summary['jobs'] if job['job_name'] == 'upload_1')
+    assert upload_job['details'] == {'error_type': 'TypeError', 'failure_stage': 'transport_receipt',
+                                     'reason': 'transport_receipt_failed'}
+    assert summary['attempts'][0]['status'] == 'EXPORTED'
+    assert len(summary['diagnostics']) == 6
+    assert 'private-payload' not in str(summary) + capsys.readouterr().out
+
+
+def test_diagnostic_elapsed_uses_monotonic_clock_and_sanitizes_custom_error(cli, monkeypatch):
+    events = []
+    ticks = iter([500.0, 501.75])
+    monkeypatch.setattr(cli, 'monotonic', lambda: next(ticks))
+    args = SimpleNamespace(_on_diagnostic=lambda phase, **event: events.append(event))
+    unsafe_type = type('private-payload', (TimeoutError,), {})
+    with pytest.raises(TimeoutError):
+        with cli.phase_diagnostic(args, 'transport_receipt'):
+            raise unsafe_type('private-body')
+    assert events == [{'status': 'failed', 'duration_seconds': 1.75,
+                      'error_type': 'TimeoutError', 'reason': 'transport_receipt_failed'}]
+
+
+def test_dispatch_exit_zero_does_not_claim_daily_acceptance(cli, run_args, monkeypatch, capsys):
+    from app.workspace import local_dispatch
+    run_args.no_upload = False
+    monkeypatch.setattr(cli, 'get_current_git_sha', lambda: 'b' * 40)
+    monkeypatch.setattr(local_dispatch, 'dispatch_once', lambda *a, **k: 0)
+    assert cli.cmd_dispatch(run_args) == 0
+    summary = json.loads(capsys.readouterr().out.splitlines()[-1])
+    assert summary['status'] == 'dispatch_finished' and summary['exit_code'] == 0
+    assert summary['daily_acceptance'] == 'NOT_EVALUATED'

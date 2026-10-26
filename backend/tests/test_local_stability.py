@@ -417,6 +417,7 @@ def test_real_dispatch_execution_identity_closes_the_stability_contract(tmp_path
         planned = datetime.fromisoformat(f"2026-10-16T{slot}:00").replace(tzinfo=SHANGHAI)
         clock = [planned]
         def run_job(mode, **hooks):
+            hooks["on_diagnostic"]("base_validation", status="succeeded", duration_seconds=0.25)
             names = FULL_STAGES if mode == "full" else FAST_STAGES
             for stage in sorted(names):
                 run_id = f"dispatch_{sequence}_{stage}"
@@ -445,6 +446,7 @@ def test_real_dispatch_execution_identity_closes_the_stability_contract(tmp_path
                              replay=None, execution=execution, now=lambda: clock[0]) == 0
     summary = LocalJobLedger(tmp_path).summary("2026-10-16")
     assert sum(job["job_name"] == "execution_identity" for job in summary["jobs"]) == len(SLOTS)
+    assert len(summary["diagnostics"]) == len(SLOTS)
     assert session(ledger_summary=summary)["state"] == "PASS"
 
 

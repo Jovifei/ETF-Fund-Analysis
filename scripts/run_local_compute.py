@@ -6,7 +6,9 @@ import argparse
 import json
 import os
 import sys
+from contextlib import contextmanager
 from pathlib import Path
+from time import monotonic
 
 # Add project root to sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -22,7 +24,7 @@ from app.workspace.local_compute import (
     validate_provider_admission,
     OPTIONAL_TASK_PARTS,
     optional_result_available,
-    closed_session_result_accepted,
+    closed_session_result_accepted, settled_daily_result_accepted,
     compute_local_fast,
     create_base_manifest,
     validate_base_manifest,
@@ -32,6 +34,24 @@ from app.workspace.local_compute import (
 from app.workspace.local_schedule import LocalRunLock
 from app.workspace.local_atomic import write_json_atomic
 from app.workspace.local_execution import execution_identity
+from app.workspace.local_job_ledger import public_error_type
+
+
+@contextmanager
+def phase_diagnostic(args, phase):
+    """Report only fixed phase/category metadata and monotonic elapsed time."""
+    started = monotonic()
+    event = {'status': 'failed', 'error_type': 'Exception', 'reason': f'{phase}_failed'}
+    try:
+        yield
+    except BaseException as exc:
+        event = {'status': 'failed', 'error_type': public_error_type(exc), 'reason': f'{phase}_failed'}
+        raise
+    else:
+        event = {'status': 'succeeded'}
+    finally:
+        if callback := getattr(args, '_on_diagnostic', None):
+            callback(phase, duration_seconds=max(0, monotonic() - started), **event)
 
 
 def read_execution(args):
@@ -155,8 +175,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         base = None
         if mode in {'fast', 'auto'}:
             try:
-                base = json.loads(base_path.read_text(encoding='utf-8'))
-                validate_base_manifest(settings, universe, base, code_sha=sha, execution_hash=execution['execution_hash'])
+                with phase_diagnostic(args, 'base_validation'):
+                    base = json.loads(base_path.read_text(encoding='utf-8'))
+                    validate_base_manifest(settings, universe, base, code_sha=sha, execution_hash=execution['execution_hash'])
                 mode = 'fast'
             except (OSError, ValueError, TypeError):
                 if mode == 'fast':
@@ -180,19 +201,21 @@ def cmd_run(args: argparse.Namespace) -> int:
             print(json.dumps({"status": "compute_failed", "reason": "no_task_results"}))
             return 1
         for task_result in results:
-            closed_accepted = closed_session_research and private_research and closed_session_result_accepted(task_result)
+            closed_accepted = closed_session_research and private_research and (closed_session_result_accepted(task_result) or settled_daily_result_accepted(task_result))
             if task_result.get("required", True) and task_result.get("status") != "succeeded" and not closed_accepted:
                 print(json.dumps({"status": "compute_failed", "tasks": results}, indent=2, ensure_ascii=False))
                 return 1
 
         print(json.dumps({"status": "completed", "tasks": results}, indent=2, ensure_ascii=False))
         if mode == 'full' and getattr(args, 'prepare_base', False):
-            base = create_base_manifest(settings, universe, code_sha=sha, execution_hash=execution['execution_hash'])
-            write_json_atomic(base_path, base)
+            with phase_diagnostic(args, 'base_validation'):
+                base = create_base_manifest(settings, universe, code_sha=sha, execution_hash=execution['execution_hash'])
+                write_json_atomic(base_path, base)
         def validate_fast():
             if mode in {'fast', 'auto'}:
-                validate_base_manifest(settings, universe, base, code_sha=sha, execution_hash=execution['execution_hash'])
-                validate_fast_result(settings, universe, results)
+                with phase_diagnostic(args, 'base_validation'):
+                    validate_base_manifest(settings, universe, base, code_sha=sha, execution_hash=execution['execution_hash'])
+                    validate_fast_result(settings, universe, results)
         validate_fast()
         if getattr(args, "compute_only", False):
             return 0
@@ -224,20 +247,23 @@ def cmd_run(args: argparse.Namespace) -> int:
         # Fast slots never call providers for optional context; they re-publish a same-day
         # full refresh labelled as carried forward, or an honest not_refreshed_today reason.
         carry_optional = mode in {'fast', 'auto'}
-        lineage = (build_execution_lineage(settings, universe, results, base_manifest=base,
-                    execution_hash=execution['execution_hash'], config_file_hash=execution['config_file_hash'],
-                    mode='fast' if mode == 'fast' else 'full')
-                   if getattr(args, 'prepare_base', False) else None)
-        check_execution()
-        bundle = export_local_v2(settings, sequence=sequence, code_sha=sha, universe=universe,
-                                 admission=admission, private_research=private_research, unavailable_parts=unavailable,
-                                 closed_session_result=next((item for item in results if closed_session_result_accepted(item)), None),
-                                 execution_lineage=lineage, carry_optional=carry_optional)
+        with phase_diagnostic(args, 'projection_export'):
+            lineage = (build_execution_lineage(settings, universe, results, base_manifest=base,
+                        execution_hash=execution['execution_hash'], config_file_hash=execution['config_file_hash'],
+                        mode='fast' if mode == 'fast' else 'full')
+                       if getattr(args, 'prepare_base', False) else None)
+            check_execution()
+            bundle = export_local_v2(settings, sequence=sequence, code_sha=sha, universe=universe,
+                                     admission=admission, private_research=private_research, unavailable_parts=unavailable,
+                                     closed_session_result=next((item for item in results if closed_session_result_accepted(item)), None),
+                                     settled_daily_result=next((item for item in results if settled_daily_result_accepted(item)), None),
+                                     execution_lineage=lineage, carry_optional=carry_optional)
 
         bundle_path = outbox / f"bundle_{bundle['manifest']['sequence']}.json"
         if callback := getattr(args, '_on_export_intent', None):
             callback(bundle, bundle_path)
-        write_json_atomic(bundle_path, bundle)
+        with phase_diagnostic(args, 'bundle_write'):
+            write_json_atomic(bundle_path, bundle)
         if callback := getattr(args, '_on_export', None):
             callback(bundle, bundle_path)
 
@@ -248,36 +274,30 @@ def cmd_run(args: argparse.Namespace) -> int:
         }, indent=2, ensure_ascii=False))
 
         if not args.no_upload:
-            # Fix-6 (part 2): missing auth is a hard error — do not silently skip
-            auth_file = root / "config" / "producer_auth.json"
-            if not auth_file.exists():
-                print(json.dumps({
-                    "status": "upload_failed",
-                    "reason": "auth_file_missing",
-                    "path": str(auth_file),
-                }, ensure_ascii=False))
-                return 1
-
-            with open(auth_file, "r", encoding="utf-8") as f:
-                auth_data = json.load(f)
-            os.environ["SHADOW_PRODUCER_TOKEN"] = auth_data["producer_token"]
-            os.environ["SHADOW_SIGNING_KEY_ID"] = auth_data["key_id"]
-            os.environ["SHADOW_SIGNING_SECRET"] = auth_data["signing_secret"]
-            sync_url = getattr(args, "sync_url", None) or "https://etf.joviluma.com/api/shadow/sync"
-            from app.workspace.shadow_client import upload_bundle_auto
             try:
-                check_execution()
-                validate_fast()
+                with phase_diagnostic(args, 'upload_auth'):
+                    # Missing or malformed authentication is an observed hard failure.
+                    auth_file = root / "config" / "producer_auth.json"
+                    auth_data = json.loads(auth_file.read_text(encoding='utf-8'))
+                    os.environ["SHADOW_PRODUCER_TOKEN"] = auth_data["producer_token"]
+                    os.environ["SHADOW_SIGNING_KEY_ID"] = auth_data["key_id"]
+                    os.environ["SHADOW_SIGNING_SECRET"] = auth_data["signing_secret"]
+                sync_url = getattr(args, "sync_url", None) or "https://etf.joviluma.com/api/shadow/sync"
+                from app.workspace.shadow_client import upload_bundle_auto
+                with phase_diagnostic(args, 'pre_upload_validation'):
+                    check_execution()
+                    validate_fast()
                 # <=16 MiB per request (wire and decoded); larger bundles go chunked + atomic commit.
-                receipt = upload_bundle_auto(sync_url, bundle)
-                receipt_path = outbox / f"bundle_{bundle['manifest']['sequence']}.receipt.json"
-                write_json_atomic(receipt_path, receipt)
-                if callback := getattr(args, '_on_receipt', None):
-                    callback(bundle['manifest'], receipt)
+                with phase_diagnostic(args, 'transport_receipt'):
+                    receipt = upload_bundle_auto(sync_url, bundle)
+                    receipt_path = outbox / f"bundle_{bundle['manifest']['sequence']}.receipt.json"
+                    write_json_atomic(receipt_path, receipt)
+                    if callback := getattr(args, '_on_receipt', None):
+                        callback(bundle['manifest'], receipt)
                 print(json.dumps({"status": "uploaded", "receipt": receipt}, indent=2, ensure_ascii=False))
             except Exception as exc:
                 # Fix-6: upload failure must exit non-zero so Windows Task Scheduler records it
-                print(json.dumps({"status": "upload_failed", "error_type": type(exc).__name__}, ensure_ascii=False))
+                print(json.dumps({"status": "upload_failed", "error_type": public_error_type(exc)}, ensure_ascii=False))
                 return 1
 
         return 0
@@ -307,7 +327,7 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
     identity = {'code_sha': sha, 'config_hash': stable_hash(settings.load_strategy()),
                 'scope_hash': digest(sorted(cfg['universe']))}
 
-    def run_job(mode, *, on_task, on_export_intent, on_export, on_receipt, lock):
+    def run_job(mode, *, on_task, on_export_intent, on_export, on_receipt, lock, on_diagnostic=None):
         child = copy(args)
         child.cadence_mode = 'auto' if mode == 'fast' else 'full'
         child.prepare_base = True
@@ -326,6 +346,7 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
             on_task(name, result, run_id)
         child._external_lock, child._on_task = lock, observe
         child._on_export_intent, child._on_export, child._on_receipt = on_export_intent, on_export, on_receipt
+        child._on_diagnostic = on_diagnostic
         return cmd_run(child)
 
     def recover_export(*, attempt):
@@ -338,21 +359,26 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
             raise ValueError('current provider admission blocked')
         return load_pending_bundle(root, attempt, {**identity, **current_execution}, now=datetime.now(timezone.utc))
 
-    def replay(*, attempt, on_receipt):
-        bundle = recover_export(attempt=attempt)
+    def replay(*, attempt, on_receipt, on_diagnostic=None):
+        replay_args = copy(args)
+        replay_args._on_diagnostic = on_diagnostic
+        with phase_diagnostic(replay_args, 'pre_upload_validation'):
+            bundle = recover_export(attempt=attempt)
         bundle_path = root / 'outbox' / attempt['bundle_file']
         manifest = bundle['manifest']
-        auth_file = root / 'config' / 'producer_auth.json'
-        auth_data = json.loads(auth_file.read_text(encoding='utf-8'))
-        os.environ.update(SHADOW_PRODUCER_TOKEN=auth_data['producer_token'],
-                          SHADOW_SIGNING_KEY_ID=auth_data['key_id'], SHADOW_SIGNING_SECRET=auth_data['signing_secret'])
-        receipt = upload_bundle_auto(args.sync_url, bundle)
-        write_json_atomic(bundle_path.with_suffix('.receipt.json'), receipt)
-        on_receipt(manifest, receipt)
+        with phase_diagnostic(replay_args, 'upload_auth'):
+            auth_file = root / 'config' / 'producer_auth.json'
+            auth_data = json.loads(auth_file.read_text(encoding='utf-8'))
+            os.environ.update(SHADOW_PRODUCER_TOKEN=auth_data['producer_token'],
+                              SHADOW_SIGNING_KEY_ID=auth_data['key_id'], SHADOW_SIGNING_SECRET=auth_data['signing_secret'])
+        with phase_diagnostic(replay_args, 'transport_receipt'):
+            receipt = upload_bundle_auto(args.sync_url, bundle)
+            write_json_atomic(bundle_path.with_suffix('.receipt.json'), receipt)
+            on_receipt(manifest, receipt)
 
     result = dispatch_once(root, identity, calendar=TradingCalendarService(settings),
                            run_job=run_job, replay=replay, recover_export=recover_export, execution=execution)
-    print(json.dumps({'status': 'dispatch_finished', 'exit_code': result}))
+    print(json.dumps({'status': 'dispatch_finished', 'exit_code': result, 'daily_acceptance': 'NOT_EVALUATED'}))
     return result
 
 

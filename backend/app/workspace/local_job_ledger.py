@@ -11,6 +11,7 @@ import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, time, timezone
+from math import isfinite
 from pathlib import Path
 from uuid import uuid4
 
@@ -23,9 +24,24 @@ VERSION = "local-job-ledger-v1.1"
 TERMINAL_SLOTS = {"DELIVERED", "SUPERSEDED", "MISSED", "FAILED_DELIVERY", "QUARANTINED"}
 EXECUTION_HASH_FIELDS = {"execution_hash", "base_input_hash", "quote_batch_hash", "config_file_hash"}
 DETAIL_FIELDS = {"coverage_complete", "requested", "completed", "missing", "failed_count",
-                 "degraded_count", "accepted_closed_session", "source_task_status", "execution_mode",
+                 "degraded_count", "accepted_closed_session", "accepted_settled_daily", "input_basis",
+                 "settled_daily_input_hash", "settled_daily_quote_hash", "source_task_status", "execution_mode",
                  "duration_seconds", "latency_seconds", "reason", "error_type", "run_id",
-                 "target_trade_date", "scope_hash"} | EXECUTION_HASH_FIELDS
+                 "target_trade_date", "scope_hash", "failure_stage"} | EXECUTION_HASH_FIELDS
+DIAGNOSTIC_PHASES = {"base_validation", "projection_export", "bundle_write", "upload_auth",
+                     "pre_upload_validation", "transport_receipt"}
+PUBLIC_ERROR_TYPES = {"Exception", "RuntimeError", "ValueError", "TypeError", "KeyError", "OSError",
+    "FileNotFoundError", "PermissionError", "TimeoutError", "ConnectionError", "JSONDecodeError",
+    "HTTPError", "URLError", "RequestError", "HTTPStatusError", "TransportError", "NetworkError",
+    "ConnectError", "ReadError", "WriteError", "CloseError", "ProtocolError", "RemoteProtocolError",
+    "LocalProtocolError", "TimeoutException", "ConnectTimeout", "ReadTimeout", "WriteTimeout",
+    "PoolTimeout", "ProxyError", "UnsupportedProtocol", "SSLError", "SSLCertVerificationError",
+    "IntegrityError", "OperationalError", "UnicodeDecodeError", "OverflowError"}
+
+
+def public_error_type(error: Exception) -> str:
+    """Only an approved class category can cross the diagnostic boundary."""
+    return next((cls.__name__ for cls in type(error).__mro__ if cls.__name__ in PUBLIC_ERROR_TYPES), "Exception")
 
 
 def _clock(value: datetime) -> datetime:
@@ -84,6 +100,10 @@ class LocalJobLedger:
                     singleton INTEGER PRIMARY KEY CHECK(singleton=1), observed_at TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS export_manifests (
                     attempt_id TEXT PRIMARY KEY REFERENCES attempts(attempt_id), manifest_json TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS diagnostics (
+                    attempt_id TEXT NOT NULL REFERENCES attempts(attempt_id), phase TEXT NOT NULL,
+                    status TEXT NOT NULL, recorded_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+                    details TEXT NOT NULL, PRIMARY KEY(attempt_id, phase));
                 PRAGMA user_version=2;
             """)
 
@@ -340,6 +360,45 @@ class LocalJobLedger:
             else:
                 db.execute("INSERT INTO jobs VALUES (?,?,?,?,?,?,?,?)", (attempt_id, job_name, status, stamp, end, run_id, bool(required), encoded))
 
+    def record_diagnostic(self, attempt_id: str, phase: str, *, status: str, now: datetime,
+                          duration_seconds: float, error_type: str | None = None, reason: str | None = None) -> None:
+        """Bounded phase observations; never participate in business-stage acceptance.
+
+        Repeated validations/replays accumulate elapsed time, while the first
+        failed category survives both later failures and successful retries.
+        """
+        if phase not in DIAGNOSTIC_PHASES or status not in {"succeeded", "failed"}:
+            raise ValueError("fixed diagnostic phase and status required")
+        if type(duration_seconds) not in (int, float) or not isfinite(duration_seconds) or duration_seconds < 0:
+            raise ValueError("finite nonnegative diagnostic duration required")
+        if ((status == "failed" and (error_type not in PUBLIC_ERROR_TYPES or reason != f"{phase}_failed"))
+                or (status == "succeeded" and (error_type is not None or reason is not None))):
+            raise ValueError("fixed public diagnostic failure required")
+        current = _clock(now)
+        stamp = current.isoformat()
+        with self._transaction() as db:
+            self._observe_clock(db, current)
+            attempt = db.execute("SELECT status,updated_at FROM attempts WHERE attempt_id=?", (attempt_id,)).fetchone()
+            if attempt is None or attempt["status"] not in {"RUNNING", "EXPORTING", "EXPORTED", "DELIVERED"}:
+                raise ValueError("diagnostic requires a current attempt")
+            _forward(attempt, current)
+            old = db.execute("SELECT * FROM diagnostics WHERE attempt_id=? AND phase=?", (attempt_id, phase)).fetchone()
+            details = json.loads(old["details"]) if old else {"duration_seconds": 0, "observations": 0}
+            details["duration_seconds"] += duration_seconds
+            details["observations"] += 1
+            if not isfinite(details["duration_seconds"]):
+                raise ValueError("finite cumulative diagnostic duration required")
+            if status == "failed" and "error_type" not in details:
+                details.update(error_type=error_type, reason=reason)
+            if old is not None:
+                _forward(old, current)
+                retained_status = "failed" if old["status"] == "failed" else status
+                db.execute("UPDATE diagnostics SET status=?,updated_at=?,details=? WHERE attempt_id=? AND phase=?",
+                           (retained_status, stamp, _json(details), attempt_id, phase))
+            else:
+                db.execute("INSERT INTO diagnostics VALUES (?,?,?,?,?,?)",
+                           (attempt_id, phase, status, stamp, stamp, _json(details)))
+
     def mark_export_intent(self, attempt_id: str, *, manifest: dict, bundle_file: str, now: datetime) -> None:
         """Commit the immutable artifact identity before its filesystem write."""
         self._record_export(attempt_id, manifest=manifest, bundle_file=bundle_file, now=now, status="EXPORTING")
@@ -501,8 +560,10 @@ class LocalJobLedger:
                          (" WHERE s.session=?" if session else "") + " ORDER BY a.started_at,a.attempt_no", args)]
             jobs = [self._row(r) for r in db.execute("SELECT j.* FROM jobs j JOIN attempts a ON a.attempt_id=j.attempt_id "
                     "JOIN slots s ON s.slot_id=a.slot_id" + (" WHERE s.session=?" if session else "") + " ORDER BY j.started_at,j.job_name", args)]
+            diagnostics = [self._row(r) for r in db.execute("SELECT d.* FROM diagnostics d JOIN attempts a ON a.attempt_id=d.attempt_id "
+                    "JOIN slots s ON s.slot_id=a.slot_id" + (" WHERE s.session=?" if session else "") + " ORDER BY d.recorded_at,d.phase", args)]
         counts = {}
         for slot in slots:
             counts[slot["status"]] = counts.get(slot["status"], 0) + 1
-        return {"ledger_version": VERSION, "slots": slots, "attempts": attempts, "jobs": jobs,
+        return {"ledger_version": VERSION, "slots": slots, "attempts": attempts, "jobs": jobs, "diagnostics": diagnostics,
                 "counts": counts, "consumer_identity": {"state": "NOT_RUN"}}

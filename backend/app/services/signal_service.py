@@ -31,6 +31,7 @@ from app.services.snapshot_contract import (
 )
 from app.services.trading_calendar_service import TradingCalendarService
 from app.utils.hashing import stable_hash
+from app.services.settled_daily_input import SettledDailyInput, require_settled_daily_input
 from app.utils.numbers import clamp
 
 
@@ -185,6 +186,7 @@ class SignalService:
         holding: object | None,
         current_weight: float,
         now: datetime,
+        *, research_input: SettledDailyInput | None = None,
     ) -> CandidateSignal:
         preflight = self.preflight.check_instrument(db, instrument, now)
         from app.services.qualification_gate import quote_reasons
@@ -200,7 +202,19 @@ class SignalService:
         risk_score = float(indicator.risk_score if indicator else 100)
         data_quality = float(indicator.data_quality if indicator else 0)
         theme_score, news_evidence = self._news_theme_score(db, instrument, now)
-        quality_score, quality_risks = self._fund_quality(quote, indicator)
+        quality_quote = quote
+        if research_input is not None:
+            from types import SimpleNamespace
+            from app.providers.data_contract import history_issues
+            bases = list(db.scalars(select(DailyBar.adjust).where(
+                DailyBar.instrument_id == instrument.id).distinct()))
+            daily = None
+            if len(bases) == 1 and instrument.id not in history_issues(db, self.settings, [instrument.id]):
+                daily = db.scalar(select(DailyBar).where(DailyBar.instrument_id == instrument.id,
+                    DailyBar.trade_date == datetime.fromisoformat(research_input.base["target_trade_date"]).date(),
+                    DailyBar.adjust == bases[0]).order_by(DailyBar.id.desc()))
+            quality_quote = SimpleNamespace(amount=daily.amount, premium_rate=None) if daily else None
+        quality_score, quality_risks = self._fund_quality(quality_quote, indicator)
         risks.extend(quality_risks)
 
         forecast_scores: list[float] = []
@@ -230,7 +244,7 @@ class SignalService:
         one_day = forecasts.get(1)
         if one_day and one_day.p_up is not None:
             reasons.append(f"1日上涨概率 {one_day.p_up * 100:.1f}%（{one_day.calibration_status}）")
-        if quote and quote.premium_rate is not None:
+        if research_input is None and quote and quote.premium_rate is not None:
             reasons.append(f"场内溢价率 {quote.premium_rate:.2f}%")
 
         if score >= 78:
@@ -361,11 +375,14 @@ class SignalService:
             item.reasons.append(f"迟滞过滤：{int(min_minutes)} 分钟内分数变化不足 {score_delta:g}")
             item.reasons = list(dict.fromkeys(item.reasons))[:10]
 
-    def refresh_all(self, db: Session, run_id: str | None = None, *, codes: list[str] | None = None) -> dict:
+    def refresh_all(self, db: Session, run_id: str | None = None, *, codes: list[str] | None = None,
+                    research_input: SettledDailyInput | None = None) -> dict:
         from app.services.research_write_guard import require_research_write
         require_research_write(self.settings, "SignalService.refresh_all")
         run_id = run_id or uuid4().hex
         now = datetime.now(self.settings.timezone)
+        if research_input is not None:
+            require_settled_daily_input(db, self.settings, research_input, at=now, codes=codes)
         instruments = db.scalars(select(Instrument).where(Instrument.enabled.is_(True))).all()
         from app.services.execution_scope import target_instruments, scope_metadata
         targets = target_instruments(instruments, codes)
@@ -443,6 +460,7 @@ class SignalService:
                 None,
                 0.0,
                 now,
+                **({"research_input": research_input} if research_input is not None else {}),
             )
             for instrument in instruments
         ]
@@ -469,6 +487,7 @@ class SignalService:
                     str(key): value for key, value in self._forecast_score_weights().items()
                 },
                 "quote_input_hash": item.quote.quality_hash if item.quote else None,
+                **({"research_input": research_input.observation} if research_input is not None else {}),
                 "indicator": (
                     {
                         "input_hash": item.indicator.input_hash,

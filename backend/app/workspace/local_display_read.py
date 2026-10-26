@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS
+from copy import deepcopy
 import json
 import os
 import re
@@ -29,6 +30,12 @@ ACCEPTANCE_HISTORY_VERSION = "local-acceptance-v1"
 ACCEPTANCE_HISTORY_LIMIT = 256
 CONSUMER_VERSION = "local-display-consumer-v1"
 QUOTE_OBSERVATION_MAX_AGE_SECONDS = 600
+
+
+def _input_observation_metadata(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Copy published input provenance without sharing the immutable cache."""
+    observation = manifest.get("input_observation")
+    return {"input_observation": deepcopy(observation)} if isinstance(observation, dict) else {}
 
 
 def bundle_expired(bundle: dict[str, Any] | None, *, now: datetime | None = None) -> bool | None:
@@ -495,6 +502,7 @@ class LocalDisplayReader:
             "research_source": "local_bundle",
             "index_history_available": False,
             "consumer_contract_version": CONSUMER_VERSION,
+            **_input_observation_metadata(manifest),
         }
 
     def read_decision_board(
@@ -551,6 +559,7 @@ class LocalDisplayReader:
             "research_only": True,
             "actionable": False,
             "automatic_orders": False,
+            **_input_observation_metadata(manifest),
         }
 
     def read_instrument_detail(
@@ -571,7 +580,7 @@ class LocalDisplayReader:
             return None
 
         # Clean detail of any private holding/avg_cost info before return
-        clean_detail = {k: v for k, v in detail.items() if k not in {"avg_cost", "trades", "account_id"}}
+        clean_detail = {k: v for k, v in detail.items() if k not in {"avg_cost", "trades", "account_id", "input_observation"}}
         now = now or datetime.now(timezone.utc)
         stale = bundle_is_stale(bundle, now=now)
         if isinstance(clean_detail.get("quote"), dict):
@@ -583,6 +592,7 @@ class LocalDisplayReader:
             "research_source": "local_bundle",
             "consumer_contract_version": CONSUMER_VERSION,
             "read_model_version": CONTRACT_VERSION,
+            **_input_observation_metadata(bundle.get("manifest", {})),
         }
 
     def read_chart_data(

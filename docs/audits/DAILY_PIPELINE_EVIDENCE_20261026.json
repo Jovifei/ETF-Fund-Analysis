@@ -1,0 +1,264 @@
+{
+  "audit_date": "2026-10-26",
+  "timezone": "Asia/Shanghai",
+  "scope": "read-only diagnosis; no code/config/task/data changes or email sent",
+  "source_revision": "7b3a5757b9e0cc140e904b67bcbeb31c1eb3830b",
+  "producer_sha": "dcffa8ebac1027d174b213915ff78a7e51b99097",
+  "site": {
+    "version": "1.0.12",
+    "generation": 1792997752011,
+    "generated_at": "2026-10-26T14:54:58.110254+08:00",
+    "received_at": "2026-10-26T15:01:58.252187+08:00",
+    "expires_at": "2026-10-26T16:54:58.110254+08:00",
+    "total": 34,
+    "daily_as_of": "2026-10-23",
+    "is_stale": true,
+    "research_source": "local_bundle",
+    "scheduler_enabled": false,
+    "llm_enabled": false,
+    "analysis_enabled": false
+  },
+  "local": {
+    "daily_rows": 68996,
+    "latest_trade_date": "2026-10-26",
+    "latest_day_instruments": 34,
+    "last_bar_fetch": "2026-10-26T17:48:33.218913+08:00",
+    "last_board": "2026-10-26T15:04:01.522326+08:00",
+    "latest_closed_batch_quotes": 34,
+    "quotes_source_time_outside_1500_1600": 10,
+    "outside_source_time_min": "2026-10-26T16:29:00+08:00",
+    "outside_source_time_max": "2026-10-26T16:29:45+08:00"
+  },
+  "slot_status_counts": {
+    "DELIVERED": 5,
+    "FAILED_DELIVERY": 2,
+    "SUPERSEDED": 1,
+    "MISSED": 4
+  },
+  "slots": [
+    {
+      "slot": "11:40",
+      "status": "DELIVERED",
+      "reason": null,
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "status": "DELIVERED",
+          "started_at": "2026-10-26T11:40:02.869705+08:00",
+          "finished_at": "2026-10-26T11:48:41.964365+08:00",
+          "sequence": 1792986214414,
+          "reason": null
+        }
+      ]
+    },
+    {
+      "slot": "13:55",
+      "status": "DELIVERED",
+      "reason": null,
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "status": "DELIVERED",
+          "started_at": "2026-10-26T13:55:05.811200+08:00",
+          "finished_at": "2026-10-26T14:05:54.245718+08:00",
+          "sequence": 1792994406825,
+          "reason": null
+        }
+      ]
+    },
+    {
+      "slot": "14:20",
+      "status": "DELIVERED",
+      "reason": null,
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "status": "DELIVERED",
+          "started_at": "2026-10-26T14:20:03.488381+08:00",
+          "finished_at": "2026-10-26T14:28:21.169180+08:00",
+          "sequence": 1792995708028,
+          "reason": null
+        }
+      ]
+    },
+    {
+      "slot": "14:30",
+      "status": "FAILED_DELIVERY",
+      "reason": "upload_retry_budget_exhausted",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "status": "FAILED_DELIVERY",
+          "started_at": "2026-10-26T14:30:04.963537+08:00",
+          "finished_at": "2026-10-26T14:43:04.014382+08:00",
+          "sequence": 1792996315199,
+          "reason": "upload_retry_budget_exhausted"
+        }
+      ]
+    },
+    {
+      "slot": "14:45",
+      "status": "DELIVERED",
+      "reason": null,
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "status": "DELIVERED",
+          "started_at": "2026-10-26T14:45:04.680179+08:00",
+          "finished_at": "2026-10-26T14:53:51.234596+08:00",
+          "sequence": 1792997221013,
+          "reason": null
+        }
+      ]
+    },
+    {
+      "slot": "14:50",
+      "status": "DELIVERED",
+      "reason": null,
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "status": "DELIVERED",
+          "started_at": "2026-10-26T14:54:04.216615+08:00",
+          "finished_at": "2026-10-26T15:02:01.627786+08:00",
+          "sequence": 1792997752011,
+          "reason": null
+        }
+      ]
+    },
+    {
+      "slot": "14:55",
+      "status": "SUPERSEDED",
+      "reason": "newer_slot:2026-10-26 15:00",
+      "attempts": []
+    },
+    {
+      "slot": "15:00",
+      "status": "FAILED_DELIVERY",
+      "reason": "upload_retry_budget_exhausted",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "status": "FAILED_DELIVERY",
+          "started_at": "2026-10-26T15:03:03.943061+08:00",
+          "finished_at": "2026-10-26T15:15:03.360253+08:00",
+          "sequence": 1792998296337,
+          "reason": "upload_retry_budget_exhausted"
+        }
+      ]
+    },
+    {
+      "slot": "15:15",
+      "status": "MISSED",
+      "reason": "catchup_window_expired",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "status": "FAILED",
+          "started_at": "2026-10-26T15:15:03.595459+08:00",
+          "finished_at": "2026-10-26T15:21:11.549393+08:00",
+          "sequence": null,
+          "reason": "run_failed"
+        },
+        {
+          "attempt_no": 2,
+          "status": "FAILED",
+          "started_at": "2026-10-26T15:23:03.638737+08:00",
+          "finished_at": "2026-10-26T15:29:31.949681+08:00",
+          "sequence": null,
+          "reason": "run_failed"
+        }
+      ]
+    },
+    {
+      "slot": "16:10",
+      "status": "MISSED",
+      "reason": "catchup_window_expired",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "status": "FAILED",
+          "started_at": "2026-10-26T16:10:03.799159+08:00",
+          "finished_at": "2026-10-26T16:16:01.675341+08:00",
+          "sequence": null,
+          "reason": "run_failed"
+        },
+        {
+          "attempt_no": 2,
+          "status": "FAILED",
+          "started_at": "2026-10-26T16:17:03.650705+08:00",
+          "finished_at": "2026-10-26T16:22:39.122310+08:00",
+          "sequence": null,
+          "reason": "run_failed"
+        }
+      ]
+    },
+    {
+      "slot": "16:40",
+      "status": "MISSED",
+      "reason": "catchup_window_expired",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "status": "FAILED",
+          "started_at": "2026-10-26T16:40:04.119112+08:00",
+          "finished_at": "2026-10-26T16:44:52.218918+08:00",
+          "sequence": null,
+          "reason": "run_failed"
+        },
+        {
+          "attempt_no": 2,
+          "status": "FAILED",
+          "started_at": "2026-10-26T16:46:03.807851+08:00",
+          "finished_at": "2026-10-26T16:50:43.137210+08:00",
+          "sequence": null,
+          "reason": "run_failed"
+        }
+      ]
+    },
+    {
+      "slot": "17:40",
+      "status": "MISSED",
+      "reason": "catchup_window_expired",
+      "attempts": [
+        {
+          "attempt_no": 1,
+          "status": "FAILED",
+          "started_at": "2026-10-26T17:40:04.050952+08:00",
+          "finished_at": "2026-10-26T17:43:23.918236+08:00",
+          "sequence": null,
+          "reason": "run_failed"
+        },
+        {
+          "attempt_no": 2,
+          "status": "FAILED",
+          "started_at": "2026-10-26T17:45:03.571940+08:00",
+          "finished_at": "2026-10-26T17:48:33.447540+08:00",
+          "sequence": null,
+          "reason": "run_failed"
+        }
+      ]
+    }
+  ],
+  "mail": {
+    "mailbox_search_window": "2026-10-26T00:00:00+08:00/2026-10-27T00:00:00+08:00",
+    "epoch_after": 1792944000,
+    "epoch_before": 1793030400,
+    "matching_message_count": 0,
+    "scope": "connected Gmail including spam/trash; subjects ETF/fund/decision",
+    "previous_bot_sender_domain": "mail.grokbot.com",
+    "repository_sender_implemented": false,
+    "local_etf_mail_task_found": false,
+    "external_task_current_state": "NOT_OBSERVED",
+    "last_seen_message_date": "2026-10-23T19:20:35+08:00",
+    "last_seen_message_date_basis": "Date/email_ts metadata of an existing mailbox message; not final-delivery time"
+  },
+  "evidence_methods": [
+    "Windows Task Scheduler read-only selected fields",
+    "SQLite URI mode=ro and PRAGMA query_only=ON",
+    "same production LocalDisplayReader safe aggregate",
+    "production API sync log HTTP-status aggregate",
+    "Gmail connector header/date/subject and epoch-bounded search",
+    "immutable fast-bundle validation at original timestamps; no upload"
+  ]
+}
