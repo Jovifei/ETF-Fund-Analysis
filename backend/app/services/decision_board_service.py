@@ -39,6 +39,7 @@ from app.services.flow_share_research import (
     latest_share_scales,
     saved_flow_share_valid,
 )
+from app.services.settled_daily_input import SettledDailyInput, require_settled_daily_input
 from app.services.signal_grade_service import GRADE_ORDER, SignalGradeService, classify_row
 from app.services.support_resistance_service import SupportResistanceService
 from app.services.trading_calendar_service import TradingCalendarService
@@ -280,11 +281,13 @@ class DecisionBoardService:
         return row
 
     def refresh(self, db: Session, *, generated_at: datetime | None = None, demo: bool = False,
-                codes: list[str] | None = None) -> SnapshotBuild:
+                codes: list[str] | None = None, research_input: SettledDailyInput | None = None) -> SnapshotBuild:
         from app.services.research_write_guard import require_research_write
         require_research_write(self.settings, "refresh_decision_board")
         generated_at = generated_at or datetime.now(self.settings.timezone)
         generated_at = generated_at.astimezone(SHANGHAI) if generated_at.tzinfo else generated_at.replace(tzinfo=SHANGHAI)
+        if research_input is not None:
+            require_settled_daily_input(db, self.settings, research_input, at=generated_at, codes=codes)
         from app.services.execution_scope import target_instruments, scope_metadata
         instruments = db.scalars(
             select(Instrument).where(Instrument.enabled.is_(True), Instrument.kind.in_(("ETF", "LOF")))
@@ -293,7 +296,7 @@ class DecisionBoardService:
         if not demo:
             # 统一刷新支撑压力快照（250 根 + 真实成交额口径），payload 构建全部读快照。
             self.support_resistance.capture_for_instruments(db, targets, computed_by="scheduled")
-        payload = self._build_payload(db, generated_at)
+        payload = self._build_payload(db, generated_at, **({"research_input": research_input} if research_input is not None else {}))
         payload.update(scope_metadata(instruments, codes))
         if demo:
             ephemeral = DecisionBoardSnapshot(
@@ -460,9 +463,10 @@ class DecisionBoardService:
                 db.execute(delete(DecisionBoardSnapshot).where(DecisionBoardSnapshot.id.in_(stale_ids[start:start+500])))
             db.flush()
 
-    def _build_payload(self, db: Session, generated_at: datetime) -> dict:
+    def _build_payload(self, db: Session, generated_at: datetime, *, research_input: SettledDailyInput | None = None) -> dict:
         generated_at = generated_at.astimezone(SHANGHAI) if generated_at.tzinfo else generated_at.replace(tzinfo=SHANGHAI)
-        grade_payload = SignalGradeService(self.settings).build(db, as_of=generated_at)
+        grade_payload = SignalGradeService(self.settings).build(db, as_of=generated_at,
+            **({"research_input": research_input} if research_input is not None else {}))
         grades = {row["ts_code"]: row for row in grade_payload["rows"]}
         instruments = db.scalars(
             select(Instrument)
@@ -475,7 +479,8 @@ class DecisionBoardService:
         forecasts = self._latest_forecasts(db)
         provisional = self._latest_provisional(db)
         rows = [
-            self._row(db, generated_at, instrument, grades.get(instrument.ts_code), indicators.get(instrument.id), previous_indicators.get(instrument.id), quotes.get(instrument.id), forecasts.get(instrument.id, {}), provisional.get(instrument.id))
+            self._row(db, generated_at, instrument, grades.get(instrument.ts_code), indicators.get(instrument.id), previous_indicators.get(instrument.id), quotes.get(instrument.id), forecasts.get(instrument.id, {}), provisional.get(instrument.id),
+                **({"research_input": research_input} if research_input is not None else {}))
             for instrument in instruments
         ]
         from app.utils.decision_reference import entry_exit_reference, theme_relative_ranks
@@ -509,6 +514,7 @@ class DecisionBoardService:
         from app.utils.hashing import stable_hash
         return {
             "read_model_version": READ_MODEL_VERSION,
+            **({"input_observation": research_input.observation} if research_input is not None else {}),
             "config_hash": stable_hash(self.settings.load_strategy()),
             "target_trade_date": settled_session(self.settings, generated_at).isoformat(),
             "snapshot_id": uuid4().hex,
@@ -633,7 +639,8 @@ class DecisionBoardService:
         except Exception:
             return []
 
-    def _row(self, db: Session, generated_at: datetime, instrument, grade_row, indicator, previous_values, quote, forecasts, provisional) -> dict:
+    def _row(self, db: Session, generated_at: datetime, instrument, grade_row, indicator, previous_values, quote, forecasts, provisional,
+             *, research_input: SettledDailyInput | None = None) -> dict:
         grade_row = grade_row or {}
         independent_sector = grade_row.get("sector")
         comparison_basis = "previous_saved_confirmed_date_not_intraday_quote"
@@ -709,12 +716,17 @@ class DecisionBoardService:
         quote_is_mock = self.settings.market_provider == "mock" or "mock" in str(quote_source or "").lower()
         # Missing settled indicators do not erase independently timestamped
         # intraday research input. Incompatible history still fails closed.
-        provisional_status = ({"status": "blocked_history_contract",
-            "used_for_derived_values": False, "reason": blocked}
-            if blocked else self._provisional_status(db, instrument.id, provisional, generated_at))
+        if research_input is not None:
+            provisional_status = {"status": "settled_daily_research", "used_for_derived_values": False,
+                                  "reason": "confirmed_daily_input_selected"}
+        else:
+            provisional_status = ({"status": "blocked_history_contract",
+                "used_for_derived_values": False, "reason": blocked}
+                if blocked else self._provisional_status(db, instrument.id, provisional, generated_at))
         forecast_map = {str(horizon): self._forecast_payload(forecasts.get(horizon)) for horizon in HORIZONS}
         from app.services.return_observation import observed_returns
-        return_context = observed_returns(db, self.settings, instrument.id, quote, generated_at)
+        return_context = observed_returns(db, self.settings, instrument.id,
+                                          quote if research_input is None else None, generated_at)
         today_return = return_context["value"]
         previous_confirmed_return = return_context["previous_return"]
         if provisional_status["used_for_derived_values"]:
@@ -872,7 +884,8 @@ class DecisionBoardService:
                 "actionable": False,
             },
             "flow_share": build_flow_share_view(
-                quote, self._latest_share_scale(db, instrument.id, as_of=generated_market), as_of=generated_market,
+                quote if research_input is None else None,
+                self._latest_share_scale(db, instrument.id, as_of=generated_market), as_of=generated_market,
             ),
             "provisional": provisional_status,
             "history": history,

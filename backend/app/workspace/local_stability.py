@@ -270,18 +270,37 @@ def _delivery(session: date, ledger: dict, source_sha: str, config_hash: str,
                         and str(job.get("status")).lower() == "partial"
                         and job.get("details", {}).get("coverage_complete") is False
                         and job.get("details", {}).get("accepted_closed_session") is True)
+            def settled_daily_research(job):
+                details = job.get("details", {})
+                observed = manifest.get("input_observation") or {}
+                return (job.get("job_name") == "refresh_quotes"
+                        and slot in {"16:10", "16:40", "17:40"}
+                        and str(job.get("status")).lower() == "partial"
+                        and details.get("coverage_complete") is False
+                        and details.get("accepted_settled_daily") is True
+                        and details.get("accepted_closed_session") is False
+                        and details.get("input_basis") == "settled_daily_bars"
+                        and observed.get("contract_version") == "settled-daily-research-input-v1"
+                        and observed.get("basis") == "settled_daily_bars"
+                        and observed.get("is_realtime") is False
+                        and observed.get("scope_hash") == scope_hash
+                        and observed.get("source_session") == session.isoformat()
+                        and observed.get("daily_input_hash") == details.get("settled_daily_input_hash")
+                        and observed.get("quote_batch_hash") == details.get("settled_daily_quote_hash")
+                        and observed.get("quote_batch_hash") == (manifest.get("execution_lineage") or {}).get("quote_batch_hash"))
+            daily_jobs = [job for job in required if settled_daily_research(job)]
             closed_jobs = [job for job in required if closed_research(job)]
             raw_coverage = bool(required) and all(job.get("details", {}).get("coverage_complete") is True for job in required)
             coverage_ok = bool(required) and all(
                 (job.get("details", {}).get("coverage_complete") is True
-                 and str(job.get("status")).lower() == "succeeded") or closed_research(job)
+                 and str(job.get("status")).lower() == "succeeded") or closed_research(job) or settled_daily_research(job)
                 for job in required)
             result.update(latency_seconds=latency, deadline_seconds=deadlines[slot],
                           receipt_matched=receipt_ok, identity_matched=identities_ok,
                           monotonic_delivery=monotonic, input_window_valid=input_window,
                           coverage_complete=raw_coverage, research_coverage_accepted=coverage_ok,
-                          closed_research_jobs=len(closed_jobs),
-                          input_qualification="closed_non_realtime_research" if closed_jobs else "source_quality_not_promoted",
+                          closed_research_jobs=len(closed_jobs), settled_daily_research_jobs=len(daily_jobs),
+                          input_qualification="settled_daily_research" if daily_jobs else "closed_non_realtime_research" if closed_jobs else "source_quality_not_promoted",
                           bundle_id=candidate.get("bundle_id"),
                           failed_jobs=sum(str(job.get("status")).lower() in {"failed", "interrupted"} for job in attempt_jobs))
             result["state"] = "PASS" if (receipt_ok and identities_ok and coverage_ok and monotonic and input_window

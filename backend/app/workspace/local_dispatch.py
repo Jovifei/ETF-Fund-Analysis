@@ -6,10 +6,12 @@ from pathlib import Path
 import json
 import re
 from math import isfinite
+from inspect import Parameter, signature
+from time import monotonic
 
-from app.workspace.local_job_ledger import LocalJobLedger
+from app.workspace.local_job_ledger import LocalJobLedger, public_error_type
 from app.workspace.local_schedule import LOCAL_SCHEDULE_SLOTS, LocalRunLock, SHANGHAI
-from app.workspace.local_compute import closed_session_result_accepted, quote_control_coverage, OPTIONAL_TASK_PARTS
+from app.workspace.local_compute import closed_session_result_accepted, quote_control_coverage, settled_daily_control, OPTIONAL_TASK_PARTS
 from app.workspace.shadow_bundle import digest
 from app.workspace.refresh_policy import lunch_close_quote_fresh
 
@@ -23,6 +25,13 @@ SETTLEMENT_SLOTS = {'16:10', '16:40', '17:40'}
 
 def utc_now():
     return datetime.now(timezone.utc)
+
+
+def _diagnostic_hook(callback, on_diagnostic):
+    """Keep existing run/replay callback signatures usable without the new hook."""
+    parameters = signature(callback).parameters
+    return ({'on_diagnostic': on_diagnostic}
+            if 'on_diagnostic' in parameters or any(p.kind == Parameter.VAR_KEYWORD for p in parameters.values()) else {})
 
 
 LUNCH_SLOT = '11:40'
@@ -162,6 +171,14 @@ def dispatch_once(root: Path, identity: dict, *, calendar, run_job, replay, now=
                 ledger.quarantine_export(intent['attempt_id'], reason=type(exc).__name__, now=now())
                 recovery_failed = True
         pending = ledger.pending_replay(now=now(), identity=identity)
+        upload_failure = {}
+
+        def on_diagnostic(phase, *, status, duration_seconds, error_type=None, reason=None):
+            ledger.record_diagnostic(attempt['attempt_id'], phase, status=status, now=now(),
+                duration_seconds=duration_seconds, error_type=error_type, reason=reason)
+            if status == 'failed' and phase in {'upload_auth', 'pre_upload_validation', 'transport_receipt'} and not upload_failure:
+                upload_failure.update(error_type=error_type, reason=reason, failure_stage=phase)
+
         # A newer due observation takes priority over retrying an old generation.
         if slot is None and pending:
             attempt = pending
@@ -171,13 +188,15 @@ def dispatch_once(root: Path, identity: dict, *, calendar, run_job, replay, now=
             ledger.record_job(attempt['attempt_id'], name, status='running', now=now())
             try:
                 replay(attempt=attempt, on_receipt=lambda manifest, receipt: ledger.mark_delivered(
-                    attempt['attempt_id'], manifest=manifest, receipt=receipt, now=now()))
+                    attempt['attempt_id'], manifest=manifest, receipt=receipt, now=now()),
+                    **_diagnostic_hook(replay, on_diagnostic))
                 if ledger.get_attempt(attempt['attempt_id'])['status'] != 'DELIVERED':
                     raise ValueError('validated receipt missing')
                 ledger.record_job(attempt['attempt_id'], name, status='succeeded', now=now())
             except Exception as exc:
                 ledger.record_job(attempt['attempt_id'], name, status='failed', now=now(),
-                                  details={'error_type': type(exc).__name__})
+                                  details=upload_failure or {'error_type': public_error_type(exc),
+                                      'reason': 'replay_failed', 'failure_stage': 'replay'})
                 return 1
             return 0 if ledger.get_attempt(attempt['attempt_id'])['status'] == 'DELIVERED' else 1
         if slot is None:
@@ -187,9 +206,11 @@ def dispatch_once(root: Path, identity: dict, *, calendar, run_job, replay, now=
         if execution is not None:
             ledger.record_job(aid, 'execution_identity', status='succeeded', required=False,
                               now=now(), details=execution)
+        task_starts = {}
 
         def on_task(name, result, run_id):
             if result is None:
+                task_starts[name] = monotonic()
                 ledger.record_job(aid, name, status='running', now=now(), run_id=run_id,
                                   required=name not in OPTIONAL_TASK_PARTS)
                 return
@@ -197,10 +218,15 @@ def dispatch_once(root: Path, identity: dict, *, calendar, run_job, replay, now=
                        if key in result}
             details.update({'source_task_status': result.get('status', 'unknown'),
                             'accepted_closed_session': closed_session_result_accepted(result)})
+            if name in task_starts:
+                details['duration_seconds'] = max(0, monotonic() - task_starts.pop(name))
             if name == 'refresh_quotes':
                 control = quote_control_coverage(result, scope_hash=identity['scope_hash'], run_id=run_id)
                 if control is not None:
                     details.update(control)
+                daily_control = settled_daily_control(result, scope_hash=identity['scope_hash'], run_id=run_id)
+                if daily_control is not None:
+                    details.update(daily_control)
             actual_run = result.get('run_id')
             if actual_run is not None and actual_run != run_id:
                 ledger.record_job(aid, name, status='failed', now=now(), run_id=run_id,
@@ -240,14 +266,15 @@ def dispatch_once(root: Path, identity: dict, *, calendar, run_job, replay, now=
 
         result = run_job('full' if slot['slot'] in FULL_SLOTS else 'fast', on_task=on_task,
                          on_export_intent=on_export_intent,
-                         on_export=on_export, on_receipt=on_receipt, lock=lock)
+                         on_export=on_export, on_receipt=on_receipt, lock=lock,
+                         **_diagnostic_hook(run_job, on_diagnostic))
         latest = ledger.get_attempt(aid)
         if latest['status'] == 'DELIVERED':
             return result
         if latest['status'] == 'EXPORTED':
             # Preserve the package across ambiguous HTTP outcomes; do not recalculate.
             ledger.record_job(aid, 'upload_1', status='failed', now=now(),
-                              details={'reason': 'delivery_not_acknowledged'})
+                              details=upload_failure or {'reason': 'delivery_not_acknowledged'})
         else:
             ledger.fail(aid, reason='run_failed' if result else 'receipt_missing', now=now())
         return result or 1
@@ -255,7 +282,11 @@ def dispatch_once(root: Path, identity: dict, *, calendar, run_job, replay, now=
         if ledger is not None and attempt is not None:
             latest = ledger.get_attempt(attempt['attempt_id'])
             if latest['status'] in {'RUNNING', 'EXPORTING'}:
-                ledger.fail(attempt['attempt_id'], reason=type(exc).__name__, now=now())
+                ledger.fail(attempt['attempt_id'], reason=public_error_type(exc), now=now())
+            elif latest['status'] == 'EXPORTED':
+                ledger.record_job(attempt['attempt_id'], 'upload_1', status='failed', now=now(),
+                    details=upload_failure or {'error_type': public_error_type(exc),
+                        'reason': 'delivery_interrupted', 'failure_stage': 'delivery'})
         return 1
     finally:
         lock.release()

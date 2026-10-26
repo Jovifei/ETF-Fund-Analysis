@@ -458,3 +458,34 @@ def test_job_state_and_export_immutable(tmp_path):
 def test_naive_and_non_datetime_clock_rejected(tmp_path, bad):
     with pytest.raises(ValueError):
         LocalJobLedger(tmp_path).plan_due(bad, verified_trading=True, identity=IDENTITY)
+
+
+def test_phase_diagnostics_survive_restart_without_becoming_business_jobs(tmp_path):
+    ledger = LocalJobLedger(tmp_path)
+    aid = claim(ledger)["attempt_id"]
+    ledger.record_diagnostic(aid, "transport_receipt", status="failed", now=now(),
+        duration_seconds=1.25, error_type="TimeoutError", reason="transport_receipt_failed")
+    # A later successful replay may add timing, but cannot erase the first error.
+    reopened = LocalJobLedger(tmp_path)
+    reopened.record_diagnostic(aid, "transport_receipt", status="succeeded", now=now(), duration_seconds=0.75)
+    summary = reopened.summary()
+    assert summary["jobs"] == []
+    diagnostic = summary["diagnostics"][0]
+    assert diagnostic["phase"] == "transport_receipt" and diagnostic["status"] == "failed"
+    assert diagnostic["details"] == {"duration_seconds": 2.0, "observations": 2,
+        "error_type": "TimeoutError", "reason": "transport_receipt_failed"}
+
+
+@pytest.mark.parametrize("change", [
+    {"phase": "https://private"}, {"duration_seconds": -1}, {"duration_seconds": float("nan")},
+    {"duration_seconds": float("inf")}, {"duration_seconds": True},
+    {"error_type": "private_payload"}, {"reason": "private text"},
+])
+def test_phase_diagnostics_reject_unbounded_or_private_values(tmp_path, change):
+    ledger = LocalJobLedger(tmp_path)
+    aid = claim(ledger)["attempt_id"]
+    values = {"phase": "transport_receipt", "status": "failed", "duration_seconds": 0.1,
+              "error_type": "TimeoutError", "reason": "transport_receipt_failed", **change}
+    with pytest.raises(ValueError):
+        ledger.record_diagnostic(aid, now=now(), **values)
+    assert ledger.summary()["diagnostics"] == []

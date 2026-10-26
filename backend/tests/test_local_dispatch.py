@@ -86,6 +86,41 @@ def test_execution_failure_is_sanitized_and_retained(tmp_path):
     assert summary['attempts'][0]['reason'] == 'RuntimeError'
 
 
+def test_first_upload_failure_preserves_safe_category_stage_and_phase_timings(tmp_path, monkeypatch):
+    from app.workspace import local_dispatch
+    ticks = iter([10.0, 12.5])
+    monkeypatch.setattr(local_dispatch, 'monotonic', lambda: next(ticks), raising=False)
+    at = datetime(2026, 10, 16, 16, 10, tzinfo=TZ)
+    manifest = manifest_for(at)
+    ident = {**IDENTITY, 'scope_hash': digest(manifest['universe'])}
+    def run(mode, **hooks):
+        hooks['on_task']('refresh_quotes', None, 'quote-task')
+        hooks['on_task']('refresh_quotes', {'status': 'partial'}, 'quote-task')
+        hooks['on_export']({'manifest': manifest}, 'bundle_99.json')
+        hooks['on_diagnostic']('pre_upload_validation', status='succeeded', duration_seconds=2.0)
+        hooks['on_diagnostic']('transport_receipt', status='failed', duration_seconds=1.0,
+            error_type='TimeoutError', reason='transport_receipt_failed')
+        return 1
+    assert dispatch_once(tmp_path, ident, calendar=Calendar(), run_job=run, replay=None, now=lambda: at) == 1
+    summary = LocalJobLedger(tmp_path).summary()
+    jobs = {job['job_name']: job for job in summary['jobs']}
+    assert jobs['upload_1']['details'] == {'error_type': 'TimeoutError',
+        'reason': 'transport_receipt_failed', 'failure_stage': 'transport_receipt'}
+    assert jobs['refresh_quotes']['status'] == 'partial'
+    assert jobs['refresh_quotes']['details']['source_task_status'] == 'partial'
+    assert jobs['refresh_quotes']['details']['duration_seconds'] == 2.5
+    assert len(summary['diagnostics']) == 2
+    assert set(jobs) == {'refresh_quotes', 'upload_1'}
+    assert summary['attempts'][0]['status'] == 'EXPORTED'
+
+
+def test_legacy_run_callback_does_not_require_diagnostic_hook(tmp_path):
+    at = datetime(2026, 10, 16, 16, 10, tzinfo=TZ)
+    def run(mode, *, on_task, on_export_intent, on_export, on_receipt, lock):
+        return 1
+    assert dispatch_once(tmp_path, IDENTITY, calendar=Calendar(), run_job=run, replay=None, now=lambda: at) == 1
+
+
 def manifest_for(now):
     return {'contract_version': 'local-display-v2', 'code_sha': IDENTITY['code_sha'],
             'config_hash': IDENTITY['config_hash'], 'universe': ['510300.SH'], 'sequence': 99,

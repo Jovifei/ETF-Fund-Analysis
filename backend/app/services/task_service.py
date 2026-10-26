@@ -316,6 +316,7 @@ class TaskService:
     def _execute(self, db: Session, task_name: str, run_id: str, **kwargs) -> dict:
         self._bind_runtime_provider(db)
         scope_kwargs = {"codes": kwargs["codes"]} if kwargs.get("codes") is not None else {}
+        research_kwargs = {"research_input": kwargs["research_input"]} if kwargs.get("research_input") is not None else {}
         if task_name in {"validate_forecasts", "calibrate_forecasts", "backtest_rotation", "backtest_ablation"}:
             from app.providers.data_contract import require_current_history
             require_current_history(db, self.settings)
@@ -375,7 +376,7 @@ class TaskService:
                 run_id=run_id,
             )
         if task_name == "refresh_signals":
-            return self.signals.refresh_all(db, run_id=run_id, **scope_kwargs)
+            return self.signals.refresh_all(db, run_id=run_id, **scope_kwargs, **research_kwargs)
         if task_name == "refresh_sector_snapshots":
             return self.market.refresh_sector_snapshots(db, run_id=run_id)
         if task_name == "refresh_decision_board":
@@ -384,7 +385,7 @@ class TaskService:
                 input_result = self.market.refresh_quotes(db, run_id=run_id)
                 captured = self.decision_board.capture_latest_quotes(db)
                 input_result = {**input_result, "provisional_captured": captured}
-            built = self.decision_board.refresh(db, **scope_kwargs)
+            built = self.decision_board.refresh(db, **scope_kwargs, **research_kwargs)
             emit_event(
                 db,
                 "decision_board.updated",

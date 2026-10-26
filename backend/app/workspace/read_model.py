@@ -46,6 +46,7 @@ from app.workspace.config import workspace_settings
 from app.workspace.detail_availability import build_detail_availability, forecast_availability
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
+_UNSET = object()
 
 _SEARCH_ALIASES = {
     # Cross-border products are not consistently labeled with the word
@@ -271,7 +272,7 @@ def holdings_view(db: Session, settings: Settings, user_id: int | None) -> dict:
     }
 
 
-def instrument_detail(db: Session, settings: Settings, code: str, user_id: int | None, *, as_of: datetime | None = None) -> dict | None:
+def instrument_detail(db: Session, settings: Settings, code: str, user_id: int | None, *, as_of: datetime | None = None, _display_chart: object = _UNSET) -> dict | None:
     read_as_of = market_time(as_of or datetime.now(SHANGHAI)).astimezone(SHANGHAI)
     inst = db.scalar(select(Instrument).where(Instrument.ts_code == code, Instrument.kind.in_(("ETF", "LOF"))))
     if inst is None:
@@ -313,7 +314,23 @@ def instrument_detail(db: Session, settings: Settings, code: str, user_id: int |
     from app.providers.data_contract import history_issues
     issue = history_issues(db, settings, [inst.id]).get(inst.id)
     view_quote = quote_view(quote, settings, as_of=read_as_of)
-    display_chart = chart_data(db, settings, code, "1d", 60, as_of=read_as_of)
+    if _display_chart is _UNSET:
+        display_chart = chart_data(db, settings, code, "1d", 60, as_of=read_as_of)
+    elif _display_chart is None or _display_chart == {}:
+        display_chart = None
+    else:
+        # A caller may share this read transaction's raw daily chart. Retain
+        # every metadata field while preserving the detail's 60-bar window.
+        if not isinstance(_display_chart, dict):
+            raise ValueError("precomputed detail chart must be a daily chart")
+        chart_as_of = _display_chart.get("as_of")
+        normalized_as_of = market_time(chart_as_of) if isinstance(chart_as_of, (str, datetime)) else None
+        if (str(_display_chart.get("ts_code", "")).strip().upper() != code.strip().upper()
+                or _display_chart.get("interval") != "1d"
+                or normalized_as_of is None or normalized_as_of.astimezone(SHANGHAI) != read_as_of):
+            raise ValueError("precomputed detail chart identity does not match read")
+        display_chart = {**_display_chart, "bars": (_display_chart.get("bars") or [])[-60:],
+                         "research_bars": (_display_chart.get("research_bars") or [])[-60:]}
     raw_chart_bars = (display_chart or {}).get("bars") or []
     research_chart_bars = (display_chart or {}).get("research_bars") or raw_chart_bars
     last = (raw_chart_bars or [None])[-1]

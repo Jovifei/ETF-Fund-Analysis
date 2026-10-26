@@ -218,3 +218,14 @@ Review: 仅展示JSON数字编码变化，负零、布尔及非整数保留；�
 - [ ] Complete exact-source tests, independent review and webpage GPT review.
 - [ ] Controlled deployment and actual local task verification.
 - [ ] Arrange two verified trading-day slot/latency/cloud-zero-growth observation; report pending until observed.
+
+
+## 2026-10-26 执行每日链路修复（Jovi已批准执行）
+
+- [ ] P0 失败分类/阶段耗时持久化（进行中，先RED）。
+- [ ] P1 收盘日线研究依据和评分输入隔离（进行中）。
+- [ ] P2 快槽性能与恢复。
+- [ ] P3 外部任务归属与同批AI/邮件。
+- [ ] P4 新SHA测试、精确CI、独立/网页复审、受控切换和自然验收。
+
+保护E根未提交报告，执行树 codex/daily-pipeline-repair-20261026；基线聚焦收据见Download/ETF-daily-pipeline-20261026/baseline.xml，未重跑旧全量。

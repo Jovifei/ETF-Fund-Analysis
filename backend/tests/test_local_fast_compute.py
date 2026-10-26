@@ -97,6 +97,44 @@ def test_base_is_bound_to_actual_all_background_inputs(baseline):
         local.validate_base_manifest(settings, codes, base, code_sha=SHA, now=now)
 
 
+def test_base_hashes_each_background_research_series_once(baseline, monkeypatch):
+    from app.utils import input_lineage
+    settings, codes, now, _ = baseline
+    expected = local.create_base_manifest(settings, codes, code_sha=SHA, now=now)
+    actual_digest = input_lineage.history_digest
+    observed = []
+
+    def record_digest(rows):
+        observed.append([row.instrument_id for row in rows])
+        return actual_digest(rows)
+
+    monkeypatch.setattr(input_lineage, 'history_digest', record_digest)
+    assert local.create_base_manifest(settings, codes, code_sha=SHA, now=now) == expected
+    assert observed == [[instrument_id] * 35 for instrument_id in (1, 2, 3)]
+
+
+@pytest.mark.parametrize('forecast_minimum', [20, 40])
+def test_base_keeps_indicator_and_forecast_history_thresholds_separate(baseline, monkeypatch, forecast_minimum):
+    from app.utils import input_lineage
+    settings, codes, now, engine = baseline
+    settings.load_strategy()['forecast']['min_history'] = forecast_minimum
+    with Session(engine) as db:
+        expected = {instrument_id: input_lineage.history_digest(db.scalars(
+            select(DailyBar).where(DailyBar.instrument_id == instrument_id)
+            .order_by(DailyBar.trade_date, DailyBar.id)).all()) for instrument_id in (1, 2, 3)}
+    actual_digest = input_lineage.calculation_digest
+    observed = {}
+
+    def record_digest(histories, strategy, component, **kwargs):
+        observed[component] = dict(histories)
+        return actual_digest(histories, strategy, component, **kwargs)
+
+    monkeypatch.setattr(input_lineage, 'calculation_digest', record_digest)
+    local._base_state(settings, codes, SHA, now, _bars_only=True)
+    assert observed == {'indicator-panel-v2': expected,
+                        'forecast-panel-v2': expected if forecast_minimum <= 35 else {}}
+
+
 def test_base_creation_rejects_history_changed_since_actual_calculation(baseline):
     settings, codes, now, engine = baseline
     with Session(engine) as db, db.begin():
@@ -367,8 +405,17 @@ def test_actual_export_and_reader_keep_quote_grade_hashes_but_no_skipped_sector(
         "refresh_bars", "refresh_quotes", "refresh_indicators", "refresh_forecasts", "refresh_signals", "refresh_decision_board")]
     lineage = local.build_execution_lineage(settings, codes, results, base_manifest=base, execution_hash=execution_hash,
                                            config_file_hash="c"*64, mode="full", now=now)
+    from app.workspace import read_model
+    actual_chart = read_model.chart_data
+    chart_calls = []
+    def record_chart(db, settings, code, interval, limit, **kwargs):
+        chart_calls.append((code, interval, limit, kwargs.get('as_of')))
+        return actual_chart(db, settings, code, interval, limit, **kwargs)
+    monkeypatch.setattr(local, 'chart_data', record_chart)
+    monkeypatch.setattr(read_model, 'chart_data', record_chart)
     bundle = local.export_local_v2(settings, sequence=20, code_sha=SHA, universe=codes, now=now,
         private_research=True, unavailable_parts=["sectors", "market_context"], execution_lineage=lineage)
+    assert chart_calls == [(code, '1d', 250, now) for code in codes]
     assert bundle["manifest"]["execution_lineage"] == lineage
     assert verify_bundle_integrity(bundle, now=now)
     assert bundle["manifest"]["parts_hashes"] == {key: digest(value) for key, value in bundle["parts"].items()}

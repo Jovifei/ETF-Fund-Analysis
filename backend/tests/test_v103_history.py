@@ -56,6 +56,106 @@ def test_missing_volume_does_not_block_price_chart_or_detail(db_session):
     db.rollback()
 
 
+@pytest.mark.parametrize('mode', ['verified', 'missing_volume', 'legacy', 'provisional'])
+def test_detail_reuses_precomputed_daily_chart_without_changing_its_contract(db_session, monkeypatch, mode):
+    from copy import deepcopy
+    from zoneinfo import ZoneInfo
+    from app.workspace import read_model
+    from app.services.decision_board_service import DecisionBoardService
+
+    settings = get_settings().model_copy(update={'market_provider': 'akshare'})
+    inst = instrument(db_session, missing_volume=mode == 'missing_volume', legacy=mode == 'legacy')
+    as_of = datetime(2025, 3, 22, 10, 0, tzinfo=ZoneInfo('Asia/Shanghai'))
+    if mode == 'provisional':
+        DecisionBoardService(settings).record_provisional_input(
+            db_session, ts_code=inst.ts_code, observed_at=as_of - timedelta(minutes=1),
+            source='akshare:em:v101', timestamp_verified=True,
+            open_price=2.8, high_price=2.9, low_price=2.7, last_price=2.85,
+            volume=1200, amount=3420, pct_change_percent_points=0.5,
+        )
+    chart = chart_data(db_session, settings, inst.ts_code, '1d', 250, as_of=as_of)
+    if mode == 'provisional':
+        assert chart['bars'][-1]['is_provisional'] is True
+    before = deepcopy(chart)
+    normal = instrument_detail(db_session, settings, inst.ts_code, None, as_of=as_of)
+    monkeypatch.setattr(read_model, 'chart_data', lambda *a, **k: pytest.fail('precomputed chart was queried again'))
+    reused = instrument_detail(db_session, settings, inst.ts_code, None, as_of=as_of, _display_chart=chart)
+    assert reused == normal
+    assert chart == before
+    assert reused['indicator_input_hash'] == chart['input_hash']
+    assert reused['chart_series_id'] == chart['series_id']
+    assert len(chart['bars']) > 60
+    db_session.rollback()
+
+
+def test_precomputed_detail_keeps_exact_sixty_bar_volume_and_scenario_window(db_session, monkeypatch):
+    from copy import deepcopy
+    from zoneinfo import ZoneInfo
+    from app.workspace import read_model
+    from app.services.decision_board_service import DecisionBoardService
+
+    settings = get_settings().model_copy(update={'market_provider': 'akshare'})
+    inst = instrument(db_session)
+    as_of = datetime(2025, 3, 22, 16, 0, tzinfo=ZoneInfo('Asia/Shanghai'))
+    chart = chart_data(db_session, settings, inst.ts_code, '1d', 250, as_of=as_of)
+    # Missing volume outside the detail window must not change detail availability.
+    chart['bars'][0]['volume'] = None
+    expected_window = deepcopy(chart['research_bars'][-60:])
+    before = deepcopy(chart)
+    captured = []
+    monkeypatch.setattr(DecisionBoardService, '_forecast_scenario',
+                        staticmethod(lambda bars, forecasts: captured.append(deepcopy(bars)) or []))
+    monkeypatch.setattr(read_model, 'chart_data', lambda *a, **k: pytest.fail('precomputed chart was queried again'))
+    detail = instrument_detail(db_session, settings, inst.ts_code, None, as_of=as_of, _display_chart=chart)
+    assert captured == [expected_window]
+    assert detail['availability']['volume']['status'] == 'available'
+    assert chart == before
+    db_session.rollback()
+
+
+@pytest.mark.parametrize('chart', [None, {}])
+def test_explicit_missing_detail_chart_never_requeries_history(db_session, monkeypatch, chart):
+    from app.workspace import read_model
+    settings = get_settings().model_copy(update={'market_provider': 'akshare'})
+    inst = instrument(db_session)
+    monkeypatch.setattr(read_model, 'chart_data', lambda *a, **k: pytest.fail('missing chart was queried again'))
+    detail = instrument_detail(db_session, settings, inst.ts_code, None, _display_chart=chart)
+    assert detail['indicator_input_hash'] is None
+    assert detail['availability']['history']['status'] == 'unavailable'
+    db_session.rollback()
+
+
+@pytest.mark.parametrize('change', [
+    {'ts_code': '999999.SH'}, {'interval': '1w'}, {'as_of': '2025-03-22T15:59:00+08:00'},
+    {'as_of': None}, {'as_of': 'invalid'},
+])
+def test_precomputed_detail_rejects_wrong_code_interval_or_read_time(db_session, monkeypatch, change):
+    from zoneinfo import ZoneInfo
+    from app.workspace import read_model
+    settings = get_settings().model_copy(update={'market_provider': 'akshare'})
+    inst = instrument(db_session)
+    as_of = datetime(2025, 3, 22, 16, 0, tzinfo=ZoneInfo('Asia/Shanghai'))
+    chart = chart_data(db_session, settings, inst.ts_code, '1d', 250, as_of=as_of)
+    monkeypatch.setattr(read_model, 'chart_data', lambda *a, **k: pytest.fail('invalid chart was queried again'))
+    with pytest.raises(ValueError, match='precomputed detail chart'):
+        instrument_detail(db_session, settings, inst.ts_code, None, as_of=as_of,
+                          _display_chart={**chart, **change})
+    db_session.rollback()
+
+
+def test_precomputed_detail_accepts_equivalent_utc_read_time(db_session):
+    from datetime import UTC
+    from zoneinfo import ZoneInfo
+    settings = get_settings().model_copy(update={'market_provider': 'akshare'})
+    inst = instrument(db_session)
+    as_of = datetime(2025, 3, 22, 16, 0, tzinfo=ZoneInfo('Asia/Shanghai'))
+    chart = chart_data(db_session, settings, inst.ts_code, '1d', 250, as_of=as_of)
+    chart['as_of'] = as_of.astimezone(UTC).isoformat()
+    assert instrument_detail(db_session, settings, inst.ts_code, None, as_of=as_of, _display_chart=chart) == instrument_detail(
+        db_session, settings, inst.ts_code, None, as_of=as_of)
+    db_session.rollback()
+
+
 def test_intraday_provisional_updates_daily_chart_indicator_series(db_session):
     inst = instrument(db_session)
     settings = get_settings().model_copy(update={'market_provider':'akshare'})
@@ -78,6 +178,7 @@ def test_intraday_provisional_updates_daily_chart_indicator_series(db_session):
     assert datetime.fromisoformat(result['computed_at']).tzinfo is not None
     assert datetime.fromisoformat(result['computed_at']) >= observed
     assert '盘中指标' in result['indicator_note']
+    db_session.rollback()
 
 
 def test_chart_read_as_of_excludes_later_persisted_daily_bars(db_session):
@@ -337,6 +438,11 @@ def test_split_price_basis_stays_separate_for_daily_weekly_and_monthly_charts(tm
             month = transform_chart(daily, '1mo', config, 500, now=as_of)
             daily_view = transform_chart(daily, '1d', config, 500, now=as_of)
             detail = instrument_detail(db, settings, inst.ts_code, None, as_of=as_of)
+            from copy import deepcopy
+            before_reuse = deepcopy(daily)
+            assert instrument_detail(db, settings, inst.ts_code, None, as_of=as_of,
+                                     _display_chart=daily) == detail
+            assert daily == before_reuse
 
             assert daily['bars'][0]['close'] == 2.0
             assert daily['research_bars'][0]['close'] == 1.0
