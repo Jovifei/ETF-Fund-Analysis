@@ -13,6 +13,19 @@
           "note": "v1.0.6-era producer; its bundles stay readable only when explicitly requested and are tagged historical_identity"
         }
       ]
+    },
+    {
+      "code_sha": "c39ab09aa5ab26b814015f0844a6aaa45a05ffd4",
+      "config_hash": "a12c6ea1c812d2cd4b5365c3fa383dbd6c6e4296e004806897d9545008b8e5c8",
+      "approved_at": "2026-10-27",
+      "approved_scope": "v1.0.13 producer: real adapters, complete 34/34 settled 2026-10-26 daily inputs, typed proof and isolated Store/Reader generation 1793035935639. This records producer eligibility for controlled cutover only; online signature acceptance, natural scheduling, calibration and SMTP are not implied.",
+      "evidence_ref": "docs/audits/DAILY_PIPELINE_C39_ISOLATED_20261027.json",
+      "superseded": [
+        {
+          "code_sha": "dcffa8ebac1027d174b213915ff78a7e51b99097",
+          "note": "Previous producer remains registered for controlled rollback; do not switch only one side of the consumer/producer identity pair."
+        }
+      ]
     }
   ]
 }

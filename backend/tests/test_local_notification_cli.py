@@ -1,7 +1,7 @@
 from datetime import datetime,timedelta,timezone
 import importlib.util
 from pathlib import Path
-import json,sqlite3
+import json,sqlite3,sys
 import pytest
 from app.workspace.shadow_bundle import digest
 from test_local_digest import packet as packet
@@ -19,6 +19,7 @@ def cli():
     return load
 
 
+@pytest.mark.skipif(sys.platform!="win32",reason="CurrentUser DPAPI setup is native Windows only")
 def test_configuration_uses_hidden_secret_prompt_and_no_network(cli,tmp_path):
     cli=cli()
     from app.workspace.local_notifications import load_smtp_config
