@@ -238,8 +238,8 @@ def add_features_and_forwards(panel: pd.DataFrame) -> pd.DataFrame:
         g["mom_252"] = calc_momentum(c, 252)
         g["vol_20"] = calc_volatility_annualized(ret, 20)
 
-        # M0: Raw TSMOM
-        g["tsmom_12m"] = np.sign(g["mom_252"]).fillna(0.0)
+        # M0: Raw TSMOM (preserves NaN for un-warmed history)
+        g["tsmom_12m"] = np.sign(g["mom_252"])
         # M1: Volatility-scaled continuous score
         g["tsmom_volscaled"] = g["tsmom_12m"] / g["vol_20"].replace(0, np.nan)
 
@@ -249,7 +249,7 @@ def add_features_and_forwards(panel: pd.DataFrame) -> pd.DataFrame:
         g["adx_14"] = calc_adx(g, 14)
         g["atr_14"] = calc_atr(g, 14)
         g["dual_ma"] = np.where(sma(c, 20) > sma(c, 60), 1.0, -1.0)
-        g["macd_sig"] = np.sign(calc_macd_hist(c)).fillna(0.0)
+        g["macd_sig"] = np.sign(calc_macd_hist(c))
         g["td9"] = calc_td_setup_signal(c)
         g["ichi"] = calc_ichimoku_signal(g)
         g["turtle"] = calc_donchian_signal(g, 20, 10)
@@ -265,7 +265,7 @@ def add_features_and_forwards(panel: pd.DataFrame) -> pd.DataFrame:
     out = out.sort_values(["ts_code", "trade_date"])
     out["bench_mom_20"] = out.groupby("ts_code")["bench_close"].transform(lambda s: s / s.shift(20) - 1.0)
     out["rs_vs_300_20"] = out["mom_20"] - out["bench_mom_20"]
-    out["rs_sig"] = np.sign(out["rs_vs_300_20"]).fillna(0.0)
+    out["rs_sig"] = np.sign(out["rs_vs_300_20"])
 
     return out
 
@@ -302,7 +302,7 @@ def build_slice_portfolio_weights(slice_df: pd.DataFrame) -> pd.DataFrame:
 
         raw_m2 = {}
         for c, t in trends.items():
-            if t > 0:
+            if not pd.isna(t) and t > 0:
                 v = vols.get(c, float("nan"))
                 scale = min(1.0, 0.15 / v) if (not pd.isna(v) and v > 0) else 1.0
                 raw_m2[c] = w_b0 * scale
@@ -312,11 +312,13 @@ def build_slice_portfolio_weights(slice_df: pd.DataFrame) -> pd.DataFrame:
 
         for _, r in day_df.iterrows():
             c = r["ts_code"]
+            t_val = trends.get(c)
+            is_active_long = (not pd.isna(t_val)) and (t_val > 0)
             b0_weights.append((dt, c, w_b0))
             c0_weights.append((dt, c, w_c0.get(c, 0.0)))
             c1_weights.append((dt, c, w_c1.get(c, 0.0)))
-            m0_weights.append((dt, c, w_b0 if trends.get(c, 0) > 0 else 0.0))
-            m2_weights.append((dt, c, norm_m2.get(c, 0.0)))
+            m0_weights.append((dt, c, w_b0 if is_active_long else 0.0))
+            m2_weights.append((dt, c, norm_m2.get(c, 0.0) if is_active_long else 0.0))
 
     b0_df = pd.DataFrame(b0_weights, columns=["date_str", "ts_code", "equal_weight_b0_w"])
     c0_df = pd.DataFrame(c0_weights, columns=["date_str", "ts_code", "mom_120_cs_w"])
@@ -346,7 +348,7 @@ FACTORS = [
     FactorMeta("mom_20_cs", "cs_rank", "mom_20", "Cross-sectional: rank IC of 20d momentum"),
     FactorMeta("mom_60_cs", "cs_rank", "mom_60", "Cross-sectional: rank IC of 60d momentum"),
     FactorMeta("mom_120_cs", "portfolio_ablation", "mom_120_cs_w", "C0: Top-4 120d CS momentum (equal-weight 0.25 each)"),
-    FactorMeta("tsmom_12m", "ts_signal", "tsmom_12m_w", "M0: Time-series 12m trend > 0 (1/N_t per long)"),
+    FactorMeta("tsmom_12m", "ts_signal", "tsmom_12m", "M0: Time-series 12m trend > 0 (1/N_t per long)"),
     FactorMeta("tsmom_volscaled", "ts_signal", "tsmom_volscaled", "Continuous score: 12m sign / 20d annualized vol"),
     FactorMeta("tsmom_voltarget_m2", "vol_weighted", "vol_target_w", "M2: Unleveraged volatility target sizing sum(w)<=1.0"),
     FactorMeta("dual_momentum_c1", "portfolio_ablation", "dual_momentum_w", "C1: Top-4 120d CS gated by 12m trend > 0"),
@@ -492,6 +494,15 @@ def evaluate_factor_slice(
     }
 
 
+PRECOMPUTED_STRATEGY_WEIGHTS = {
+    "equal_weight_b0": "equal_weight_b0_w",
+    "mom_120_cs": "mom_120_cs_w",
+    "dual_momentum_c1": "dual_momentum_w",
+    "tsmom_12m": "tsmom_12m_w",
+    "tsmom_voltarget_m2": "vol_target_w",
+}
+
+
 def compute_fixed_daily_stats_for_factor(
     slice_df: pd.DataFrame,
     factor: FactorMeta,
@@ -500,7 +511,13 @@ def compute_fixed_daily_stats_for_factor(
     """Compute fee-deducted daily Sharpe and closed trades performance on the slice dataframe."""
     weights_map: dict[Tuple[str, str], float] = {}
 
-    if factor.col.endswith("_w"):
+    if factor.name in PRECOMPUTED_STRATEGY_WEIGHTS:
+        w_col = PRECOMPUTED_STRATEGY_WEIGHTS[factor.name]
+        valid_w = slice_df.dropna(subset=[w_col])
+        for dt, code, w_val in valid_w[["date_str", "ts_code", w_col]].itertuples(index=False, name=None):
+            if w_val > 0.0:
+                weights_map[(str(dt), str(code))] = float(w_val)
+    elif factor.col.endswith("_w"):
         valid_w = slice_df.dropna(subset=[factor.col])
         for dt, code, w_val in valid_w[["date_str", "ts_code", factor.col]].itertuples(index=False, name=None):
             if w_val > 0.0:
