@@ -45,8 +45,8 @@ def after_close_clock(monkeypatch):
 
 def test_installed_tencent_sdk_does_not_reuse_morning_response_key(monkeypatch):
     """Exercise the installed parser while every HTTP request remains offline."""
-    pytest.importorskip("akshare")
-    sdk = importlib.import_module("akshare.stock_feature.stock_hist_tx")
+    akshare = pytest.importorskip("akshare")
+    sdk = importlib.import_module(akshare.stock_zh_a_hist_tx.__module__)
     requests, cached = [], {}
     upstream = {"has_target": False}
 
