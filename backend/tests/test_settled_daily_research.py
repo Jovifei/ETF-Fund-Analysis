@@ -32,7 +32,8 @@ def settled_pipeline(tmp_path, monkeypatch):
         @classmethod
         def now(cls, tz=None):
             return AT.astimezone(tz) if tz else AT.replace(tzinfo=None)
-    for module in (market_service, task_service, signal_service, indicator_service, forecast_service, decision_board_service, local):
+    import app.services.settlement as settlement_service
+    for module in (market_service, task_service, signal_service, indicator_service, forecast_service, decision_board_service, local, settlement_service):
         if hasattr(module, "datetime"):
             monkeypatch.setattr(module, "datetime", Clock)
     monkeypatch.setenv("GIT_COMMIT_SHA", SHA)
