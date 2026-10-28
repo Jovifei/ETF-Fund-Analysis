@@ -97,6 +97,15 @@ def populate_ledger(root, day="2026-10-16"):
                    "received_at": (planned + timedelta(seconds=50)).isoformat()}
         ledger.mark_delivered(attempt["attempt_id"], manifest=manifest, receipt=receipt,
                               now=planned + timedelta(seconds=50))
+        ledger.record_diagnostic(attempt["attempt_id"], "base_validation", status="succeeded",
+                                 now=planned + timedelta(seconds=55), duration_seconds=1.25)
+        ledger.record_diagnostic(attempt["attempt_id"], "projection_export", status="succeeded",
+                                 now=planned + timedelta(seconds=56), duration_seconds=2.5)
+        # A failed observation retained from a retried phase must stay visible
+        # without turning a recovered delivery into a failure.
+        ledger.record_diagnostic(attempt["attempt_id"], "upload_auth", status="failed",
+                                 now=planned + timedelta(seconds=57), duration_seconds=0.5,
+                                 error_type="ValueError", reason="upload_auth_failed")
     return ledger
 
 
@@ -485,3 +494,44 @@ def test_evening_settlement_slots_have_full_deadlines():
     assert ls.DEFAULT_DEADLINES["17:40"] == 600
     assert {"16:40", "17:40"} <= ls.FULL_SLOTS
     assert {"16:40", "17:40"} <= set(ls.SLOTS)
+
+
+def test_diagnostic_phases_are_visible_but_never_change_delivery_state():
+    report = session()
+    row = next(item for item in report["checks"]["delivery"]["slots"]
+               if item["slot_id"].endswith("14:30"))
+    assert row["state"] == "PASS"
+    assert [item["phase"] for item in row["diagnostic_phases"]] == [
+        "base_validation", "projection_export", "upload_auth"]
+    phases = {item["phase"]: item for item in row["diagnostic_phases"]}
+    assert phases["base_validation"]["duration_seconds"] == 1.25
+    assert phases["projection_export"]["observations"] == 1
+    # A recovered failure stays visible as first-failure evidence.
+    assert phases["upload_auth"]["status"] == "failed"
+    assert phases["upload_auth"]["error_type"] == "ValueError"
+    assert report["state"] == "PASS"
+
+
+def test_foreign_or_malformed_diagnostic_rows_are_ignored():
+    ledger = jobs()
+    attempt_id = next(row["attempt_id"] for row in ledger["attempts"]
+                      if row["slot_id"].endswith("14:30"))
+    ledger["diagnostics"].extend([
+        {"attempt_id": attempt_id, "phase": "unknown_phase", "status": "succeeded",
+         "details": {"duration_seconds": 1.0, "observations": 1}},
+        {"attempt_id": attempt_id, "phase": "projection_export", "status": "succeeded",
+         "details": {"duration_seconds": -1.0, "observations": 1}},
+        {"attempt_id": attempt_id, "phase": "bundle_write", "status": "succeeded",
+         "details": {"duration_seconds": float("nan"), "observations": 1}},
+        {"attempt_id": attempt_id, "phase": "transport_receipt", "status": "unknown",
+         "details": {"duration_seconds": 1.0, "observations": 1}},
+    ])
+    report = session(ledger_summary=ledger)
+    row = next(item for item in report["checks"]["delivery"]["slots"]
+               if item["slot_id"].endswith("14:30"))
+    phases = {item["phase"]: item for item in row["diagnostic_phases"]}
+    assert "unknown_phase" not in phases
+    assert "bundle_write" not in phases
+    assert "transport_receipt" not in phases
+    assert phases["projection_export"]["duration_seconds"] == 2.5  # valid fixture row retained
+    assert report["state"] == "PASS"

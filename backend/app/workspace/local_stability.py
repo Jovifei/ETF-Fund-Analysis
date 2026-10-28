@@ -41,6 +41,42 @@ def _sha256(value) -> bool:
     return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
 
 
+def _diagnostic_phases(items: list[dict]) -> list[dict]:
+    """Bounded phase timings for measurement only; never acceptance evidence.
+
+    The ledger keeps the first failed category even when a later retry
+    succeeds, so these rows explain *why* a slot was slow or was retried.
+    They must not change the delivery state: an examined failure that was
+    recovered is still a valid delivery.
+    """
+    from math import isfinite
+
+    from app.workspace.local_job_ledger import DIAGNOSTIC_PHASES
+
+    phases = []
+    for item in items:
+        details = item.get("details")
+        phase = item.get("phase")
+        status = item.get("status")
+        if (phase not in DIAGNOSTIC_PHASES or status not in {"succeeded", "failed"}
+                or not isinstance(details, dict)
+                or type(details.get("duration_seconds")) not in (int, float)
+                or not isfinite(details["duration_seconds"])
+                or details["duration_seconds"] < 0
+                or type(details.get("observations")) is not int
+                or details["observations"] < 1):
+            continue
+        phases.append({
+            "phase": phase,
+            "status": status,
+            "duration_seconds": round(float(details["duration_seconds"]), 3),
+            "observations": details["observations"],
+            "error_type": details.get("error_type"),
+            "reason": details.get("reason"),
+        })
+    return sorted(phases, key=lambda row: row["phase"])
+
+
 def _time(value: Any) -> datetime:
     if not isinstance(value, str):
         raise ValueError("missing timestamp")
@@ -225,6 +261,8 @@ def _delivery(session: date, ledger: dict, source_sha: str, config_hash: str,
         candidate = min(delivered, key=lambda item: item.get("finished_at") or "")
         receipt = candidate.get("receipt") or {}
         attempt_jobs = [job for job in jobs if job.get("attempt_id") == candidate.get("attempt_id")]
+        attempt_diagnostics = [item for item in ledger.get("diagnostics", [])
+                               if item.get("attempt_id") == candidate.get("attempt_id")]
         required = [job for job in attempt_jobs if job.get("required") is True
                     and not (job.get("job_name") == "upload" or str(job.get("job_name", "")).startswith("upload_"))]
         try:
@@ -302,7 +340,8 @@ def _delivery(session: date, ledger: dict, source_sha: str, config_hash: str,
                           closed_research_jobs=len(closed_jobs), settled_daily_research_jobs=len(daily_jobs),
                           input_qualification="settled_daily_research" if daily_jobs else "closed_non_realtime_research" if closed_jobs else "source_quality_not_promoted",
                           bundle_id=candidate.get("bundle_id"),
-                          failed_jobs=sum(str(job.get("status")).lower() in {"failed", "interrupted"} for job in attempt_jobs))
+                          failed_jobs=sum(str(job.get("status")).lower() in {"failed", "interrupted"} for job in attempt_jobs),
+                          diagnostic_phases=_diagnostic_phases(attempt_diagnostics))
             result["state"] = "PASS" if (receipt_ok and identities_ok and coverage_ok and monotonic and input_window
                 and accepted_at >= planned_at and 0 <= latency <= deadlines[slot]) else "FAIL"
             if not required or any(type(job.get("details", {}).get("coverage_complete")) is not bool for job in required):

@@ -258,3 +258,15 @@ Review：发布源码、CI、控制登记与部署镜像分别绑定；不继承
 Review：Jovi 已授权本次检查、按价值整合与指定临时快照清理；运行代码的独立缺口不随此项整理宣布修复。子 Agent 使用 gpt-6.1-terra / max，父 Agent 负责最终复核与变更。
 
 Review：审计结论及隔离复现见 `docs/audits/SETTLED_TEST_CLOCK_REVIEW_20261028.md`。原 `6442c7e` 有内部输入信任及历史背景截止边界缺口，未合入本分支；尚无其外部 HTTP 可利用或生产污染的证据。
+
+## 2026-10-29 审计收尾：诊断耗时可见性 + 沪深300 占比研究设计（Jovi 要求新分支完成）
+
+- [x] 从 origin/main `f7993b4` 新建隔离工作树 `E:\worktrees\etf-audit-completion-20261028`（分支 `codex/audit-completion-20261028`），不改动其他 Agent 的工作树与分支。
+- [x] 稳定性报告每个槽位新增 `diagnostic_phases`（阶段、状态、耗时、观测数、首失败分类），只做测量，不参与 PASS/FAIL 判定。
+- [x] 失败优先测试：外来源、负耗时、NaN、未知状态的行被忽略；已恢复的失败仍可见但不改变交付状态。
+- [x] 聚焦测试 `test_local_stability.py` 50 项通过。
+- [x] 沪深300 头部基金市值/流通市值比例：实测现有 Provider 无指数自由流通市值分母，只提交研究设计与数据准入门槛，不实现伪计算。
+- [x] 全量 pytest（退出码 0，进度 100%，含跳过项）、compileall 与 node --check 通过。
+- [ ] 本地提交后推送分支，PR/复审通过后再合并。
+
+Review：本轮只改本地稳定性报告的测量字段并新增研究设计文档，不改指标公式、信号权重、仓位阈值、Provider 或生产数据库；资格保持 UNKNOWN、actionable=false、not_calibrated。设计文档见 `tasks/plans/2026-10-28-hs300-passive-ratio-research.md`。
