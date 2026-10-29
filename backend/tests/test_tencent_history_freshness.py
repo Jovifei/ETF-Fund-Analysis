@@ -50,7 +50,9 @@ def test_installed_tencent_sdk_does_not_reuse_morning_response_key(monkeypatch):
     requests, cached = [], {}
     upstream = {"has_target": False}
 
-    def offline_get(url, *, params, timeout):
+    def offline_get(url, *args, **kwargs):
+        params = kwargs.get("params") or (args[0] if len(args) > 0 and isinstance(args[0], dict) else {})
+        timeout = kwargs.get("timeout")
         requests.append((url, dict(params), timeout))
         key = (url, tuple(sorted(params.items())))
         if key not in cached:
@@ -62,16 +64,29 @@ def test_installed_tencent_sdk_does_not_reuse_morning_response_key(monkeypatch):
         return cached[key]
 
     original_requests = SimpleNamespace(get=offline_get)
+    mock_year = lambda **_: "2026-01-01"
+    mock_tqdm = lambda: lambda iterable, **_: iterable
     target_fn = getattr(akshare.stock_zh_a_hist_tx, "__wrapped__", akshare.stock_zh_a_hist_tx)
     if hasattr(target_fn, "__globals__"):
         monkeypatch.setitem(target_fn.__globals__, "requests", original_requests)
-        if "get_tx_start_year" in target_fn.__globals__:
-            monkeypatch.setitem(target_fn.__globals__, "get_tx_start_year", lambda **_: "2026-01-01")
-        if "get_tqdm" in target_fn.__globals__:
-            monkeypatch.setitem(target_fn.__globals__, "get_tqdm", lambda: lambda iterable, **_: iterable)
+        monkeypatch.setitem(target_fn.__globals__, "get_tx_start_year", mock_year)
+        monkeypatch.setitem(target_fn.__globals__, "get_tqdm", mock_tqdm)
     monkeypatch.setattr(sdk, "requests", original_requests, raising=False)
-    monkeypatch.setattr(sdk, "get_tx_start_year", lambda **_: "2026-01-01", raising=False)
-    monkeypatch.setattr(sdk, "get_tqdm", lambda: lambda iterable, **_: iterable, raising=False)
+    monkeypatch.setattr(sdk, "get_tx_start_year", mock_year, raising=False)
+    monkeypatch.setattr(sdk, "get_tqdm", mock_tqdm, raising=False)
+    try:
+        import requests as _requests
+        monkeypatch.setattr(_requests, "get", offline_get, raising=False)
+    except Exception:
+        pass
+    for mod_name in ("akshare.stock_feature.stock_hist_tx", "akshare.stock.stock_zh_a_hist_tx"):
+        try:
+            m = importlib.import_module(mod_name)
+            monkeypatch.setattr(m, "requests", original_requests, raising=False)
+            monkeypatch.setattr(m, "get_tx_start_year", mock_year, raising=False)
+            monkeypatch.setattr(m, "get_tqdm", mock_tqdm, raising=False)
+        except Exception:
+            pass
     params = dict(symbol="sh510300", start_date="20261016", end_date="20261023", adjust="", timeout=7)
 
     set_market_clock(monkeypatch, datetime(2026, 10, 23, 1, 30, tzinfo=ZoneInfo("UTC")))
