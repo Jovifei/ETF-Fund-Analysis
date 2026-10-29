@@ -16,7 +16,7 @@
 
 约束：
 
-- 「头部」必须先定义再计算：前 N 只（按最近一个已结算日的基金规模排序）、全部跟踪基金，或单一 510300，三者不可混用。每次计算必须携带 `top_n` 与候选基金清单。
+- 「头部」定义为全部跟踪沪深300 的 ETF（2026-10-29 决定）；排除联接基金、LOF 与增强指数基金。运行期只读冻结的配置清单，每次计算携带清单哈希与候选数。
 - 分子用基金资产净值，不用场内成交额、不用份额变化、不用 ETF 收盘价乘份额冒充净值；若只能取得份额，必须标注为「份额代理」并单独命名。
 - 分母必须是同一交易日、同一指数、同一流通口径；总市值、上证流通市值、成交额都不能替代。
 - 联接基金与其目标 ETF 不得重复计入；场外指数基金、增强指数基金是否计入必须在配置中显式声明。
@@ -53,7 +53,7 @@
    - `numerator`: `[{trade_date, value, source, source_timestamp, lag_days}]`
    - `denominator`: `[{trade_date, value, source, source_timestamp, lag_days, basis}]`
 2. 任一序列缺失、日期不一致、来源未准入、`basis` 不是 `float_market_cap`（自由流通变体必须单独命名）→ 返回 `status=unavailable` 与固定 reason code，不返回数字。
-3. 输出固定字段：`ratio`、`numerator`、`denominator`、`as_of`、`lag_days`、`top_n`、`fund_codes`、`source`、`actionable=false`、`research_only=true`、`changes_grade=false`、`qualification=UNKNOWN`、`calibration_status=not_calibrated`。
+3. 输出固定字段：`ratio`、`numerator`、`denominator`、`as_of`、`lag_days`、`fund_count`、`universe_hash`、`fund_codes`、`source`、`actionable=false`、`research_only=true`、`changes_grade=false`、`qualification=UNKNOWN`、`calibration_status=not_calibrated`。
 4. 只进入详情页的研究上下文，不进入 `SignalService` 打分、不改变 `state`、不改变仓位建议。
 5. 分母数据源必须先通过 provider 准入（来源、许可、单位、时间口径、可复现证据），再新增持久化快照；不得在业务代码中写死网页接口。
 
