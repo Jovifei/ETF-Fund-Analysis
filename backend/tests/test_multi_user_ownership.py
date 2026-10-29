@@ -322,7 +322,10 @@ def test_member_bootstrap_hides_global_operational_details_but_admin_can_read_th
 ) -> None:
     import app.main as main_module
 
-    now = datetime.now(UTC)
+    # Stamp with the same clock basis TaskService uses. SQLite drops the UTC
+    # offset on TaskRun.started_at, so a UTC-stamped row sorts eight hours
+    # behind every app-written row and falls out of the bootstrap task window.
+    now = datetime.now(multi_user_settings.timezone)
     task_id = f"shared-task-{uuid4().hex}"
     audit_id = f"shared-audit-{uuid4().hex}"
     with session_scope() as db:
@@ -696,7 +699,10 @@ def test_member_report_generation_excludes_global_operational_diagnostics(
 
     task_error = "member-report-must-not-see-task-error"
     provider_error = "member-report-must-not-see-provider-error"
-    now = datetime.now(UTC)
+    # Same clock basis as TaskService: SQLite keeps only the wall clock, so a
+    # UTC-stamped row would sort behind every app-written row and be dropped
+    # from the bootstrap task window before the assertion ever sees it.
+    now = datetime.now(multi_user_settings.timezone)
     db_session.add_all(
         [
             TaskRun(
