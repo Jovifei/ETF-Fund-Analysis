@@ -266,6 +266,7 @@ Review：审计结论及隔离复现见 `docs/audits/SETTLED_TEST_CLOCK_REVIEW_2
 - [x] 失败优先测试：外来源、负耗时、NaN、未知状态的行被忽略；已恢复的失败仍可见但不改变交付状态。
 - [x] 聚焦测试 `test_local_stability.py` 50 项通过。
 - [x] 沪深300 头部基金市值/流通市值比例：实测现有 Provider 无指数自由流通市值分母，只提交研究设计与数据准入门槛，不实现伪计算。
+- [x] 数据源选型：核实 Tushare / AKShare / 中证 / 商业终端能力，结论为首选 Tushare 2000 积分路径（`daily_basic` + `index_weight`），零凭证仅能前瞻积累；见 `tasks/plans/2026-10-29-hs300-ratio-data-source-selection.md`，待 Owner 决定。
 - [x] 全量 pytest（退出码 0，进度 100%，含跳过项）、compileall 与 node --check 通过。
 - [ ] 本地提交后推送分支，PR/复审通过后再合并。
 

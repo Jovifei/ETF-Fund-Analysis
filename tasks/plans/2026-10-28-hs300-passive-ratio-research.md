@@ -4,13 +4,15 @@
 
 ## 1. 指标精确定义
 
-建议名称：`hs300_passive_fund_share_ratio`。
+建议名称：`hs300_passive_share_of_float_mv`（流通市值口径）。若将来采用自由流通口径，另立 `hs300_passive_share_of_free_float_mv`，两者不得混用。
 
 ```
-分子 = Σ（被定义为「头部」的沪深300 跟踪基金的基金资产净值）
-分母 = 沪深300 指数样本股的自由流通市值合计（或发布方口径的指数流通市值）
+分子 = Σ（被定义为「头部」的沪深300 跟踪基金的基金市值；AUM 与市值须显式标注）
+分母 = 沪深300 指数样本股的流通市值合计（float market cap）
 比例 = 分子 / 分母
 ```
+
+口径已按 Jovi 的原话「流通市值」校准；数据源选型见 `2026-10-29-hs300-ratio-data-source-selection.md`。
 
 约束：
 
@@ -40,7 +42,7 @@
 |---|---|---|
 | 基金份额 | `providers/share_scale.py` 已有 SSE/SZSE 份额接口，`EtfShareScale` 已持久化 | 可得，但只覆盖已配置基金 |
 | 基金净值/规模 | 无基金净值序列；可用份额 × 场内价格作代理，但需单独命名 | 只能先做代理 |
-| 沪深300 自由流通市值 | AKShare 指数接口只有 OHLC、成交额、滚动市盈率；`stock_zh_index_value_csindex` 只有市盈率/股息率 | **不可得** |
+| 沪深300 流通市值 | AKShare 指数接口只有 OHLC、成交额、滚动市盈率；`stock_zh_index_value_csindex` 只有市盈率/股息率 | AKShare 不可得；Tushare `daily_basic` + `index_weight`（2000 积分）可回填，详见选型文档 |
 | 成分股流通市值 | 可通过成分股列表 + 全市场快照汇总，但这是「流通市值合计」，不是指数自由流通市值；300 只逐日抓取还需新的准入与存储 | 新数据源，需专项准入 |
 
 因此：**今天不能诚实地算出这个比例**。任何用总市值、成交额或单只 ETF 规模替代分母的实现，都会把口径错误带进决策，按项目规则必须拒绝。
@@ -50,7 +52,7 @@
 1. 新增只读研究视图，计算函数为纯函数，输入为两条已校验序列：
    - `numerator`: `[{trade_date, value, source, source_timestamp, lag_days}]`
    - `denominator`: `[{trade_date, value, source, source_timestamp, lag_days, basis}]`
-2. 任一序列缺失、日期不一致、来源未准入、`basis` 不是 `free_float_market_cap` → 返回 `status=unavailable` 与固定 reason code，不返回数字。
+2. 任一序列缺失、日期不一致、来源未准入、`basis` 不是 `float_market_cap`（自由流通变体必须单独命名）→ 返回 `status=unavailable` 与固定 reason code，不返回数字。
 3. 输出固定字段：`ratio`、`numerator`、`denominator`、`as_of`、`lag_days`、`top_n`、`fund_codes`、`source`、`actionable=false`、`research_only=true`、`changes_grade=false`、`qualification=UNKNOWN`、`calibration_status=not_calibrated`。
 4. 只进入详情页的研究上下文，不进入 `SignalService` 打分、不改变 `state`、不改变仓位建议。
 5. 分母数据源必须先通过 provider 准入（来源、许可、单位、时间口径、可复现证据），再新增持久化快照；不得在业务代码中写死网页接口。
@@ -74,5 +76,5 @@
 ## 7. 下一步
 
 1. 先由 Owner 确认「头部」定义（top_n 与基金清单）以及是否接受份额代理。
-2. 评估一个可准入的指数流通市值来源；准入通过前不写计算代码。
+2. 按 `2026-10-29-hs300-ratio-data-source-selection.md` 确认数据源（Tushare 2000 积分路径或零凭证前瞻方案）；准入通过前不写计算代码。
 3. 数据就绪后再实现第 4 节的纯函数与只读视图，并先写失败测试。
