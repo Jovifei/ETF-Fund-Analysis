@@ -22,6 +22,7 @@ async function openOverview(context: Record<string, unknown>, options: { local?:
   vi.mocked(api).mockImplementation(async (path: string, init?: unknown) => {
     if (path.includes('/overview?')) return options.local ? { generation: options.missingGeneration ? undefined : 7, research_source: 'local_bundle' } : {}
     if (path.includes('/market-context')) return context
+    if (path.includes('/hs300-ratio')) return options.local ? { status: 'unavailable', reason: 'research_ratio_not_published', items: [] } : { status: 'available', items: [{ numerator_basis: 'market_value_at_close', ratio: 0.005, trade_date: '2026-10-29', lag_days: 0 }] }
     if (path.includes('/indexes/') && path.includes('/chart?')) return { available: true, bars: [], summary: { price: 4000 } }
     if (path.includes('/indexes?') || path.endsWith('/indexes')) return options.local ? { ...local, items: [] } : { items: [] }
     if (path.includes('/data-jobs') && init) return { job: { job_id: 'fixture-job' } }
@@ -134,5 +135,14 @@ describe('published market context on the overview', () => {
     await flushPromises()
     expect(vi.mocked(api).mock.calls.some(([path, init]) => path.includes('/data-jobs') &&
       (init as { body?: { task?: string } })?.body?.task === 'index_history')).toBe(true)
+  })
+
+  it('renders the research-only HS300 ratio card without affecting decisions', async () => {
+    const { wrapper } = await openOverview({ latest_view: [item] }, { local: false })
+    const card = wrapper.get('[data-testid="hs300-ratio-card"]')
+    expect(card.text()).toContain('沪深300 被动配置比例')
+    expect(card.text()).toContain('0.500%')
+    expect(card.text()).toContain('收盘口径')
+    expect(card.text()).toContain('不进入评分或仓位')
   })
 })

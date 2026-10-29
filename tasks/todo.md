@@ -281,6 +281,8 @@ Review：本轮只改本地稳定性报告的测量字段并新增研究设计�
 - [x] 任务注册 `refresh_hs300_ratio`（不并入 `full_pipeline`）。
 - [x] `config/hs300_etf_universe.json` 以 `status=provisional` 占位；`scripts/derive_hs300_etf_universe.py` 供 Jovi 本机派生并 `--confirm --owner` 冻结。
 - [x] 新增 `backend/tests/test_hs300_passive_ratio.py` 19 项通过；聚焦回归 67 项通过；compileall、node --check 通过。
+- [x] 新增只读研究 API `GET /api/workspace/hs300-ratio` 与测试 `test_hs300_ratio_api.py`。
+- [x] 前端市场总览增加研究卡片与测试 `overview-context.test.ts`；保持 `research_only=true`、`actionable=false`。
 - [x] 全量 `pytest -q` 通过（2026-10-29，两次基线对照后确认 green，`PYTEST_EXIT=0`）；`compileall`、`node --check`、ruff 通过。
 - [x] 全量首轮暴露 `test_multi_user_ownership` 两项红测：基线 `f7993b4` 全量 green，本分支新增的 1 条 TaskRun 把 bootstrap 的 20 条窗口顶满，而这两项用 `datetime.now(UTC)` 建行、SQLite 丢偏移量后按墙钟排序落后 8 小时。已改为按应用时钟（`settings.timezone`）打戳，断言不变。
 - [x] 独立评审补强：单位净值逐只拒绝 `nav_date > as_of`（`fund_nav_future`）、成分名单日期晚于估值日拒绝（`constituent_date_after_as_of`）、收盘价复用 `data_contract.row_units_verified` 并要求质量哈希（`fund_close_unqualified`）、结果补 `observation_kind`/`observed_at`。先写 7 项失败测试再实现，现 25 项全过。

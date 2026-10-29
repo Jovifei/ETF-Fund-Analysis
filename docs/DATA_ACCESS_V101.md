@@ -153,6 +153,8 @@ POST /api/tasks/refresh_hs300_ratio
 
 失败关闭：成分名单日期晚于估值日（`constituent_date_after_as_of`）、成分覆盖不足 100%、快照不是当日收盘后、份额或收盘缺失、单位净值日期晚于估值日（`fund_nav_future`，逐只判断，不用聚合滞后掩盖）、收盘价来源不在 `data_contract.DOCUMENTED_UNIT_SOURCES` 或缺质量哈希（`fund_close_unqualified`）、比例越界（>0.5）都返回固定 reason code，不返回比例。Mock 运行直接跳过（`mock_ratio_blocked`）。
 
+只读读取入口：`GET /api/workspace/hs300-ratio`。返回最新研究快照（含两个分子口径 `market_value_at_close` 与 `aum_at_nav`），无数据或本地展示包未发布时返回对应不可用状态；不触发数据源请求，不写数据库。前端在市场总览中以独立研究卡片展示，明确标注 `research_only=true` 与 `actionable=false`。
+
 结果带 `observation_kind: same_day_post_close_snapshot` 与 `observed_at`（采集时刻）。它说明这是收盘后的前瞻样本，**不是**官方交易日收盘市值，调用方不得改写为历史口径。
 
 ## 本版没有接通的能力不是不存在的接口

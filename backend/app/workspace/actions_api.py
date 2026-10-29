@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.security import optional_current_user, require_admin
 from app.db.session import get_db
-from app.models import AuthUser, Instrument, QuoteSnapshot, UserWatchlistEntry
+from app.models import AuthUser, Hs300PassiveRatioSnapshot, Instrument, QuoteSnapshot, UserWatchlistEntry
 from app.services.holding_import_service import HoldingImportError, HoldingImportService
 from app.workspace import bridge_api, data_jobs, imports, jobs, read_model
 from app.workspace.config import workspace_settings
@@ -41,6 +41,67 @@ def status(db: DB, settings: Config, user: User):
     heartbeat = db.get(WorkspacePreference, "system:workspace-worker")
     strategy = settings.load_strategy()
     return {"app_version": settings.app_version, "workspace_version": settings.app_version, "strategy_version": strategy.get("version"), "indicator_version": strategy.get("indicator_version"), "forecast_version": strategy.get("forecast_version"), "market_provider": configuration(db, settings)["effective_provider"], "ui_enabled": cfg.ui_enabled, "bridge_enabled": cfg.bridge_enabled, "daily_review_enabled": cfg.daily_review_enabled, "worker": heartbeat.settings_json if heartbeat else None, "catalog_count": db.scalar(select(func.count()).select_from(Instrument).where(Instrument.kind.in_(("ETF", "LOF")))), "tracked_count": db.scalar(select(func.count()).select_from(Instrument).where(Instrument.enabled.is_(True))), "historical_1430_backtest": "not_qualified", "api_key_configuration": "encrypted_opt_in_profiles", "automatic_orders": False}
+
+
+@router.get("/hs300-ratio")
+def hs300_ratio(db: DB, settings: Config, user: User):
+    """Read the latest research-only HS300 ratio snapshot without fetching data."""
+    if settings.workspace_research_source == "local_bundle":
+        return {
+            "status": "unavailable",
+            "reason": "research_ratio_not_published",
+            "items": [],
+            "research_only": True,
+            "actionable": False,
+            "changes_grade": False,
+            "qualification": "UNKNOWN",
+            "calibration_status": "not_calibrated",
+        }
+    latest_date = db.scalar(select(func.max(Hs300PassiveRatioSnapshot.trade_date)))
+    rows = [] if latest_date is None else db.scalars(
+        select(Hs300PassiveRatioSnapshot)
+        .where(Hs300PassiveRatioSnapshot.trade_date == latest_date)
+        .order_by(Hs300PassiveRatioSnapshot.id.asc())
+    ).all()
+    if not rows:
+        return {
+            "status": "unavailable",
+            "reason": "no_snapshot",
+            "items": [],
+            "research_only": True,
+            "actionable": False,
+            "changes_grade": False,
+            "qualification": "UNKNOWN",
+            "calibration_status": "not_calibrated",
+        }
+    return {
+        "status": "available",
+        "items": [
+            {
+                "trade_date": row.trade_date.isoformat(),
+                "index_code": row.index_code,
+                "basis": row.basis,
+                "numerator_basis": row.numerator_basis,
+                "ratio": row.ratio,
+                "numerator": row.numerator,
+                "denominator": row.denominator,
+                "fund_count": row.fund_count,
+                "constituent_count": row.constituent_count,
+                "constituent_as_of": row.constituent_as_of.isoformat() if row.constituent_as_of else None,
+                "numerator_source": row.numerator_source,
+                "denominator_source": row.denominator_source,
+                "lag_days": row.lag_days,
+                "computed_at": row.computed_at.isoformat(),
+                "observation_kind": "same_day_post_close_snapshot",
+            }
+            for row in rows
+        ],
+        "research_only": True,
+        "actionable": False,
+        "changes_grade": False,
+        "qualification": "UNKNOWN",
+        "calibration_status": "not_calibrated",
+    }
 
 
 @router.get("/data-sources")

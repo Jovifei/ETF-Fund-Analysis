@@ -81,6 +81,7 @@
 - 纯函数 `app/services/hs300_ratio.py`（`universe_hash`、`normalize_funds`、`compute_ratio`）。
 - 研究服务 `app/services/hs300_ratio_service.py` + 表 `hs300_passive_ratio_snapshots`（迁移 `b7c8d9e0f1a2`）。
 - 任务 `refresh_hs300_ratio`；运行期只读 `config/hs300_etf_universe.json`。
+- 只读 API `GET /api/workspace/hs300-ratio` 与总览页研究卡片（`Overview.vue`）。
 - 失败关闭：清单未确认/哈希不符、成分覆盖不足、快照非当日收盘后、份额或收盘缺失、比例越界，均返回固定 reason code 且不写数字。
 
 评审补强（2026-10-29，同一轮）：
