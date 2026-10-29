@@ -71,10 +71,11 @@ def _fresh_tencent_history(function):
     """
     if not isinstance(function, FunctionType):
         raise CapabilityUnavailable('endpoint_unavailable')
-    client = function.__globals__.get('requests')
+    transport_name = 'http' if 'http' in function.__globals__ and 'requests' not in function.__globals__ else 'requests'
+    client = function.__globals__.get(transport_name)
     if not callable(getattr(client, 'get', None)):
         raise CapabilityUnavailable('endpoint_unavailable')
-    namespace = {**function.__globals__, 'requests': _FreshTencentRequests(client)}
+    namespace = {**function.__globals__, transport_name: _FreshTencentRequests(client)}
     fresh = FunctionType(function.__code__, namespace, function.__name__,
                          function.__defaults__, function.__closure__)
     fresh.__kwdefaults__ = function.__kwdefaults__

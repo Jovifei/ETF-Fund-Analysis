@@ -77,22 +77,30 @@ def test_installed_tencent_sdk_does_not_reuse_morning_response_key(monkeypatch):
     target_fn = getattr(akshare.stock_zh_a_hist_tx, "__wrapped__", akshare.stock_zh_a_hist_tx)
     if hasattr(target_fn, "__globals__"):
         monkeypatch.setitem(target_fn.__globals__, "requests", original_requests)
+        monkeypatch.setitem(target_fn.__globals__, "http", original_requests)
         monkeypatch.setitem(target_fn.__globals__, "get_tx_start_year", mock_year)
         monkeypatch.setitem(target_fn.__globals__, "get_tqdm", mock_tqdm)
         monkeypatch.setitem(target_fn.__globals__, "datetime", MockDateTime)
     monkeypatch.setattr(sdk, "requests", original_requests, raising=False)
+    monkeypatch.setattr(sdk, "http", original_requests, raising=False)
     monkeypatch.setattr(sdk, "get_tx_start_year", mock_year, raising=False)
     monkeypatch.setattr(sdk, "get_tqdm", mock_tqdm, raising=False)
     monkeypatch.setattr(sdk, "datetime", MockDateTime, raising=False)
+    try:
+        import akshare.utils.http as _ak_http
+        monkeypatch.setattr(_ak_http, "get", offline_get, raising=False)
+    except Exception:
+        pass
     try:
         import requests as _requests
         monkeypatch.setattr(_requests, "get", offline_get, raising=False)
     except Exception:
         pass
-    for mod_name in ("akshare.stock_feature.stock_hist_tx", "akshare.stock.stock_zh_a_hist_tx"):
+    for mod_name in ("akshare.stock_feature.stock_hist_tx", "akshare.stock.stock_zh_a_hist_tx", "akshare.stock.quote.stock_hist_tx"):
         try:
             m = importlib.import_module(mod_name)
             monkeypatch.setattr(m, "requests", original_requests, raising=False)
+            monkeypatch.setattr(m, "http", original_requests, raising=False)
             monkeypatch.setattr(m, "get_tx_start_year", mock_year, raising=False)
             monkeypatch.setattr(m, "get_tqdm", mock_tqdm, raising=False)
             monkeypatch.setattr(m, "datetime", MockDateTime, raising=False)
