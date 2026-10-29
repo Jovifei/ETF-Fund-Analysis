@@ -14,7 +14,7 @@ const local = { read_contract: 'local-display-context-read-v1', research_source:
   read_at: '2026-10-12T09:00:00Z', source_as_of: '2026-10-09', is_stale: true, is_expired: true,
   index_history_available: false, provider_called: false, actionable: false }
 
-async function openOverview(context: Record<string, unknown>, options: { local?: boolean; missingGeneration?: boolean } = { local: true }) {
+async function openOverview(context: Record<string, unknown>, options: { local?: boolean; missingGeneration?: boolean; ratio?: Record<string, unknown> } = { local: true }) {
   const router = createRouter({ history: createMemoryHistory(), routes: [
     { path: '/', component: Overview }, { path: '/etf/:code', component: { template: '<div />' } },
     { path: '/analysis', component: { template: '<div />' } }, { path: '/settings', component: { template: '<div />' } },
@@ -22,7 +22,7 @@ async function openOverview(context: Record<string, unknown>, options: { local?:
   vi.mocked(api).mockImplementation(async (path: string, init?: unknown) => {
     if (path.includes('/overview?')) return options.local ? { generation: options.missingGeneration ? undefined : 7, research_source: 'local_bundle' } : {}
     if (path.includes('/market-context')) return context
-    if (path.includes('/hs300-ratio')) return options.local ? { status: 'unavailable', reason: 'research_ratio_not_published', items: [] } : { status: 'available', items: [{ numerator_basis: 'market_value_at_close', ratio: 0.005, trade_date: '2026-10-29', lag_days: 0 }] }
+    if (path.includes('/hs300-ratio')) return options.ratio ?? (options.local ? { status: 'unavailable', reason: 'research_ratio_not_published', items: [] } : { status: 'available', items: [{ numerator_basis: 'market_value_at_close', ratio: 0.005, trade_date: '2026-10-29', lag_days: 0 }] })
     if (path.includes('/indexes/') && path.includes('/chart?')) return { available: true, bars: [], summary: { price: 4000 } }
     if (path.includes('/indexes?') || path.endsWith('/indexes')) return options.local ? { ...local, items: [] } : { items: [] }
     if (path.includes('/data-jobs') && init) return { job: { job_id: 'fixture-job' } }
@@ -144,5 +144,21 @@ describe('published market context on the overview', () => {
     expect(card.text()).toContain('0.500%')
     expect(card.text()).toContain('收盘口径')
     expect(card.text()).toContain('不进入评分或仓位')
+  })
+
+  it('renders unavailable notice when no snapshot is available', async () => {
+    const { wrapper } = await openOverview({ latest_view: [item] }, { local: false, ratio: { status: 'unavailable', reason: 'no_snapshot', items: [] } })
+    const card = wrapper.get('[data-testid="hs300-ratio-card"]')
+    expect(card.text()).toContain('尚无可用研究快照；清单确认和收盘后采集完成后才会显示。')
+    expect(card.text()).toContain('research_only=true')
+    expect(card.text()).toContain('actionable=false')
+  })
+
+  it('renders unavailable notice when local bundle has not published the ratio snapshot', async () => {
+    const { wrapper } = await openOverview({ ...local, latest_view: [item] }, { local: true })
+    const card = wrapper.get('[data-testid="hs300-ratio-card"]')
+    expect(card.text()).toContain('本机展示包未发布该研究快照。')
+    expect(card.text()).toContain('research_only=true')
+    expect(card.text()).toContain('actionable=false')
   })
 })

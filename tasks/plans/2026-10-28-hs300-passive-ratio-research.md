@@ -98,3 +98,4 @@
 1. Owner 在本机能访问东财的环境运行 `scripts/derive_hs300_etf_universe.py --write-config`，逐只核对后 `--confirm --owner <标识>` 冻结清单。
 2. 冻结后连续交易日运行 `refresh_hs300_ratio` 积累前瞻序列；样本不足前只展示，不校准。
 3. 进入评分前仍须完成第 5 节的 walk-forward、事件研究与人工批准。
+- 2026-10-30 网页复审补强：校验观测时间盘后（>=15:00）才标记 `same_day_post_close_snapshot`；补测空表、local_bundle 负例、零 Provider 请求与零写入只读断言，及前端不可用卡片提示。

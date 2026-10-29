@@ -74,28 +74,34 @@ def hs300_ratio(db: DB, settings: Config, user: User):
             "qualification": "UNKNOWN",
             "calibration_status": "not_calibrated",
         }
+    items = []
+    for row in rows:
+        computed_local = row.computed_at.astimezone(settings.timezone) if row.computed_at.tzinfo else row.computed_at.replace(tzinfo=settings.timezone)
+        is_same_day_post_close = (
+            computed_local.date() == row.trade_date
+            and (computed_local.hour > 15 or (computed_local.hour == 15 and computed_local.minute >= 0))
+        )
+        observation_kind = "same_day_post_close_snapshot" if is_same_day_post_close else "research_snapshot"
+        items.append({
+            "trade_date": row.trade_date.isoformat(),
+            "index_code": row.index_code,
+            "basis": row.basis,
+            "numerator_basis": row.numerator_basis,
+            "ratio": row.ratio,
+            "numerator": row.numerator,
+            "denominator": row.denominator,
+            "fund_count": row.fund_count,
+            "constituent_count": row.constituent_count,
+            "constituent_as_of": row.constituent_as_of.isoformat() if row.constituent_as_of else None,
+            "numerator_source": row.numerator_source,
+            "denominator_source": row.denominator_source,
+            "lag_days": row.lag_days,
+            "computed_at": row.computed_at.isoformat(),
+            "observation_kind": observation_kind,
+        })
     return {
         "status": "available",
-        "items": [
-            {
-                "trade_date": row.trade_date.isoformat(),
-                "index_code": row.index_code,
-                "basis": row.basis,
-                "numerator_basis": row.numerator_basis,
-                "ratio": row.ratio,
-                "numerator": row.numerator,
-                "denominator": row.denominator,
-                "fund_count": row.fund_count,
-                "constituent_count": row.constituent_count,
-                "constituent_as_of": row.constituent_as_of.isoformat() if row.constituent_as_of else None,
-                "numerator_source": row.numerator_source,
-                "denominator_source": row.denominator_source,
-                "lag_days": row.lag_days,
-                "computed_at": row.computed_at.isoformat(),
-                "observation_kind": "same_day_post_close_snapshot",
-            }
-            for row in rows
-        ],
+        "items": items,
         "research_only": True,
         "actionable": False,
         "changes_grade": False,
