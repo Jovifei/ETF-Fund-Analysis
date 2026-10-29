@@ -66,14 +66,24 @@ def test_installed_tencent_sdk_does_not_reuse_morning_response_key(monkeypatch):
     original_requests = SimpleNamespace(get=offline_get)
     mock_year = lambda **_: "2026-01-01"
     mock_tqdm = lambda: lambda iterable, **_: iterable
+    import datetime as _dt_module
+    class MockDate(_dt_module.date):
+        @classmethod
+        def today(cls):
+            return _dt_module.date(2026, 10, 23)
+    class MockDateTime(_dt_module.datetime):
+        date = MockDate
+
     target_fn = getattr(akshare.stock_zh_a_hist_tx, "__wrapped__", akshare.stock_zh_a_hist_tx)
     if hasattr(target_fn, "__globals__"):
         monkeypatch.setitem(target_fn.__globals__, "requests", original_requests)
         monkeypatch.setitem(target_fn.__globals__, "get_tx_start_year", mock_year)
         monkeypatch.setitem(target_fn.__globals__, "get_tqdm", mock_tqdm)
+        monkeypatch.setitem(target_fn.__globals__, "datetime", MockDateTime)
     monkeypatch.setattr(sdk, "requests", original_requests, raising=False)
     monkeypatch.setattr(sdk, "get_tx_start_year", mock_year, raising=False)
     monkeypatch.setattr(sdk, "get_tqdm", mock_tqdm, raising=False)
+    monkeypatch.setattr(sdk, "datetime", MockDateTime, raising=False)
     try:
         import requests as _requests
         monkeypatch.setattr(_requests, "get", offline_get, raising=False)
@@ -85,6 +95,7 @@ def test_installed_tencent_sdk_does_not_reuse_morning_response_key(monkeypatch):
             monkeypatch.setattr(m, "requests", original_requests, raising=False)
             monkeypatch.setattr(m, "get_tx_start_year", mock_year, raising=False)
             monkeypatch.setattr(m, "get_tqdm", mock_tqdm, raising=False)
+            monkeypatch.setattr(m, "datetime", MockDateTime, raising=False)
         except Exception:
             pass
     params = dict(symbol="sh510300", start_date="20261016", end_date="20261023", adjust="", timeout=7)
