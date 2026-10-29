@@ -83,6 +83,13 @@
 - 任务 `refresh_hs300_ratio`；运行期只读 `config/hs300_etf_universe.json`。
 - 失败关闭：清单未确认/哈希不符、成分覆盖不足、快照非当日收盘后、份额或收盘缺失、比例越界，均返回固定 reason code 且不写数字。
 
+评审补强（2026-10-29，同一轮）：
+
+- 单位净值逐只校验 `nav_date <= as_of`，晚于估值日记 `fund_nav_future` 并停用该分子口径；不再用跨基金 `max()` 后的 `max(0, lag)` 把未来日期压成零滞后。
+- 成分名单日期晚于估值日记 `constituent_date_after_as_of`，在抓取分母之前就拒绝。
+- 收盘价复用 `data_contract.row_units_verified`（`DOCUMENTED_UNIT_SOURCES`）并要求非空 `quality_hash`；不合格来源记 `fund_close_unqualified`，不再「有价格就算有资格」。测试夹具改用 `akshare:em:v101`。
+- 结果新增 `observation_kind=same_day_post_close_snapshot` 与 `observed_at`，避免把收盘后采集时刻当成官方交易日收盘口径。
+
 不进 `scheduler.py`：与同样依赖当日份额的 `refresh_share_scales` 一致，本轮只提供显式 API 触发。理由是该任务需要「当日 `refresh_bars` + `refresh_share_scales` 已完成」这一前置条件，定时器无法在不读任务结果的情况下保证；自动排程留到确认清单并积累前瞻序列之后再评估。
 
 ## 8. 下一步

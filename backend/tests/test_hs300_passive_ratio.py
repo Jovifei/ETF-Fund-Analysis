@@ -37,13 +37,13 @@ INDEX = "000300.SH"
 FUNDS = ("512999.SH", "159999.SZ")
 
 
-def _constituents() -> list[IndexConstituentRecord]:
+def _constituents(as_of: date = date(2026, 6, 30)) -> list[IndexConstituentRecord]:
     return [
-        IndexConstituentRecord(ts_code="600000.SH", index_code=INDEX, as_of=date(2026, 6, 30),
+        IndexConstituentRecord(ts_code="600000.SH", index_code=INDEX, as_of=as_of,
                                name="浦发银行", exchange="SH", source="akshare:index_stock_cons_csindex"),
-        IndexConstituentRecord(ts_code="000001.SZ", index_code=INDEX, as_of=date(2026, 6, 30),
+        IndexConstituentRecord(ts_code="000001.SZ", index_code=INDEX, as_of=as_of,
                                name="平安银行", exchange="SZ", source="akshare:index_stock_cons_csindex"),
-        IndexConstituentRecord(ts_code="300001.SZ", index_code=INDEX, as_of=date(2026, 6, 30),
+        IndexConstituentRecord(ts_code="300001.SZ", index_code=INDEX, as_of=as_of,
                                name="特锐德", exchange="SZ", source="akshare:index_stock_cons_csindex"),
     ]
 
@@ -120,7 +120,8 @@ def _settings(tmp_path, **kwargs):
     )
 
 
-def _seed(db, *, shares=(1_000_000.0, 500_000.0), closes=(4.0, 2.0)):
+def _seed(db, *, shares=(1_000_000.0, 500_000.0), closes=(4.0, 2.0),
+          close_source="akshare:em:v101"):
     created: list[int] = []
     for index, code in enumerate(FUNDS):
         row = db.query(Instrument).filter(Instrument.ts_code == code).one_or_none()
@@ -142,7 +143,7 @@ def _seed(db, *, shares=(1_000_000.0, 500_000.0), closes=(4.0, 2.0)):
         if closes is not None:
             db.add(DailyBar(
                 instrument_id=row.id, trade_date=AS_OF, open=closes[index], high=closes[index],
-                low=closes[index], close=closes[index], adjust="none", source="test",
+                low=closes[index], close=closes[index], adjust="none", source=close_source,
                 quality_hash=f"ratio-bar-{code}",
             ))
     db.flush()
@@ -293,6 +294,8 @@ def test_confirmed_universe_computes_both_numerator_bases(db_session, tmp_path):
         assert result["calibration_status"] == "not_calibrated"
         assert result["fund_count"] == 2
         assert result["constituent_count"] == 3
+        assert result["observation_kind"] == "same_day_post_close_snapshot"
+        assert result["observed_at"] == POST_CLOSE.isoformat()
         close_basis = result["bases"]["market_value_at_close"]
         nav_basis = result["bases"]["aum_at_nav"]
         assert close_basis["numerator"] == pytest.approx(5_000_000.0)
@@ -433,3 +436,63 @@ def test_mock_task_skips_the_ratio_refresh(db_session):
     assert result["status"] == "skipped"
     assert result["reason"] == "mock_ratio_blocked"
     assert result["actionable"] is False
+
+
+def test_future_nav_is_refused_instead_of_clamped_to_zero(db_session, tmp_path):
+    """A NAV dated after as_of is look-ahead, not a zero-lag observation.
+
+    The other fund lags one day, so an aggregate max() would report lag 1 and
+    let the future NAV through unnoticed. The gate has to be per fund.
+    """
+    created = _seed(db_session)
+    navs = _navs()
+    navs[0] = FundNavRecord(ts_code="512999.SH", nav_date=date(2026, 10, 30), nav=4.05,
+                            source="akshare:fund_etf_fund_daily_em")
+    service = Hs300RatioService(_RatioProvider(navs=navs), _settings(tmp_path))
+    try:
+        result = service.refresh(db_session, as_of=AS_OF, run_id="ratio-future-nav")
+
+        assert result["status"] == "partial"
+        assert result["unavailable_reasons"]["aum_at_nav"] == "fund_nav_future"
+        assert result["future_nav_funds"] == 1
+        assert result["bases"]["market_value_at_close"]["ratio"] == pytest.approx(0.005)
+        assert list(result["bases"]) == ["market_value_at_close"]
+        assert _snapshot_count(db_session) == 1
+    finally:
+        _cleanup(db_session, created)
+
+
+def test_future_constituent_list_is_refused_before_the_cap_fetch(db_session, tmp_path):
+    created = _seed(db_session)
+    provider = _RatioProvider(constituents=_constituents(as_of=date(2026, 11, 30)))
+    service = Hs300RatioService(provider, _settings(tmp_path))
+    try:
+        result = service.refresh(db_session, as_of=AS_OF, run_id="ratio-future-list")
+
+        assert result["status"] == "failed"
+        assert result["reason"] == "constituent_date_after_as_of"
+        assert result["constituent_as_of"] == "2026-11-30"
+        assert result["actionable"] is False
+        assert provider.calls == ["constituents"]
+        assert _snapshot_count(db_session) == 0
+    finally:
+        _cleanup(db_session, created)
+
+
+@pytest.mark.parametrize("source", ["test", "akshare", "akshare:sina:v101", "mock:demo"])
+def test_unqualified_close_sources_cannot_back_the_market_value_basis(
+    db_session, tmp_path, source
+):
+    """price is not qualification: only documented unit sources may price an ETF."""
+    created = _seed(db_session, close_source=source)
+    service = Hs300RatioService(_RatioProvider(), _settings(tmp_path))
+    try:
+        result = service.refresh(db_session, as_of=AS_OF, run_id="ratio-bad-close")
+
+        assert result["status"] == "partial"
+        assert result["unavailable_reasons"]["market_value_at_close"] == "fund_close_unqualified"
+        assert result["unqualified_close_funds"] == 2
+        assert result["bases"]["aum_at_nav"]["ratio"] == pytest.approx(0.00506)
+        assert _snapshot_count(db_session) == 1
+    finally:
+        _cleanup(db_session, created)

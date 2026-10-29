@@ -283,6 +283,8 @@ Review：本轮只改本地稳定性报告的测量字段并新增研究设计�
 - [x] 新增 `backend/tests/test_hs300_passive_ratio.py` 19 项通过；聚焦回归 67 项通过；compileall、node --check 通过。
 - [x] 全量 `pytest -q` 通过（2026-10-29，两次基线对照后确认 green，`PYTEST_EXIT=0`）；`compileall`、`node --check`、ruff 通过。
 - [x] 全量首轮暴露 `test_multi_user_ownership` 两项红测：基线 `f7993b4` 全量 green，本分支新增的 1 条 TaskRun 把 bootstrap 的 20 条窗口顶满，而这两项用 `datetime.now(UTC)` 建行、SQLite 丢偏移量后按墙钟排序落后 8 小时。已改为按应用时钟（`settings.timezone`）打戳，断言不变。
+- [x] 独立评审补强：单位净值逐只拒绝 `nav_date > as_of`（`fund_nav_future`）、成分名单日期晚于估值日拒绝（`constituent_date_after_as_of`）、收盘价复用 `data_contract.row_units_verified` 并要求质量哈希（`fund_close_unqualified`）、结果补 `observation_kind`/`observed_at`。先写 7 项失败测试再实现，现 25 项全过。
+- [ ] 仍待决策：本轮是否补一个只读 API/页面入口（当前表只写不读）。
 - [ ] Jovi 在本机（可访问东财）运行派生脚本，逐只核对后冻结清单。
 - [ ] 推送分支后开 PR，复审通过再合并（未获 PR 授权前不自动开）。
 

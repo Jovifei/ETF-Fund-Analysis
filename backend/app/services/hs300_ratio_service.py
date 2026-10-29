@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.models import DailyBar, EtfShareScale, Hs300PassiveRatioSnapshot, Instrument, ProviderAudit
 from app.providers.base import CapabilityUnavailable, ProviderError
+from app.providers.data_contract import row_units_verified
 from app.providers.share_scale import ALLOWED_SOURCES as ALLOWED_SHARE_SOURCES
 from app.services.audit_service import AuditTimer, record_provider_audit
 from app.services.event_service import emit_event
@@ -80,6 +81,17 @@ class Hs300RatioService:
         constituents, failure = self._fetch_constituents(db, run_id, index_code)
         if failure is not None:
             return self._fail(db, run_id, as_of, failure, index_code=index_code, universe_hash=expected_hash)
+
+        # The list's date is a rebalance date, normally well before as_of. A
+        # list dated after as_of would pair future membership with a snapshot
+        # taken today, so refuse it before spending a market-cap fetch.
+        future_lists = [row for row in constituents if row.as_of > as_of]
+        if future_lists:
+            return self._fail(
+                db, run_id, as_of, "constituent_date_after_as_of",
+                index_code=index_code, universe_hash=expected_hash,
+                constituent_as_of=max(row.as_of for row in constituents).isoformat(),
+            )
 
         snapshot, failure = self._fetch_market_caps(db, run_id)
         if failure is not None:
@@ -141,15 +153,19 @@ class Hs300RatioService:
                 index_code=index_code, universe_hash=expected_hash,
                 missing_funds=len(missing_shares),
             )
-        closes = self._latest_closes(db, instrument_ids, as_of)
+        closes, unqualified_closes = self._latest_closes(db, instrument_ids, as_of)
         missing_closes = [code for code in funds if instruments[code].id not in closes]
         share_by_code = {code: shares[instruments[code].id] for code in funds}
         close_by_code = {code: closes[instruments[code].id] for code in funds if code not in missing_closes}
 
         navs, nav_reason = self._fetch_navs(db, run_id, funds)
-        for code in funds:
-            if code not in navs and nav_reason is None:
-                nav_reason = "fund_nav_missing"
+        # Per fund, never on the aggregate: one fund lagging a day would hide
+        # another fund's future NAV behind the same max().
+        future_navs = [code for code in funds if code in navs and navs[code].nav_date > as_of]
+        if future_navs:
+            nav_reason = "fund_nav_future"
+        elif nav_reason is None:
+            nav_reason = "fund_nav_missing" if any(code not in navs for code in funds) else None
 
         computed_at = datetime.now(self.settings.timezone)
         constituent_as_of = max((row.as_of for row in constituents), default=None)
@@ -157,7 +173,10 @@ class Hs300RatioService:
         unavailable: dict[str, str] = {}
 
         if missing_closes:
-            unavailable[MARKET_VALUE_AT_CLOSE] = "fund_close_missing"
+            unqualified = any(instruments[code].id in unqualified_closes for code in missing_closes)
+            unavailable[MARKET_VALUE_AT_CLOSE] = (
+                "fund_close_unqualified" if unqualified else "fund_close_missing"
+            )
         else:
             numerator = sum(share_by_code[code] * close_by_code[code] for code in funds)
             ratio = compute_ratio(numerator, denominator)
@@ -196,7 +215,9 @@ class Hs300RatioService:
                     "constituent_as_of": constituent_as_of.isoformat() if constituent_as_of else None,
                     "numerator_source": NAV_NUMERATOR_SOURCE,
                     "denominator_source": snapshot.source,
-                    "lag_days": max(0, lag),
+                    # Negative lag is impossible here: the per-fund gate above
+                    # already refused any nav_date after as_of.
+                    "lag_days": lag,
                 }
 
         inserted = updated = unchanged = 0
@@ -267,13 +288,26 @@ class Hs300RatioService:
             updated += 1
         db.flush()
 
+        # Callers must not read this as an official exchange close: the
+        # denominator has no upstream trade date, only our post-close capture.
+        observed = {
+            "observation_kind": "same_day_post_close_snapshot",
+            "observed_at": local.isoformat(),
+        }
+        if future_navs:
+            observed["future_nav_funds"] = len(future_navs)
+        if unqualified_closes:
+            observed["unqualified_close_funds"] = len(
+                [code for code in funds if instruments[code].id in unqualified_closes]
+            )
+
         if not bases:
             reason = next(iter(unavailable.values()), "ratio_unavailable")
             payload = self._result(
                 run_id, as_of, status="failed", reason=reason, index_code=index_code,
                 universe_hash=expected_hash, fund_count=len(funds),
                 constituent_count=len(constituent_codes), bases=bases, unavailable_reasons=unavailable,
-                inserted=inserted, updated=updated, unchanged=unchanged,
+                inserted=inserted, updated=updated, unchanged=unchanged, **observed,
             )
         else:
             payload = self._result(
@@ -282,7 +316,7 @@ class Hs300RatioService:
                 reason=None, index_code=index_code,
                 universe_hash=expected_hash, fund_count=len(funds),
                 constituent_count=len(constituent_codes), bases=bases, unavailable_reasons=unavailable,
-                inserted=inserted, updated=updated, unchanged=unchanged,
+                inserted=inserted, updated=updated, unchanged=unchanged, **observed,
             )
         emit_event(db, "hs300_ratio.updated", dict(payload))
         return payload
@@ -390,9 +424,15 @@ class Hs300RatioService:
         return latest
 
     @staticmethod
-    def _latest_closes(db: Session, instrument_ids: list[int], as_of: date) -> dict[int, float]:
+    def _latest_closes(db: Session, instrument_ids: list[int], as_of: date) -> tuple[dict[int, float], set[int]]:
+        """Return qualified closes and the ids whose only row was rejected.
+
+        A price is not a qualification: the shared daily-bar contract decides
+        whether a source's units were documented. Mock, legacy, unverified-unit
+        and hash-less rows are rejected here instead of silently pricing an ETF.
+        """
         if not instrument_ids:
-            return {}
+            return {}, set()
         rows = db.scalars(
             select(DailyBar)
             .where(
@@ -403,11 +443,19 @@ class Hs300RatioService:
             .order_by(DailyBar.id)
         ).all()
         latest: dict[int, float] = {}
+        rejected: set[int] = set()
         for row in rows:
             if row.close is None or float(row.close) <= 0:
+                rejected.add(row.instrument_id)
+                continue
+            if not row_units_verified(row) or not str(row.quality_hash or "").strip():
+                rejected.add(row.instrument_id)
                 continue
             latest[row.instrument_id] = float(row.close)
-        return latest
+            rejected.discard(row.instrument_id)
+        # Only instruments left with no qualified row are truly rejected; an
+        # earlier bad row must not outvote a later documented one.
+        return latest, rejected - set(latest)
 
     # ---- result plumbing ------------------------------------------------
 
