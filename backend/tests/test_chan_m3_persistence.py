@@ -113,9 +113,9 @@ def migrated_engine(tmp_path_factory):
     upgrade = _alembic(database_url, "upgrade", "head")
     assert upgrade.returncode == 0, upgrade.stderr
     heads = _alembic(database_url, "heads")
-    assert heads.returncode == 0 and "f0e1d2c3b4a5" in (heads.stdout + heads.stderr)
+    assert heads.returncode == 0 and "b7c8d9e0f1a2" in (heads.stdout + heads.stderr)
     current = _alembic(database_url, "current")
-    assert current.returncode == 0 and "f0e1d2c3b4a5" in (current.stdout + current.stderr)
+    assert current.returncode == 0 and "b7c8d9e0f1a2" in (current.stdout + current.stderr)
     engine = create_engine(database_url, connect_args={"check_same_thread": False})
     with engine.begin() as connection:
         connection.exec_driver_sql("PRAGMA foreign_keys=ON")
@@ -378,9 +378,9 @@ def migrated_postgres_engine():
     recheck = _alembic(database_url, "check")
     assert recheck.returncode == 0, recheck.stderr
     heads = _alembic(database_url, "heads")
-    assert heads.returncode == 0 and "f0e1d2c3b4a5" in (heads.stdout + heads.stderr)
+    assert heads.returncode == 0 and "b7c8d9e0f1a2" in (heads.stdout + heads.stderr)
     current = _alembic(database_url, "current")
-    assert current.returncode == 0 and "f0e1d2c3b4a5" in (current.stdout + current.stderr)
+    assert current.returncode == 0 and "b7c8d9e0f1a2" in (current.stdout + current.stderr)
     try:
         yield engine
     finally:

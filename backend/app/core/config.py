@@ -165,6 +165,9 @@ class Settings(BaseSettings):
     taxonomy_path: Path = PROJECT_ROOT / "config" / "sector_taxonomy.json"
     market_context_path: Path = PROJECT_ROOT / "config" / "market_context.json"
     board_catalog_path: Path = PROJECT_ROOT / "config" / "board_catalog.json"
+    # Frozen HS300-tracking ETF list for the research-only passive ratio.
+    # Runtime only reads it; the service refuses anything not marked confirmed.
+    hs300_universe_path: Path = PROJECT_ROOT / "config" / "hs300_etf_universe.json"
     reports_dir: Path = PROJECT_ROOT / "reports"
 
     # Portfolio screenshot OCR is local-only by default.  The transient root

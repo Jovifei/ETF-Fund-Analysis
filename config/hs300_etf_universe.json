@@ -1,0 +1,17 @@
+{
+  "index_code": "000300.SH",
+  "index_name": "沪深300",
+  "definition": "全部跟踪沪深300指数的场内 ETF；不含联接基金、LOF 与指数增强产品。",
+  "status": "provisional",
+  "universe_hash": null,
+  "confirmed_at": null,
+  "confirmed_by": null,
+  "derived_by": "scripts/derive_hs300_etf_universe.py",
+  "derived_at": null,
+  "funds": [],
+  "notes": [
+    "status=provisional 时，Hs300RatioService 在抓取前即拒绝计算（reason=universe_not_confirmed）。",
+    "在本机运行 scripts/derive_hs300_etf_universe.py --write-config 生成候选，逐只人工核对后加 --confirm --owner <你的标识> 冻结。",
+    "冻结后运行期只读本文件，不做名称猜测；universe_hash 与 funds 不匹配时同样拒绝计算。"
+  ]
+}

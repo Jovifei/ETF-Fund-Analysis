@@ -271,3 +271,19 @@ Review：审计结论及隔离复现见 `docs/audits/SETTLED_TEST_CLOCK_REVIEW_2
 - [ ] 本地提交后推送分支，PR/复审通过后再合并。
 
 Review：本轮只改本地稳定性报告的测量字段并新增研究设计文档，不改指标公式、信号权重、仓位阈值、Provider 或生产数据库；资格保持 UNKNOWN、actionable=false、not_calibrated。设计文档见 `tasks/plans/2026-10-28-hs300-passive-ratio-research.md`。
+
+## 2026-10-29 沪深300 占比 Phase 1（零凭证前瞻快照，Jovi 批准“执行吧”）
+
+- [x] 白名单新增 `index_stock_cons_csindex`、`fund_etf_fund_daily_em`。
+- [x] Provider 新能力：`fetch_index_constituents`、`fetch_stock_float_market_caps`、`fetch_etf_nav_snapshot`、`fetch_etf_catalog`；AKShare 实现、Composite 转调、其余默认 `CapabilityUnavailable`。
+- [x] 表 `hs300_passive_ratio_snapshots` + 迁移 `b7c8d9e0f1a2`（down_revision `f0e1d2c3b4a5`）；临时库 upgrade → downgrade → upgrade 通过，列/索引核对一致。
+- [x] `Hs300RatioService`：研究写守卫、Mock 拒绝、冻结清单只读、两种分子口径、收盘后且当日快照校验、成分 100% 覆盖、比例越界拒绝、质量哈希幂等 upsert；恒 `actionable=false`、`changes_grade=false`、`qualification=UNKNOWN`、`not_calibrated`。
+- [x] 任务注册 `refresh_hs300_ratio`（不并入 `full_pipeline`）。
+- [x] `config/hs300_etf_universe.json` 以 `status=provisional` 占位；`scripts/derive_hs300_etf_universe.py` 供 Jovi 本机派生并 `--confirm --owner` 冻结。
+- [x] 新增 `backend/tests/test_hs300_passive_ratio.py` 19 项通过；聚焦回归 67 项通过；compileall、node --check 通过。
+- [x] 全量 `pytest -q` 通过（2026-10-29，两次基线对照后确认 green，`PYTEST_EXIT=0`）；`compileall`、`node --check`、ruff 通过。
+- [x] 全量首轮暴露 `test_multi_user_ownership` 两项红测：基线 `f7993b4` 全量 green，本分支新增的 1 条 TaskRun 把 bootstrap 的 20 条窗口顶满，而这两项用 `datetime.now(UTC)` 建行、SQLite 丢偏移量后按墙钟排序落后 8 小时。已改为按应用时钟（`settings.timezone`）打戳，断言不变。
+- [ ] Jovi 在本机（可访问东财）运行派生脚本，逐只核对后冻结清单。
+- [ ] 推送分支后开 PR，复审通过再合并（未获 PR 授权前不自动开）。
+
+Review：新增均为只读取数能力与独立研究快照表，不改指标公式、信号权重、仓位阈值和市场门控；不写生产数据库，不启用自动交易；资格保持 UNKNOWN、actionable=false、not_calibrated。

@@ -1,6 +1,6 @@
 # 沪深300 头部基金市值占流通市值比例：研究接入设计
 
-日期：2026-10-28；状态：RESEARCH_DESIGN，未实现计算，未进入评分。
+日期：2026-10-28；状态：PHASE_1_IMPLEMENTED（2026-10-29，研究快照 + 双分子口径），未进入评分。冻结清单仍需 Owner 本机派生确认，在此之前服务恒返回 `universe_not_confirmed`。
 
 ## 1. 指标精确定义
 
@@ -73,8 +73,20 @@
 - 不用 LLM 计算该比例或替代数值验证。
 - 不把「比例处于高位」直接翻译成减仓。
 
-## 7. 下一步
+## 7. 实施状态（2026-10-29）
 
-1. 先由 Owner 确认「头部」定义（top_n 与基金清单）以及是否接受份额代理。
-2. 按 `2026-10-29-hs300-ratio-data-source-selection.md` 确认数据源（Tushare 2000 积分路径或零凭证前瞻方案）；准入通过前不写计算代码。
-3. 数据就绪后再实现第 4 节的纯函数与只读视图，并先写失败测试。
+已按第 4 节落地：
+
+- Provider 能力 `fetch_index_constituents` / `fetch_stock_float_market_caps` / `fetch_etf_nav_snapshot` / `fetch_etf_catalog`（AKShare 实现，Composite 转调，其余默认拒绝）。
+- 纯函数 `app/services/hs300_ratio.py`（`universe_hash`、`normalize_funds`、`compute_ratio`）。
+- 研究服务 `app/services/hs300_ratio_service.py` + 表 `hs300_passive_ratio_snapshots`（迁移 `b7c8d9e0f1a2`）。
+- 任务 `refresh_hs300_ratio`；运行期只读 `config/hs300_etf_universe.json`。
+- 失败关闭：清单未确认/哈希不符、成分覆盖不足、快照非当日收盘后、份额或收盘缺失、比例越界，均返回固定 reason code 且不写数字。
+
+不进 `scheduler.py`：与同样依赖当日份额的 `refresh_share_scales` 一致，本轮只提供显式 API 触发。理由是该任务需要「当日 `refresh_bars` + `refresh_share_scales` 已完成」这一前置条件，定时器无法在不读任务结果的情况下保证；自动排程留到确认清单并积累前瞻序列之后再评估。
+
+## 8. 下一步
+
+1. Owner 在本机能访问东财的环境运行 `scripts/derive_hs300_etf_universe.py --write-config`，逐只核对后 `--confirm --owner <标识>` 冻结清单。
+2. 冻结后连续交易日运行 `refresh_hs300_ratio` 积累前瞻序列；样本不足前只展示，不校准。
+3. 进入评分前仍须完成第 5 节的 walk-forward、事件研究与人工批准。

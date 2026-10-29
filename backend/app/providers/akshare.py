@@ -322,6 +322,26 @@ class AKShareProvider(MarketProvider):
 
         return fetch_share_scales(self.ak, codes, start_date, end_date)
 
+    def fetch_index_constituents(self, index_code: str):
+        from app.providers.hs300_snapshot import fetch_index_constituents
+
+        return fetch_index_constituents(self.ak, index_code)
+
+    def fetch_stock_float_market_caps(self):
+        from app.providers.hs300_snapshot import fetch_stock_float_market_caps
+
+        return fetch_stock_float_market_caps(self.ak, self.tz)
+
+    def fetch_etf_nav_snapshot(self):
+        from app.providers.hs300_snapshot import fetch_etf_nav_snapshot
+
+        return fetch_etf_nav_snapshot(self.ak)
+
+    def fetch_etf_catalog(self):
+        from app.providers.hs300_snapshot import fetch_etf_catalog
+
+        return fetch_etf_catalog(self.ak)
+
     # 板块数据源优先级：东财（含平盘家数）→ 同花顺（无平盘家数，total 按 up+down 计）。
     # 两者都走 AKShare 公开函数，不在业务层硬编码网页接口。
     _SECTOR_SOURCES = (

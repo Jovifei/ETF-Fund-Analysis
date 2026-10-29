@@ -438,6 +438,30 @@ class CompositeProvider(MarketProvider):
             lambda provider: provider.fetch_share_scales(codes, start_date, end_date),
         )
 
+    def fetch_index_constituents(self, index_code: str):
+        return self._invoke(
+            "fetch_index_constituents",
+            lambda provider: provider.fetch_index_constituents(index_code),
+        )
+
+    def fetch_stock_float_market_caps(self):
+        return self._invoke(
+            "fetch_stock_float_market_caps",
+            lambda provider: provider.fetch_stock_float_market_caps(),
+        )
+
+    def fetch_etf_nav_snapshot(self):
+        return self._invoke(
+            "fetch_etf_nav_snapshot",
+            lambda provider: provider.fetch_etf_nav_snapshot(),
+        )
+
+    def fetch_etf_catalog(self):
+        return self._invoke(
+            "fetch_etf_catalog",
+            lambda provider: provider.fetch_etf_catalog(),
+        )
+
     def fetch_sector_snapshots(self, trade_date: date | None = None) -> list[SectorRecord]:
         return self._invoke(
             "fetch_sector_snapshots", lambda provider: provider.fetch_sector_snapshots(trade_date)

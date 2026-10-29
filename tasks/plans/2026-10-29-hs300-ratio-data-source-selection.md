@@ -128,11 +128,19 @@ Jovi 的目标表述是「头部沪深300基金市值占沪深300**流通市值*
 - 「头部」= 全部跟踪沪深300 的 ETF。
 - 分子两种口径都做。
 
-仍需 Jovi 确认：
+Jovi 已批准（“好的，执行吧”，2026-10-29），Phase 1 已实现：
 
-1. 冻结的 ETF 候选清单（由东财场内基金名单按名称派生，排除联接/LOF/增强）。
-2. 是否同意把 `index_stock_cons_csindex`、`fund_etf_fund_daily_em` 加入
-   `AKSHARE_APIS` 白名单（方案 B 必需），以及是否同意新增收盘后采集任务。
+1. `index_stock_cons_csindex`、`fund_etf_fund_daily_em` 已加入 `AKSHARE_APIS`。
+2. 新增收盘后任务 `refresh_hs300_ratio`；结果只进研究快照，
+   `actionable=false`、`changes_grade=false`。
+3. 冻结清单机制：`config/hs300_etf_universe.json` 运行期只读，未确认即拒绝；
+   `scripts/derive_hs300_etf_universe.py` 在本机派生候选，由 Owner
+   `--confirm --owner` 冻结。
+
+仍需 Jovi 在本机完成：
+
+1. 运行派生脚本并逐只核对候选清单（排除联接/LOF/增强/风格子指数）。
+2. 冻结后连续交易日采集；样本不足前只展示、不校准。
 
 ## 5. 证据来源
 

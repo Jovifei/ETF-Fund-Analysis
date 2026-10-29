@@ -43,3 +43,5 @@
 - 发布前核实际宿主Python、SSH身份与既有服务健康契约；禁用健康检查的scheduler需按稳定运行验收，不能用全局Compose wait误判。私有700目录在应用UID只读容器验证，不放宽ACL。
 - 有依赖的工具调用先检查上一调用的exit_code/session_id；未结束或失败不得推进后续变更。配置差分先列计划内角色变更，避免把预期展示模式当漂移并误停任务。
 - 安全检查先核遍历边界，在干净Git index/checkout执行原扫描器；不要把Owner忽略的历史工作树、私有配置和生成文件纳入发布源码扫描。
+
+- 测试库是 SQLite，`DateTime(timezone=True)` 只保留墙钟、丢弃偏移量：同刻的 UTC 行比 Asia/Shanghai 行少 8 小时，`ORDER BY started_at DESC` 会把 UTC 行排到后面。样本行必须用应用时钟（`settings.timezone`）打时间戳，否则只要同会话里产品写入的行凑满 bootstrap 的 20 条窗口，新增任何一条 TaskRun 就会把断言挤出窗口。排查红测先跑基线分支全量，区分“既有失败”和“被自己新增状态顶破的临界假设”。

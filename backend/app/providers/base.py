@@ -6,11 +6,14 @@ from datetime import date
 from app.market_context.contracts import MarketContextItem, MarketContextObservation
 from app.providers.types import (
     BarRecord,
+    FundNavRecord,
+    IndexConstituentRecord,
     InstrumentRecord,
     NewsRecord,
     QuoteRecord,
     SectorRecord,
     ShareScaleRecord,
+    StockMarketCapSnapshot,
 )
 
 
@@ -144,3 +147,29 @@ class MarketProvider(ABC):
     def fetch_market_breadth(self, trade_date: date | None = None) -> SectorRecord | None:
         """全市场涨跌家数（宽度）。返回单条 board_type='market' 的快照，无数据返回 None。"""
         raise CapabilityUnavailable("market breadth unavailable for this provider")
+
+    # ---- 沪深300 被动持仓占比研究（只读快照，不参与评分）----
+    # 三个能力各自独立降级；调用方不得用近似值替代缺失的分母或分子。
+
+    def fetch_index_constituents(self, index_code: str) -> list[IndexConstituentRecord]:
+        """官方指数成分名单；``as_of`` 是名单（调样）日期，不是估值日。"""
+        raise CapabilityUnavailable("index constituents unavailable for this provider")
+
+    def fetch_stock_float_market_caps(self) -> StockMarketCapSnapshot:
+        """全市场流通市值快照（元）。
+
+        上游没有交易日字段，实现必须用采集时刻标注 ``observed_at``；
+        调用方不得回填历史，也不得把盘中快照当成收盘值。
+        """
+        raise CapabilityUnavailable("stock float market caps unavailable for this provider")
+
+    def fetch_etf_nav_snapshot(self) -> list[FundNavRecord]:
+        """场内基金单位净值快照，净值日期随记录返回。"""
+        raise CapabilityUnavailable("etf nav snapshot unavailable for this provider")
+
+    def fetch_etf_catalog(self) -> list[InstrumentRecord]:
+        """枚举全部场内 ETF（代码/名称原样返回）。
+
+        只供一次性清单派生脚本使用；运行期不得按名称猜测跟踪标的。
+        """
+        raise CapabilityUnavailable("etf catalog unavailable for this provider")

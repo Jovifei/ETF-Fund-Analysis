@@ -535,6 +535,45 @@ class EtfShareScale(Base):
     quality_hash: Mapped[str] = mapped_column(String(64), nullable=False)
 
 
+class Hs300PassiveRatioSnapshot(Base):
+    """Research-only ratio of HS300-tracking ETF value to HS300 float market cap.
+
+    ``numerator`` is the summed fund value for one ``numerator_basis``:
+
+    * ``market_value_at_close`` — 份额 × 当日收盘价（二级市场市值代理）
+    * ``aum_at_nav`` — 份额 × 单位净值（接近资产净值）
+
+    ``denominator`` is Σ floating market cap (元) of the official constituent
+    list. ``basis`` names the denominator convention, so a future free-float
+    variant gets a separate value instead of overwriting this one. The row is
+    display-only evidence: it never changes grade, ``actionable`` or position.
+    """
+
+    __tablename__ = "hs300_passive_ratio_snapshots"
+    __table_args__ = (
+        UniqueConstraint("trade_date", "numerator_basis", name="uq_hs300_ratio_date_basis"),
+        Index("ix_hs300_ratio_trade_date", "trade_date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    trade_date: Mapped[date] = mapped_column(Date, nullable=False)
+    index_code: Mapped[str] = mapped_column(String(16), nullable=False)
+    basis: Mapped[str] = mapped_column(String(32), nullable=False)
+    numerator_basis: Mapped[str] = mapped_column(String(32), nullable=False)
+    numerator: Mapped[float] = mapped_column(Float, nullable=False)
+    denominator: Mapped[float] = mapped_column(Float, nullable=False)
+    ratio: Mapped[float] = mapped_column(Float, nullable=False)
+    fund_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    universe_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    constituent_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    constituent_as_of: Mapped[date | None] = mapped_column(Date)
+    numerator_source: Mapped[str] = mapped_column(String(96), nullable=False)
+    denominator_source: Mapped[str] = mapped_column(String(64), nullable=False)
+    lag_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    quality_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
 class SectorSnapshot(Base):
     """板块涨跌家数快照（K线企稳看板用）。
 

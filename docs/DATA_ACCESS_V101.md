@@ -106,7 +106,7 @@ Tushare 主链现价失败时直接尝试下一现价源，不对每一只 ETF �
 
 ## 当前仓库迁移 head（2026-10-02 文档对齐）
 
-Git `main` tip 上 Alembic **唯一 head** 为 `f0e1d2c3b4a5`（`f0e1d2c3b4a5_etf_flow_share_scales`，父修订 `h9c0d1e2f3a4`）。下文个别历史段落仍可能写着当年交付时的 `d40609090002` 或「本版 head 未变」——那些只描述当时收据，**升级现网/本机库时以 `alembic heads` / 本段为准**，并先离线备份。
+本分支 Alembic **唯一 head** 为 `b7c8d9e0f1a2`（`b7c8d9e0f1a2_hs300_passive_ratio_snapshots`，父修订 `f0e1d2c3b4a5`；后者是 `h9c0d1e2f3a4` 之后的 flow-share 迁移）。下文个别历史段落仍可能写着当年交付时的 `d40609090002`、`f0e1d2c3b4a5` 或「本版 head 未变」——那些只描述当时收据，**升级现网/本机库时以 `alembic heads` / 本段为准**，并先离线备份。
 
 ## 免费加仓/减仓研究字段（etf-flow-share-v1）
 
@@ -129,6 +129,29 @@ POST /api/tasks/refresh_decision_board
 ```
 
 `refresh_quotes` 写入现货资金流和 IOPV。`refresh_share_scales` 只拉最近最多 12 个自然日（深交所日频接口本身不允许超过 6 个月）。决策板是已保存快照，需要第三次任务后才会带上新的 `flow_share`；`/api/signals/grade` 在前两步写入后即可读取。Mock 运行会跳过份额抓取并在审计里记 `mock_share_scale_blocked`。
+
+## 沪深300 被动持仓占比（research-only，2026-10-29 接入）
+
+零凭证、只能前瞻。结果只写入研究快照 `hs300_passive_ratio_snapshots`，不进入评分，不改变 `actionable`、`state`、仓位建议或资格状态。
+
+| 输入 | 来源 | 口径 |
+|---|---|---|
+| 成分名单 | `index_stock_cons_csindex`（中证官方） | 记录里的 `as_of` 是名单（调样）日，不是估值日 |
+| 分母 | `stock_zh_a_spot_em` 全 A 股「流通市值」（元） | 上游没有交易日字段；适配器用采集时刻标注 `observed_at`，只能当日收盘后使用，禁止回填 |
+| 分子（市值） | `etf_share_scales` 份额 × `daily_bars` 当日收盘（`adjust=none`） | `numerator_basis=market_value_at_close` |
+| 分子（净值） | 同一份额 × `fund_etf_fund_daily_em` 单位净值 | `numerator_basis=aum_at_nav`，`lag_days` 记录净值日期差 |
+
+任务：
+
+```text
+POST /api/tasks/refresh_hs300_ratio
+```
+
+需要先让 `refresh_bars` 与 `refresh_share_scales` 覆盖当日，否则返回 `fund_close_missing` / `fund_shares_missing`，不写任何数字。
+
+运行期只读 `config/hs300_etf_universe.json`。`status` 不是 `confirmed`、或 `universe_hash` 与 `funds` 不一致时直接拒绝（`universe_not_confirmed` / `universe_hash_mismatch`）。清单由 `scripts/derive_hs300_etf_universe.py` 在本机派生，Owner 用 `--confirm --owner` 冻结；运行期不做名称猜测。
+
+失败关闭：成分覆盖不足 100%、快照不是当日收盘后、份额或收盘缺失、比例越界（>0.5）都返回固定 reason code，不返回比例。Mock 运行直接跳过（`mock_ratio_blocked`）。
 
 ## 本版没有接通的能力不是不存在的接口
 

@@ -19,6 +19,7 @@ from app.models.entities import (
     Holding,
     HoldingImportCandidate,
     HoldingImportSession,
+    Hs300PassiveRatioSnapshot,
     IndicatorSnapshot,
     Instrument,
     MarketBar,
@@ -56,7 +57,7 @@ __all__ = [
     "SupportResistanceSnapshotRevision",
     "ChanResearchObservation", "ChanStructureRevision", "ChanObservedTransition", "ChanResearchStreamHead",
     "TaskRun", "MarketBar", "ProviderAudit", "EtfShareScale", "EventLog", "ReportArtifact",
-    "UnitCertificationEvidence",
+    "Hs300PassiveRatioSnapshot", "UnitCertificationEvidence",
     "WorkspaceBridgeDevice", "WorkspaceDataJob", "WorkspaceImportBatch",
     "WorkspacePreference", "WorkspaceResearchJob",
 ]

@@ -19,8 +19,8 @@ def test_inventory_is_metadata_only_and_never_upgrades_data():
     assert 'published_image_digest_missing' in value['missing']
     assert not value['release_inventory_complete'] and not value['production_deployed']
     assert value['data_qualification']=='not_asserted'
-    # Flow-share migration chains after R4C M3 persistence head.
-    assert value['migration_heads']==['f0e1d2c3b4a5']
+    # Flow-share -> HS300 ratio migration chains after R4C M3 persistence head.
+    assert value['migration_heads']==['b7c8d9e0f1a2']
     assert all(set(row)=={'name','version'} for row in value['python_resolved'])
     assert not any('.env' in path or 'auth.json' in path for path in value['source_hashes'])
 

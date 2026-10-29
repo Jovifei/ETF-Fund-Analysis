@@ -225,6 +225,7 @@ class TaskService:
             "refresh_minute_bars",
             "refresh_quotes",
             "refresh_share_scales",
+            "refresh_hs300_ratio",
             "refresh_indicators",
             "refresh_forecasts",
             "refresh_news",
@@ -362,6 +363,11 @@ class TaskService:
                 lookback_days=kwargs.get("lookback_days"),
                 run_id=run_id,
             )
+        if task_name == "refresh_hs300_ratio":
+            from app.services.hs300_ratio_service import Hs300RatioService
+            # Research snapshot only: no grade, no position, no actionable flag.
+            # The service refuses any as_of it did not observe after the close.
+            return Hs300RatioService(self.provider, self.settings).refresh(db, run_id=run_id)
         if task_name == "refresh_indicators":
             return self.indicators.refresh_all(db, run_id=run_id, **scope_kwargs)
         if task_name == "refresh_forecasts":

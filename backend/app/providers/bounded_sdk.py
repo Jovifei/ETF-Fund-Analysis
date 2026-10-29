@@ -25,6 +25,9 @@ TUSHARE_APIS = frozenset({'index_daily','etf_basic','fund_basic','fund_daily','r
 AKSHARE_APIS = frozenset({
     'fund_etf_spot_em','fund_lof_spot_em','fund_etf_hist_em','fund_lof_hist_em','fund_etf_hist_sina',
     'fund_etf_scale_sse','fund_scale_daily_szse','fund_etf_scale_szse',
+    # HS300 passive-holdings ratio research: official constituent list (list
+    # date, not valuation date) and fund NAV with the date inside the column.
+    'index_stock_cons_csindex','fund_etf_fund_daily_em',
     'fund_etf_hist_min_em','fund_lof_hist_min_em','fund_etf_category_sina','fund_etf_category_ths',
     'stock_board_industry_name_em','stock_board_industry_summary_ths','stock_board_concept_name_em',
     'stock_sector_spot','stock_board_concept_summary_ths','stock_zh_a_spot_em','stock_zh_a_spot','stock_info_a_code_name','stock_zh_index_daily',

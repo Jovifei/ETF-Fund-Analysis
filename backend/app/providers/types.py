@@ -13,6 +13,10 @@ __all__ = [
     "NewsRecord",
     "SectorRecord",
     "ShareScaleRecord",
+    "IndexConstituentRecord",
+    "StockMarketCapRecord",
+    "StockMarketCapSnapshot",
+    "FundNavRecord",
     "MarketContextItem",
     "MarketContextObservation",
 ]
@@ -99,6 +103,70 @@ class ShareScaleRecord:
     source: str
     exchange: str
     name: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class IndexConstituentRecord:
+    """Official index constituent list. ``as_of`` is the list/rebalance date.
+
+    It is not a valuation date: membership and market cap are dated separately.
+    """
+
+    ts_code: str
+    index_code: str
+    as_of: date
+    name: str | None = None
+    exchange: str | None = None
+    source: str = "unknown"
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class StockMarketCapRecord:
+    """One stock's market value. Units are 元 exactly as published."""
+
+    ts_code: str
+    total_mv: float | None
+    float_mv: float | None
+    name: str | None = None
+    source: str = "unknown"
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class StockMarketCapSnapshot:
+    """A whole-market market-cap snapshot with the moment it was observed.
+
+    The upstream endpoint exposes no trade date, so ``observed_at`` is the
+    local collection time. Callers must not back-date it.
+    """
+
+    observed_at: datetime
+    source: str
+    rows: list[StockMarketCapRecord] = field(default_factory=list)
+
+    def __len__(self) -> int:
+        return len(self.rows)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class FundNavRecord:
+    """Published unit NAV for one fund on ``nav_date``. Unit is 元 per share."""
+
+    ts_code: str
+    nav_date: date
+    nav: float
+    source: str = "unknown"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
