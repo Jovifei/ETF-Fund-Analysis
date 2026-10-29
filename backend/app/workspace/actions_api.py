@@ -13,6 +13,7 @@ from app.core.security import optional_current_user, require_admin
 from app.db.session import get_db
 from app.models import AuthUser, Hs300PassiveRatioSnapshot, Instrument, QuoteSnapshot, UserWatchlistEntry
 from app.services.holding_import_service import HoldingImportError, HoldingImportService
+from app.services.settlement import SETTLEMENT_CUTOFF
 from app.workspace import bridge_api, data_jobs, imports, jobs, read_model
 from app.workspace.config import workspace_settings
 from app.workspace.data_sources import configuration
@@ -79,7 +80,7 @@ def hs300_ratio(db: DB, settings: Config, user: User):
         computed_local = row.computed_at.astimezone(settings.timezone) if row.computed_at.tzinfo else row.computed_at.replace(tzinfo=settings.timezone)
         is_same_day_post_close = (
             computed_local.date() == row.trade_date
-            and (computed_local.hour > 15 or (computed_local.hour == 15 and computed_local.minute >= 0))
+            and computed_local.time().replace(tzinfo=None) >= SETTLEMENT_CUTOFF
         )
         observation_kind = "same_day_post_close_snapshot" if is_same_day_post_close else "research_snapshot"
         items.append({

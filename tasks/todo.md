@@ -292,3 +292,4 @@ Review：本轮只改本地稳定性报告的测量字段并新增研究设计�
 
 Review：新增均为只读取数能力与独立研究快照表，不改指标公式、信号权重、仓位阈值和市场门控；不写生产数据库，不启用自动交易；资格保持 UNKNOWN、actionable=false、not_calibrated。
 - [x] 网页复审反馈补强（2026-10-30）：actions_api 校验 computed_at 时间必须为当日盘后（>=15:00）才标记 same_day_post_close_snapshot，否则标记 research_snapshot；补齐空表 no_snapshot、local_bundle 未发布、零网络/零写库断言；前端补测两项不可用状态展示。
+- [x] 网页复审二次补强（2026-10-30）：统一盘后收盘时间判定至 SETTLEMENT_CUTOFF (15:15)；test_hs300_ratio_api 引入 SQLAlchemy before_execute 拦截器验证零写库并对比行状态全字段、拦截外部网络与 Provider refresh 调用；测试 15:14:59/15:15:00 临界点。
