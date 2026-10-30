@@ -1,19 +1,56 @@
 # 本机 SMTP 安全配置
 
-用途：给 ETF 定时邮件设置无人值守发送通道。授权码只由你在自己的终端隐藏输入，使用 Windows CurrentUser DPAPI 加密并保存在 F 盘私有目录；不写入聊天、仓库、命令参数或日志。配置工具已通过合成授权码的真实加密往返测试，尚未发送真实邮件。
+用途：给 ETF 定时邮件设置无人值守发送通道。授权码只由你在自己的终端隐藏输入，使用 Windows CurrentUser DPAPI 加密并保存在 F 盘私有目录；不写入聊天、仓库、命令参数或日志。
 
-## 在你自己的终端执行
+## 1. 终端配置（首选安全通道）
+
+在大机终端执行以下命令：
 
 ```powershell
-& 'E:\project\ETF-Fund-Analysis\.venv\Scripts\python.exe' 'C:\Users\Admin\.codex\worktrees\watchlist-quote-source\ETF-Fund-Analysis\scripts\run_local_notifications.py' configure --root 'F:\ETF_Data\ETF-Fund-Analysis' --confirm-owner-switchover
+& 'E:\project\ETF-Fund-Analysis\.venv\Scripts\python.exe' 'E:\project\ETF-Fund-Analysis\scripts\run_local_notifications.py' configure --root 'F:\ETF_Data\ETF-Fund-Analysis' --confirm-owner-switchover
 ```
 
-依次输入：SMTP登录邮箱、邮箱服务商提供的SMTP服务器、TLS端口（465/587）、对应模式（ssl/starttls）、收件邮箱、邮箱授权码。授权码使用 getpass 隐藏输入；不要使用聊天传递，不要把完整终端输入截图发送。QQ/163等邮箱需在各自官方邮箱设置中取得授权码。
+如果已有配置需要重新更新，追加 `--overwrite` 参数：
+```powershell
+& 'E:\project\ETF-Fund-Analysis\.venv\Scripts\python.exe' 'E:\project\ETF-Fund-Analysis\scripts\run_local_notifications.py' configure --root 'F:\ETF_Data\ETF-Fund-Analysis' --confirm-owner-switchover --overwrite
+```
 
-`--confirm-owner-switchover` 表示以项目 SMTP 作为唯一自动发送方；旧 Bot 的同槽邮件草稿不再手动批准重复发送。如果还没决定迁移归属，先去掉该标记完成默认关闭的配置。
+依次输入：
+- SMTP登录邮箱（如 QQ/163 邮箱）
+- SMTP服务器（如 smtp.qq.com / smtp.163.com）
+- TLS端口（465 或 587）
+- 对应模式（ssl 或 starttls）
+- 收件邮箱（回车默认使用登录邮箱）
+- 邮箱授权码（隐藏输入，终端不回显）
 
-本命令没有 `--enable`，所以**只保存配置，不发送邮件，也不启动定时任务**。真实发送将在代码复核、固定版本测试与切换检查通过后启用。
+## 2. 启用 / 停用发送通道
 
-成功时只显示 `state=CONFIGURED`、启用/归属布尔值和配置路径，不显示邮箱或授权码。私有路径：`F:\ETF_Data\ETF-Fund-Analysis\config\notifications\smtp.json`。不要把此文件加入 Git。若已有配置，工具会拒绝覆盖，保留原文件。
+配置保存后，如需单独开启或关闭发送，无需重新输入密码：
 
-配置完成后在聊天回复“已在本机配置”即可，不需要提供邮箱或授权码。定时执行必须使用同一个 Windows 用户，其他账户无法解密该授权码；正常运行仍保持 pythonw 无弹窗。
+- **开启发送**：
+  ```powershell
+  & 'E:\project\ETF-Fund-Analysis\.venv\Scripts\python.exe' 'E:\project\ETF-Fund-Analysis\scripts\run_local_notifications.py' enable --root 'F:\ETF_Data\ETF-Fund-Analysis' --confirm-owner-switchover
+  ```
+- **停用发送**：
+  ```powershell
+  & 'E:\project\ETF-Fund-Analysis\.venv\Scripts\python.exe' 'E:\project\ETF-Fund-Analysis\scripts\run_local_notifications.py' disable --root 'F:\ETF_Data\ETF-Fund-Analysis'
+  ```
+- **查看状态**：
+  ```powershell
+  & 'E:\project\ETF-Fund-Analysis\.venv\Scripts\python.exe' 'E:\project\ETF-Fund-Analysis\scripts\run_local_notifications.py' status --root 'F:\ETF_Data\ETF-Fund-Analysis'
+  ```
+
+## 3. 网页端配置辅助（推送邮箱与 OpenAI Key）
+
+系统在网页工作台提供了 **“⚙️ 推送与AI”** 弹窗：
+- 用户登录后可直接绑定个人推送接收邮箱（如 `977191131@qq.com`）；
+- 填写 OpenAI API Key 后，每日定时邮件会在确定性指标决策下方追加纯文字事实解读与风险提示（严格禁止模型篡改数值指标或生成交易指令）。
+- 密钥与配置均在本机经 DPAPI / AES-GCM 安全加密存储。
+
+## 4. 自动化 Windows 定时任务注册
+
+通过 PowerShell 注册每日定时通知任务（11:40, 14:30, 14:45, 18:00 槽）：
+```powershell
+powershell -ExecutionPolicy Bypass -File 'E:\project\ETF-Fund-Analysis\scripts\register_local_notification_task.ps1' -Apply
+```
+注册后任务默认处于 `Disabled` 状态，人工复核后右键启用即可。

@@ -27,7 +27,7 @@ DETAIL_FIELDS = {"coverage_complete", "requested", "completed", "missing", "fail
                  "degraded_count", "accepted_closed_session", "accepted_settled_daily", "input_basis",
                  "settled_daily_input_hash", "settled_daily_quote_hash", "source_task_status", "execution_mode",
                  "duration_seconds", "latency_seconds", "reason", "error_type", "run_id",
-                 "target_trade_date", "scope_hash", "failure_stage"} | EXECUTION_HASH_FIELDS
+                 "target_trade_date", "scope_hash", "failure_stage", "failure_detail"} | EXECUTION_HASH_FIELDS
 DIAGNOSTIC_PHASES = {"base_validation", "projection_export", "bundle_write", "upload_auth",
                      "pre_upload_validation", "transport_receipt"}
 PUBLIC_ERROR_TYPES = {"Exception", "RuntimeError", "ValueError", "TypeError", "KeyError", "OSError",
@@ -361,7 +361,7 @@ class LocalJobLedger:
                 db.execute("INSERT INTO jobs VALUES (?,?,?,?,?,?,?,?)", (attempt_id, job_name, status, stamp, end, run_id, bool(required), encoded))
 
     def record_diagnostic(self, attempt_id: str, phase: str, *, status: str, now: datetime,
-                          duration_seconds: float, error_type: str | None = None, reason: str | None = None) -> None:
+                          duration_seconds: float, error_type: str | None = None, reason: str | None = None, failure_detail: str | None = None) -> None:
         """Bounded phase observations; never participate in business-stage acceptance.
 
         Repeated validations/replays accumulate elapsed time, while the first
@@ -390,6 +390,8 @@ class LocalJobLedger:
                 raise ValueError("finite cumulative diagnostic duration required")
             if status == "failed" and "error_type" not in details:
                 details.update(error_type=error_type, reason=reason)
+                if failure_detail is not None:
+                    details["failure_detail"] = str(failure_detail)[:255]
             if old is not None:
                 _forward(old, current)
                 retained_status = "failed" if old["status"] == "failed" else status

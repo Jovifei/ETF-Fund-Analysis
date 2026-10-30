@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"backend"))
 from app.workspace.local_notifications import (NotificationQueue,SMTPConfig,SMTPTransport,
-    save_smtp_config,load_smtp_config,private_directory)
+    save_smtp_config,load_smtp_config,set_smtp_enabled,private_directory)
 from app.workspace.local_digest import build_digest,build_status_digest
 from app.workspace.local_schedule import LocalRunLock
 from app.workspace.local_atomic import write_json_atomic
@@ -30,7 +30,7 @@ def owned_root(root):
     return root
 
 
-def configure(root,*,ask=input,secret=getpass,enabled=False,owner_confirmed=False):
+def configure(root,*,ask=input,secret=getpass,enabled=False,owner_confirmed=False,overwrite=False):
     root=owned_root(root)
     if enabled and not owner_confirmed:
         raise ValueError("confirm old mail owner switchover before activation")
@@ -41,7 +41,7 @@ def configure(root,*,ask=input,secret=getpass,enabled=False,owner_confirmed=Fals
     recipient=ask("收件邮箱（回车使用登录邮箱）：").strip() or mailbox
     password=secret("邮箱授权码（隐藏输入；不会写入仓库）：")
     config=SMTPConfig(host=host,port=port,mode=mode,username=mailbox,password=password,sender=mailbox,recipient=recipient)
-    path=save_smtp_config(root,config,enabled=enabled,owner_confirmed=owner_confirmed)
+    path=save_smtp_config(root,config,enabled=enabled,owner_confirmed=owner_confirmed,overwrite=overwrite)
     return {"state":"CONFIGURED","enabled":enabled,"owner_confirmed":owner_confirmed,"config_file":str(path)}
 
 
@@ -161,34 +161,55 @@ def dispatch(root,*,now,code_sha,config_hash,dry_run=False,recipient_id=None,slo
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command",choices=("configure","status","dispatch","preview"))
+    parser.add_argument("command",choices=("configure","status","dispatch","preview","enable","disable"))
     parser.add_argument("--root",required=True)
     parser.add_argument("--code-sha")
     parser.add_argument("--config-hash")
     parser.add_argument("--enable",action="store_true")
+    parser.add_argument("--overwrite",action="store_true")
     parser.add_argument("--confirm-owner-switchover",action="store_true")
     args=parser.parse_args(argv)
     try:
         if args.command=="configure":
             if not sys.stdin.isatty():
                 raise ValueError("owner interactive console required for hidden credential input")
-            result=configure(args.root,enabled=args.enable,owner_confirmed=args.confirm_owner_switchover)
+            result=configure(args.root,enabled=args.enable,owner_confirmed=args.confirm_owner_switchover,overwrite=args.overwrite)
         elif args.command=="status":
             try:
                 _,policy=load_smtp_config(owned_root(args.root))
                 result={"state":"CONFIGURED",**policy}
             except ValueError:
                 result={"state":"CONFIG_REQUIRED"}
+        elif args.command=="enable":
+            result=set_smtp_enabled(owned_root(args.root),enabled=True,owner_confirmed=args.confirm_owner_switchover)
+        elif args.command=="disable":
+            result=set_smtp_enabled(owned_root(args.root),enabled=False,owner_confirmed=False)
         else:
             from app.core.config import Settings
             from app.services.analysis_service import AnalysisService
-            with AnalysisService(Settings(_env_file=None)) as service:
-                result=dispatch(args.root,now=datetime.now(timezone.utc),code_sha=args.code_sha or "",
-                    config_hash=args.config_hash or "",dry_run=args.command=="preview",analyzer=service.analyze)
+            from app.utils.hashing import stable_hash
+            settings = Settings(_env_file=None)
+            sha = args.code_sha
+            if not sha:
+                import subprocess
+                try:
+                    repo_dir = str(Path(__file__).resolve().parents[1])
+                    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo_dir, text=True).strip()
+                except Exception as exc:
+                    sha = "0" * 40
+            chash = args.config_hash
+            if not chash:
+                try:
+                    chash = stable_hash(settings.load_strategy())
+                except Exception as exc:
+                    chash = "0" * 64
+            with AnalysisService(settings) as service:
+                result=dispatch(args.root,now=datetime.now(timezone.utc),code_sha=sha,
+                    config_hash=chash,dry_run=args.command=="preview",analyzer=service.analyze)
         print(json.dumps(result,ensure_ascii=False))
         return 1 if result["state"] in {"CONFIG_REQUIRED","CALENDAR_UNKNOWN"} else 0
-    except Exception:
-        print(json.dumps({"state":"NOTIFICATION_FAILED","reason":"configuration_or_input_invalid"}))
+    except Exception as exc:
+        print(json.dumps({"state":"NOTIFICATION_FAILED","reason":"configuration_or_input_invalid","detail":str(exc)}))
         return 1
 
 if __name__=="__main__":

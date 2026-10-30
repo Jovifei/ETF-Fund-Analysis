@@ -214,7 +214,14 @@ class NotificationQueue:
                     raise ValueError("immutable notification already queued")
                 return old["id"]
             if db.execute("SELECT COUNT(*) FROM messages").fetchone()[0] >= MAX_ITEMS:
-                raise ValueError("notification capacity reached")
+                # Auto-prune terminal messages older than 30 days
+                cutoff = (now - timedelta(days=30)).isoformat()
+                db.execute("DELETE FROM messages WHERE (state='ACCEPTED' OR (state='FAILED' AND retryable=0) OR state='AMBIGUOUS') AND created_at < ?", (cutoff,))
+                if db.execute("SELECT COUNT(*) FROM messages").fetchone()[0] >= MAX_ITEMS:
+                    # Still full? Prune oldest ACCEPTED messages to free up capacity
+                    db.execute("DELETE FROM messages WHERE id IN (SELECT id FROM messages WHERE state='ACCEPTED' ORDER BY created_at ASC LIMIT 100)")
+                if db.execute("SELECT COUNT(*) FROM messages").fetchone()[0] >= MAX_ITEMS:
+                    raise ValueError("notification capacity reached")
             db.execute("INSERT INTO messages(id,event_key,payload_hash,subject,body,binding,state,created_at) VALUES (?,?,?,?,?,?,'READY',?)",
                        (event_key,event_key,payload_hash,subject,body,json.dumps(binding,sort_keys=True),now.isoformat()))
         return event_key
@@ -283,7 +290,7 @@ def _config_path(root):
     return path
 
 
-def save_smtp_config(root, config: SMTPConfig, *, enabled=False, owner_confirmed=False):
+def save_smtp_config(root, config: SMTPConfig, *, enabled=False, owner_confirmed=False, overwrite=False):
     if type(enabled) is not bool or type(owner_confirmed) is not bool or enabled and not owner_confirmed:
         raise ValueError("explicit single-owner activation required")
     if os.name!="nt":
@@ -291,18 +298,44 @@ def save_smtp_config(root, config: SMTPConfig, *, enabled=False, owner_confirmed
     from app.workspace.ai_secrets import _dpapi
     from app.workspace.windows_acl import descriptor
     path=_config_path(root)
-    if path.exists():
+    if path.exists() and not overwrite:
         raise ValueError("SMTP configuration already exists; preserve it")
     value={"version":"etf-smtp-dpapi-v1","host":config.host,"port":config.port,
            "username":config.username,"sender":config.sender,"recipient":config.recipient,"mode":config.mode,
            "password_dpapi":base64.b64encode(_dpapi(config.password.encode())).decode(),
            "enabled":enabled,"owner_confirmed":owner_confirmed}
+    if path.exists():
+        path.unlink()
     fd=os.open(path,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
     with os.fdopen(fd,"w",encoding="utf-8") as handle:
         descriptor(path,created=True,directory=False)
         json.dump(value,handle,ensure_ascii=False)
         handle.flush();os.fsync(handle.fileno())
     return path
+
+
+def set_smtp_enabled(root, *, enabled: bool, owner_confirmed: bool):
+    """Update enabled flag of an existing SMTP config without re-entering password."""
+    if type(enabled) is not bool or type(owner_confirmed) is not bool or (enabled and not owner_confirmed):
+        raise ValueError("explicit single-owner activation required")
+    path = _config_path(root)
+    if not path.is_file():
+        raise ValueError("SMTP configuration not found")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["enabled"] = enabled
+    data["owner_confirmed"] = owner_confirmed
+    from app.workspace.windows_acl import descriptor
+    temp_path = path.with_suffix(".tmp")
+    if temp_path.exists():
+        temp_path.unlink()
+    fd = os.open(temp_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        descriptor(temp_path, created=True, directory=False)
+        json.dump(data, handle, ensure_ascii=False)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temp_path, path)
+    return {"state": "UPDATED", "enabled": enabled, "owner_confirmed": owner_confirmed, "config_file": str(path)}
 
 
 def load_smtp_config(root):

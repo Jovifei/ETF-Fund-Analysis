@@ -84,3 +84,25 @@ def test_semantic_bad_shapes_become_status_instead_of_stopping_dispatch(cli,tmp_
     result=cli.dispatch(tmp_path,now=AT+timedelta(minutes=20),code_sha="a"*40,config_hash="b"*64,
         dry_run=True,recipient_id="c"*64,slots=("14:30",),calendar_verified=True)
     assert result["queued"]==1 and result["notices"][0]["kind"]=="status"
+
+
+@pytest.mark.skipif(sys.platform!="win32",reason="CurrentUser DPAPI setup is native Windows only")
+def test_enable_and_disable_subcommands(cli,tmp_path):
+    cli=cli()
+    (tmp_path/".local-live").touch()
+    answers=iter(["fixture@example.invalid","smtp.example.invalid","465","ssl",""])
+    result=cli.configure(tmp_path,ask=lambda p:next(answers),secret=lambda p:"code-123")
+    assert result["enabled"] is False
+
+    # enable command
+    rc=cli.main(["enable","--root",str(tmp_path),"--confirm-owner-switchover"])
+    assert rc==0
+    from app.workspace.local_notifications import load_smtp_config
+    _,policy=load_smtp_config(tmp_path)
+    assert policy["enabled"] is True
+
+    # disable command
+    rc=cli.main(["disable","--root",str(tmp_path)])
+    assert rc==0
+    _,policy=load_smtp_config(tmp_path)
+    assert policy["enabled"] is False

@@ -173,11 +173,13 @@ def dispatch_once(root: Path, identity: dict, *, calendar, run_job, replay, now=
         pending = ledger.pending_replay(now=now(), identity=identity)
         upload_failure = {}
 
-        def on_diagnostic(phase, *, status, duration_seconds, error_type=None, reason=None):
+        def on_diagnostic(phase, *, status, duration_seconds, error_type=None, reason=None, failure_detail=None, **kwargs):
             ledger.record_diagnostic(attempt['attempt_id'], phase, status=status, now=now(),
-                duration_seconds=duration_seconds, error_type=error_type, reason=reason)
+                duration_seconds=duration_seconds, error_type=error_type, reason=reason, failure_detail=failure_detail)
             if status == 'failed' and phase in {'upload_auth', 'pre_upload_validation', 'transport_receipt'} and not upload_failure:
                 upload_failure.update(error_type=error_type, reason=reason, failure_stage=phase)
+                if failure_detail is not None:
+                    upload_failure["failure_detail"] = str(failure_detail)[:255]
 
         # A newer due observation takes priority over retrying an old generation.
         if slot is None and pending:
@@ -195,7 +197,7 @@ def dispatch_once(root: Path, identity: dict, *, calendar, run_job, replay, now=
                 ledger.record_job(attempt['attempt_id'], name, status='succeeded', now=now())
             except Exception as exc:
                 ledger.record_job(attempt['attempt_id'], name, status='failed', now=now(),
-                                  details=upload_failure or {'error_type': public_error_type(exc),
+                                  details=upload_failure or {'error_type': public_error_type(exc), 'failure_detail': str(exc)[:255],
                                       'reason': 'replay_failed', 'failure_stage': 'replay'})
                 return 1
             return 0 if ledger.get_attempt(attempt['attempt_id'])['status'] == 'DELIVERED' else 1

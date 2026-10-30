@@ -40,12 +40,13 @@ from app.workspace.local_job_ledger import public_error_type
 @contextmanager
 def phase_diagnostic(args, phase):
     """Report only fixed phase/category metadata and monotonic elapsed time."""
+    setattr(args, '_active_phase', phase)
     started = monotonic()
     event = {'status': 'failed', 'error_type': 'Exception', 'reason': f'{phase}_failed'}
     try:
         yield
     except BaseException as exc:
-        event = {'status': 'failed', 'error_type': public_error_type(exc), 'reason': f'{phase}_failed'}
+        event = {'status': 'failed', 'error_type': public_error_type(exc), 'reason': f'{phase}_failed', 'failure_detail': str(exc)[:255]}
         raise
     else:
         event = {'status': 'succeeded'}
@@ -297,7 +298,26 @@ def cmd_run(args: argparse.Namespace) -> int:
                 print(json.dumps({"status": "uploaded", "receipt": receipt}, indent=2, ensure_ascii=False))
             except Exception as exc:
                 # Fix-6: upload failure must exit non-zero so Windows Task Scheduler records it
-                print(json.dumps({"status": "upload_failed", "error_type": public_error_type(exc)}, ensure_ascii=False))
+                err_type = public_error_type(exc)
+                err_msg = str(exc)
+                active_phase = getattr(args, '_active_phase', 'upload_unknown')
+                err_payload = {
+                    "status": "upload_failed",
+                    "error_type": err_type,
+                    "error_message": err_msg,
+                    "phase": active_phase,
+                }
+                try:
+                    from datetime import datetime, timezone
+                    err_file = outbox / "last_upload_error.json"
+                    write_json_atomic(err_file, {
+                        **err_payload,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "sequence": bundle.get("manifest", {}).get("sequence") if isinstance(bundle, dict) else None,
+                    })
+                except Exception:
+                    pass
+                print(json.dumps(err_payload, ensure_ascii=False))
                 return 1
 
         return 0
