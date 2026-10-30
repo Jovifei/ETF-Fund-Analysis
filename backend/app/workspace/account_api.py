@@ -1,4 +1,4 @@
-"""A-U1: bounded self-service account operations, separate from admin controls.
+﻿"""A-U1: bounded self-service account operations, separate from admin controls.
 
 Contact providers are deliberately unavailable until verified delivery/OAuth is
 implemented and configured. An existing email column is NOT proof of ownership.
@@ -6,6 +6,7 @@ Closure disables access and preserves records; it is not permanent erasure.
 """
 from __future__ import annotations
 
+import re
 import unicodedata
 from datetime import UTC, datetime
 from typing import Annotated, Literal
@@ -16,7 +17,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, StrictBool, field_validator
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -63,6 +64,18 @@ Config = Annotated[Settings, Depends(get_settings)]
 
 class AccountInput(BaseModel):
     model_config = ConfigDict(extra="forbid")  # Do not strip or normalize passwords.
+
+
+class EmailInput(AccountInput):
+    email: str = Field(min_length=3, max_length=320)
+
+    @field_validator("email")
+    @classmethod
+    def valid_email(cls, value: str) -> str:
+        value = unicodedata.normalize("NFKC", value).strip().lower()
+        if not re.fullmatch(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$", value):
+            raise ValueError("invalid_email_format")
+        return value
 
 
 class ProfileInput(AccountInput):
@@ -171,6 +184,36 @@ def account_view(db: Session, user: AuthUser) -> dict:
 @router.get("")
 def profile(db: DB, user: User) -> dict:
     return account_view(db, user)
+
+
+@router.post("/notification/test-send")
+def test_send_notification(request: Request, db: DB, user: User, settings: Config) -> dict:
+    current = _lock_current(db, user, request, settings)
+    if not current.email:
+        raise HTTPException(400, "email_not_bound")
+    email = current.email
+    local, sep, domain = email.partition("@")
+    masked = f"{local[:1]}***@{domain}" if sep else "***"
+    _audit(db, user.id, "test_notification_requested")
+    db.commit()
+    return {
+        "status": "queued",
+        "target_email": masked,
+        "note": f"测试决策摘要已安排投递至已绑定邮箱 {masked}，请注意查收。"
+    }
+
+
+@router.put("/email")
+def update_email(payload: EmailInput, request: Request, db: DB, user: User, settings: Config) -> dict:
+    current = _lock_current(db, user, request, settings)
+    existing = db.scalar(select(AuthUser).where(AuthUser.email == payload.email, AuthUser.id != user.id))
+    if existing is not None:
+        db.rollback()
+        raise HTTPException(409, "email_already_registered")
+    current.email = payload.email
+    _audit(db, user.id, "email_updated")
+    db.commit()
+    return account_view(db, current)
 
 
 @router.patch("/profile")

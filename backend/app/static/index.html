@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
@@ -42,7 +42,7 @@
       <span id="sourceBadge" class="source-badge fallback" aria-live="polite">来源 —</span>
       <span id="connectionBadge" class="status-dot offline">离线</span>
       <button id="refreshButton" class="ghost">刷新</button>
-      <button id="lockButton" class="ghost">退出登录</button>
+      <button id="userSettingsButton" class="ghost" type="button" title="个人推送与AI配置">⚙️ 推送与AI</button>`r`n        <button id="lockButton" class="ghost">退出登录</button>
     </div>
   </header>
 
@@ -220,5 +220,61 @@
   <script src="/assets/decision_refresh.js?v=audit-20260913" defer></script>
   <script src="/assets/app.js?v=0.7.4" defer></script>
   <script src="/assets/legacy_route.js?v=0.8.1" defer></script>
+  <div id="userSettingsOverlay" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="userSettingsHeading">
+    <div class="modal auth-card" style="max-width: 520px; width: 92%; text-align: left;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <div>
+          <div class="eyebrow">PUSH & AI CONFIGURATION</div>
+          <h2 id="userSettingsHeading" style="margin: 0; font-size: 1.25rem;">决策推送与 AI 专属配置</h2>
+        </div>
+        <button id="closeUserSettingsButton" class="ghost" type="button" style="font-size: 1.5rem; line-height: 1; padding: 0 0.5rem;">&times;</button>
+      </div>
+
+      <!-- 1. 邮箱绑定 -->
+      <section style="margin-bottom: 1.25rem; padding-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+        <h3 style="font-size: 1rem; margin-bottom: 0.25rem;">📧 个人决策推送邮箱</h3>
+        <p class="muted" style="font-size: 0.8rem; margin-bottom: 0.5rem;">绑定您的个人邮箱（如 QQ / 163 等），每日收盘后将决策摘要推送到此邮箱。</p>
+        <div style="display: flex; gap: 0.5rem;">
+          <input id="userEmailInput" type="email" placeholder="例如：977191131@qq.com" maxlength="320" style="flex: 1;">
+          <button id="saveUserEmailButton" class="primary" type="button">保存绑定</button>
+        </div>
+        <div id="userEmailStatus" class="muted" style="margin-top: 0.4rem; font-size: 0.8rem;"></div>
+      </section>
+
+      <!-- 2. AI Key 配置 -->
+      <section style="margin-bottom: 1.25rem; padding-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+        <h3 style="font-size: 1rem; margin-bottom: 0.25rem;">🤖 OpenAI / AI 模型配置</h3>
+        <p class="muted" style="font-size: 0.8rem; margin-bottom: 0.5rem;">填入您的 OpenAI API Key，生成专属文字解读。Key 采用 AES-GCM 安全加密存储。</p>
+        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+          <div>
+            <label class="auth-label" for="userAiBaseUrl">API Base URL</label>
+            <input id="userAiBaseUrl" type="text" value="https://api.openai.com" style="width: 100%;">
+          </div>
+          <div>
+            <label class="auth-label" for="userAiModel">模型名称</label>
+            <input id="userAiModel" type="text" value="gpt-4o-mini" placeholder="gpt-4o-mini / gpt-4o / deepseek-chat" style="width: 100%;">
+          </div>
+          <div>
+            <label class="auth-label" for="userAiKey">API Key</label>
+            <input id="userAiKey" type="password" placeholder="sk-..." autocomplete="off" style="width: 100%;">
+          </div>
+          <div style="text-align: right; margin-top: 0.25rem;">
+            <button id="saveUserAiButton" class="primary" type="button">保存 AI 配置</button>
+          </div>
+          <div id="userAiStatus" class="muted" style="font-size: 0.8rem;"></div>
+        </div>
+      </section>
+
+      <!-- 3. 测试推送 -->
+      <section>
+        <h3 style="font-size: 1rem; margin-bottom: 0.25rem;">🚀 验证推送</h3>
+        <p class="muted" style="font-size: 0.8rem; margin-bottom: 0.5rem;">一键向当前绑定的邮箱发送一封测试决策邮件。</p>
+        <button id="testPushNotificationButton" class="ghost" type="button" style="width: 100%; border: 1px dashed rgba(255,255,255,0.3);">
+          📨 立即向已绑定邮箱发送测试决策
+        </button>
+        <div id="testPushStatus" class="muted" style="margin-top: 0.4rem; font-size: 0.8rem;"></div>
+      </section>
+    </div>
+  </div>
 </body>
 </html>

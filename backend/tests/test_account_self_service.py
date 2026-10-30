@@ -1,4 +1,4 @@
-"""A-U1: self-service changes use real database sessions and never claim verification."""
+﻿"""A-U1: self-service changes use real database sessions and never claim verification."""
 from collections.abc import Iterator
 
 import pytest
@@ -190,3 +190,36 @@ def test_last_admin_cannot_close(account_case):
                     json={"current_password": PASSWORD, "confirmation": "注销当前账户", "acknowledge_retention": True})
     assert r.status_code == 409
     assert r.json()["detail"] == "last_active_admin_protected"
+
+
+def test_email_update_validation_and_success(account_case):
+    client, factory, _, headers, ids, *_ = account_case
+    # 1. Invalid formats
+    for bad in ["notanemail", "@missinguser.com", "user@", "bad space@domain.com"]:
+        r = client.put("/api/workspace/account/email", headers=headers, json={"email": bad})
+        assert r.status_code == 422
+
+    # 2. Valid email update
+    r = client.put("/api/workspace/account/email", headers=headers, json={"email": "977191131@qq.com"})
+    assert r.status_code == 200
+    assert r.json()["email"]["state"] == "recorded_unverified"
+    assert r.json()["email"]["masked"] == "9***@qq.com"
+
+    # 3. Check DB persistence
+    with factory() as db:
+        user = db.get(AuthUser, ids["user"])
+        assert user.email == "977191131@qq.com"
+
+
+def test_email_update_conflict_rejected(account_case):
+    client, factory, _, headers, ids, *_ = account_case
+    # other user has no email initially; let's give other user an email in DB
+    with factory() as db:
+        other = db.get(AuthUser, ids["other"])
+        other.email = "occupied@example.com"
+        db.commit()
+
+    # user attempts to set same email
+    r = client.put("/api/workspace/account/email", headers=headers, json={"email": "occupied@example.com"})
+    assert r.status_code == 409
+    assert r.json()["detail"] == "email_already_registered"

@@ -2337,6 +2337,109 @@ async function connectEvents() {
   }
 }
 
+
+async function openUserSettingsModal() {
+  const overlay = qs('#userSettingsOverlay');
+  if (!overlay) return;
+  overlay.classList.remove('hidden');
+  const emailStatus = qs('#userEmailStatus');
+  const aiStatus = qs('#userAiStatus');
+  const pushStatus = qs('#testPushStatus');
+  if (emailStatus) emailStatus.textContent = '正在加载个人设置…';
+  if (aiStatus) aiStatus.textContent = '';
+  if (pushStatus) pushStatus.textContent = '';
+  try {
+    const acct = await api('/api/workspace/account');
+    if (acct && acct.email && emailStatus) {
+      emailStatus.textContent = acct.email.masked ? ('当前绑定：' + acct.email.masked) : '尚未绑定邮箱';
+    }
+    const profiles = await api('/api/workspace/ai/profiles');
+    if (Array.isArray(profiles) && profiles.length > 0 && aiStatus) {
+      const active = profiles.find(p => p.is_default) || profiles[0];
+      if (qs('#userAiBaseUrl')) qs('#userAiBaseUrl').value = active.base_url || 'https://api.openai.com';
+      if (qs('#userAiModel')) qs('#userAiModel').value = active.model || 'gpt-4o-mini';
+      aiStatus.textContent = '已配置模型：' + active.name + ' (' + active.model + ')';
+    }
+  } catch (err) {
+    if (emailStatus) emailStatus.textContent = '加载设置失败：' + err.message;
+  }
+}
+
+function closeUserSettingsModal() {
+  const overlay = qs('#userSettingsOverlay');
+  if (overlay) overlay.classList.add('hidden');
+}
+
+async function saveUserEmail() {
+  const input = qs('#userEmailInput');
+  const status = qs('#userEmailStatus');
+  const email = (input ? input.value : '').trim();
+  if (!email || !email.includes('@')) {
+    if (status) status.textContent = '请输入有效的邮箱地址（如 977191131@qq.com）';
+    return;
+  }
+  if (status) status.textContent = '正在保存绑定…';
+  try {
+    const res = await api('/api/workspace/account/email', {
+      method: 'PUT',
+      body: JSON.stringify({ email: email })
+    });
+    const masked = res.email && res.email.masked ? res.email.masked : email;
+    if (status) status.textContent = '✅ 邮箱绑定成功！已更新为 ' + masked;
+    if (input) input.value = '';
+    toast('推送邮箱绑定成功');
+  } catch (err) {
+    if (status) status.textContent = '❌ 保存失败：' + err.message;
+  }
+}
+
+async function saveUserAiConfig() {
+  const baseUrlInput = qs('#userAiBaseUrl');
+  const modelInput = qs('#userAiModel');
+  const keyInput = qs('#userAiKey');
+  const status = qs('#userAiStatus');
+  const baseUrl = (baseUrlInput ? baseUrlInput.value : '').trim() || 'https://api.openai.com';
+  const model = (modelInput ? modelInput.value : '').trim() || 'gpt-4o-mini';
+  const apiKey = (keyInput ? keyInput.value : '').trim();
+  if (!apiKey) {
+    if (status) status.textContent = '请输入 API Key';
+    return;
+  }
+  if (status) status.textContent = '正在加密保存 API Key…';
+  try {
+    const res = await api('/api/workspace/ai/profiles', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'openai-' + model,
+        base_url: baseUrl,
+        model: model,
+        api_key: apiKey,
+        max_tokens: 1800
+      })
+    });
+    if (res && res.profile_id) {
+      await api('/api/workspace/ai/profiles/' + res.profile_id + '/default', { method: 'POST' });
+    }
+    if (status) status.textContent = '✅ AI 配置已加密保存并设为默认 (模型: ' + model + ')';
+    if (keyInput) keyInput.value = '';
+    toast('OpenAI 配置保存成功');
+  } catch (err) {
+    if (status) status.textContent = '❌ 保存失败：' + err.message;
+  }
+}
+
+async function triggerTestPush() {
+  const status = qs('#testPushStatus');
+  if (status) status.textContent = '正在向绑定邮箱发送测试决策…';
+  try {
+    const res = await api('/api/workspace/account/notification/test-send', { method: 'POST' });
+    if (status) status.textContent = '✅ ' + (res.note || '已提交发送，请查收邮箱');
+    toast('测试决策邮件已触发');
+  } catch (err) {
+    if (status) status.textContent = '提示：' + err.message;
+  }
+}
+
 function bindEvents() {
   qs('#authForm').addEventListener('submit', async event => {
     event.preventDefault();
@@ -2405,6 +2508,11 @@ function bindEvents() {
   qs('#portfolioConfirmButton').addEventListener('click', requestPortfolioConfirm);
   qs('#portfolioConfirmYes').addEventListener('click', confirmPortfolioImport);
   qs('#portfolioConfirmNo').addEventListener('click', () => closeModal('portfolioConfirmOverlay'));
+  qs('#userSettingsButton')?.addEventListener('click', openUserSettingsModal);
+  qs('#closeUserSettingsButton')?.addEventListener('click', closeUserSettingsModal);
+  qs('#saveUserEmailButton')?.addEventListener('click', saveUserEmail);
+  qs('#saveUserAiButton')?.addEventListener('click', saveUserAiConfig);
+  qs('#testPushNotificationButton')?.addEventListener('click', triggerTestPush);
   qs('#newsRefreshButton').addEventListener('click',event=>runTask('refresh_news',event.currentTarget));
   qs('#generateReportButton').addEventListener('click',event=>runTask('generate_report',event.currentTarget));
   qs('#settingsForm').addEventListener('submit',async event=>{event.preventDefault();if(blockFormalMutation('刷新频率设置保存'))return;const form=new FormData(event.currentTarget),payload={};for(const [k,v] of form.entries())payload[k]=Number(v);try{state.settings=await api('/api/settings',{method:'PUT',body:JSON.stringify(payload)});toast('刷新频率已保存');scheduleBrowserRefresh();}catch(error){toast(`保存失败：${error.message}`);}});
