@@ -12,6 +12,7 @@ from app.providers.rss_news import RssNewsProvider
 from app.providers.sina import SinaProvider
 from app.providers.tushare import TushareProvider
 from app.providers.tencent import TencentProvider
+from app.providers.yfinance_provider import YFinanceProvider
 
 
 def _with_news(provider, settings):
@@ -27,6 +28,8 @@ def build_provider(settings: Settings | None = None) -> MarketProvider:
     settings = settings or get_settings()
     if settings.market_provider == "mock":
         return MockProvider(settings)
+    if settings.market_provider == "yfinance":
+        return _with_news(YFinanceProvider(settings), settings)
     if settings.market_provider == "tushare":
         return _with_news(TushareProvider(settings), settings)
     if settings.market_provider == "akshare":

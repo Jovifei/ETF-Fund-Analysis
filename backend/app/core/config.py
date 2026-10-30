@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import os
@@ -116,7 +116,7 @@ class Settings(BaseSettings):
     registration_invite_code: str = Field(default="", validation_alias="REGISTRATION_INVITE_CODE")
     trusted_proxy_headers: bool = False
 
-    market_provider: Literal["mock", "tushare", "akshare", "ftshare", "public_composite", "composite"] = "mock"
+    market_provider: Literal["mock", "tushare", "akshare", "ftshare", "public_composite", "composite", "yfinance"] = "mock"
     allow_mock_fallback: bool = False
     tushare_token: str = Field(default="", repr=False, exclude=True)
     tushare_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
