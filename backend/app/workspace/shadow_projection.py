@@ -1,4 +1,4 @@
-"""Public daily chart projection and versioned typed validation."""
+﻿"""Public daily chart projection and versioned typed validation."""
 from datetime import date, datetime, timezone
 from math import isfinite
 import re
@@ -12,7 +12,7 @@ LEVEL = {"price","lower","upper","kind","type","methods","groups","strength","ca
 TREND_LINE = {"label","method","start_index","end_index","start_price","end_price","projected_price","slope_per_bar"}
 CHART = {"ts_code","sr_overlay_allowed","research_sr_overlay_allowed","basis_transition","adjust","bars","research_bars","available","source_as_of","as_of","computed_at","actionable","qualification","research_only","interval","unsupported_intervals","indicator_version","indicator_basis","input_hash","series_id","chart_contract_version","display_price_basis","research_price_basis","research_price_basis_id","raw_overlay_allowed","raw_overlay_reason","history_issue","reason","cost_overlay_allowed","research_cost_overlay_allowed","studies","support_resistance","research_support_resistance"}
 STUDY = {"levels","nearest_support","nearest_resistance","current_price","atr14","atr_basis","reason","actionable","qualified","qualification","trend_lines"}
-CODE_RE = re.compile(r"[0-9]{6}\.(SH|SZ|BJ)")
+CODE_RE = re.compile(r"([0-9]{6}\.(SH|SZ|BJ)|[A-Za-z0-9_.-]+\.US)")
 
 def numeric(value, *, nullable=False):
     if value is None and nullable:
