@@ -220,76 +220,30 @@ Review: 仅展示JSON数字编码变化，负零、布尔及非整数保留；�
 - [ ] Arrange two verified trading-day slot/latency/cloud-zero-growth observation; report pending until observed.
 
 
-## 2026-10-26 执行每日链路修复（Jovi已批准执行）
+## 2026-10-26 定时数据—决策—网站—邮件只读排障
 
-- [x] P0 固定失败分类/阶段耗时持久化；空轮询不冒充全天验收。
-- [x] P1 收盘日线研究依据和评分输入隔离，旧证明/合法旧包兼容。
-- [x] P2 图表投影与 base 摘要复用、同包恢复及发送前守卫。
-- [ ] P2 真实快槽源时间至接收 ≤4 分钟目标与多日统计。
-- [x] P3 同批摘要、AI 来源与 SMTP 默认停用队列实现/测试。
-- [ ] P3 旧发送 owner 归属闭环、真实 AI/SMTP 配置/投递和缺席检查（Jovi 暂缓 SMTP）。
-- [x] P4 固定 `2f4e8cc` 全量与十项精确 CI、独立/网页复审、PR58 合 main `0ceec87`。
-- [x] P4 备份/回滚、网站 v1.0.13、34 只生产 Reader、两项 pythonw Action 成套切换。
-- [x] P4 手动有限重试578.215秒取得签名 accepted，新代1793045670621，生产Reader同代34/170与发布短窗云端八表零增长。
-- [ ] 正常生产登录/手机、两交易日自然运行与7–14日观察；资格保持 UNKNOWN。
+范围：先检查与报告，不修改业务代码、调度、数据或发送邮件；基线 E 根 7b3a575，固定生产者 dcffa8e，网站 v1.0.12。
 
-保护E根未提交报告，执行树 codex/daily-pipeline-repair-20261026；基线聚焦收据见Download/ETF-daily-pipeline-20261026/baseline.xml，未重跑旧全量。
+- [x] 核当前版本、实际 Windows 触发器与今天退出码。
+- [x] 对账本机 slots/attempts/jobs、原始行情与决策时点。
+- [x] 读回服务器默认批次与接收/请求证据，定位上传失败边界。
+- [x] 查明 AI/邮件实现及可得投递证据；邮件来自 mail.grokbot.com，外部任务当前启停尚未取得。
+- [x] 输出原因、修复优先级和端到端验收合同，独立复核。
 
-Review：发布源码、CI、控制登记与部署镜像分别绑定；不继承旧候选的空扫描或测试失败结果。生产准备时一次 API 重启原因未完整确认，故障证据保留；正式切换后的健康与资源另验。SMTP 真实发送按 Owner 指示保持关闭。
+Review：只读排查及独立复核完成，证据交叉检查与 git diff --check 通过；未运行新代码测试。网站停盘中批次、日终报价合同/快槽时效/AI邮件归属缺口详见 docs/audits/DAILY_PIPELINE_GAP_20261026.md。Windows Result=0 不能代表全链路成功。Hub revision 查询本次 WinError10061，未发送，不自动重试；未改代码/任务/生产数据，未发送邮件。
 
-## 2026-10-28 结算测试时钟与待接收提交复核
 
-- [x] 查明本地未推送的 `6442c7e`，独立复核新增运行时接口边界；保留原分支和提交。
-- [x] 在实际生产源码 A0D 复现旧测试按真实系统日期失败，证明只补测试夹具即可通过。
-- [x] 在独立工作树最小修正测试时钟；184 项相关测试、编译、Node 语法、敏感字段扫描和运行源码不变检查通过。
-- [x] 冻结合并门槛：固定提交通过精确 CI 和同项目网页只读复审；运行时无变化，不重做生产切换。
-- [x] 只读核对两日自然槽及 15:00 过期证据；仍未接通的 SMTP 和早槽缺口分别保留，不以测试通过冒充全天交付。
-- [x] 复现并修正 AKShare 1.20.2 内部路径变化导致的 CI 测试失败，保留原始时效断言。
-- [x] 对包含上述修正的新固定提交完成精确 CI 与网页复审后合并（PR60 / 5555225 / main 0bbc54a）。
-- [ ] 后续修复全天观察窗口、未来回执与账本只读缺口，并测量启动、源时点及投影耗时。
+## 2026-10-26 每日完整链路修复计划
 
-## 2026-10-28 隔离工作树整合与临时快照清理
+计划：`tasks/plans/2026-10-26-daily-pipeline-repair.md`。仅计划，尚未授权本轮新代码/运行切换。
 
-- [x] 核当前主线与隔离分支，按已有精确测试证据判断可合并内容。
-- [x] 核验两份临时数据库的路径、用途、只读聚合及哈希，保存清理收据并仅删除指定样本。
-- [ ] 在保全 Owner 未提交文件的前提下同步现有工作分支及 E 根 main，不提交 Owner 草稿。
-- [ ] 保留必要的精简审核结论；通过文档合同、精确 CI 与同项目网页复审后归入 main。
+- [x] 现场证据、当前源码与既有能力映射。
+- [x] 独立复核full/base复用、下游报价污染风险、邮件唯一owner及故障隔离。
+- [x] 冻结P0–P4范围、失败优先测试、同SHA验收与无损回滚合同。
+- [ ] P0 持久错误/分项耗时/全天状态。
+- [ ] P1 完整同日结算研究依据、输入选择与网站发布。
+- [ ] P2 快槽性能、有效窗与同包恢复。
+- [ ] P3 唯一邮件任务、同批AI解释、投递与缺席状态。
+- [ ] P4 精确CI/独立及网页复审、受控发布、同批收件与两交易日自然验收。
 
-Review：Jovi 已授权本次检查、按价值整合与指定临时快照清理；运行代码的独立缺口不随此项整理宣布修复。子 Agent 使用 gpt-6.1-terra / max，父 Agent 负责最终复核与变更。
-
-Review：审计结论及隔离复现见 `docs/audits/SETTLED_TEST_CLOCK_REVIEW_20261028.md`。原 `6442c7e` 有内部输入信任及历史背景截止边界缺口，未合入本分支；尚无其外部 HTTP 可利用或生产污染的证据。
-
-## 2026-10-29 审计收尾：诊断耗时可见性 + 沪深300 占比研究设计（Jovi 要求新分支完成）
-
-- [x] 从 origin/main `f7993b4` 新建隔离工作树 `E:\worktrees\etf-audit-completion-20261028`（分支 `codex/audit-completion-20261028`），不改动其他 Agent 的工作树与分支。
-- [x] 稳定性报告每个槽位新增 `diagnostic_phases`（阶段、状态、耗时、观测数、首失败分类），只做测量，不参与 PASS/FAIL 判定。
-- [x] 失败优先测试：外来源、负耗时、NaN、未知状态的行被忽略；已恢复的失败仍可见但不改变交付状态。
-- [x] 聚焦测试 `test_local_stability.py` 50 项通过。
-- [x] 沪深300 头部基金市值/流通市值比例：实测现有 Provider 无指数自由流通市值分母，只提交研究设计与数据准入门槛，不实现伪计算。
-- [x] 数据源选型：Jovi 决定不付费，首期走零凭证前瞻采集（中证官方成分 + 东财全市场快照 + 场内基金净值快照），Tushare 2000 积分仅作为将来免费攒够后的回填升级；“头部”= 全部跟踪沪深300 的 ETF，分子两种口径都做。见 `tasks/plans/2026-10-29-hs300-ratio-data-source-selection.md`。
-- [x] 全量 pytest（退出码 0，进度 100%，含跳过项）、compileall 与 node --check 通过。
-- [ ] 本地提交后推送分支，PR/复审通过后再合并。
-
-Review：本轮只改本地稳定性报告的测量字段并新增研究设计文档，不改指标公式、信号权重、仓位阈值、Provider 或生产数据库；资格保持 UNKNOWN、actionable=false、not_calibrated。设计文档见 `tasks/plans/2026-10-28-hs300-passive-ratio-research.md`。
-
-## 2026-10-29 沪深300 占比 Phase 1（零凭证前瞻快照，Jovi 批准“执行吧”）
-
-- [x] 白名单新增 `index_stock_cons_csindex`、`fund_etf_fund_daily_em`。
-- [x] Provider 新能力：`fetch_index_constituents`、`fetch_stock_float_market_caps`、`fetch_etf_nav_snapshot`、`fetch_etf_catalog`；AKShare 实现、Composite 转调、其余默认 `CapabilityUnavailable`。
-- [x] 表 `hs300_passive_ratio_snapshots` + 迁移 `b7c8d9e0f1a2`（down_revision `f0e1d2c3b4a5`）；临时库 upgrade → downgrade → upgrade 通过，列/索引核对一致。
-- [x] `Hs300RatioService`：研究写守卫、Mock 拒绝、冻结清单只读、两种分子口径、收盘后且当日快照校验、成分 100% 覆盖、比例越界拒绝、质量哈希幂等 upsert；恒 `actionable=false`、`changes_grade=false`、`qualification=UNKNOWN`、`not_calibrated`。
-- [x] 任务注册 `refresh_hs300_ratio`（不并入 `full_pipeline`）。
-- [x] `config/hs300_etf_universe.json` 以 `status=provisional` 占位；`scripts/derive_hs300_etf_universe.py` 供 Jovi 本机派生并 `--confirm --owner` 冻结。
-- [x] 新增 `backend/tests/test_hs300_passive_ratio.py` 19 项通过；聚焦回归 67 项通过；compileall、node --check 通过。
-- [x] 新增只读研究 API `GET /api/workspace/hs300-ratio` 与测试 `test_hs300_ratio_api.py`。
-- [x] 前端市场总览增加研究卡片与测试 `overview-context.test.ts`；保持 `research_only=true`、`actionable=false`。
-- [x] 全量 `pytest -q` 通过（2026-10-29，两次基线对照后确认 green，`PYTEST_EXIT=0`）；`compileall`、`node --check`、ruff 通过。
-- [x] 全量首轮暴露 `test_multi_user_ownership` 两项红测：基线 `f7993b4` 全量 green，本分支新增的 1 条 TaskRun 把 bootstrap 的 20 条窗口顶满，而这两项用 `datetime.now(UTC)` 建行、SQLite 丢偏移量后按墙钟排序落后 8 小时。已改为按应用时钟（`settings.timezone`）打戳，断言不变。
-- [x] 独立评审补强：单位净值逐只拒绝 `nav_date > as_of`（`fund_nav_future`）、成分名单日期晚于估值日拒绝（`constituent_date_after_as_of`）、收盘价复用 `data_contract.row_units_verified` 并要求质量哈希（`fund_close_unqualified`）、结果补 `observation_kind`/`observed_at`。先写 7 项失败测试再实现，现 25 项全过。
-- [ ] 仍待决策：本轮是否补一个只读 API/页面入口（当前表只写不读）。
-- [ ] Jovi 在本机（可访问东财）运行派生脚本，逐只核对后冻结清单。
-- [ ] 推送分支后开 PR，复审通过再合并（未获 PR 授权前不自动开）。
-
-Review：新增均为只读取数能力与独立研究快照表，不改指标公式、信号权重、仓位阈值和市场门控；不写生产数据库，不启用自动交易；资格保持 UNKNOWN、actionable=false、not_calibrated。
-- [x] 网页复审反馈补强（2026-10-30）：actions_api 校验 computed_at 时间必须为当日盘后（>=15:00）才标记 same_day_post_close_snapshot，否则标记 research_snapshot；补齐空表 no_snapshot、local_bundle 未发布、零网络/零写库断言；前端补测两项不可用状态展示。
-- [x] 网页复审二次补强（2026-10-30）：统一盘后收盘时间判定至 SETTLEMENT_CUTOFF (15:15)；test_hs300_ratio_api 引入 SQLAlchemy before_execute 拦截器验证零写库并对比行状态全字段、拦截外部网络与 Provider refresh 调用；测试 15:14:59/15:15:00 临界点。
+Review：本轮只写计划与任务记录；命令均为未来验收要求，无新代码测试/发布/发信声明。保留上一轮报告与其他Agent工作。Hub连接拒绝未上报。

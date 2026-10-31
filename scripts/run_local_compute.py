@@ -76,6 +76,8 @@ def read_execution(args):
 
 def get_current_git_sha() -> str:
     import subprocess
+    import sys
+    cf = 0x08000000 if sys.platform == "win32" else 0
     # Hard gate: verify that tracked runtime code (backend, scripts, config) has NO uncommitted changes
     status_proc = subprocess.run(
         ["git", "status", "--porcelain", "--untracked-files=all", "backend/", "scripts/", "config/", "frontend/", "pyproject.toml"],
@@ -83,11 +85,12 @@ def get_current_git_sha() -> str:
         capture_output=True,
         text=True,
         check=True,
+        creationflags=cf,
     )
     if status_proc.stdout.strip():
         raise RuntimeError("uncommitted runtime modifications detected in repo")
 
-    res = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(PROJECT_ROOT), capture_output=True, text=True, check=True)
+    res = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(PROJECT_ROOT), capture_output=True, text=True, check=True, creationflags=cf)
     sha = res.stdout.strip()
     if not sha or len(sha) < 40 or set(sha) == {"0"}:
         raise RuntimeError("git rev-parse HEAD failed to return a valid non-zero commit SHA")
