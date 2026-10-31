@@ -46,7 +46,7 @@ def phase_diagnostic(args, phase):
     try:
         yield
     except BaseException as exc:
-        event = {'status': 'failed', 'error_type': public_error_type(exc), 'reason': f'{phase}_failed', 'failure_detail': str(exc)[:255]}
+        event = {'status': 'failed', 'error_type': public_error_type(exc), 'reason': f'{phase}_failed'}
         raise
     else:
         event = {'status': 'succeeded'}
@@ -320,7 +320,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                     })
                 except Exception:
                     pass
-                print(json.dumps(err_payload, ensure_ascii=False))
+                print(json.dumps({"status": "upload_failed", "error_type": err_type}, ensure_ascii=False))
                 return 1
 
         return 0
