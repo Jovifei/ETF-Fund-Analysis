@@ -185,7 +185,8 @@ class NotificationQueue:
         now = _time(now)
         keys = {"session", "slot", "kind", "generation", "bundle_id", "recipient_id"}
         optional = {"ai_input_hash", "ai_result_hash", "ai_status", "consumer_state", "data_as_of", "expires_at",
-                    "ai_model", "ai_provider", "ai_prompt_version", "ai_schema_version"}
+                    "ai_model", "ai_provider", "ai_prompt_version", "ai_schema_version",
+                    "slot_freshness_minutes", "send_data_age_minutes", "send_delay_minutes"}
         if not isinstance(binding, dict) or not keys <= set(binding) or set(binding)-keys-optional:
             raise ValueError("exact notification binding required")
         session=date.fromisoformat(binding["session"])

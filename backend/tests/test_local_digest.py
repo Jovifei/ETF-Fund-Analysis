@@ -144,3 +144,41 @@ def test_schema_valid_oversized_ai_text_falls_back_without_blocking_mail(packet)
     assert result.binding["ai_status"]=="analysis_unavailable"
     assert result.binding["ai_result_hash"] is None and result.binding["ai_model"] is None
     assert len(result.body)<12000 and "AI解释不可用" in result.body
+
+
+
+
+def test_late_digest_distinguishes_slot_freshness_from_send_data_age(packet):
+    from zoneinfo import ZoneInfo
+    b, r = deepcopy(packet)
+    # Quote at 12:23 Shanghai time
+    quote_dt = datetime(2026, 10, 26, 12, 23, tzinfo=ZoneInfo("Asia/Shanghai"))
+    b["parts"]["details"]["510300.SH"]["quote"]["source_time"] = quote_dt.isoformat()
+    # Generated at 14:45, valid until 20:00
+    gen_dt = datetime(2026, 10, 26, 14, 45, tzinfo=ZoneInfo("Asia/Shanghai"))
+    exp_dt = datetime(2026, 10, 26, 20, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+    b["manifest"]["generated_at"] = gen_dt.isoformat()
+    b["manifest"]["expires_at"] = exp_dt.isoformat()
+    b["parts"]["overview"]["generated_at"] = gen_dt.isoformat()
+    b["manifest"]["parts_hashes"] = compute_parts_hashes(b["parts"])
+    r.update(bundle_id=digest(b["manifest"]), manifest_hash=digest(b["manifest"]), received_at=gen_dt.isoformat())
+
+    # Sent at 18:50 (late delivery)
+    send_now = datetime(2026, 10, 26, 18, 50, tzinfo=ZoneInfo("Asia/Shanghai"))
+
+    from app.workspace.local_digest import build_digest
+    digest_result = build_digest(
+        bundle=b, receipt=r, session="2026-10-26", slot="14:45",
+        recipient_id="c"*64, now=send_now,
+        expected_code_sha="a"*40, expected_config_hash="b"*64,
+        kind="late",
+    )
+    assert "原槽位新鲜度" in digest_result.body
+    assert "约 142 分钟" in digest_result.body
+    assert "发送时数据年龄" in digest_result.body
+    assert "约 387 分钟" in digest_result.body
+    assert "距计划槽位约 245 分钟" in digest_result.body
+    assert "严禁作为实时交易信号" in digest_result.body
+    assert digest_result.binding["slot_freshness_minutes"] == 142
+    assert digest_result.binding["send_data_age_minutes"] == 387
+    assert digest_result.binding["send_delay_minutes"] == 245

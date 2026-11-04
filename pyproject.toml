@@ -50,6 +50,7 @@ market = [
   "akshare>=1.17.0",
   "chanlun>=2606.73",
   "feedparser>=6.0,<7",
+  "yfinance>=0.2.40,<2",
 ]
 ocr = [
   "Pillow<13,>=10",
@@ -60,6 +61,7 @@ dev = [
   "pytest>=8,<10",
   "pytest-cov>=5,<7",
   "ruff>=0.7,<1",
+  "yfinance>=0.2.40,<2",
 ]
 
 [project.scripts]

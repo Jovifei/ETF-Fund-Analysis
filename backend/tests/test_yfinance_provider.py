@@ -9,6 +9,8 @@ import pytest
 from app.providers.base import CapabilityUnavailable, ProviderError
 from app.providers.types import BarRecord, InstrumentRecord, QuoteRecord
 
+pytest.importorskip("yfinance")
+
 
 def test_yfinance_provider_initialization_and_catalog():
     from app.providers.yfinance_provider import YFinanceProvider

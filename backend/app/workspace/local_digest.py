@@ -145,8 +145,40 @@ def build_digest(*,bundle,receipt,session,slot,recipient_id,now,expected_code_sh
     if (isinstance(consumer,dict) and consumer.get("generation")==m["sequence"]
             and consumer.get("bundle_id")==digest(m) and consumer.get("state")=="READER_MATCHED"):
         state="READER_MATCHED"
+
+    valid_source_times = []
+    for f in facts:
+        st = f.get("quote_source_time")
+        if st and isinstance(st, str):
+            try:
+                dt = datetime.fromisoformat(st.replace("Z", "+00:00"))
+                valid_source_times.append(dt.replace(tzinfo=TZ) if dt.tzinfo is None else dt.astimezone(TZ))
+            except Exception:
+                pass
+
+    slot_freshness_min = None
+    send_data_age_min = None
+    send_delay_min = max(0, round((now.astimezone(TZ) - planned).total_seconds() / 60))
+
+    if valid_source_times:
+        ref_source_dt = max(valid_source_times)
+        slot_freshness_min = max(0, round((planned - ref_source_dt).total_seconds() / 60))
+        send_data_age_min = max(0, round((now.astimezone(TZ) - ref_source_dt).total_seconds() / 60))
+
+    if slot_freshness_min is not None:
+        freshness_text = (
+            f"时效口径：原槽位新鲜度约 {slot_freshness_min} 分钟；"
+            f"发送时数据年龄约 {send_data_age_min} 分钟（距计划槽位约 {send_delay_min} 分钟）。"
+        )
+    else:
+        freshness_text = f"时效口径：无有效行情源时点；距计划槽位约 {send_delay_min} 分钟。"
+
+    if kind == "late":
+        freshness_text += "【迟到补发：数据已过时，保留研究用途与不可操作标识，严禁作为实时交易信号】"
+
     body=[f"{session} {slot} 研究摘要"+("（迟到补发）" if kind=="late" else ""),
           f"批次：{m['sequence']}；生成：{generated.astimezone(TZ).isoformat()}；服务器接收：{received.astimezone(TZ).isoformat()}。",
+          freshness_text,
           "网站服务器已核同批读取；正常登录页面需另行验收。" if state=="READER_MATCHED" else "服务器已接收；网页消费待验证，不能仅凭回执认定页面已刷新。",
           "研究分级及价格均来自冻结数据；UNKNOWN / actionable=false / not_calibrated。"]
     for f in facts:
@@ -160,5 +192,8 @@ def build_digest(*,bundle,receipt,session,slot,recipient_id,now,expected_code_sh
                   "ai_result_hash":ai_result_hash,"ai_status":ai_status,"consumer_state":state,
                   "ai_model":ai_model,"ai_provider":ai_provider,"ai_prompt_version":input_data.prompt_version,
                   "ai_schema_version":input_data.schema_version,
+                  "slot_freshness_minutes":slot_freshness_min,
+                  "send_data_age_minutes":send_data_age_min,
+                  "send_delay_minutes":send_delay_min,
                   "data_as_of":session if kind=="eod" else min((f["daily_as_of"] or "unknown") for f in facts),
                   "expires_at":m["expires_at"]})

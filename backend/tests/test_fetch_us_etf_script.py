@@ -9,6 +9,8 @@ import pytest
 
 from app.models import DailyBar, Instrument
 
+pytest.importorskip("yfinance")
+
 
 @pytest.fixture
 def cli():
