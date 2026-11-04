@@ -1,379 +1,383 @@
 {
   "513100.SH": {
     "name": "纳斯达克100ETF",
-    "bars": 2326,
+    "bars": 2327,
     "date_range": [
       "2017-03-23",
-      "2026-10-23"
+      "2026-10-26"
     ],
+    "sample_limitations": {
+      "is_small_sample": false,
+      "warning": "样本期较为充分，但需考虑跨境交易溢价及海外市场休市影响。"
+    },
     "factors": {
       "tsmom_12m": {
         "factor": "tsmom_12m",
-        "net_sharpe": 0.332,
-        "max_drawdown": -81.82,
+        "net_sharpe": 0.893,
+        "max_drawdown": -28.57,
         "trade_stats": {
-          "total_trades": 9,
-          "net_win_rate": 55.56,
-          "profit_factor": 1.976,
-          "net_expectancy_bps": 891.5
+          "total_trades": 16,
+          "net_win_rate": 50.0,
+          "profit_factor": 9.434,
+          "net_expectancy_bps": 936.0
         },
         "horizons": {
           "h1": {
-            "ic": 0.0264,
-            "hit_rate": 52.9,
+            "ic": 0.0094,
+            "hit_rate": 53.28,
             "wilson_ci": [
-              50.87,
-              54.93
+              50.98,
+              55.57
             ]
           },
           "h3": {
-            "ic": 0.0417,
-            "hit_rate": 56.22,
+            "ic": 0.0189,
+            "hit_rate": 56.82,
             "wilson_ci": [
-              54.19,
-              58.23
+              54.53,
+              59.08
             ]
           },
           "h7": {
-            "ic": 0.0682,
-            "hit_rate": 59.42,
+            "ic": 0.038,
+            "hit_rate": 60.15,
             "wilson_ci": [
-              57.41,
-              61.4
+              57.88,
+              62.39
             ]
           },
           "h20": {
-            "ic": 0.0992,
-            "hit_rate": 64.7,
+            "ic": 0.0433,
+            "hit_rate": 64.88,
             "wilson_ci": [
-              62.73,
-              66.63
+              62.64,
+              67.06
             ]
           },
           "h60": {
-            "ic": 0.1418,
-            "hit_rate": 71.62,
+            "ic": 0.0645,
+            "hit_rate": 72.06,
             "wilson_ci": [
-              69.73,
-              73.44
+              69.92,
+              74.11
             ]
           }
         }
       },
       "tsmom_volscaled": {
         "factor": "tsmom_volscaled",
-        "net_sharpe": 0.332,
-        "max_drawdown": -81.82,
+        "net_sharpe": 0.893,
+        "max_drawdown": -28.57,
         "trade_stats": {
-          "total_trades": 9,
-          "net_win_rate": 55.56,
-          "profit_factor": 1.976,
-          "net_expectancy_bps": 891.5
+          "total_trades": 16,
+          "net_win_rate": 50.0,
+          "profit_factor": 9.434,
+          "net_expectancy_bps": 936.0
         },
         "horizons": {
           "h1": {
-            "ic": 0.0225,
-            "hit_rate": 52.9,
+            "ic": 0.0234,
+            "hit_rate": 53.28,
             "wilson_ci": [
-              50.87,
-              54.93
+              50.98,
+              55.57
             ]
           },
           "h3": {
-            "ic": 0.0507,
-            "hit_rate": 56.22,
+            "ic": 0.0453,
+            "hit_rate": 56.82,
             "wilson_ci": [
-              54.19,
-              58.23
+              54.53,
+              59.08
             ]
           },
           "h7": {
-            "ic": 0.0883,
-            "hit_rate": 59.42,
+            "ic": 0.0904,
+            "hit_rate": 60.15,
             "wilson_ci": [
-              57.41,
-              61.4
+              57.88,
+              62.39
             ]
           },
           "h20": {
-            "ic": 0.1384,
-            "hit_rate": 64.7,
+            "ic": 0.1304,
+            "hit_rate": 64.88,
             "wilson_ci": [
-              62.73,
-              66.63
+              62.64,
+              67.06
             ]
           },
           "h60": {
-            "ic": 0.2188,
-            "hit_rate": 71.62,
+            "ic": 0.1074,
+            "hit_rate": 72.06,
             "wilson_ci": [
-              69.73,
-              73.44
+              69.92,
+              74.11
             ]
           }
         }
       },
       "turtle_20_10": {
         "factor": "turtle_20_10",
-        "net_sharpe": 0.89,
+        "net_sharpe": 0.889,
         "max_drawdown": -21.27,
         "trade_stats": {
           "total_trades": 37,
           "net_win_rate": 56.76,
-          "profit_factor": 3.791,
-          "net_expectancy_bps": 352.8
+          "profit_factor": 3.792,
+          "net_expectancy_bps": 353.5
         },
         "horizons": {
           "h1": {
-            "ic": 0.0139,
-            "hit_rate": 52.9,
+            "ic": 0.0142,
+            "hit_rate": 53.53,
             "wilson_ci": [
-              50.87,
-              54.93
+              50.77,
+              56.27
             ]
           },
           "h3": {
-            "ic": 0.0322,
-            "hit_rate": 56.22,
+            "ic": 0.032,
+            "hit_rate": 59.17,
             "wilson_ci": [
-              54.19,
-              58.23
+              56.44,
+              61.86
             ]
           },
           "h7": {
-            "ic": 0.0381,
-            "hit_rate": 59.42,
+            "ic": 0.0373,
+            "hit_rate": 62.26,
             "wilson_ci": [
-              57.41,
-              61.4
+              59.55,
+              64.9
             ]
           },
           "h20": {
-            "ic": 0.0058,
-            "hit_rate": 64.7,
+            "ic": 0.0041,
+            "hit_rate": 65.33,
             "wilson_ci": [
-              62.73,
-              66.63
+              62.64,
+              67.92
             ]
           },
           "h60": {
-            "ic": -0.0561,
-            "hit_rate": 71.62,
+            "ic": -0.059,
+            "hit_rate": 70.29,
             "wilson_ci": [
-              69.73,
-              73.44
+              67.68,
+              72.78
             ]
           }
         }
       },
       "dual_ma_20_60": {
         "factor": "dual_ma_20_60",
-        "net_sharpe": 0.095,
-        "max_drawdown": -86.5,
+        "net_sharpe": 0.614,
+        "max_drawdown": -33.81,
         "trade_stats": {
           "total_trades": 21,
           "net_win_rate": 57.14,
-          "profit_factor": 1.198,
-          "net_expectancy_bps": 109.9
+          "profit_factor": 3.223,
+          "net_expectancy_bps": 459.1
         },
         "horizons": {
           "h1": {
-            "ic": -0.0028,
-            "hit_rate": 52.9,
+            "ic": -0.004,
+            "hit_rate": 53.1,
             "wilson_ci": [
-              50.87,
-              54.93
+              50.6,
+              55.59
             ]
           },
           "h3": {
-            "ic": -0.0271,
-            "hit_rate": 56.22,
+            "ic": -0.0283,
+            "hit_rate": 55.98,
             "wilson_ci": [
-              54.19,
-              58.23
+              53.48,
+              58.45
             ]
           },
           "h7": {
-            "ic": -0.0415,
-            "hit_rate": 59.42,
+            "ic": -0.0436,
+            "hit_rate": 59.21,
             "wilson_ci": [
-              57.41,
-              61.4
+              56.73,
+              61.65
             ]
           },
           "h20": {
-            "ic": -0.0529,
-            "hit_rate": 64.7,
+            "ic": -0.0559,
+            "hit_rate": 64.22,
             "wilson_ci": [
-              62.73,
-              66.63
+              61.77,
+              66.6
             ]
           },
           "h60": {
-            "ic": -0.1008,
-            "hit_rate": 71.62,
+            "ic": -0.1077,
+            "hit_rate": 68.5,
             "wilson_ci": [
-              69.73,
-              73.44
+              66.1,
+              70.81
             ]
           }
         }
       },
       "macd": {
         "factor": "macd",
-        "net_sharpe": 0.35,
+        "net_sharpe": 0.358,
         "max_drawdown": -34.86,
         "trade_stats": {
-          "total_trades": 91,
-          "net_win_rate": 49.45,
-          "profit_factor": 1.381,
-          "net_expectancy_bps": 57.0
+          "total_trades": 94,
+          "net_win_rate": 50.0,
+          "profit_factor": 1.376,
+          "net_expectancy_bps": 55.0
         },
         "horizons": {
           "h1": {
-            "ic": -0.0097,
-            "hit_rate": 52.9,
+            "ic": -0.013,
+            "hit_rate": 52.09,
             "wilson_ci": [
-              50.87,
-              54.93
+              49.26,
+              54.91
             ]
           },
           "h3": {
-            "ic": -0.0087,
-            "hit_rate": 56.22,
+            "ic": 0.0006,
+            "hit_rate": 56.77,
             "wilson_ci": [
-              54.19,
-              58.23
+              53.95,
+              59.55
             ]
           },
           "h7": {
-            "ic": 0.0234,
-            "hit_rate": 59.42,
+            "ic": 0.0326,
+            "hit_rate": 60.75,
             "wilson_ci": [
-              57.41,
-              61.4
+              57.95,
+              63.48
             ]
           },
           "h20": {
-            "ic": 0.0663,
-            "hit_rate": 64.7,
+            "ic": 0.0853,
+            "hit_rate": 66.92,
             "wilson_ci": [
-              62.73,
-              66.63
+              64.19,
+              69.54
             ]
           },
           "h60": {
-            "ic": -0.0238,
-            "hit_rate": 71.62,
+            "ic": 0.0016,
+            "hit_rate": 73.29,
             "wilson_ci": [
-              69.73,
-              73.44
+              70.68,
+              75.75
             ]
           }
         }
       },
       "z_mr_20": {
         "factor": "z_mr_20",
-        "net_sharpe": -0.052,
-        "max_drawdown": -84.39,
+        "net_sharpe": 0.403,
+        "max_drawdown": -21.95,
         "trade_stats": {
           "total_trades": 125,
           "net_win_rate": 60.8,
-          "profit_factor": 0.919,
-          "net_expectancy_bps": -10.4
+          "profit_factor": 1.629,
+          "net_expectancy_bps": 46.0
         },
         "horizons": {
           "h1": {
-            "ic": 0.0157,
-            "hit_rate": 52.99,
+            "ic": 0.0158,
+            "hit_rate": 48.63,
             "wilson_ci": [
-              50.95,
-              55.02
+              46.6,
+              50.67
             ]
           },
           "h3": {
-            "ic": -0.0095,
-            "hit_rate": 56.21,
+            "ic": -0.0078,
+            "hit_rate": 47.03,
             "wilson_ci": [
-              54.17,
-              58.22
+              45.0,
+              49.07
             ]
           },
           "h7": {
-            "ic": -0.0242,
-            "hit_rate": 59.43,
+            "ic": -0.0228,
+            "hit_rate": 45.07,
             "wilson_ci": [
-              57.41,
-              61.42
+              43.04,
+              47.11
             ]
           },
           "h20": {
-            "ic": -0.0417,
-            "hit_rate": 64.41,
+            "ic": -0.0398,
+            "hit_rate": 43.27,
             "wilson_ci": [
-              62.42,
-              66.34
+              41.25,
+              45.31
             ]
           },
           "h60": {
-            "ic": 0.0552,
-            "hit_rate": 71.38,
+            "ic": 0.0543,
+            "hit_rate": 44.22,
             "wilson_ci": [
-              69.48,
-              73.22
+              42.18,
+              46.28
             ]
           }
         }
       },
       "td9_setup": {
         "factor": "td9_setup",
-        "net_sharpe": 0.578,
+        "net_sharpe": 0.577,
         "max_drawdown": -3.55,
         "trade_stats": {
           "total_trades": 21,
           "net_win_rate": 61.9,
-          "profit_factor": 3.363,
-          "net_expectancy_bps": 65.2
+          "profit_factor": 3.364,
+          "net_expectancy_bps": 65.4
         },
         "horizons": {
           "h1": {
-            "ic": 0.0383,
-            "hit_rate": 52.9,
+            "ic": 0.0382,
+            "hit_rate": 66.67,
             "wilson_ci": [
-              50.87,
-              54.93
+              45.37,
+              82.81
             ]
           },
           "h3": {
-            "ic": 0.0462,
-            "hit_rate": 56.22,
+            "ic": 0.0463,
+            "hit_rate": 71.43,
             "wilson_ci": [
-              54.19,
-              58.23
+              50.04,
+              86.19
             ]
           },
           "h7": {
-            "ic": 0.0517,
-            "hit_rate": 59.42,
+            "ic": 0.0518,
+            "hit_rate": 71.43,
             "wilson_ci": [
-              57.41,
-              61.4
+              50.04,
+              86.19
             ]
           },
           "h20": {
-            "ic": 0.0156,
-            "hit_rate": 64.7,
+            "ic": 0.0158,
+            "hit_rate": 61.9,
             "wilson_ci": [
-              62.73,
-              66.63
+              40.88,
+              79.25
             ]
           },
           "h60": {
-            "ic": 0.0316,
-            "hit_rate": 71.62,
+            "ic": 0.0313,
+            "hit_rate": 76.19,
             "wilson_ci": [
-              69.73,
-              73.44
+              54.91,
+              89.37
             ]
           }
         }
@@ -387,6 +391,10 @@
       "2025-08-18",
       "2026-10-14"
     ],
+    "sample_limitations": {
+      "is_small_sample": true,
+      "warning": "样本量较小（少于500根日线或闭合交易极少），结果仅供探索性参考，不可据此形成强烈推荐。"
+    },
     "factors": {
       "tsmom_12m": {
         "factor": "tsmom_12m",
@@ -395,43 +403,43 @@
         "trade_stats": {},
         "horizons": {
           "h1": {
-            "ic": -0.0043,
-            "hit_rate": 53.79,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              47.91,
-              59.57
+              0.0,
+              13.32
             ]
           },
           "h3": {
-            "ic": 0.0202,
-            "hit_rate": 57.45,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              51.55,
-              63.16
+              0.0,
+              14.31
             ]
           },
           "h7": {
-            "ic": 0.0207,
-            "hit_rate": 55.72,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              49.77,
-              61.51
+              0.0,
+              16.82
             ]
           },
           "h20": {
-            "ic": 0.0124,
-            "hit_rate": 62.4,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              56.35,
-              68.09
+              0.0,
+              39.03
             ]
           },
           "h60": {
             "ic": 0.0,
-            "hit_rate": 72.94,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              66.68,
-              78.4
+              0.0,
+              0.0
             ]
           }
         }
@@ -443,43 +451,43 @@
         "trade_stats": {},
         "horizons": {
           "h1": {
-            "ic": 0.0014,
-            "hit_rate": 53.79,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              47.91,
-              59.57
+              0.0,
+              13.32
             ]
           },
           "h3": {
-            "ic": 0.0276,
-            "hit_rate": 57.45,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              51.55,
-              63.16
+              0.0,
+              14.31
             ]
           },
           "h7": {
-            "ic": 0.0251,
-            "hit_rate": 55.72,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              49.77,
-              61.51
+              0.0,
+              16.82
             ]
           },
           "h20": {
-            "ic": 0.0119,
-            "hit_rate": 62.4,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              56.35,
-              68.09
+              0.0,
+              39.03
             ]
           },
           "h60": {
             "ic": 0.0,
-            "hit_rate": 72.94,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              66.68,
-              78.4
+              0.0,
+              0.0
             ]
           }
         }
@@ -492,47 +500,47 @@
           "total_trades": 3,
           "net_win_rate": 100.0,
           "profit_factor": null,
-          "net_expectancy_bps": 483.0
+          "net_expectancy_bps": 483.9
         },
         "horizons": {
           "h1": {
-            "ic": 0.0256,
-            "hit_rate": 53.79,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              47.91,
-              59.57
+              0.0,
+              2.05
             ]
           },
           "h3": {
-            "ic": 0.027,
-            "hit_rate": 57.45,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              51.55,
-              63.16
+              0.0,
+              2.05
             ]
           },
           "h7": {
-            "ic": 0.0324,
-            "hit_rate": 55.72,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              49.77,
-              61.51
+              0.0,
+              2.05
             ]
           },
           "h20": {
-            "ic": -0.0029,
-            "hit_rate": 62.4,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              56.35,
-              68.09
+              0.0,
+              2.09
             ]
           },
           "h60": {
-            "ic": -0.5065,
-            "hit_rate": 72.94,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              66.68,
-              78.4
+              0.0,
+              2.58
             ]
           }
         }
@@ -544,48 +552,48 @@
         "trade_stats": {
           "total_trades": 2,
           "net_win_rate": 50.0,
-          "profit_factor": 0.686,
-          "net_expectancy_bps": -57.6
+          "profit_factor": 0.687,
+          "net_expectancy_bps": -57.7
         },
         "horizons": {
           "h1": {
-            "ic": -0.0416,
-            "hit_rate": 53.79,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              47.91,
-              59.57
+              0.0,
+              2.33
             ]
           },
           "h3": {
-            "ic": -0.0974,
-            "hit_rate": 57.45,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              51.55,
-              63.16
+              0.0,
+              2.36
             ]
           },
           "h7": {
-            "ic": -0.1351,
-            "hit_rate": 55.72,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              49.77,
-              61.51
+              0.0,
+              2.42
             ]
           },
           "h20": {
-            "ic": -0.2936,
-            "hit_rate": 62.4,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              56.35,
-              68.09
+              0.0,
+              2.63
             ]
           },
           "h60": {
-            "ic": -0.5206,
-            "hit_rate": 72.94,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              66.68,
-              78.4
+              0.0,
+              3.56
             ]
           }
         }
@@ -598,47 +606,47 @@
           "total_trades": 12,
           "net_win_rate": 41.67,
           "profit_factor": 1.717,
-          "net_expectancy_bps": 49.0
+          "net_expectancy_bps": 49.1
         },
         "horizons": {
           "h1": {
-            "ic": 0.0225,
-            "hit_rate": 53.79,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              47.91,
-              59.57
+              0.0,
+              3.43
             ]
           },
           "h3": {
-            "ic": 0.054,
-            "hit_rate": 57.45,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              51.55,
-              63.16
+              0.0,
+              3.5
             ]
           },
           "h7": {
-            "ic": 0.1134,
-            "hit_rate": 55.72,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              49.77,
-              61.51
+              0.0,
+              3.53
             ]
           },
           "h20": {
-            "ic": 0.1546,
-            "hit_rate": 62.4,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              56.35,
-              68.09
+              0.0,
+              3.6
             ]
           },
           "h60": {
-            "ic": 0.1447,
-            "hit_rate": 72.94,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              66.68,
-              78.4
+              0.0,
+              4.18
             ]
           }
         }
@@ -651,47 +659,47 @@
           "total_trades": 18,
           "net_win_rate": 66.67,
           "profit_factor": 2.254,
-          "net_expectancy_bps": 60.4
+          "net_expectancy_bps": 60.5
         },
         "horizons": {
           "h1": {
-            "ic": 0.0376,
-            "hit_rate": 53.88,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              47.78,
-              59.86
+              0.0,
+              1.47
             ]
           },
           "h3": {
-            "ic": 0.0022,
-            "hit_rate": 56.64,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              50.52,
-              62.57
+              0.0,
+              1.48
             ]
           },
           "h7": {
-            "ic": -0.0188,
-            "hit_rate": 53.97,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              47.8,
-              60.02
+              0.0,
+              1.51
             ]
           },
           "h20": {
-            "ic": -0.072,
-            "hit_rate": 59.41,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              53.09,
-              65.44
+              0.0,
+              1.59
             ]
           },
           "h60": {
-            "ic": 0.1722,
-            "hit_rate": 70.35,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              63.67,
-              76.26
+              0.0,
+              1.9
             ]
           }
         }
@@ -708,43 +716,43 @@
         },
         "horizons": {
           "h1": {
-            "ic": 0.0157,
-            "hit_rate": 53.79,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              47.91,
-              59.57
+              0.0,
+              65.76
             ]
           },
           "h3": {
-            "ic": 0.0224,
-            "hit_rate": 57.45,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              51.55,
-              63.16
+              0.0,
+              65.76
             ]
           },
           "h7": {
-            "ic": 0.0302,
-            "hit_rate": 55.72,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              49.77,
-              61.51
+              0.0,
+              65.76
             ]
           },
           "h20": {
-            "ic": 0.0023,
-            "hit_rate": 62.4,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              56.35,
-              68.09
+              0.0,
+              65.76
             ]
           },
           "h60": {
-            "ic": -0.0114,
-            "hit_rate": 72.94,
+            "ic": 0.0,
+            "hit_rate": 0.0,
             "wilson_ci": [
-              66.68,
-              78.4
+              0.0,
+              65.76
             ]
           }
         }

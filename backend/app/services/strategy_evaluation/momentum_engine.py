@@ -28,12 +28,14 @@ def calc_forward_returns(df: pd.DataFrame, horizons: list[int] = [1, 3, 7, 20, 6
     prod_{k=1}^h (1 + ret_{t+k}) - 1.
     """
     df = df.sort_values("trade_date").copy()
-    ret = df["ret_1"].fillna(0.0) if "ret_1" in df else df["close"].pct_change().fillna(0.0)
+    ret = df["ret_1"] if "ret_1" in df else df["close"].pct_change()
     log1p = np.log1p(ret.clip(lower=-0.99))
     for h in horizons:
         # Sum future log returns from t+1 to t+h
         fwd_log = log1p.iloc[::-1].rolling(h, min_periods=h).sum().iloc[::-1].shift(-1)
         df[f"fwd_{h}"] = np.expm1(fwd_log)
+        # Store exact ending trade date of forward horizon window for precise leakage purging
+        df[f"label_end_{h}"] = df["trade_date"].shift(-h)
     return df
 
 
@@ -42,17 +44,18 @@ def compute_volatility_target_weight(
     vol: float,
     target_vol: float = 0.15,
     max_weight: float = 1.0,
+    base_weight: float = 1.0,
 ) -> float:
     """Compute true volatility target position weight (M2).
 
-    w = 1[trend_state > 0] * min(max_weight, target_vol / vol)
+    w = 1[trend_state > 0] * base_weight * min(max_weight, target_vol / vol)
     If trend is flat or down, weight is 0.0 (cash).
     """
     if trend_state <= 0:
         return 0.0
     if pd.isna(vol) or vol <= 0.0 or not math.isfinite(vol):
         return 0.0
-    raw_w = target_vol / vol
+    raw_w = base_weight * (target_vol / vol)
     return float(min(max_weight, raw_w))
 
 
@@ -154,13 +157,13 @@ class MomentumStrategyEngine:
 
         curr_close = float(close_series.iloc[-1])
         past_close = float(close_series.iloc[-lookback - 1])
-        if past_close <= 0 or pd.isna(past_close):
+        if curr_close <= 0 or pd.isna(curr_close) or past_close <= 0 or pd.isna(past_close):
             return StrategyResult.abstain(
                 strategy_id="M0_TSMOM_RAW",
                 version=self.version,
                 trade_date=trade_date,
                 ts_code=ts_code,
-                reason="invalid_historical_close_price",
+                reason="invalid_close_price",
                 as_of=f"{trade_date} 15:00:00",
                 available_at=f"{trade_date} 17:00:00",
             )
