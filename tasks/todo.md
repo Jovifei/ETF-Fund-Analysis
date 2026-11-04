@@ -247,3 +247,92 @@ Review：只读排查及独立复核完成，证据交叉检查与 git diff --ch
 - [ ] P4 精确CI/独立及网页复审、受控发布、同批收件与两交易日自然验收。
 
 Review：本轮只写计划与任务记录；命令均为未来验收要求，无新代码测试/发布/发信声明。保留上一轮报告与其他Agent工作。Hub连接拒绝未上报。
+
+Review：Jovi 已授权本次检查、按价值整合与指定临时快照清理；运行代码的独立缺口不随此项整理宣布修复。子 Agent 使用 gpt-6.1-terra / max，父 Agent 负责最终复核与变更。
+
+Review：审计结论及隔离复现见 `docs/audits/SETTLED_TEST_CLOCK_REVIEW_20261028.md`。原 `6442c7e` 有内部输入信任及历史背景截止边界缺口，未合入本分支；尚无其外部 HTTP 可利用或生产污染的证据。
+
+## 2026-10-29 审计收尾：诊断耗时可见性 + 沪深300 占比研究设计（Jovi 要求新分支完成）
+
+- [x] 从 origin/main `f7993b4` 新建隔离工作树 `E:\worktrees\etf-audit-completion-20261028`（分支 `codex/audit-completion-20261028`），不改动其他 Agent 的工作树与分支。
+- [x] 稳定性报告每个槽位新增 `diagnostic_phases`（阶段、状态、耗时、观测数、首失败分类），只做测量，不参与 PASS/FAIL 判定。
+- [x] 失败优先测试：外来源、负耗时、NaN、未知状态的行被忽略；已恢复的失败仍可见但不改变交付状态。
+- [x] 聚焦测试 `test_local_stability.py` 50 项通过。
+- [x] 沪深300 头部基金市值/流通市值比例：实测现有 Provider 无指数自由流通市值分母，只提交研究设计与数据准入门槛，不实现伪计算。
+- [x] 数据源选型：Jovi 决定不付费，首期走零凭证前瞻采集（中证官方成分 + 东财全市场快照 + 场内基金净值快照），Tushare 2000 积分仅作为将来免费攒够后的回填升级；“头部”= 全部跟踪沪深300 的 ETF，分子两种口径都做。见 `tasks/plans/2026-10-29-hs300-ratio-data-source-selection.md`。
+- [x] 全量 pytest（退出码 0，进度 100%，含跳过项）、compileall 与 node --check 通过。
+- [ ] 本地提交后推送分支，PR/复审通过后再合并。
+
+Review：本轮只改本地稳定性报告的测量字段并新增研究设计文档，不改指标公式、信号权重、仓位阈值、Provider 或生产数据库；资格保持 UNKNOWN、actionable=false、not_calibrated。设计文档见 `tasks/plans/2026-10-28-hs300-passive-ratio-research.md`。
+
+## 2026-10-29 沪深300 占比 Phase 1（零凭证前瞻快照，Jovi 批准“执行吧”）
+
+- [x] 白名单新增 `index_stock_cons_csindex`、`fund_etf_fund_daily_em`。
+- [x] Provider 新能力：`fetch_index_constituents`、`fetch_stock_float_market_caps`、`fetch_etf_nav_snapshot`、`fetch_etf_catalog`；AKShare 实现、Composite 转调、其余默认 `CapabilityUnavailable`。
+- [x] 表 `hs300_passive_ratio_snapshots` + 迁移 `b7c8d9e0f1a2`（down_revision `f0e1d2c3b4a5`）；临时库 upgrade → downgrade → upgrade 通过，列/索引核对一致。
+- [x] `Hs300RatioService`：研究写守卫、Mock 拒绝、冻结清单只读、两种分子口径、收盘后且当日快照校验、成分 100% 覆盖、比例越界拒绝、质量哈希幂等 upsert；恒 `actionable=false`、`changes_grade=false`、`qualification=UNKNOWN`、`not_calibrated`。
+- [x] 任务注册 `refresh_hs300_ratio`（不并入 `full_pipeline`）。
+- [x] `config/hs300_etf_universe.json` 以 `status=provisional` 占位；`scripts/derive_hs300_etf_universe.py` 供 Jovi 本机派生并 `--confirm --owner` 冻结。
+- [x] 新增 `backend/tests/test_hs300_passive_ratio.py` 19 项通过；聚焦回归 67 项通过；compileall、node --check 通过。
+- [x] 新增只读研究 API `GET /api/workspace/hs300-ratio` 与测试 `test_hs300_ratio_api.py`。
+- [x] 前端市场总览增加研究卡片与测试 `overview-context.test.ts`；保持 `research_only=true`、`actionable=false`。
+- [x] 全量 `pytest -q` 通过（2026-10-29，两次基线对照后确认 green，`PYTEST_EXIT=0`）；`compileall`、`node --check`、ruff 通过。
+- [x] 全量首轮暴露 `test_multi_user_ownership` 两项红测：基线 `f7993b4` 全量 green，本分支新增的 1 条 TaskRun 把 bootstrap 的 20 条窗口顶满，而这两项用 `datetime.now(UTC)` 建行、SQLite 丢偏移量后按墙钟排序落后 8 小时。已改为按应用时钟（`settings.timezone`）打戳，断言不变。
+- [x] 独立评审补强：单位净值逐只拒绝 `nav_date > as_of`（`fund_nav_future`）、成分名单日期晚于估值日拒绝（`constituent_date_after_as_of`）、收盘价复用 `data_contract.row_units_verified` 并要求质量哈希（`fund_close_unqualified`）、结果补 `observation_kind`/`observed_at`。先写 7 项失败测试再实现，现 25 项全过。
+- [ ] 仍待决策：本轮是否补一个只读 API/页面入口（当前表只写不读）。
+- [ ] Jovi 在本机（可访问东财）运行派生脚本，逐只核对后冻结清单。
+- [ ] 推送分支后开 PR，复审通过再合并（未获 PR 授权前不自动开）。
+
+Review：新增均为只读取数能力与独立研究快照表，不改指标公式、信号权重、仓位阈值和市场门控；不写生产数据库，不启用自动交易；资格保持 UNKNOWN、actionable=false、not_calibrated。
+- [x] 网页复审反馈补强（2026-10-30）：actions_api 校验 computed_at 时间必须为当日盘后（>=15:00）才标记 same_day_post_close_snapshot，否则标记 research_snapshot；补齐空表 no_snapshot、local_bundle 未发布、零网络/零写库断言；前端补测两项不可用状态展示。
+- [x] 网页复审二次补强（2026-10-30）：统一盘后收盘时间判定至 SETTLEMENT_CUTOFF (15:15)；test_hs300_ratio_api 引入 SQLAlchemy before_execute 拦截器验证零写库并对比行状态全字段、拦截外部网络与 Provider refresh 调用；测试 15:14:59/15:15:00 临界点。
+
+## 2026-10-30 生产切换前核验
+
+- [x] 核对目标 main、现有服务健康、定时生产者身份及数据库备份完整性。
+- [x] 找到六份旧配置候选并校验复制；组合配置哈希未匹配运行容器记录，隔离容器已验证哈希比对方法。
+- [x] 备份容器记录中仍存在的 16 份 Compose 文件并逐份核对 SHA-256；未复制环境文件。
+- [x] 在隔离空 PostgreSQL 16 复现：目标迁移完成后，旧镜像的原 Alembic 启动命令因未知 revision 失败；没有接触生产数据库。
+- [x] 在隔离空库确认新表为空时 downgrade 后旧镜像可启动；降级删除新表，不能推断真实数据可安全回退。
+- [ ] 恢复或在隔离环境验证可回滚的完整 Compose 配置和镜像。
+- [ ] 将固定 CI 镜像产物保存到允许目录并验证镜像身份。
+- [ ] 在隔离数据库上验证迁移和旧版回退；处理上次输出到工具记录中的同步凭据。
+- [ ] 完成生产切换并验证 API、worker、scheduler、身份和展示包。
+
+Review：生产尚未切换。上次清理已删除部分回滚配置与旧镜像；本轮发现并保留证据。详细记录见 `E:\Claude_allow\Download\ETF-deploy-recovery-20261030\DEPLOY_PREFLIGHT.md`。
+
+## 2026-10-30 继续恢复生产回滚和部署（Jovi 授权）
+
+- [x] 复核线上服务、目标提交及已有备份，保留当前容器和镜像。
+- [x] 隔离复现：保留目标迁移文件时，旧版可在含合成持仓和新表数据的数据库启动；确认旧版启动仍有清理副作用。
+- [x] 找到两份历史配置候选并隔离暂存，保持对来源和生产等价性的区分。
+- [ ] 找回可验证的配置链，或验证保留原容器的完整替代回滚路径。
+- [ ] 取得并核验目标 CI 镜像；如不可用，评估固定源码离线构建及镜像专属测试的证据与限制。
+- [x] 在无网络隔离 PostgreSQL 中恢复真实备份，核验恢复流哈希、目标迁移及旧 API 启动和重启；仅比较选定表的行数，不声称所有字段未变。
+- [x] 在合成库验证只读旧容器的条件降级路径，以及非空、序列、权限、注释、失败和并发负例；确认实验脚本存在并发序列配置竞态，尚非生产回滚工具。
+- [ ] 继续核实真实展示包、worker 和 scheduler 的迁移及回退兼容性，并处理上次工具记录中的同步凭据暴露。
+- [ ] 满足回滚和部署门槛后，切换并验收 API、worker、scheduler、展示包与身份。
+
+Review：隔离试验不等同生产回滚；未删除现有容器、数据库、归档或其他项目资产。目标 CI 镜像仍未落地，四份历史配置与旧启动脚本仍缺；生产仍为旧版本。GitHub 元数据显示仓库公开，与先前记录不一致，未修改可见性。
+
+## 2026-10-30 继续自主恢复与部署（Jovi 授权）
+
+- [x] 复核当前 main、线上健康及已有备份/隔离演练证据。
+- [ ] 自主取得固定 CI 镜像到允许的 E 盘目录，校验压缩包、内部归档、源码身份及镜像身份。
+- [ ] 找回或重建可核验的生产配置，保留旧容器、挂载、数据及凭据。
+- [ ] 修复并在隔离环境验证完整的回滚入口、失败保护和目标迁移兼容性。
+- [ ] 满足生产门槛后备份并部署，核对镜像、API、worker、scheduler、展示包及回滚，失败立即回退。
+
+Review：部署仅在凭据不暴露、配置与回滚可证实、目标镜像验证通过后执行；禁止清理受保护资产。
+
+## 2026-10-31 生产切换完成（Jovi 授权"验证通过后部署上线"）
+
+- [x] 按运行容器观测规格重建独立 Compose 项目，逐项核对命令/用户/挂载/安全选项/健康检查/端口一致，应用环境变量摘要一致。
+- [x] 修复 .env 与线上实际值漂移（APP_VERSION、MARKET_PROVIDER、REGISTRATION_ENABLED、SCHEDULER_ENABLED），生成器改为取线上真值并拒绝密钥同类偏差。
+- [x] 建立并验证只读挂载目标迁移文件的旧镜像回滚路径（真实备份副本上 b7 库健康启动，45 表与新表数据保留）。
+- [x] 以同一 Dockerfile 与同一源码树重建镜像，复跑 CI 镜像检查（迁移、health、workspace_image_smoke、alembic check、只读研究接口契约），并固定 akshare==1.20.2 复跑数据源测试。
+- [x] 切换前新备份发布并独立校验；服务器 8 份历史备份与 11:48 备份保留；旧容器仅停止。
+- [x] 生产切到 8cceba1 镜像，数据库升到 b7c8d9e0f1a2，API/worker 健康，未认证 401，账户/收藏/持仓行数不变。
+- [ ] 待处理：仓库公开可见性与既往记录不一致；同步凭据轮换；SMTP 配置与真实投递；.env 漂移修正；pyproject 依赖固定决策；HS300 清单冻结与占比任务排期。
+
+Review：收据见 docs/handoffs/PRODUCTION_DEPLOYMENT_20261031.md。演练期间在 1.8 GiB 内存服务器上并行副本恢复与两套栈触发系统 OOM，波及同机 star-photo 容器（已自愈 healthy），是本机处置失误，后续禁止此类并行。
