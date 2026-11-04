@@ -73,20 +73,27 @@ def test_fetch_us_etf_script_persists_to_db(cli, db_session):
         mock_instance.history.return_value = mock_df
         mock_ticker.return_value = mock_instance
 
-        res = cli.sync_us_etfs(
-            db_session,
-            symbols=["GLD"],
-            start_date=date(2026, 10, 27),
-            end_date=date(2026, 10, 28),
-            dry_run=False,
-        )
-        assert res["synced"] == ["GLD"]
-        inst = db_session.query(Instrument).filter(Instrument.ts_code == "GLD.US").first()
-        assert inst is not None
-        assert inst.symbol == "GLD"
-        assert inst.metadata_json.get("market") == "US"
+        try:
+            res = cli.sync_us_etfs(
+                db_session,
+                symbols=["GLD"],
+                start_date=date(2026, 10, 27),
+                end_date=date(2026, 10, 28),
+                dry_run=False,
+            )
+            assert res["synced"] == ["GLD"]
+            inst = db_session.query(Instrument).filter(Instrument.ts_code == "GLD.US").first()
+            assert inst is not None
+            assert inst.symbol == "GLD"
+            assert inst.metadata_json.get("market") == "US"
 
-        bars = db_session.query(DailyBar).filter(DailyBar.instrument_id == inst.id).all()
-        assert len(bars) == 2
-        assert bars[0].close == 582.0
-        assert bars[1].close == 584.0
+            bars = db_session.query(DailyBar).filter(DailyBar.instrument_id == inst.id).all()
+            assert len(bars) == 2
+            assert bars[0].close == 582.0
+            assert bars[1].close == 584.0
+        finally:
+            inst = db_session.query(Instrument).filter(Instrument.ts_code == "GLD.US").first()
+            if inst is not None:
+                db_session.query(DailyBar).filter(DailyBar.instrument_id == inst.id).delete()
+                db_session.delete(inst)
+                db_session.commit()

@@ -64,7 +64,7 @@ class ShadowStore:
         if set(blobs['board'])-{'rows','snapshot_id','generated_at','contains_mock','actionable'}:raise ValueError('nonpublic board fields')
         if blobs['board'].get('generated_at') and timestamp(blobs['board']['generated_at'])!=generated:raise ValueError('board source time mismatch')
         codes=[row.get('ts_code') for row in rows if isinstance(row,dict)]
-        if len(codes)!=len(rows) or len(set(codes))!=len(codes) or any(not isinstance(code,str) or not re.fullmatch(r'[0-9]{6}\.(SH|SZ|BJ)',code) for code in codes):raise ValueError('invalid board universe')
+        if len(codes)!=len(rows) or len(set(codes))!=len(codes) or any(not isinstance(code,str) or not re.fullmatch(r'([0-9]{6}\.(SH|SZ|BJ)|[A-Za-z0-9_.-]+\.US)',code) for code in codes):raise ValueError('invalid board universe')
         if set(blobs['charts'])!=set(codes):raise ValueError('chart universe mismatch')
         from app.workspace.shadow_projection import validate_public_chart
         for code,chart in blobs['charts'].items():
