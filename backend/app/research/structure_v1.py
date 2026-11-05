@@ -79,6 +79,29 @@ def structure_v1_from_history(
         return None
 
 
+# Keys the structure_fund_row schema marks as required; a block that claims
+# schema_version "structure_v1" without them is incomplete and must be
+# refilled from bars rather than passed through to the board.
+_STRUCTURE_V1_REQUIRED = frozenset(
+    {
+        "schema_version",
+        "ts_code",
+        "as_of",
+        "wyckoff_phase",
+        "wyckoff_score",
+        "wyckoff_confidence",
+        "dow_phase",
+        "dow_score",
+        "dow_confidence",
+        "atr14",
+        "atr_pct",
+        "atr_risk_bucket",
+        "evidence",
+        "research_only",
+    }
+)
+
+
 def resolve_structure_v1(
     *,
     existing: Any,
@@ -87,7 +110,10 @@ def resolve_structure_v1(
     name: str | None = None,
 ) -> dict[str, Any] | None:
     """Prefer an already-attached structure_v1 block; else fill from bars."""
-    if isinstance(existing, dict) and existing.get("schema_version") in (None, "structure_v1"):
-        if "wyckoff_phase" in existing or existing.get("schema_version") == "structure_v1":
+    if isinstance(existing, dict):
+        if existing.get("schema_version") == "structure_v1":
+            if _STRUCTURE_V1_REQUIRED <= existing.keys():
+                return existing
+        elif existing.get("schema_version") is None and "wyckoff_phase" in existing:
             return existing
     return structure_v1_from_history(ts_code=ts_code, history=history, name=name)

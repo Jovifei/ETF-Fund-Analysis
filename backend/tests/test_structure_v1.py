@@ -212,9 +212,76 @@ def test_structure_v1_from_history_soft_fail_and_fill():
 
 
 def test_resolve_prefers_existing_block():
-    existing = {"schema_version": "structure_v1", "wyckoff_phase": "range", "atr_risk_bucket": "mid"}
+    existing = {
+        "schema_version": "structure_v1",
+        "ts_code": "X",
+        "as_of": "2026-11-05",
+        "wyckoff_phase": "range",
+        "wyckoff_score": 0.0,
+        "wyckoff_confidence": 0.4,
+        "dow_phase": "sideways",
+        "dow_score": 0.0,
+        "dow_confidence": 0.4,
+        "atr14": 0.05,
+        "atr_pct": 0.01,
+        "atr_risk_bucket": "mid",
+        "evidence": [],
+        "research_only": True,
+    }
     out = resolve_structure_v1(existing=existing, ts_code="X", history=None)
     assert out is existing
+
+
+def test_resolve_refills_incomplete_structure_v1_block():
+    # A block claiming the schema but missing required fields is not served
+    # as-is; it is rebuilt from bars like a missing block.
+    incomplete = {"schema_version": "structure_v1", "wyckoff_phase": "range"}
+    s = _series_uptrend(40)
+    hist = _history_from_series(s)
+    out = resolve_structure_v1(existing=incomplete, ts_code="510300.SH", history=hist, name="demo")
+    assert out is not incomplete
+    assert isinstance(out, dict)
+    assert out["atr14"] is not None
+    assert resolve_structure_v1(existing=incomplete, ts_code="X", history=None) is None
+
+
+def _pivot(side: str, index: int, price: float) -> dict:
+    return {"side": side, "index": index, "price": price, "confirmed_index": index + 2}
+
+
+def test_dow_mixed_swings_use_midpoint_drift():
+    # LH + HL with a rising range centre → correction inside an uptrend.
+    rising = [
+        _pivot("high", 10, 100.0),
+        _pivot("low", 13, 90.0),
+        _pivot("high", 20, 99.0),
+        _pivot("low", 23, 96.0),
+    ]
+    phase, score, _, _ = dow_phase_from_pivots(rising)
+    assert phase == "correction_in_uptrend"
+    assert score > 0
+
+    # LH + HL with a falling range centre → rally inside a downtrend.
+    falling = [
+        _pivot("high", 10, 100.0),
+        _pivot("low", 13, 80.0),
+        _pivot("high", 20, 95.0),
+        _pivot("low", 23, 82.0),
+    ]
+    phase, score, _, _ = dow_phase_from_pivots(falling)
+    assert phase == "rally_in_downtrend"
+    assert score < 0
+
+    # LH + HL with an unmoved centre → sideways, no directional score.
+    flat = [
+        _pivot("high", 10, 100.0),
+        _pivot("low", 13, 90.0),
+        _pivot("high", 20, 97.0),
+        _pivot("low", 23, 93.0),
+    ]
+    phase, score, _, _ = dow_phase_from_pivots(flat)
+    assert phase == "sideways"
+    assert score == 0.0
 
 
 def test_board_helper_fills_when_missing():
