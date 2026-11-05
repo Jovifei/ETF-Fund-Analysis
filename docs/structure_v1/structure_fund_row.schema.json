@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.etf/structure_v1/fund_row.schema.json",
+  "title": "ETFStructureFundRowV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "ts_code",
+    "as_of",
+    "wyckoff_phase",
+    "wyckoff_score",
+    "wyckoff_confidence",
+    "dow_phase",
+    "dow_score",
+    "dow_confidence",
+    "atr14",
+    "atr_pct",
+    "atr_risk_bucket",
+    "evidence",
+    "research_only"
+  ],
+  "properties": {
+    "schema_version": { "const": "structure_v1" },
+    "ts_code": { "type": "string", "minLength": 1 },
+    "name": { "type": ["string", "null"] },
+    "as_of": { "type": "string", "description": "ISO date or datetime of last bar used" },
+    "lag_n": { "type": "integer", "minimum": 1, "default": 2 },
+    "wyckoff_phase": {
+      "type": "string",
+      "enum": [
+        "unknown",
+        "accumulation",
+        "markup",
+        "distribution",
+        "markdown",
+        "reaccumulation",
+        "redistribution",
+        "range"
+      ]
+    },
+    "wyckoff_score": { "type": "number", "minimum": -1, "maximum": 1 },
+    "wyckoff_confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "dow_phase": {
+      "type": "string",
+      "enum": [
+        "unknown",
+        "uptrend",
+        "downtrend",
+        "correction_in_uptrend",
+        "rally_in_downtrend",
+        "sideways"
+      ]
+    },
+    "dow_score": { "type": "number", "minimum": -1, "maximum": 1 },
+    "dow_confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "atr14": { "type": ["number", "null"], "minimum": 0 },
+    "atr_pct": { "type": ["number", "null"], "minimum": 0 },
+    "atr_risk_bucket": {
+      "type": "string",
+      "enum": ["unknown", "low", "mid", "high", "extreme"]
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "text"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["dow_pivot", "wyckoff_range", "wyckoff_volume", "atr", "note"]
+          },
+          "text": { "type": "string" },
+          "bar_index": { "type": ["integer", "null"] }
+        }
+      }
+    },
+    "research_only": { "const": true },
+    "proxy_disclaimer": {
+      "type": "string",
+      "default": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    }
+  }
+}
