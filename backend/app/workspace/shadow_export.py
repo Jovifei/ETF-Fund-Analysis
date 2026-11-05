@@ -12,7 +12,7 @@ from app.utils.hashing import stable_hash
 from app.workspace.shadow_projection import project_chart
 from app.workspace.candle_periods import transform_chart
 
-ROW_FIELDS={'ts_code','name','kind','grade','grade_reason','freshness','data_status','price','price_basis','theme_l1','theme_l2','research_only','actionable'}
+ROW_FIELDS={'ts_code','name','kind','grade','grade_reason','freshness','data_status','price','price_basis','theme_l1','theme_l2','research_only','actionable','structure_v1'}
 BAR_FIELDS={'date','open','high','low','close','volume','amount','source'}
 def local_settings(root,database):
     original_root=Path(root);original_database=Path(database)

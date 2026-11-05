@@ -891,6 +891,11 @@ class DecisionBoardService:
             "history": history,
             "forecast_scenario": scenario,
             "support_resistance": support_resistance,
+            "structure_v1": (
+                grade_row.get("structure_v1")
+                if isinstance(grade_row.get("structure_v1"), dict)
+                else (values.get("structure_v1") if isinstance(values.get("structure_v1"), dict) else None)
+            ),
             "research_only": True,
             "actionable": False,
         }

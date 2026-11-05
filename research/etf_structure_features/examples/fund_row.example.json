@@ -1,0 +1,23 @@
+{
+  "schema_version": "structure_v1",
+  "ts_code": "510300.SH",
+  "name": "沪深300ETF",
+  "as_of": "2026-11-05",
+  "lag_n": 2,
+  "wyckoff_phase": "range",
+  "wyckoff_score": 0.12,
+  "wyckoff_confidence": 0.45,
+  "dow_phase": "sideways",
+  "dow_score": 0.05,
+  "dow_confidence": 0.5,
+  "atr14": 0.042,
+  "atr_pct": 0.0112,
+  "atr_risk_bucket": "mid",
+  "evidence": [
+    { "kind": "dow_pivot", "text": "last confirmed swing high @ idx 118 (lag=2)", "bar_index": 118 },
+    { "kind": "wyckoff_range", "text": "20d high-low range / atr ≈ 3.1", "bar_index": null },
+    { "kind": "atr", "text": "atr_pct=1.12% → mid bucket", "bar_index": null }
+  ],
+  "research_only": true,
+  "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+}
