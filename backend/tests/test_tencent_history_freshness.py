@@ -73,6 +73,9 @@ def test_installed_tencent_sdk_does_not_reuse_morning_response_key(monkeypatch):
             return _dt_module.date(2026, 10, 23)
     class MockDateTime(_dt_module.datetime):
         date = MockDate
+    # Current AKShare reaches the clock through the datetime module
+    # (datetime.datetime.strptime), not the class alone.
+    MockDateTime.datetime = _dt_module.datetime
 
     target_fn = getattr(akshare.stock_zh_a_hist_tx, "__wrapped__", akshare.stock_zh_a_hist_tx)
     if hasattr(target_fn, "__globals__"):
