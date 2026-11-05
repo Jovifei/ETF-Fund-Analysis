@@ -334,7 +334,8 @@
         "kind": "unknown",
         "label": "量能未知",
         "ratio": null
-      }
+      },
+      "structure_v1": null
     },
     "signal_grade_row": {
       "actionable": false,

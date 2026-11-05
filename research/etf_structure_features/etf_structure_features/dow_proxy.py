@@ -68,8 +68,17 @@ def dow_phase_from_pivots(
     if hh and ll:
         return "sideways", 0.1, 0.45, evidence
     if lh and hl:
-        # potential correction/rally mixed
-        if h2["price"] > l2["price"]:
+        # Contracting swings. Comparing the last swing high with the last
+        # swing low cannot separate the two cases (a swing high sits above
+        # the swing low in any sane series), so use the drift of the
+        # swing-range midpoint: a contracting range whose centre rises is a
+        # correction inside an uptrend; a falling centre is a rally inside
+        # a downtrend; no drift is sideways.
+        mid_prev = (h1["price"] + l1["price"]) / 2
+        mid_last = (h2["price"] + l2["price"]) / 2
+        if mid_last > mid_prev:
             return "correction_in_uptrend", 0.25, 0.5, evidence
-        return "rally_in_downtrend", -0.25, 0.5, evidence
+        if mid_last < mid_prev:
+            return "rally_in_downtrend", -0.25, 0.5, evidence
+        return "sideways", 0.0, 0.4, evidence
     return "sideways", 0.0, 0.4, evidence
