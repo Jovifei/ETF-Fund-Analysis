@@ -48,22 +48,36 @@ def _tencent_close_refresh(params):
     return target == local.date() and local.time().replace(tzinfo=None) >= SETTLEMENT_CUTOFF
 
 
-class _FreshTencentRequests:
-    def __init__(self, client):
+class _BoundedTencentRequests:
+    """Transport shim for the Tencent history call inside its owned child.
+
+    AKShare's history function accepts no timeout argument and issues its
+    request without one, so forward the child's call timeout to bound the
+    transport itself, not only the owning process. After the settlement
+    cutoff, also rotate the cache key: AKShare uses a fixed r even after
+    today's close, so change only the cache key, never the date, adjustment
+    or parser. Only the Tencent history URL is touched and the caller's
+    params dict is never mutated.
+    """
+
+    def __init__(self, client, *, timeout, refresh):
         self._client = client
+        self._timeout = timeout
+        self._refresh = refresh
 
     def __getattr__(self, name):
         return getattr(self._client, name)
 
     def get(self, url, *args, **kwargs):
-        if url == _TENCENT_HISTORY_URL and isinstance(kwargs.get('params'), dict):
-            # AKShare uses a fixed r and yearly range even after today's close.
-            # Change only the cache key, never the date/adjustment or parser.
-            kwargs = {**kwargs, 'params': {**kwargs['params'], 'r': uuid4().hex}}
+        if url == _TENCENT_HISTORY_URL:
+            if self._refresh and isinstance(kwargs.get('params'), dict):
+                kwargs = {**kwargs, 'params': {**kwargs['params'], 'r': uuid4().hex}}
+            if self._timeout is not None and 'timeout' not in kwargs:
+                kwargs = {**kwargs, 'timeout': self._timeout}
         return self._client.get(url, *args, **kwargs)
 
 
-def _fresh_tencent_history(function):
+def _bounded_tencent_history(function, *, timeout, refresh):
     """Confine the transport override to this SDK call in its owned child.
 
     Clone its namespace instead of patching requests or the imported module.
@@ -76,7 +90,7 @@ def _fresh_tencent_history(function):
     for name in ('http', 'requests'):
         client = namespace.get(name)
         if client is not None and callable(getattr(client, 'get', None)):
-            namespace[name] = _FreshTencentRequests(client)
+            namespace[name] = _BoundedTencentRequests(client, timeout=timeout, refresh=refresh)
             found = True
     if not found:
         raise CapabilityUnavailable('endpoint_unavailable')
@@ -143,8 +157,13 @@ def _child(conn, module, name, params, token, timeout):
             else:
                 function=getattr(importlib.import_module('akshare'),name,None)
                 if not callable(function): raise CapabilityUnavailable('endpoint_unavailable')
-                if name == 'stock_zh_a_hist_tx' and _tencent_close_refresh(params):
-                    function = _fresh_tencent_history(function)
+                # The call timeout is this child's deadline, never an SDK
+                # keyword: current AKShare functions reject it outright.
+                params=dict(params)
+                call_timeout=params.pop('timeout',timeout)
+                if name == 'stock_zh_a_hist_tx':
+                    function = _bounded_tencent_history(function, timeout=call_timeout,
+                                                        refresh=_tencent_close_refresh(params))
                 result=function(**params)
             frame = hasattr(result,'to_json')
             if frame:
