@@ -1,0 +1,70 @@
+{
+  "generated_at": "2026-11-05T17:19:07.886976+08:00",
+  "status": "research_proposal_only",
+  "do_not_apply_to_live": true,
+  "live_strategy_path_note": "Jovi ...\\etf-live-v113-a0d52e4\\...\\config\\strategy.json — FORBIDDEN to edit",
+  "fork_targets_if_promoted_later": {
+    "signal_grade.board_score_weights": "could add wyckoff/dow/atr keys (normalize to sum 1)",
+    "backtest.factor_weights.structure": "currently 0.04 — candidate bump after validation",
+    "strategy_engine.family_weights.structure": "currently 0.10 — candidate bump",
+    "signal.portfolio_exposure_caps": "map atr_risk_bucket → exposure cap",
+    "new_block_suggested": "strategy.structure_soft_weight (w_wyckoff/w_dow/conf_floor/buy_thresh/atr_scale)",
+    "assign_grade": "UNTOUCHED — no hard threshold change in this research"
+  },
+  "proposals": [
+    {
+      "name": "soft_a_balanced",
+      "w_wyckoff": 0.45,
+      "w_dow": 0.55,
+      "conf_floor": 0.35,
+      "buy_thresh": 0.2,
+      "flat_band": 0.08,
+      "atr_scale": {
+        "low": 1.0,
+        "mid": 1.0,
+        "high": 0.55,
+        "extreme": 0.0,
+        "unknown": 0.5
+      },
+      "description": "Dow slightly heavier; buy when combined≥0.20; kill extreme ATR",
+      "status": "research_proposal_only",
+      "applies_to": "structure soft overlay — NOT production assign_grade"
+    },
+    {
+      "name": "soft_b_wy_heavy",
+      "w_wyckoff": 0.65,
+      "w_dow": 0.35,
+      "conf_floor": 0.3,
+      "buy_thresh": 0.15,
+      "flat_band": 0.05,
+      "atr_scale": {
+        "low": 1.0,
+        "mid": 0.95,
+        "high": 0.7,
+        "extreme": 0.15,
+        "unknown": 0.5
+      },
+      "description": "Wyckoff-heavy; lower buy threshold; mild ATR dampen",
+      "status": "research_proposal_only",
+      "applies_to": "structure soft overlay — NOT production assign_grade"
+    },
+    {
+      "name": "soft_c_strict",
+      "w_wyckoff": 0.4,
+      "w_dow": 0.6,
+      "conf_floor": 0.45,
+      "buy_thresh": 0.3,
+      "flat_band": 0.12,
+      "atr_scale": {
+        "low": 1.0,
+        "mid": 0.9,
+        "high": 0.4,
+        "extreme": 0.0,
+        "unknown": 0.4
+      },
+      "description": "Higher confidence + stricter buy; strong ATR filter",
+      "status": "research_proposal_only",
+      "applies_to": "structure soft overlay — NOT production assign_grade"
+    }
+  ]
+}
