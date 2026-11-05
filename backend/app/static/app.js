@@ -104,8 +104,22 @@ const DECISION_GROUPS = Object.freeze(['可加仓', '可入场', '可试探', '�
 const DECISION_COLUMNS = Object.freeze([
   ['instrument', '标的'], ['theme', '分类'], ['today', '今日'], ['previous_day_delta', '较昨日'], ['week_1', '近1周'],
   ['volume', '量能'], ['ma', '均线'], ['macd', 'MACD'], ['kdj', 'KDJ'], ['td', '九转'], ['rsi', 'RSI'], ['chan', '缠论'],
-  ['sector', '板块'], ['forecast', '预测'], ['grade', '分级'], ['health', '数据状态'], ['reason', '理由 / 风险'],
+  ['sector', '板块'], ['forecast', '预测'],
+  ['wyckoff', '威科夫'], ['dow', '道氏'], ['atr_bucket', 'ATR桶'],
+  ['grade', '分级'], ['health', '数据状态'], ['reason', '理由 / 风险'],
 ]);
+const STRUCTURE_WYCKOFF_ZH = Object.freeze({unknown:'未知',accumulation:'吸筹',markup:'拉升',distribution:'派发',markdown:'下跌',reaccumulation:'再吸筹',redistribution:'再派发',range:'震荡'});
+const STRUCTURE_DOW_ZH = Object.freeze({unknown:'未知',uptrend:'上升趋势',downtrend:'下降趋势',correction_in_uptrend:'升势回调',rally_in_downtrend:'跌势反弹',sideways:'横盘'});
+const STRUCTURE_ATR_ZH = Object.freeze({unknown:'未知',low:'低波',mid:'中波',high:'高波',extreme:'极端'});
+function structureV1(row) { return (row && row.structure_v1 && typeof row.structure_v1 === 'object') ? row.structure_v1 : null; }
+function structureLabel(row, kind) {
+  const sv = structureV1(row);
+  if (!sv) return '—';
+  if (kind === 'wyckoff') { const raw = sv.wyckoff_phase; return raw ? (STRUCTURE_WYCKOFF_ZH[raw] || '—') : '—'; }
+  if (kind === 'dow') { const raw = sv.dow_phase; return raw ? (STRUCTURE_DOW_ZH[raw] || '—') : '—'; }
+  if (kind === 'atr') { const raw = sv.atr_risk_bucket; return raw ? (STRUCTURE_ATR_ZH[raw] || '—') : '—'; }
+  return '—';
+}
 const DECISION_SORTABLE = Object.freeze(new Set(['today', 'previous_day_delta', 'week_1', 'volume', 'ma', 'macd', 'kdj', 'td', 'rsi', 'chan', 'forecast', 'grade']));
 const DECISION_SORT_KEY = Object.freeze({grade: 'grade_health'});
 
@@ -234,6 +248,9 @@ function decisionRowHtml(row, index, horizon = 1) {
     <td class="${escapeHtml(colorClass(returns.week_1))}">${escapeHtml(decisionPercent(returns.week_1))}</td>
     <td>${decisionVolumeHtml(row?.volume, row?.provisional)}</td><td>${decisionMaHtml(row?.ma)}</td><td>${decisionMacdHtml(row?.macd)}</td><td>${decisionKdjHtml(row?.kdj)}</td><td>${decisionTdHtml(row?.td)}</td><td>${decisionRsiHtml(row?.rsi)}</td><td>${decisionChanHtml(row?.chan)}</td><td>${decisionSectorHtml(row?.sector)}</td>
     <td class="${escapeHtml(colorClass(forecast))}"><div>${escapeHtml(decisionPercent(forecast))}</div><div class="forecast-flag">${horizon} 日 · 研究情景</div></td>
+    <td>${decisionMetricHtml(structureLabel(row, 'wyckoff'))}</td>
+    <td>${decisionMetricHtml(structureLabel(row, 'dow'))}</td>
+    <td>${decisionMetricHtml(structureLabel(row, 'atr'))}</td>
     <td><span class="badge ${escapeHtml(stateClass(row?.grade))}">${escapeHtml(row?.grade || '—')}</span>${blocked ? '<div class="decision-block-note">已阻断</div>' : ''}</td>
     <td><span class="health-badge ${healthClass}">${escapeHtml(health)}</span></td>
     <td class="decision-sticky-last"><div class="decision-reason">${escapeHtml(row?.grade_reason || '—')}</div><span class="risk-badge">${blocked ? '不可操作' : '研究提示'}</span></td>
