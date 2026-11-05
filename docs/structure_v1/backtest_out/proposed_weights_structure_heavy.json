@@ -1,0 +1,83 @@
+{
+  "generated_at": "2026-11-05T18:08:57.250454+08:00",
+  "status": "research_proposal_only",
+  "do_not_apply_to_live": true,
+  "phase": "B0_structure_soft_overlay",
+  "live_macd": {
+    "fast": 12,
+    "slow": 26,
+    "signal": 9
+  },
+  "macd_21_finding": "Box /workspace/etf-p1/config/strategy.json indicator.macd = 12/26/9. Backend indicators.py defaults fast=12 slow=26 signal=9. No production 21-day MACD. Live may be signal-v0.7.5; box copy is v0.7.4 — MACD periods unchanged. User recall of 'MACD 21' likely means MA20/monthly horizon or a research idea, not live MACD span.",
+  "board_score_weights_current_box": {
+    "volume": 0.15,
+    "ma": 0.2,
+    "macd": 0.2,
+    "kdj": 0.15,
+    "rsi": 0.15,
+    "td": 0.05,
+    "momentum": 0.1
+  },
+  "board_score_weights_structure_heavy_bypass": {
+    "wyckoff": 0.14,
+    "dow": 0.16,
+    "atr_inv": 0.1,
+    "macd": 0.1,
+    "ma": 0.14,
+    "volume": 0.1,
+    "kdj": 0.1,
+    "rsi": 0.08,
+    "momentum": 0.05,
+    "td": 0.03
+  },
+  "structure_trio_share": 0.4,
+  "macd_share": 0.1,
+  "structure_decision_v1": {
+    "version": "structure_decision_v1",
+    "status": "research_proposal_only",
+    "do_not_apply_to_live": true,
+    "w_structure_combo": 0.4,
+    "w_macd": 0.1,
+    "w_wyckoff_inside": 0.4,
+    "w_dow_inside": 0.6,
+    "conf_floor": 0.45,
+    "buy_thresh": 0.28,
+    "flat_band": 0.1,
+    "atr_scale": {
+      "low": 1.0,
+      "mid": 0.9,
+      "high": 0.4,
+      "extreme": 0.0,
+      "unknown": 0.4
+    },
+    "macd_periods": {
+      "fast": 12,
+      "slow": 26,
+      "signal": 9
+    },
+    "macd_21_note": "Live/box strategy.json uses indicator.macd 12/26/9. No 21-day MACD in production. Optional slow-MACD (e.g. 21/55/9) is research-only and not wired.",
+    "board_score_weights_bypass": {
+      "wyckoff": 0.14,
+      "dow": 0.16,
+      "atr_inv": 0.1,
+      "macd": 0.1,
+      "ma": 0.14,
+      "volume": 0.1,
+      "kdj": 0.1,
+      "rsi": 0.08,
+      "momentum": 0.05,
+      "td": 0.03
+    },
+    "structure_trio_share": 0.4,
+    "macd_share": 0.1
+  },
+  "soft_c_frozen_reference": {
+    "w_wyckoff": 0.4,
+    "w_dow": 0.6,
+    "conf_floor": 0.45,
+    "buy_thresh": 0.3,
+    "flat_band": 0.12,
+    "note": "kept frozen; structure_heavy builds on same wy/dow mix + MACD tilt"
+  },
+  "fork_note": "If promoted later: fork board_score_weights ONLY in a旁路 worktree. Board 综合分 only — assign_grade five-档 untouched. No CONFIG_HASH flip."
+}
