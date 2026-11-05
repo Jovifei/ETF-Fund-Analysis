@@ -54,17 +54,21 @@
 
 | Item | Status |
 |------|--------|
+| Proxies in-repo | **Real** ATR/Dow/Wyckoff (stubs removed 2026-11-05 review fix); `build_shadow.py` reproducible |
+| Board fill | `decision_board_service` soft-fills from history when block missing; sidecar optional |
+| Tests | `backend/tests/test_structure_v1.py` |
 | Contract | Flat per-row `structure_v1` (**not** nested `research_display`) |
 | Schema | `research/etf_structure_features/` in feature tree · box `schemas/structure_fund_row.schema.json` |
-| Shadow | **34/34** → `/workspace/etf_structure_features/out/shadow_20261105.json` · Jovi `C:\Users\Admin\etf_structure_v1_shadow_20261105.json` |
-| ATR bucket | `atr_pct_fixed_v1` (low&lt;1%, mid[1%,2%), high[2%,3.5%), extreme≥3.5%) |
+| Shadow | **34/34** → box `/workspace/etf_structure_features/out/shadow_20261105.json` · in-repo `docs/structure_v1/shadow_20261105.json` |
+| ATR bucket | `atr_pct_fixed_v1` (low<1%, mid[1%,2%), high[2%,3.5%), extreme≥3.5%) |
 | Email attach | `attach_structure_v1.py` / extract `--structure-sidecar` · slim `etf-email-slim-v1.1` |
 | Dry-run | OK 2026-11-05 · `/workspace/etf_slot/email_render/out/phase_a_dryrun_20261105/` |
-| Board | +3 research cols; **not** in `DECISION_SORTABLE`; `assign_grade` diff empty |
+| Board cols | +3 research cols; **not** in `DECISION_SORTABLE`; `assign_grade` untouched |
 | Worktree (Jovi) | `E:\worktrees\etf-phase-a-structure-v1-20261105` |
-| Live worktree | `C:\Users\Admin\.codex\worktrees\etf-live-v113-a0d52e4\ETF-Fund-Analysis` — **do not hang feature SHA on live tasks** |
+| Live worktree | live a0d52e4 worktree — **do not hang feature SHA on live tasks** |
 | B0 weights | **Frozen** after verdict **`WEAK_PASS_KEEP_FROZEN`** |
 | Phase A live-merge gate | Still need **≥3 trading-day** parallel after 2026-11-05 |
+| Live / main | **NOT merged** |
 
 ### 2026-11-05 production slots (already sent — do not re-push)
 

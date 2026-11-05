@@ -48,6 +48,23 @@ from app.utils.indicators_v05 import calculate_indicators
 from app.utils.numbers import finite_or_none
 from app.utils.support_resistance import build_support_resistance
 from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS
+from app.research.structure_v1 import resolve_structure_v1
+
+
+def _resolve_structure_v1_for_row(*, grade_row, values, ts_code, name, history):
+    """Research-only: passthrough existing block, else fill from DailyBar history."""
+    existing = None
+    if isinstance(grade_row.get("structure_v1"), dict):
+        existing = grade_row.get("structure_v1")
+    elif isinstance(values.get("structure_v1"), dict):
+        existing = values.get("structure_v1")
+    return resolve_structure_v1(
+        existing=existing,
+        ts_code=ts_code,
+        history=history,
+        name=name,
+    )
+
 
 READ_MODEL_VERSION = "decision-read-v110-flow-share-provenance"
 CURRENT_BOARD_READ_CONTRACT = "current-board-read-v1-temporal"
@@ -891,10 +908,12 @@ class DecisionBoardService:
             "history": history,
             "forecast_scenario": scenario,
             "support_resistance": support_resistance,
-            "structure_v1": (
-                grade_row.get("structure_v1")
-                if isinstance(grade_row.get("structure_v1"), dict)
-                else (values.get("structure_v1") if isinstance(values.get("structure_v1"), dict) else None)
+            "structure_v1": _resolve_structure_v1_for_row(
+                grade_row=grade_row,
+                values=values,
+                ts_code=instrument.ts_code,
+                name=instrument.name,
+                history=history,
             ),
             "research_only": True,
             "actionable": False,

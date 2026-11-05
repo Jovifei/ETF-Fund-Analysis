@@ -1,40 +1,35 @@
 # ETF Structure Features — Phase A (Wyckoff / Dow / ATR)
 
-**Status:** scaffold only · research / display columns · **no grade change**  
-**Production base (box):** `/workspace/etf-p1` @ `103522c` (`origin/main`)  
-**Git branch (created, no feature commits yet):** `feature/structure-v1-wyckoff-dow-atr`  
-**Merge gate:** ≥3 trading-day parallel display test, then review → merge. Do **not** soft-weight into `assign_grade` in Phase A.
+**Status:** real OHLCV proxies in-repo · research / display columns · **no grade change**  
+**Git branch:** `feature/structure-v1-wyckoff-dow-atr`  
+**Merge gate:** ≥3 trading-day parallel display test, then review → merge. Do **not** soft-weight into `assign_grade` in Phase A. Live / `main` still frozen.
 
 ## Phase A scope (allowed)
 
-- Compute **read-only** structure fields per fund/day from OHLC(+V) bars already available to local compute.
-- Emit sidecar / slim optional block for email + decision board **new columns**.
+- Compute **read-only** structure fields per fund/day from OHLC(+V) bars.
+- Emit shadow JSON + optional slim/board `structure_v1` block for email + decision board **new columns**.
+- Board `_row` **fills** `structure_v1` from DailyBar / research history when the block is missing (soft-fail → `None` / UI `—`). Sidecar join still optional.
 - Keep `assign_grade` / five-档买卖 **unchanged**; `actionable` / calibration flags stay as production.
 - Labels are **proxies** (A-share ETF volume ≠ underlying money flow). UI/email copy must say 代理 / proxy.
 
 ## Phase A out of scope
 
-- Changing `signal_grade_service.assign_grade` inputs or thresholds.
+- Changing `signal_grade_service.assign_grade` inputs or thresholds / `CONFIG_HASH`.
 - Soft-weighted “final decision” (Phase B after walk-forward).
 - CloudAgent / Cursor cloud quota.
-- Pushing to `origin` without user/ETF Bot release process.
+- Merging this branch to live / `main` without the ≥3-day gate + explicit approve.
 
-## Field contract (one fund row)
+## ATR risk bands (`atr_pct_fixed_v1`)
 
-See `schemas/structure_fund_row.schema.json`. Required display fields:
+`atr_pct = atr14 / price` (Wilder ATR(14); slim `atr14`/`price` overrides allowed in shadow builder):
 
-| Field | Meaning |
-|-------|---------|
-| `wyckoff_phase` | Proxy phase enum (range/vol heuristic) |
-| `wyckoff_score` | −1..1 bullish structure bias |
-| `wyckoff_confidence` | 0..1 |
-| `dow_phase` | Confirmed-pivot trend enum |
-| `dow_score` | −1..1 |
-| `dow_confidence` | 0..1 |
-| `atr14` | Wilder ATR(14), align with `price_structure` |
-| `atr_pct` | `atr14 / close` |
-| `atr_risk_bucket` | low / mid / high / extreme (quantile or fixed bands) |
-| `evidence[]` | Short audit strings (pivots, range, vol ratio) |
+| bucket | band |
+|--------|------|
+| low | `[0, 1.0%)` |
+| mid | `[1.0%, 2.0%)` |
+| high | `[2.0%, 3.5%)` |
+| extreme | `≥ 3.5%` |
+| unknown | missing atr/price |
 
 ## Causality
 
@@ -47,26 +42,35 @@ See `schemas/structure_fund_row.schema.json`. Required display fields:
 ```
 etf_structure_features/
   README.md
+  PHASE_A_WIRING.md
+  build_shadow.py          # reproducible shadow builder (cache and/or --fetch)
   schemas/structure_fund_row.schema.json
   examples/fund_row.example.json
   etf_structure_features/
     __init__.py
-    dow_proxy.py      # confirmed-pivot Dow stub
-    wyckoff_proxy.py  # range/vol Wyckoff stub
-    atr_risk.py       # atr14 / atr_pct / bucket stub
-    pipeline.py       # row assembler stub
+    dow_proxy.py           # confirmed-pivot Dow proxy (real)
+    wyckoff_proxy.py       # range/vol Wyckoff proxy (real)
+    atr_risk.py            # Wilder ATR + atr_pct_fixed_v1 buckets (real)
+    pipeline.py            # build_structure_row assembler
 ```
 
-## Handoff to ETF Bot (ingest)
+Backend soft-import: `backend/app/research/structure_v1.py` → `build_structure_row`.
+Tests: `backend/tests/test_structure_v1.py`.
 
-Accept optional `structure_v1` object on each slim/board fund row (or sidecar keyed by `ts_code`+`as_of`). Map columns; **do not** feed into grade. Email/HTML: add columns only when payload present; missing → `—`.
+## Rebuild shadow
 
-## Other local copies (not used for branch)
+```bash
+# with bars cache (no network)
+python research/etf_structure_features/build_shadow.py \
+  --slim /path/to/slim.json \
+  --cache research/etf_structure_features/data/bars_cache.json
 
-| Path | Notes |
-|------|--------|
-| `/workspace/etf-p1` | **Chosen** — remote `Jovifei/ETF-Fund-Analysis`, clean @ origin/main |
-| `/workspace/etf-deploy/ETF-Fund-Analysis` | Same remote; dirty/feature ahead — not base |
-| `/workspace/slot1140/repo` | No remote; dirty staged slot1140 patches |
-| `/workspace/h5/src` | No remote; heavily dirty H5 WIP |
-| `/workspace/etf_slot` | Runtime payloads only, no `.git` |
+# or fetch missing symbols
+python research/etf_structure_features/build_shadow.py --slim /path/to/slim.json --fetch
+```
+
+Sample shadow (34/34, 2026-11-05): `docs/structure_v1/shadow_20261105.json`.
+
+## Handoff
+
+Accept optional `structure_v1` on each slim/board fund row. Map columns; **do not** feed into grade. Missing → `—`.
