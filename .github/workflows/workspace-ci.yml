@@ -9,7 +9,12 @@ concurrency:
   cancel-in-progress: true
 jobs:
   contracts:
-    runs-on: ubuntu-latest
+    # Pinned: Playwright 1.55.1 does not support Ubuntu 26.04, and
+    # ubuntu-latest rolled forward to 26.04, which broke the
+    # "Chromium browser dependencies" step (run 41870908925:
+    # "Playwright does not support chromium on ubuntu26.04-x64").
+    # Move back to a floating label only after Playwright supports it.
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
