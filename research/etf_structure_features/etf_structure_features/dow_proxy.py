@@ -1,21 +1,4 @@
-"""Confirmed-pivot Dow trend proxy (no lookahead).
-
-Algorithm sketch
-----------------
-1. Detect swing highs/lows with symmetric window `k` on bars[0 : t+1] only.
-2. A swing at index i is **confirmed** only when i <= t - lag_n (default lag_n=2).
-   Bars in (t - lag_n, t] may form tentative swings but must not label the phase yet.
-3. Phase from the last two confirmed swings of each type (HH/HL vs LH/LL):
-   - HH + HL → uptrend
-   - LH + LL → downtrend
-   - HL then LH inside prior uptrend → correction_in_uptrend
-   - LH then HL inside prior downtrend → rally_in_downtrend
-   - otherwise sideways / unknown
-4. Score in [-1, 1] from signed pivot sequence strength; confidence from
-   pivot spacing consistency and sample count.
-
-This module is a stub: functions return structured placeholders until wired to bars.
-"""
+"""Confirmed-pivot Dow proxy (lag_n, no lookahead)."""
 
 from __future__ import annotations
 
@@ -23,6 +6,19 @@ from typing import Any
 
 DEFAULT_LAG_N = 2
 DEFAULT_SWING_K = 2
+
+
+def _swings(values: list[float], *, is_high: bool, k: int) -> list[int]:
+    out: list[int] = []
+    n = len(values)
+    for i in range(k, n - k):
+        w = values[i - k : i + k + 1]
+        v = values[i]
+        if is_high and v == max(w) and w.count(v) == 1:
+            out.append(i)
+        if (not is_high) and v == min(w) and w.count(v) == 1:
+            out.append(i)
+    return out
 
 
 def confirmed_pivots(
@@ -33,14 +29,47 @@ def confirmed_pivots(
     lag_n: int = DEFAULT_LAG_N,
     swing_k: int = DEFAULT_SWING_K,
 ) -> list[dict[str, Any]]:
-    """Return confirmed pivots with index <= as_of_index - lag_n. Stub → []."""
-    _ = (highs, lows, as_of_index, lag_n, swing_k)
-    return []
+    highs = highs[: as_of_index + 1]
+    lows = lows[: as_of_index + 1]
+    last_usable = len(highs) - 1 - lag_n
+    pivots: list[dict[str, Any]] = []
+    for series, side, is_high in ((highs, "high", True), (lows, "low", False)):
+        for i in _swings(series, is_high=is_high, k=swing_k):
+            confirmed_at = i + swing_k
+            if confirmed_at <= last_usable:
+                pivots.append({"side": side, "index": i, "price": series[i], "confirmed_index": confirmed_at})
+    pivots.sort(key=lambda p: (p["confirmed_index"], p["side"]))
+    return pivots
 
 
 def dow_phase_from_pivots(
     pivots: list[dict[str, Any]],
 ) -> tuple[str, float, float, list[dict[str, Any]]]:
-    """Return (dow_phase, dow_score, dow_confidence, evidence). Stub → unknown."""
-    _ = pivots
-    return "unknown", 0.0, 0.0, [{"kind": "note", "text": "dow_proxy stub — not computed", "bar_index": None}]
+    highs_p = [p for p in pivots if p["side"] == "high"]
+    lows_p = [p for p in pivots if p["side"] == "low"]
+    evidence: list[dict[str, Any]] = []
+    if len(highs_p) >= 2:
+        evidence.append({"kind": "dow_pivot", "text": f"swing highs {highs_p[-2]['price']:.4f}->{highs_p[-1]['price']:.4f}", "bar_index": highs_p[-1]["index"]})
+    if len(lows_p) >= 2:
+        evidence.append({"kind": "dow_pivot", "text": f"swing lows {lows_p[-2]['price']:.4f}->{lows_p[-1]['price']:.4f}", "bar_index": lows_p[-1]["index"]})
+    if len(highs_p) < 2 or len(lows_p) < 2:
+        evidence.append({"kind": "note", "text": "insufficient confirmed pivots", "bar_index": None})
+        return "unknown", 0.0, 0.2, evidence
+
+    h1, h2 = highs_p[-2], highs_p[-1]
+    l1, l2 = lows_p[-2], lows_p[-1]
+    hh, hl = h2["price"] > h1["price"], l2["price"] > l1["price"]
+    lh, ll = h2["price"] < h1["price"], l2["price"] < l1["price"]
+
+    if hh and hl:
+        return "uptrend", 0.7, 0.65, evidence
+    if lh and ll:
+        return "downtrend", -0.7, 0.65, evidence
+    if hh and ll:
+        return "sideways", 0.1, 0.45, evidence
+    if lh and hl:
+        # potential correction/rally mixed
+        if h2["price"] > l2["price"]:
+            return "correction_in_uptrend", 0.25, 0.5, evidence
+        return "rally_in_downtrend", -0.25, 0.5, evidence
+    return "sideways", 0.0, 0.4, evidence

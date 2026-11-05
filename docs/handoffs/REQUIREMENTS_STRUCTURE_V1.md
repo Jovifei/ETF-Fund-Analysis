@@ -10,6 +10,9 @@ An item is done only when its acceptance check passes.
 - [x] Feature wiring committed (`5844e828`) and tip handoff (`9a072f2`) **pushed** to `origin/feature/structure-v1-wyckoff-dow-atr`.
 - [x] Merged into **review** baseline via PR **#64** (`ecc26155`) — **not** live/main.
 - [x] Daily shadow sample **34/34** for 2026-11-05 with schema `structure_v1`.
+- [x] In-repo real ATR/Dow/Wyckoff proxies (stubs removed); shadow builder `build_shadow.py` reproducible.
+- [x] Board `_row` soft-fills `structure_v1` from history (no sidecar required for three columns).
+- [x] Pytest `backend/tests/test_structure_v1.py` covers proxies + soft-fill.
 - [x] Dry-run email/board path OK for 2026-11-05.
 - [ ] Each new session: shadow rebuilt 34/34 for that date.
 - [ ] Slim attach before strategy email render on parallel days.
