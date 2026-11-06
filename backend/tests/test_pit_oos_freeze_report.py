@@ -52,6 +52,10 @@ def test_freeze_inventory_purges_all_horizons_before_pristine_holdout():
     assert len(result["purged_walk_forward"]["folds"]) == 2
     holdout = result["pristine_holdout"]["bounds"]
     assert holdout["label_horizon"] == 20
+    assert result["pristine_holdout"]["sessions"] == 20
+    assert result["pristine_holdout"]["minimum_sessions_required"] == 120
+    assert "pristine_holdout_less_than_6_months" in result["reasons"]
+    assert "decision_cutoff_date_not_in_declared_exchange_calendar" in result["reasons"]
     for fold in result["purged_walk_forward"]["folds"]:
         assert fold["purge_sessions"] >= 20
         assert fold["test_end"] < result["data_window"]["holdout_start"]

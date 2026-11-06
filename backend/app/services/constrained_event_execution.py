@@ -104,6 +104,9 @@ class ConstrainedEventExecution:
         instruments: Mapping[str, object],
         exposure_cap: float,
     ) -> tuple[float, list[dict[str, Any]]]:
+        # Current Instrument.kind/theme_l1 is deliberately *not* consulted.
+        # Only effective-dated row values may influence historical fills.
+        del instruments
         if not math.isfinite(cash) or cash < 0:
             raise ValueError("cash_book_invalid")
         commission_rate = float(self.config.get("commission_rate", 0.0002))
@@ -202,10 +205,24 @@ class ConstrainedEventExecution:
             record(code, "sell", sell, price, fee, realized)
 
         theme_value: dict[str, float] = defaultdict(float)
+        missing_held_theme = False
         for code, pos in positions.items():
-            inst = instruments.get(code)
-            if inst is not None and getattr(inst, "theme_l1", None):
-                theme_value[str(inst.theme_l1)] += pos.shares * opened.get(code, marks.get(code, 0))
+            frame = frames.get(code)
+            row = frame.loc[day] if frame is not None and day in frame.index else None
+            if (
+                not isinstance(row, pd.Series)
+                or not _verified(row, "theme_pit_verified")
+                or not isinstance(row.get("theme_l1_pit"), str)
+                or not row["theme_l1_pit"].strip()
+            ):
+                missing_held_theme = True
+                continue
+            theme_value[row["theme_l1_pit"]] += pos.shares * opened.get(code, marks.get(code, 0))
+        if missing_held_theme:
+            for code, weight in targets.items():
+                if weight > 0:
+                    self._block(day, code, "buy", "held_theme_pit_missing")
+            return cash, trades
         for code, weight in sorted(targets.items(), key=lambda item: (-item[1], item[0])):
             if weight <= 0:
                 continue
@@ -215,16 +232,28 @@ class ConstrainedEventExecution:
                 self._block(day, code, "buy", reason)
                 continue
             assert row is not None
-            inst = instruments.get(code)
-            theme = str(getattr(inst, "theme_l1", "") or "")
-            if not theme or not _verified(row, "theme_pit_verified"):
+            theme = row.get("theme_l1_pit")
+            if (not _verified(row, "theme_pit_verified")
+                    or not isinstance(theme, str) or not theme.strip()):
                 self._block(day, code, "buy", "effective_dated_theme_missing")
                 continue
-            kind = str(getattr(inst, "kind", "")).upper()
-            if "LOF" in kind or "QDII" in kind or _verified(row, "cross_border_fund"):
+            kind = row.get("fund_kind_pit")
+            if (not _verified(row, "fund_kind_pit_verified")
+                    or not isinstance(kind, str) or not kind.strip()):
+                self._block(day, code, "buy", "historical_fund_kind_unverified")
+                continue
+            cross_border = row.get("cross_border_fund")
+            if not isinstance(cross_border, (bool, np.bool_)):
+                self._block(day, code, "buy", "historical_cross_border_classification_missing")
+                continue
+            kind = kind.upper()
+            if "LOF" in kind or "QDII" in kind or bool(cross_border):
                 premium = _finite(row.get("premium_rate"))
                 if not _verified(row, "premium_pit_verified") or premium is None:
                     self._block(day, code, "buy", "lof_qdii_premium_pit_missing")
+                    continue
+                if row.get("premium_rate_unit") != "percent_points":
+                    self._block(day, code, "buy", "lof_qdii_premium_unit_unverified")
                     continue
                 if abs(premium) > float(self.config.get("max_abs_premium_pct", 2.0)):
                     self._block(day, code, "buy", "lof_qdii_premium_limit")
@@ -273,6 +302,7 @@ class ConstrainedEventExecution:
                 "t_plus_one", "commission", "slippage", "exchange_lot",
                 "limit_up_down", "suspension", "lof_qdii_premium",
                 "portfolio_exposure", "single_fund", "effective_dated_theme",
+                "historical_fund_kind", "cross_border_identity", "premium_unit",
                 "turnover_hysteresis",
             ],
             "blocked_order_count": len(self.blocked),
