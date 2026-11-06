@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from types import SimpleNamespace
 
 import pandas as pd
+import pytest
 
 from app.services.backtest_service import Position
 from app.services.constrained_event_execution import ConstrainedEventExecution
@@ -143,3 +144,41 @@ def test_theme_concentration_and_turnover_hysteresis_are_hard_caps():
     )
     assert not trades2
     assert engine2.summary()["blocked_by_reason"]["turnover_hysteresis"] == 1
+
+
+def test_suspended_open_spike_cannot_inflate_buying_power():
+    dates = list(_frame().index)
+    suspended = _frame()
+    suspended.loc[dates[1], "open"] = 1000.
+    suspended.loc[dates[1], "close"] = 1000.
+    suspended.loc[dates[1], "trade_activity_observed"] = False
+    suspended.loc[dates[1], "volume"] = 0.
+    active = _frame()
+    pos = {"510300.SH": Position(shares=100, average_cost=10., opened_index=0)}
+    engine = ConstrainedEventExecution(CONFIG, SIGNAL)
+    cash, trades = _execute(
+        engine, dates[1], 1, {"512480.SH": .2},
+        {"510300.SH": suspended, "512480.SH": active},
+        pos=pos, cash=10000., theme="t1",
+    )
+    buys = [trade for trade in trades if trade["side"] == "buy"]
+    assert len(buys) == 1
+    # Equity=10k cash + last real observed close (100 shares x 10) = 11k,
+    # not the fabricated suspended open (100 shares x 1000).
+    assert buys[0]["shares"] == 200
+    assert pos["510300.SH"].shares == 100
+    assert any(item["reason"] == "suspended_or_price_missing" for item in engine.blocked)
+
+
+def test_execution_refuses_invalid_lots_and_negative_price_from_slippage():
+    day = date(2026, 11, 2)
+    frame = _frame()
+    for config, reason in [
+        ({**CONFIG, "lot_size": 0}, "execution_lot_policy_invalid"),
+        ({**CONFIG, "lot_size": -1}, "execution_lot_policy_invalid"),
+        ({**CONFIG, "lot_size": True}, "execution_lot_policy_invalid"),
+        ({**CONFIG, "slippage_rate": 1.5}, "execution_cost_policy_invalid"),
+    ]:
+        engine = ConstrainedEventExecution(config, SIGNAL)
+        with pytest.raises(ValueError, match=reason):
+            _execute(engine, day, 0, {"510300.SH": .2}, {"510300.SH": frame})

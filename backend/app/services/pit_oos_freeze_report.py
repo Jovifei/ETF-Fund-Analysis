@@ -144,7 +144,12 @@ def build_1430_freeze_report(
     else:
         reasons.append("walk_forward_bounds_missing")
 
-    candidate_ready = not reasons
+    # This module inventories caller-supplied evidence; it has no
+    # authenticated external verifier for provider licensing, raw historical
+    # delivery timestamps or the pristine access log. Even a forged all-true
+    # attestation must never become a sealable candidate.
+    reasons.append("independent_provider_and_holdout_receipt_verification_not_implemented")
+    candidate_ready = False
     return {
         "schema_version": "pit-oos-freeze-candidate-v1",
         "mode": "offline_evidence_inventory",

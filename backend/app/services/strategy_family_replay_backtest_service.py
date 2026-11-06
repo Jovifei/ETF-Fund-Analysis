@@ -162,6 +162,13 @@ class StrategyFamilyReplayBacktestService(RotationBacktestV05Service):
             instrument = instruments.get(code)
             if instrument is None:
                 continue
+            # Today's theme metadata cannot assign groups to historical bars.
+            # Keep the runtime allocator but put all unclassified history in
+            # one conservative bucket; no modern theme survives into PIT ranks.
+            research_instrument = SimpleNamespace(
+                id=getattr(instrument, "id", None), ts_code=code,
+                kind=getattr(instrument, "kind", "ETF"), theme_l1=None,
+            )
             current = positions.get(code)
             weight = (
                 current.shares * float(row["close"]) / portfolio_equity
@@ -174,7 +181,7 @@ class StrategyFamilyReplayBacktestService(RotationBacktestV05Service):
                 50., 50., fit, float(row["quality_score"]),
             )
             items.append(CandidateSignal(
-                instrument=instrument, indicator=None, quote=None, forecasts={},
+                instrument=research_instrument, indicator=None, quote=None, forecasts={},
                 holding=None, current_weight=weight, score=score,
                 confidence=0.0, data_quality=float(row["data_quality"]),
                 reasons=[], risks=list(row["risk_reasons"]),
@@ -215,6 +222,8 @@ class StrategyFamilyReplayBacktestService(RotationBacktestV05Service):
             "actions": actions,
             "not_replayed": list(NOT_REPLAYED),
             "simulated_holdings_only": True,
+            "historical_theme_allocation_policy": "conservative_unclassified_shared_bucket",
+            "theme_point_in_time_qualified": False,
         }
 
     def _execute(self, trade_date, day_index, target_weights, frames, positions, cash):

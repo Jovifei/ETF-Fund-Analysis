@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from datetime import datetime, timedelta
+from app.services.backtest_service import Position
 
 import numpy as np
 import pandas as pd
@@ -117,3 +119,61 @@ def test_projection_uses_exact_runtime_action_rules_for_fixed_inputs():
         item.instrument.ts_code: item.first_step_target_weight
         for item in expected if item.first_step_target_weight > 0
     } == weights
+
+
+def test_hard_reduce_from_simulated_holding_matches_runtime_and_bypasses_hysteresis():
+    settings = Settings(_env_file=None, market_provider="mock")
+    service = StrategyFamilyReplayBacktestService(settings)
+    instrument = SimpleNamespace(ts_code="510300.SH", theme_l1="index", kind="ETF")
+    features = pd.DataFrame({
+        "close": [10.0], "technical_score": [0.],
+        "risk_score": [100.], "quality_score": [55.],
+        "data_quality": [90.], "risk_reasons": [[]],
+    }, index=["510300.SH"])
+    as_of = pd.Timestamp("2026-10-23").date()
+    features.attrs["as_of_date"] = as_of
+    old_time = datetime(2026, 10, 23, 14, 55, tzinfo=settings.timezone)
+    service._prior_actions["510300.SH"] = SimpleNamespace(
+        state="持有", score=24., as_of_time=old_time
+    )
+    weights, details = service._select(
+        features, {"510300.SH": instrument},
+        {"510300.SH": Position(shares=5000, average_cost=10., opened_index=0)},
+        100, .7, portfolio_equity=100000.,
+    )
+    action = details["actions"]["510300.SH"]
+    assert action["action_kind"] == "hard_reduce"
+    assert action["state"] == "减仓"
+    assert action["current_weight"] == .5
+    assert action["target_weight"] == 0.
+    assert weights["510300.SH"] == .4  # runtime one-step adjustment cap, not instant liquidation
+    assert action["actionable"] is False
+
+
+def test_replay_never_uses_current_theme_metadata_for_historical_allocation():
+    settings = Settings(_env_file=None, market_provider="mock")
+    codes = [f"{i:06d}.SH" for i in (510300, 512480, 510500, 159901, 159915)]
+    features = pd.DataFrame({
+        "close": [10.] * len(codes),
+        "technical_score": [100.] * len(codes),
+        "risk_score": [0.] * len(codes),
+        "quality_score": [100.] * len(codes),
+        "data_quality": [90.] * len(codes),
+        "risk_reasons": [[] for _ in codes],
+    }, index=codes)
+    features.attrs["as_of_date"] = pd.Timestamp("2026-10-23").date()
+    def make_mapping(unique):
+        return {
+            code: SimpleNamespace(ts_code=code,
+                                  theme_l1=(f"modern_{n}" if unique else "shared"))
+            for n, code in enumerate(codes)
+        }
+    a = StrategyFamilyReplayBacktestService(settings)
+    b = StrategyFamilyReplayBacktestService(settings)
+    wa, da = a._select(features, make_mapping(True), {}, 0, 1., portfolio_equity=100000.)
+    wb, db = b._select(features, make_mapping(False), {}, 0, 1., portfolio_equity=100000.)
+    assert wa == wb
+    assert len(wa) == 2  # conservative unknown-group strategic cap .4, step cap .1
+    assert da["theme_point_in_time_qualified"] is False
+    assert da["historical_theme_allocation_policy"] == "conservative_unclassified_shared_bucket"
+    assert db["historical_theme_allocation_policy"] == da["historical_theme_allocation_policy"]

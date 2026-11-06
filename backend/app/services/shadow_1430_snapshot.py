@@ -66,7 +66,9 @@ def write_1430_shadow_snapshot(
         if not isinstance(record, Mapping):
             raise ValueError("shadow_record_invalid")
         _validate_evidence_dates(record, market_cutoff)
-        if record.get("actionable") is True or record.get("calibration_status") == "calibrated":
+        if (record.get("actionable") not in (None, False)
+                or record.get("calibration_status") not in (None, "not_calibrated")
+                or record.get("qualification") not in (None, "UNKNOWN")):
             raise ValueError("shadow_snapshot_must_be_research_only")
 
     payload = {
@@ -76,7 +78,11 @@ def write_1430_shadow_snapshot(
         "git_commit_sha": code_sha,
         "parameters_hash": parameters_hash,
         "source_evidence": dict(source_evidence),
-        "observations": {code: dict(record) for code, record in sorted(observations.items())},
+        "observations": {
+            code: {**dict(record), "qualification": "UNKNOWN",
+                   "actionable": False, "calibration_status": "not_calibrated"}
+            for code, record in sorted(observations.items())
+        },
         "qualification": "UNKNOWN",
         "actionable": False,
         "calibration_status": "not_calibrated",

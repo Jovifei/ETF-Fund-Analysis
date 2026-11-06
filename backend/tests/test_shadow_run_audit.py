@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
+
+import pytest
 
 from app.services.shadow_run_audit_service import ShadowRunAuditService
 from app.services.task_service import TaskService
@@ -67,3 +69,10 @@ def test_shadow_audit_no_production_writes(bootstrapped, db_session):
     }
     assert pre_cal == post_cal, "forecast calibration_status was modified!"
     assert pre_sig_state == post_sig_state, "signal state was modified!"
+
+
+def test_shadow_audit_rejects_future_target_date_before_touching_snapshots():
+    svc = ShadowRunAuditService()
+    future = datetime.now(svc.settings.timezone).date() + timedelta(days=1)
+    with pytest.raises(ValueError, match="shadow_audit_future_target_date_not_allowed"):
+        svc.run(None, target_date=future)

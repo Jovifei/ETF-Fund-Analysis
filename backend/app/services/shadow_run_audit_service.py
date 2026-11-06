@@ -41,7 +41,10 @@ class ShadowRunAuditService:
         calendar = TradingCalendarService(self.settings)
         # Shadow audit dates follow the configured market timezone. Using the
         # host's local date can audit the wrong session around UTC midnight.
-        today = target_date or datetime.now(self.settings.timezone).date()
+        market_today = datetime.now(self.settings.timezone).date()
+        if target_date is not None and target_date > market_today:
+            raise ValueError("shadow_audit_future_target_date_not_allowed")
+        today = target_date or market_today
         today_decision = calendar.decision(today)
         cutoff = datetime.combine(today, time(14, 30), tzinfo=self.settings.timezone)
 

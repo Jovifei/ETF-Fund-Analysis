@@ -155,12 +155,16 @@ def test_pit_evidence_valid_temporal_chain_is_still_not_provider_qualified():
 
 
 def test_pit_evidence_rejects_future_news_and_unverified_execution():
-    cutoff = datetime(2026, 8, 31, 14, 30)
+    tz = ZoneInfo("Asia/Shanghai")
+    cutoff = datetime(2026, 8, 31, 14, 30, tzinfo=tz)
+    fill = datetime(2026, 8, 31, 14, 35, tzinfo=tz)
     result = evaluate_pit_evidence(
         cutoff,
         feature_rows=[SimpleNamespace(trade_time=cutoff, source_timestamp=cutoff)],
-        execution_rows=[SimpleNamespace(trade_time=datetime(2026, 8, 31, 14, 35), price=1.2, is_tradable=False)],
-        news_rows=[SimpleNamespace(published_at=datetime(2026, 8, 31, 14, 31))],
+        execution_rows=[SimpleNamespace(
+            trade_time=fill, source_timestamp=fill, price=1.2, is_tradable=False,
+        )],
+        news_rows=[SimpleNamespace(published_at=datetime(2026, 8, 31, 14, 31, tzinfo=tz))],
     )
     assert result.qualified is False
     assert "execution_tradability_unverified" in result.reasons
@@ -168,11 +172,15 @@ def test_pit_evidence_rejects_future_news_and_unverified_execution():
 
 
 def test_pit_evidence_rejects_missing_source_timestamp_and_execution_price():
-    cutoff = datetime(2026, 8, 31, 14, 30)
+    tz = ZoneInfo("Asia/Shanghai")
+    cutoff = datetime(2026, 8, 31, 14, 30, tzinfo=tz)
+    fill = datetime(2026, 8, 31, 14, 35, tzinfo=tz)
     result = evaluate_pit_evidence(
         cutoff,
         feature_rows=[SimpleNamespace(trade_time=cutoff)],
-        execution_rows=[SimpleNamespace(trade_time=datetime(2026, 8, 31, 14, 35), price=None, is_tradable=True)],
+        execution_rows=[SimpleNamespace(
+            trade_time=fill, source_timestamp=fill, price=None, is_tradable=True,
+        )],
         news_rows=[],
     )
     assert result.qualified is False
