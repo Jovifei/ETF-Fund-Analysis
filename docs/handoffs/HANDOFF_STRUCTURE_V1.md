@@ -33,6 +33,14 @@
 
 **Authorized now:** Phase A parallel + B0 research. B1/B2 not started.
 
+**Update 2026-11-06 (Muse, on the user's direct instruction after Grok Bot
+had no new submission for ~12h):** B1 is now implemented on the feature
+branch — see `docs/structure_v1/PHASE_A_WIRING.md` §"Phase B1 wiring".
+Frozen soft_c weights run as a parallel `structure_shadow` column
+(board / web / email); live five-档 and CONFIG_HASH remain untouched.
+B2 is still **not** authorized or gated-in: it needs the ≥3 trading-day
+parallel record, holdout standing, and a separate explicit approval.
+
 ---
 
 ## 2. Current status (2026-11-05 Asia/Shanghai) — FACTS

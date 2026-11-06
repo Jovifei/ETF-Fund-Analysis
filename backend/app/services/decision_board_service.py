@@ -48,7 +48,16 @@ from app.utils.indicators_v05 import calculate_indicators
 from app.utils.numbers import finite_or_none
 from app.utils.support_resistance import build_support_resistance
 from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS
+from app.research.structure_shadow import compute_structure_shadow
 from app.research.structure_v1 import resolve_structure_v1
+
+
+def _structure_shadow_for_row(*, structure_block, grade):
+    """Phase B1 bypass: frozen soft_c shadow signal beside the live grade.
+
+    Research-only and display-only; the result never feeds assign_grade.
+    """
+    return compute_structure_shadow(structure_block, live_grade=grade)
 
 
 def _resolve_structure_v1_for_row(*, grade_row, values, ts_code, name, history):
@@ -567,6 +576,7 @@ class DecisionBoardService:
             "rows": rows,
             "flow_share_contract": FLOW_CONTRACT,
             "flow_share_changes_grade": False,
+            "structure_shadow_changes_grade": False,
             "sector_timing": self._safe_sector_timing_observation(
                 db,
                 rows,
@@ -820,6 +830,13 @@ class DecisionBoardService:
             "detail": "重叠区近似，不是完整 Chan/CZSC",
             "zone": support_resistance.get("chan_zone_approx") if isinstance(support_resistance, dict) else None,
         }
+        structure_block = _resolve_structure_v1_for_row(
+            grade_row=grade_row,
+            values=values,
+            ts_code=instrument.ts_code,
+            name=instrument.name,
+            history=history,
+        )
         return {
             "instrument_id": instrument.id,
             "ts_code": instrument.ts_code,
@@ -908,12 +925,10 @@ class DecisionBoardService:
             "history": history,
             "forecast_scenario": scenario,
             "support_resistance": support_resistance,
-            "structure_v1": _resolve_structure_v1_for_row(
-                grade_row=grade_row,
-                values=values,
-                ts_code=instrument.ts_code,
-                name=instrument.name,
-                history=history,
+            "structure_v1": structure_block,
+            "structure_shadow": _structure_shadow_for_row(
+                structure_block=structure_block,
+                grade=grade_row.get("grade", "数据异常"),
             ),
             "research_only": True,
             "actionable": False,
@@ -1233,6 +1248,7 @@ class DecisionBoardService:
             "rows": [],
             "flow_share_contract": FLOW_CONTRACT,
             "flow_share_changes_grade": False,
+            "structure_shadow_changes_grade": False,
             "sector_timing": empty_sector_timing_observation(),
             "research_only": True,
             "automatic_orders": False,

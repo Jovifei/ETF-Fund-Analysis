@@ -41,10 +41,10 @@ An item is done only when its acceptance check passes.
 - [x] Structure weight block **> MACD** in board bypass design (trio 0.40 > macd 0.10).
 - [x] Production MACD remains **12/26/9**.
 
-## Phase B1 / B2 (not started)
+## Phase B1 / B2
 
-- [ ] B1:旁路 `shadow_grade` column; live five-档 still frozen.
-- [ ] B2: explicit user approve + new CONFIG_HASH + merge plan before live `assign_grade` change.
+- [x] B1:旁路 `structure_shadow` column (2026-11-06, Muse under user's direct instruction): frozen soft_c weights run in parallel on the board, web and email; live five-档 still frozen (`structure_shadow_changes_grade: false`). Note: B1 signal is the B0-validated ternary overlay, not a rule-tree copy of `assign_grade`.
+- [ ] B2: explicit user approve + new CONFIG_HASH + merge plan before live `assign_grade` change. Gates unchanged: ≥3 trading-day parallel + holdout standing (stable >60% not yet met).
 - [ ] Optional: `replay_assign_grade.py`旁路 CLI.
 
 ## Process / handoff

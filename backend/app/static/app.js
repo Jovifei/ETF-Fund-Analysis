@@ -105,7 +105,7 @@ const DECISION_COLUMNS = Object.freeze([
   ['instrument', '标的'], ['theme', '分类'], ['today', '今日'], ['previous_day_delta', '较昨日'], ['week_1', '近1周'],
   ['volume', '量能'], ['ma', '均线'], ['macd', 'MACD'], ['kdj', 'KDJ'], ['td', '九转'], ['rsi', 'RSI'], ['chan', '缠论'],
   ['sector', '板块'], ['forecast', '预测'],
-  ['wyckoff', '威科夫'], ['dow', '道氏'], ['atr_bucket', 'ATR桶'],
+  ['wyckoff', '威科夫'], ['dow', '道氏'], ['atr_bucket', 'ATR桶'], ['structure_shadow', '结构影子'],
   ['grade', '分级'], ['health', '数据状态'], ['reason', '理由 / 风险'],
 ]);
 const STRUCTURE_WYCKOFF_ZH = Object.freeze({unknown:'未知',accumulation:'吸筹',markup:'拉升',distribution:'派发',markdown:'下跌',reaccumulation:'再吸筹',redistribution:'再派发',range:'震荡'});
@@ -119,6 +119,13 @@ function structureLabel(row, kind) {
   if (kind === 'dow') { const raw = sv.dow_phase; return raw ? (STRUCTURE_DOW_ZH[raw] || '—') : '—'; }
   if (kind === 'atr') { const raw = sv.atr_risk_bucket; return raw ? (STRUCTURE_ATR_ZH[raw] || '—') : '—'; }
   return '—';
+}
+function structureShadowLabel(row) {
+  // Phase B1 bypass: frozen soft_c shadow signal; display only, never the live grade.
+  const sh = (row && row.structure_shadow && typeof row.structure_shadow === 'object') ? row.structure_shadow : null;
+  if (!sh || !sh.signal) return '—';
+  const score = Number(sh.score);
+  return Number.isFinite(score) ? `${sh.signal} ${score >= 0 ? '+' : ''}${score.toFixed(2)}` : String(sh.signal);
 }
 const DECISION_SORTABLE = Object.freeze(new Set(['today', 'previous_day_delta', 'week_1', 'volume', 'ma', 'macd', 'kdj', 'td', 'rsi', 'chan', 'forecast', 'grade']));
 const DECISION_SORT_KEY = Object.freeze({grade: 'grade_health'});
@@ -251,6 +258,7 @@ function decisionRowHtml(row, index, horizon = 1) {
     <td>${decisionMetricHtml(structureLabel(row, 'wyckoff'))}</td>
     <td>${decisionMetricHtml(structureLabel(row, 'dow'))}</td>
     <td>${decisionMetricHtml(structureLabel(row, 'atr'))}</td>
+    <td>${decisionMetricHtml(structureShadowLabel(row))}</td>
     <td><span class="badge ${escapeHtml(stateClass(row?.grade))}">${escapeHtml(row?.grade || '—')}</span>${blocked ? '<div class="decision-block-note">已阻断</div>' : ''}</td>
     <td><span class="health-badge ${healthClass}">${escapeHtml(health)}</span></td>
     <td class="decision-sticky-last"><div class="decision-reason">${escapeHtml(row?.grade_reason || '—')}</div><span class="risk-badge">${blocked ? '不可操作' : '研究提示'}</span></td>
