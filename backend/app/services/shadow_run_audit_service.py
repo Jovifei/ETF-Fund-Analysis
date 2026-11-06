@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import math
 import uuid
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
 import pandas as pd
@@ -47,6 +47,9 @@ class ShadowRunAuditService:
         today = target_date or market_today
         today_decision = calendar.decision(today)
         cutoff = datetime.combine(today, time(14, 30), tzinfo=self.settings.timezone)
+        # generated_at uses the database server's UTC clock; unlike signal
+        # as_of_time, it must be compared with the UTC-equivalent instant.
+        generated_at_cutoff = cutoff.astimezone(timezone.utc)
 
         instruments = db.scalars(
             select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code)
@@ -68,7 +71,11 @@ class ShadowRunAuditService:
             # 取最近一条预测
             forecast = db.scalars(
                 select(ForecastSnapshot)
-                .where(ForecastSnapshot.instrument_id == inst.id, ForecastSnapshot.as_of_date <= today)
+                .where(
+                    ForecastSnapshot.instrument_id == inst.id,
+                    ForecastSnapshot.as_of_date <= today,
+                    ForecastSnapshot.generated_at <= generated_at_cutoff,
+                )
                 .order_by(ForecastSnapshot.as_of_date.desc(), ForecastSnapshot.horizon)
                 .limit(1)
             ).first()
@@ -125,7 +132,11 @@ class ShadowRunAuditService:
             values = {}
             indicator = db.scalars(
                 select(IndicatorSnapshot)
-                .where(IndicatorSnapshot.instrument_id == inst.id, IndicatorSnapshot.as_of_date <= forecast.as_of_date)
+                .where(
+                    IndicatorSnapshot.instrument_id == inst.id,
+                    IndicatorSnapshot.as_of_date <= forecast.as_of_date,
+                    IndicatorSnapshot.generated_at <= generated_at_cutoff,
+                )
                 .order_by(IndicatorSnapshot.as_of_date.desc())
                 .limit(1)
             ).first()
@@ -194,6 +205,7 @@ class ShadowRunAuditService:
             "audit_information_cutoff": cutoff.isoformat(),
             "actual_bar_policy": "closed_sessions_strictly_before_audit_1430_date",
             "future_signal_indicator_forecast_excluded": True,
+            "generation_time_policy": "indicator_and_forecast_generated_at_UTC_no_later_than_market_1430",
             "is_trade_day": today_decision.is_trade_day,
             "trade_day_source": today_decision.source,
             "research_status": "shadow_only_no_production_changes",
