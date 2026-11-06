@@ -65,3 +65,12 @@ def test_shadow_refuses_actionable_or_calibrated_fixtures(tmp_path):
     for claim in ({"actionable": True}, {"calibration_status": "calibrated"}):
         with pytest.raises(ValueError, match="shadow_snapshot_must_be_research_only"):
             _write(tmp_path, observations={"510300.SH": claim})
+
+
+def test_shadow_refuses_promotion_claim_inside_observation(tmp_path):
+    for claim in ({"qualification": "APPROVED"},
+                  {"calibration_status": "some_other_claim"},
+                  {"actionable": 1}):
+        with pytest.raises(ValueError, match="shadow_snapshot_must_be_research_only"):
+            _write(tmp_path, observations={"510300.SH": claim})
+    assert not list(tmp_path.glob("shadow_1430_*"))

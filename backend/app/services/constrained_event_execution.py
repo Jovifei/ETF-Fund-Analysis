@@ -109,11 +109,17 @@ class ConstrainedEventExecution:
         commission_rate = float(self.config.get("commission_rate", 0.0002))
         minimum_commission = float(self.config.get("minimum_commission", 5))
         slip = float(self.config.get("slippage_rate", 0.0005))
-        lot = max(1, int(self.config.get("lot_size", 100)))
-        if any(not math.isfinite(v) or v < 0 for v in (commission_rate, minimum_commission, slip)):
+        raw_lot = self.config.get("lot_size", 100)
+        if (isinstance(raw_lot, bool) or not isinstance(raw_lot, int) or raw_lot <= 0):
+            raise ValueError("execution_lot_policy_invalid")
+        lot = raw_lot
+        if (any(not math.isfinite(v) or v < 0 for v in (commission_rate, minimum_commission, slip))
+                or slip >= 1. or commission_rate >= 1.):
             raise ValueError("execution_cost_policy_invalid")
         max_single = float(self.signal.get("single_fund_target_cap", 0.25))
         max_theme = float(self.signal.get("single_theme_target_cap", 0.4))
+        if (not 0 < max_single <= 1 or not 0 < max_theme <= 1):
+            raise ValueError("portfolio_constraint_policy_invalid")
         cap = _finite(exposure_cap)
         invalid = (
             cap is None or cap < 0 or cap > 1
@@ -128,7 +134,7 @@ class ConstrainedEventExecution:
         opened: dict[str, float] = {}
         marks: dict[str, float] = {}
         for code, frame in frames.items():
-            if day in frame.index:
+            if day in frame.index and _verified(frame.loc[day], "trade_activity_observed"):
                 value = _finite(frame.loc[day, "open"])
                 if value is not None and value > 0:
                     opened[code] = value

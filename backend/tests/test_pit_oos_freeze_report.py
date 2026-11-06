@@ -7,7 +7,9 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from app.services.pit_oos_freeze_report import build_1430_freeze_report
+from app.services.pit_oos_freeze_report import (
+    REQUIRED_PROVIDER_EVIDENCE, build_1430_freeze_report,
+)
 
 
 TZ = ZoneInfo("Asia/Shanghai")
@@ -79,3 +81,22 @@ def test_freeze_after_holdout_start_is_rejected():
         days[242], datetime.min.time(), tzinfo=TZ,
     ))
     assert "version_not_frozen_before_holdout" in result["reasons"]
+
+
+def test_all_true_caller_metadata_cannot_forge_independent_pit_approval():
+    provided = {
+        key: (True if key.endswith("_verified") else "fixture_string")
+        for key in REQUIRED_PROVIDER_EVIDENCE
+    }
+    provided.update({
+        "provider": "fixture_not_external_admitted",
+        "intervals": ["5m", "15m"],
+        "source_record_hashes": {"510300.SH:5m": "fixture"},
+        "historical_universe_pit_verified": True,
+        "historical_theme_pit_verified": True,
+        "historical_price_limit_pit_verified": True,
+    })
+    report = _report(provider=provided)
+    assert report["candidate_seal_ready"] is False
+    assert "independent_provider_and_holdout_receipt_verification_not_implemented" in report["reasons"]
+    assert report["qualification"] == "UNKNOWN"

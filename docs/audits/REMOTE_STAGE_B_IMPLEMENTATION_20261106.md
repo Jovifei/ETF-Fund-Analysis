@@ -52,6 +52,9 @@ calibration_status=not_calibrated; all trading requires human decision.
 - Daily research output includes per-symbol `state`, `action_kind`
   (entry/probe/reduce/hard_reduce/observe), `target_weight`,
   `first_step_target_weight`, market regime and the `not_replayed` inventory.
+  Unqualified modern `theme_l1` is deliberately replaced with the single
+  conservative `未分类` bucket before the shared allocator, so future theme
+  classifications cannot leak into historical target sizing.
 - A fixed-input exact **rule projection** test compares these same functions
   and actions without claiming actual historical signals, forecasts or fills.
   Historical 14:30 features, prediction, news, owner holdings and intraday
@@ -80,6 +83,9 @@ published_at but this alone does not prove 14:30 historical availability.
 
 No real provider access, permission or data was exercised by the remote
 read-only workspace connector. **Source/admissibility/rights remain UNKNOWN.**
+All caller-declared “verified” metadata still requires independent authentication;
+this offline inventory intentionally reports `candidate_seal_ready=false` until
+such a verifier exists, even if all caller-supplied booleans are true.
 Holdout-driven tuning contaminates the experiment and invalidates the candidate.
 
 ## D — Event constraints
@@ -90,7 +96,8 @@ slippage, 100-unit-style configurable lot, suspension/tradability, evidenced
 historical limit-up/down status, LOF/QDII historical premium, portfolio and
 single-fund cap, point-in-time theme cap and turnover hysteresis.
 Unavailable constraints yield blocked-order reason and never default to
-unverified fills. Historical data from `RotationBacktestService` does not
+unverified fills. A suspended open is not a valuation mark: the ledger uses
+last observed positive-volume close or rejects an unpriceable held position. Historical data from `RotationBacktestService` does not
 contain all these metadata fields, so its daily-only projection correctly
 blocks entries; `trade_count=0` is **not a profitability result**.
 
