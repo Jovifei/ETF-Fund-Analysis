@@ -26,6 +26,14 @@ def test_mock_pipeline_builds_research_layers(bootstrapped):
     assert "rps20" in latest_values and "rps60" in latest_values and "rps120" in latest_values
     assert "strategy_family_scores" in latest_values
     assert "strategy_signals" in latest_values
+    replay = latest_values["strategy_replay_contract"]
+    assert replay["status"] == "runtime_observation"
+    assert replay["actionable"] is False
+    assert replay["calibration_status"] == "not_calibrated"
+    assert replay["family_order"] == [
+        "trend", "momentum", "volume_flow", "breakout",
+        "pullback", "structure", "relative_strength", "reversal",
+    ]
     assert "chip_peak_price" in latest_values
     # Mock data is marked degraded; no signal may become execution-grade.
     assert all(not item.is_actionable for item in signals)
@@ -59,6 +67,9 @@ def test_v050_runtime_wiring_remains_selected_for_tasks():
     assert isinstance(service.signals, SignalV05Service)
     assert isinstance(service.backtest, RotationBacktestV05Service)
     assert "backtest_ablation" in service.task_names
+    assert "backtest_strategy_replay" in service.task_names
+    from app.services.strategy_family_replay_backtest_service import StrategyFamilyReplayBacktestService
+    assert isinstance(service.strategy_replay_backtest, StrategyFamilyReplayBacktestService)
 
 
 def test_full_pipeline_refreshes_sector_context_before_publishing_board(monkeypatch, db_session):

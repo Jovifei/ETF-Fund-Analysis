@@ -17,6 +17,7 @@ from app.models import DailyBar, Instrument, ReportArtifact
 from app.providers.corporate_action_contract import official_corporate_actions
 from app.providers.data_contract import price_history_issue, row_units_verified
 from app.services.event_service import emit_event
+from app.services.strategy_replay_contract import build_strategy_replay_contract
 from app.utils.hashing import stable_hash
 from app.utils.historical_classification_contract import (
     current_metadata_classification_contract,
@@ -47,6 +48,15 @@ class RotationBacktestService:
         self.settings = settings or get_settings()
         self.strategy = self.settings.load_strategy()
         self.config = self.strategy.get("backtest", {})
+
+    def _strategy_replay_contract(self) -> dict[str, object]:
+        return build_strategy_replay_contract(
+            self.strategy,
+            status="factor_rotation_not_equivalent",
+            source=self.__class__.__name__,
+            feature_basis="settled_daily_bars",
+            reason="backtest_selector_uses_factor_weights; runtime_strategy_families_not_replayed",
+        )
 
     @staticmethod
     def _frame_input_hash(frame: pd.DataFrame) -> str:
@@ -682,6 +692,7 @@ class RotationBacktestService:
             "decisions": decisions,
             "trades": trades,
             "audit": {
+                "strategy_replay_contract": self._strategy_replay_contract(),
                 "decision_at": "close_t",
                 "execution_at": "open_t_plus_1",
                 "lot_constraint": int(self.config.get("lot_size", 100)),

@@ -41,6 +41,11 @@ def test_rotation_backtest_is_next_open_and_audited(bootstrapped, db_session):
     assert tradability["trade_ledger_reconciliation_required"] is True
     assert payload["audit"]["valuation_policy"] == "last_observed_positive_volume_close_v1"
     assert payload["audit"]["trade_ledger_reconciliation_required"] is True
+    replay = payload["audit"]["strategy_replay_contract"]
+    assert replay["status"] == "factor_rotation_not_equivalent"
+    assert replay["actionable"] is False
+    assert replay["calibration_status"] == "not_calibrated"
+    assert "runtime_strategy_families_not_replayed" in replay["reason"]
     assert tradability["participation_cap_qualified"] is False
     assert tradability["market_impact_model_qualified"] is False
     assert tradability["price_limit_execution_qualified"] is False
