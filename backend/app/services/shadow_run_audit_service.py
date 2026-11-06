@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import math
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 import pandas as pd
@@ -43,6 +43,7 @@ class ShadowRunAuditService:
         # host's local date can audit the wrong session around UTC midnight.
         today = target_date or datetime.now(self.settings.timezone).date()
         today_decision = calendar.decision(today)
+        cutoff = datetime.combine(today, time(14, 30), tzinfo=self.settings.timezone)
 
         instruments = db.scalars(
             select(Instrument).where(Instrument.enabled.is_(True)).order_by(Instrument.ts_code)
@@ -64,7 +65,7 @@ class ShadowRunAuditService:
             # 取最近一条预测
             forecast = db.scalars(
                 select(ForecastSnapshot)
-                .where(ForecastSnapshot.instrument_id == inst.id)
+                .where(ForecastSnapshot.instrument_id == inst.id, ForecastSnapshot.as_of_date <= today)
                 .order_by(ForecastSnapshot.as_of_date.desc(), ForecastSnapshot.horizon)
                 .limit(1)
             ).first()
@@ -75,7 +76,7 @@ class ShadowRunAuditService:
             # 取预测之后最近一条收盘价（实际）
             actual_bar = db.scalars(
                 select(DailyBar)
-                .where(DailyBar.instrument_id == inst.id, DailyBar.trade_date > forecast.as_of_date)
+                .where(DailyBar.instrument_id == inst.id, DailyBar.trade_date > forecast.as_of_date, DailyBar.trade_date < today)
                 .order_by(DailyBar.trade_date)
                 .limit(1)
             ).first()
@@ -86,7 +87,7 @@ class ShadowRunAuditService:
             # 取信号快照（最新）
             signal = db.scalars(
                 select(SignalSnapshot)
-                .where(SignalSnapshot.instrument_id == inst.id)
+                .where(SignalSnapshot.instrument_id == inst.id, SignalSnapshot.as_of_time <= cutoff)
                 .order_by(SignalSnapshot.as_of_time.desc())
                 .limit(1)
             ).first()
@@ -121,7 +122,7 @@ class ShadowRunAuditService:
             values = {}
             indicator = db.scalars(
                 select(IndicatorSnapshot)
-                .where(IndicatorSnapshot.instrument_id == inst.id)
+                .where(IndicatorSnapshot.instrument_id == inst.id, IndicatorSnapshot.as_of_date <= forecast.as_of_date)
                 .order_by(IndicatorSnapshot.as_of_date.desc())
                 .limit(1)
             ).first()
@@ -187,6 +188,9 @@ class ShadowRunAuditService:
             "feature_schema_version": self.strategy.get("feature_schema_version"),
             "config_hash": stable_hash(self.strategy),
             "target_date": str(today),
+            "audit_information_cutoff": cutoff.isoformat(),
+            "actual_bar_policy": "closed_sessions_strictly_before_audit_1430_date",
+            "future_signal_indicator_forecast_excluded": True,
             "is_trade_day": today_decision.is_trade_day,
             "trade_day_source": today_decision.source,
             "research_status": "shadow_only_no_production_changes",

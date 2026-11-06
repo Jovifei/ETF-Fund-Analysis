@@ -281,6 +281,8 @@ class RotationBacktestService:
         positions: dict[str, Position],
         day_index: int,
         exposure_cap: float,
+        *,
+        portfolio_equity: float | None = None,
     ) -> tuple[dict[str, float], dict]:
         if features.empty:
             return {}, {"reason": "no_features"}
@@ -594,7 +596,8 @@ class RotationBacktestService:
                 features = self._feature_table(frames, trade_date)
                 regime, cap, regime_details = self._regime(benchmark, trade_date)
                 target, selection_details = self._select(
-                    features, instrument_map, positions, day_index, cap
+                    features, instrument_map, positions, day_index, cap,
+                    portfolio_equity=equity,
                 )
                 decision = {
                     "as_of_close": trade_date.isoformat(),
@@ -693,6 +696,11 @@ class RotationBacktestService:
             "trades": trades,
             "audit": {
                 "strategy_replay_contract": self._strategy_replay_contract(),
+                "event_constraint_audit": (
+                    self._event_constraint_summary()
+                    if hasattr(self, "_event_constraint_summary")
+                    else {"status": "not_in_rotation_baseline"}
+                ),
                 "decision_at": "close_t",
                 "execution_at": "open_t_plus_1",
                 "lot_constraint": int(self.config.get("lot_size", 100)),
