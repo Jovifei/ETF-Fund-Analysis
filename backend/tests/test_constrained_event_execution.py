@@ -31,7 +31,10 @@ def _frame(**fields):
         "trade_activity_observed": True,
         "execution_price_pit_verified": True, "price_limit_verified": True,
         "limit_up": False, "limit_down": False, "trading_unit_verified": True,
-        "theme_pit_verified": True, "premium_pit_verified": True,
+        "theme_pit_verified": True, "theme_l1_pit": "t1",
+        "fund_kind_pit_verified": True, "fund_kind_pit": "ETF",
+        "cross_border_fund": False,
+        "premium_pit_verified": True, "premium_rate_unit": "percent_points",
         "premium_rate": .5,
     }
     raw.update(fields)
@@ -83,6 +86,9 @@ def test_missing_execution_rights_or_limit_status_blocks_all_orders():
         ({"trade_activity_observed": False, "volume": 0.}, "suspended_or_unverified_trading_activity"),
         ({"trading_unit_verified": False}, "exchange_lot_unit_unverified"),
         ({"theme_pit_verified": False}, "effective_dated_theme_missing"),
+        ({"theme_l1_pit": None}, "effective_dated_theme_missing"),
+        ({"fund_kind_pit_verified": False}, "historical_fund_kind_unverified"),
+        ({"cross_border_fund": None}, "historical_cross_border_classification_missing"),
     ]
     for fields, issue in cases:
         engine = ConstrainedEventExecution(CONFIG, SIGNAL)
@@ -117,7 +123,8 @@ def test_lof_premium_absent_or_excessive_blocks_buy():
         engine = ConstrainedEventExecution(CONFIG, SIGNAL)
         _, trades = _execute(
             engine, day, 0, {"166001.SZ": .2},
-            {"166001.SZ": _frame(premium_rate=premium, premium_pit_verified=verified)},
+            {"166001.SZ": _frame(fund_kind_pit="LOF",
+                                   premium_rate=premium, premium_pit_verified=verified)},
             kind="LOF",
         )
         assert not trades
@@ -182,3 +189,32 @@ def test_execution_refuses_invalid_lots_and_negative_price_from_slippage():
         engine = ConstrainedEventExecution(config, SIGNAL)
         with pytest.raises(ValueError, match=reason):
             _execute(engine, day, 0, {"510300.SH": .2}, {"510300.SH": frame})
+
+
+def test_premium_unit_must_be_explicitly_verified_for_qdii():
+    engine = ConstrainedEventExecution(CONFIG, SIGNAL)
+    day = date(2026, 11, 2)
+    _, trades = _execute(
+        engine, day, 0, {"513500.SH": .2},
+        {"513500.SH": _frame(fund_kind_pit="QDII-ETF",
+                                premium_rate=.03, premium_rate_unit="decimal")},
+    )
+    assert not trades
+    assert engine.summary()["blocked_by_reason"]["lof_qdii_premium_unit_unverified"] == 1
+
+
+def test_held_position_missing_historical_theme_blocks_new_buys():
+    engine = ConstrainedEventExecution(CONFIG, SIGNAL)
+    frame_a = _frame(theme_pit_verified=False)
+    frame_b = _frame(theme_l1_pit="t2")
+    day = date(2026, 11, 3)
+    positions = {"510300.SH": Position(shares=100, average_cost=10., opened_index=0)}
+    cash, trades = _execute(
+        engine, day, 1, {"510300.SH": .1, "512480.SH": .2},
+        {"510300.SH": frame_a, "512480.SH": frame_b},
+        pos=positions, cash=10000.,
+    )
+    assert not trades
+    assert cash == 10000.
+    assert positions["510300.SH"].shares == 100
+    assert engine.summary()["blocked_by_reason"]["held_theme_pit_missing"] >= 1

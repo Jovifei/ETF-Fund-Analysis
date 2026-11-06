@@ -63,6 +63,12 @@ def build_1430_freeze_report(
     dates = sorted(set(calendar_dates))
     if not dates:
         reasons.append("exchange_trading_calendar_missing")
+    holdout_sessions = sum(day >= holdout_start for day in dates)
+    if holdout_sessions < 120:
+        reasons.append("pristine_holdout_less_than_6_months")
+    if cutoff.tzinfo is not None and cutoff.utcoffset() is not None:
+        if cutoff.astimezone(CN_MARKET_TZ).date() not in dates:
+            reasons.append("decision_cutoff_date_not_in_declared_exchange_calendar")
     if not label_horizons or any(isinstance(h, bool) or not isinstance(h, int) or h <= 0 for h in label_horizons):
         reasons.append("label_horizons_invalid")
     horizon = max(label_horizons) if label_horizons and "label_horizons_invalid" not in reasons else None
@@ -188,7 +194,9 @@ def build_1430_freeze_report(
             "embargo_sessions": embargo_sessions, "folds": folds,
         },
         "pristine_holdout": {
-            "bounds": holdout, "access_count": holdout_access_count,
+            "bounds": holdout, "sessions": holdout_sessions,
+            "minimum_sessions_required": 120,
+            "access_count": holdout_access_count,
             "tuned_on_holdout": holdout_tuned,
             "access_log_hash": holdout_access_log_hash,
             "contaminated": holdout_tuned is True,

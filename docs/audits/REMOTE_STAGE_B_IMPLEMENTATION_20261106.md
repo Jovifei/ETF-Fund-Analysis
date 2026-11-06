@@ -74,6 +74,8 @@ published_at but this alone does not prove 14:30 historical availability.
 `build_1430_freeze_report` records:
 - Data coverage, provider/endpoint, 5m/15m OHLCV+amount units,
   bar-end/source publication timestamps, license and authorized retention;
+  Declared decision date must appear in the supplied exchange session calendar;
+  a pristine holdout shorter than 120 exchange sessions is rejected;
 - Shanghai 14:30 cutoff and the first **post-cutoff** executable observation;
 - Source record hashes, code SHA and parameter hash, explicit freeze before
   holdout, horizon-aware purge on each walk-forward test window, held-out
@@ -93,8 +95,13 @@ Holdout-driven tuning contaminates the experiment and invalidates the candidate.
 `ConstrainedEventExecution` is a research-only, evidence-gated
 execution engine. It enforces T+1 acquired-lot tracking, commission/minimum,
 slippage, 100-unit-style configurable lot, suspension/tradability, evidenced
-historical limit-up/down status, LOF/QDII historical premium, portfolio and
-single-fund cap, point-in-time theme cap and turnover hysteresis.
+historical limit-up/down status, LOF/QDII historical premium with explicit
+percent-point units and effective-dated cross-border/fund kind, portfolio and
+single-fund cap, point-in-time theme cap and turnover hysteresis. The executable
+ledger never trusts the current Instrument kind or theme when reconstructing
+an old session; it requires signed-source-equivalent historical row fields
+`fund_kind_pit`, `theme_l1_pit` and verification flags or blocks the trade.
+Unclassified existing holdings block additional purchases, not de-risking sells.
 Unavailable constraints yield blocked-order reason and never default to
 unverified fills. A suspended open is not a valuation mark: the ledger uses
 last observed positive-volume close or rejects an unpriceable held position. Historical data from `RotationBacktestService` does not
