@@ -564,8 +564,50 @@ ATR_BUCKET_ZH = {
     "extreme": "极端",
 }
 STRUCTURE_PROXY_DISCLAIMER = (
-    "威科夫/道氏列为 OHLCV 代理相位（非资金流）；ATR 风险桶复用 atr14。仅展示，不参与五档分级。"
+    "威科夫/道氏列为 OHLCV 代理相位（非资金流）；ATR 风险桶复用 atr14。结构影子为冻结 soft_c 权重的并行研究信号，仅展示，不参与五档分级。"
 )
+
+# Phase B1 bypass: frozen soft_c_strict overlay (same constants as
+# backend/app/research/structure_shadow.py; keep in sync). Never feeds 分级.
+SHADOW_ATR_SCALE = {"low": 1.0, "mid": 0.9, "high": 0.4, "extreme": 0.0, "unknown": 0.4}
+
+
+def structure_shadow_signal(sv):
+    """Ternary shadow signal from a structure_v1 block; missing/invalid → None."""
+    if not isinstance(sv, dict):
+        return None
+    try:
+        wy_s = float(sv.get("wyckoff_score"))
+        wy_c = float(sv.get("wyckoff_confidence"))
+        dow_s = float(sv.get("dow_score"))
+        dow_c = float(sv.get("dow_confidence"))
+    except (TypeError, ValueError):
+        return None
+    raw = (0.40 * wy_s * wy_c + 0.60 * dow_s * dow_c) / 1.0
+    if (wy_c + dow_c) / 2.0 < 0.45:
+        raw = 0.0
+    score = max(-1.0, min(1.0, raw * SHADOW_ATR_SCALE.get(sv.get("atr_risk_bucket") or "unknown", 0.4)))
+    if score >= 0.30:
+        label = "偏多"
+    elif score <= -0.30:
+        label = "偏空"
+    elif abs(score) < 0.12:
+        label = "中性"
+    elif score > 0:
+        label = "弱偏多"
+    else:
+        label = "弱偏空"
+    return f"{label} {'+' if score >= 0 else ''}{score:.2f}"
+
+
+def structure_shadow_col(r):
+    sh = r.get("structure_shadow") if isinstance(r, dict) else None
+    if isinstance(sh, dict) and sh.get("signal"):
+        score = sh.get("score")
+        if is_num(score):
+            return f"{sh['signal']} {'+' if score >= 0 else ''}{float(score):.2f}"
+        return str(sh["signal"])
+    return structure_shadow_signal(structure_v1_of(r)) or "—"
 
 
 def structure_v1_of(r):
@@ -1113,14 +1155,14 @@ def render_html(ctx, charts):
     # column header for Phase A structure display
     trs.append('<tr bgcolor="#eef2f7"><td><b>标的</b></td><td align="right"><b>现价/涨跌</b></td>'
                '<td align="center"><b>威科夫</b></td><td align="center"><b>道氏</b></td>'
-               '<td align="center"><b>ATR风险桶</b></td><td><b>理由/信号</b></td></tr>')
+               '<td align="center"><b>ATR风险桶</b></td><td align="center"><b>结构影子</b></td><td><b>理由/信号</b></td></tr>')
     H.append(para(F(STRUCTURE_PROXY_DISCLAIMER, "#666"), "2px 20px"))
     for g in GRADES + sorted({r.get("grade") for r in ctx["rows"]} - set(GRADES), key=str):
         grp = [r for r in ctx["rows"] if r.get("grade") == g]
         if not grp:
             continue
         # Phase A: 威科夫 / 道氏 / ATR风险桶 display columns (structure_v1; missing → —)
-        trs.append(f'<tr bgcolor="{GRADE_COLOR.get(g, OTHER_COLOR)}"><td colspan="6">{F(f"{esc(g)} · {len(grp)} 只", GRADE_TEXT_COLOR.get(g, "#fff"), True)}</td></tr>')
+        trs.append(f'<tr bgcolor="{GRADE_COLOR.get(g, OTHER_COLOR)}"><td colspan="7">{F(f"{esc(g)} · {len(grp)} 只", GRADE_TEXT_COLOR.get(g, "#fff"), True)}</td></tr>')
         for i, r in enumerate(grp):
             price = []
             if is_num(r.get("price")):
@@ -1134,11 +1176,13 @@ def render_html(ctx, charts):
             wy = esc(structure_col(r, "wyckoff"))
             dw = esc(structure_col(r, "dow"))
             ab = esc(structure_col(r, "atr"))
+            sh = esc(structure_shadow_col(r))
             trs.append(f'<tr{zebra(i)}><td valign="top"><b>{esc(r.get("name"))}</b><br>{F(esc(code6(r.get("ts_code")) + ("　" + theme if theme else "")), "#999", small=True)}</td>'
                        f'<td valign="top" align="right" nowrap>{"<br>".join(price)}</td>'
                        f'<td valign="top" align="center" nowrap>{F(wy, "#444")}</td>'
                        f'<td valign="top" align="center" nowrap>{F(dw, "#444")}</td>'
                        f'<td valign="top" align="center" nowrap>{F(ab, "#444")}</td>'
+                       f'<td valign="top" align="center" nowrap>{F(sh, "#444")}</td>'
                        f'<td valign="top">{F("<br>".join(det), "#666", small=True)}</td></tr>')
     H.append(TBL + "".join(trs) + TBL_END)
     # data sources + gates
