@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from datetime import datetime
 
 from app.services.shadow_run_audit_service import ShadowRunAuditService
 from app.services.task_service import TaskService
@@ -29,6 +30,13 @@ def test_shadow_audit_produces_report(bootstrapped, db_session):
     assert payload["research_status"] == "shadow_only_no_production_changes"
     assert payload["promotion_policy"] is not None
     assert len(payload["audits"]) == result["summary"]["audited"]
+
+
+def test_shadow_audit_default_target_uses_configured_timezone(bootstrapped, db_session):
+    svc = ShadowRunAuditService()
+    result = svc.run(db_session, run_id="test-shadow-timezone")
+    expected = datetime.now(svc.settings.timezone).date().isoformat()
+    assert result["target_date"] == expected
 
 
 def test_shadow_audit_no_production_writes(bootstrapped, db_session):

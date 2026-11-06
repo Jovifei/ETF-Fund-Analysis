@@ -16,6 +16,7 @@ from app.models import Instrument, ProviderAudit, TaskRun
 from app.providers.factory import create_provider
 from app.research.integrations import capability_matrix
 from app.services.backtest_v05_service import RotationBacktestV05Service
+from app.services.strategy_family_replay_backtest_service import StrategyFamilyReplayBacktestService
 from app.services.calibration_service import CalibrationService
 from app.services.crosscheck_engine import crosscheck_main
 from app.services.decision_board_service import DecisionBoardService
@@ -202,6 +203,7 @@ class TaskService:
         self.portfolio = PortfolioOptimizationService(self.settings)
         self.shadow_audit = ShadowRunAuditService(self.settings)
         self.backtest = RotationBacktestV05Service(self.settings)
+        self.strategy_replay_backtest = StrategyFamilyReplayBacktestService(self.settings)
         self.decision_board = DecisionBoardService(self.settings)
 
     def close(self) -> None:
@@ -238,6 +240,7 @@ class TaskService:
             "calibrate_forecasts",
             "optimize_portfolio",
             "backtest_rotation",
+            "backtest_strategy_replay",
             "backtest_ablation",
             "backtest_crosscheck",
             "shadow_run_audit",
@@ -418,6 +421,8 @@ class TaskService:
             return self.portfolio.run(db, run_id=run_id, user_id=kwargs.get("user_id"))
         if task_name == "backtest_rotation":
             return self.backtest.run(db, run_id=run_id)
+        if task_name == "backtest_strategy_replay":
+            return self.strategy_replay_backtest.run(db, run_id=run_id)
         if task_name == "backtest_ablation":
             return self.backtest.run_ablation(db, run_id=run_id)
         if task_name == "backtest_crosscheck":

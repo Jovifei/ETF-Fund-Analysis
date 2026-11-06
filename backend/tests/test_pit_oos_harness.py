@@ -11,6 +11,7 @@ from app.services.pit_oos_harness import (
     assert_point_in_time_rows,
     assert_sessions_comparable,
     evaluate_1430_forecast_use,
+    evaluate_pit_evidence,
     oos_walk_forward_status,
     PitLeakageError,
 )
@@ -131,3 +132,42 @@ def test_qualify_1430_keeps_provisional_observation_unactionable():
     assert "oos_walk_forward_not_approved" in result["reasons"]
     assert result["observation_kind"] == "provisional_1430"
     assert result["calibrated_eod"] is False
+
+
+def test_pit_evidence_requires_feature_execution_and_news_causality():
+    cutoff = datetime(2026, 8, 31, 14, 30)
+    result = evaluate_pit_evidence(
+        cutoff,
+        feature_rows=[SimpleNamespace(trade_time=cutoff, source_timestamp=cutoff)],
+        execution_rows=[SimpleNamespace(trade_time=datetime(2026, 8, 31, 14, 35), price=1.2, is_tradable=True)],
+        news_rows=[SimpleNamespace(published_at=datetime(2026, 8, 31, 14, 29))],
+    )
+    assert result.qualified is True
+    assert result.actionable is False
+    assert result.reasons == ()
+
+
+def test_pit_evidence_rejects_future_news_and_unverified_execution():
+    cutoff = datetime(2026, 8, 31, 14, 30)
+    result = evaluate_pit_evidence(
+        cutoff,
+        feature_rows=[SimpleNamespace(trade_time=cutoff, source_timestamp=cutoff)],
+        execution_rows=[SimpleNamespace(trade_time=datetime(2026, 8, 31, 14, 35), price=1.2, is_tradable=False)],
+        news_rows=[SimpleNamespace(published_at=datetime(2026, 8, 31, 14, 31))],
+    )
+    assert result.qualified is False
+    assert "execution_tradability_unverified" in result.reasons
+    assert "news_published_after_cutoff" in result.reasons
+
+
+def test_pit_evidence_rejects_missing_source_timestamp_and_execution_price():
+    cutoff = datetime(2026, 8, 31, 14, 30)
+    result = evaluate_pit_evidence(
+        cutoff,
+        feature_rows=[SimpleNamespace(trade_time=cutoff)],
+        execution_rows=[SimpleNamespace(trade_time=datetime(2026, 8, 31, 14, 35), price=None, is_tradable=True)],
+        news_rows=[],
+    )
+    assert result.qualified is False
+    assert "feature_source_timestamp_missing" in result.reasons
+    assert "execution_price_missing_or_invalid" in result.reasons

@@ -34,6 +34,20 @@ class ForecastUseGate:
     reasons: tuple[str, ...] = field(default_factory=tuple)
 
 
+@dataclass(frozen=True, slots=True)
+class PitEvidenceGate:
+    """Evidence completeness for a historical 14:30 observation.
+
+    This gate validates the shape and temporal ordering of supplied evidence. It
+    never certifies a provider, unit, license, or strategy; callers must retain
+    ``qualified=False`` until those independent reviews are complete.
+    """
+
+    qualified: bool
+    actionable: bool
+    reasons: tuple[str, ...] = field(default_factory=tuple)
+
+
 def assert_sessions_comparable(query_kind: str, neighbor_kind: str) -> None:
     if query_kind != neighbor_kind:
         raise PitLeakageError("intraday_1430_not_comparable_to_eod_neighbors")
@@ -49,6 +63,75 @@ def assert_point_in_time_rows(cutoff: datetime, feature_rows, label_rows) -> Non
     for row in label_rows or ():
         if row.trade_time <= cutoff:
             raise PitLeakageError("label_not_strictly_after_cutoff")
+
+
+def evaluate_pit_evidence(
+    cutoff: datetime,
+    *,
+    feature_rows=None,
+    execution_rows=None,
+    news_rows=None,
+) -> PitEvidenceGate:
+    """Check minimum temporal evidence needed for a historical 14:30 claim.
+
+    Rows are deliberately duck-typed so this remains usable by provider probes,
+    isolated reports, and future persisted evidence models. The function checks
+    only causal ordering and presence of an executable price; it does not infer
+    missing timestamps, tradability, units, or publication rights.
+    """
+
+    reasons: list[str] = []
+    features = list(feature_rows or ())
+    executions = list(execution_rows or ())
+    news = list(news_rows or ())
+    if not features:
+        reasons.append("pit_feature_rows_missing")
+    else:
+        try:
+            assert_point_in_time_rows(cutoff, features, [])
+        except PitLeakageError as exc:
+            reasons.append(str(exc))
+        for row in features:
+            source_stamp = getattr(row, "source_timestamp", None)
+            if source_stamp is None:
+                reasons.append("feature_source_timestamp_missing")
+                break
+            if source_stamp > cutoff:
+                reasons.append("feature_source_timestamp_after_cutoff")
+                break
+
+    if not executions:
+        reasons.append("pit_execution_rows_missing")
+    else:
+        ordered = sorted(executions, key=lambda row: getattr(row, "trade_time", cutoff))
+        first = ordered[0]
+        stamp = getattr(first, "trade_time", None)
+        if stamp is None:
+            reasons.append("execution_trade_time_missing")
+        elif stamp <= cutoff:
+            reasons.append("execution_not_strictly_after_cutoff")
+        price = getattr(first, "price", None)
+        if not isinstance(price, (int, float)) or isinstance(price, bool) or price <= 0:
+            reasons.append("execution_price_missing_or_invalid")
+        tradable = getattr(first, "is_tradable", None)
+        if tradable is not True:
+            reasons.append("execution_tradability_unverified")
+
+    for row in news:
+        published_at = getattr(row, "published_at", None)
+        if published_at is None:
+            reasons.append("news_published_at_missing")
+            break
+        if published_at > cutoff:
+            reasons.append("news_published_after_cutoff")
+            break
+
+    unique = tuple(dict.fromkeys(reasons))
+    return PitEvidenceGate(
+        qualified=not unique,
+        actionable=False,
+        reasons=unique,
+    )
 
 
 def _fold_leaks(fold) -> bool:

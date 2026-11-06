@@ -39,7 +39,9 @@ class ShadowRunAuditService:
     def run(self, db: Session, run_id: str | None = None, target_date: date | None = None) -> dict[str, Any]:
         run_id = run_id or uuid4().hex
         calendar = TradingCalendarService(self.settings)
-        today = target_date or date.today()
+        # Shadow audit dates follow the configured market timezone. Using the
+        # host's local date can audit the wrong session around UTC midnight.
+        today = target_date or datetime.now(self.settings.timezone).date()
         today_decision = calendar.decision(today)
 
         instruments = db.scalars(
