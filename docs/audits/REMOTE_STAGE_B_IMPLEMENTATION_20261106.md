@@ -33,6 +33,8 @@ calibration_status=not_calibrated; all trading requires human decision.
    session audit. Added target-date visibility filters so the audit cannot
    read forecasts, observed closed bars, signals or indicators from the future
    of the selected 14:30 audit date.
+   Forecast/indicator `generated_at` also cannot exceed the UTC-equivalent
+   cutoff; historical `as_of_date` alone cannot establish publication time.
 5. Stage A added `test_strategy_family_replay_uses_runtime_family_contract`
    which consumes session-scoped `bootstrapped` database, shared with tests
    that mutate bars/instruments. This enables order-dependent fixtures. V2
