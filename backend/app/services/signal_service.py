@@ -60,6 +60,34 @@ class CandidateSignal:
     actionable: bool = False
 
 
+def blended_signal_score(
+    technical: float, risk_score: float, theme_score: float,
+    forecast_score: float, portfolio_fit: float, quality_score: float,
+) -> float:
+    """Single runtime/replay scoring formula; unknown inputs stay explicitly unplayed."""
+    return clamp(
+        technical * 0.35 + (100 - risk_score) * 0.20
+        + theme_score * 0.20 + forecast_score * 0.15
+        + portfolio_fit * 0.05 + quality_score * 0.05,
+        0, 100,
+    )
+
+
+def raw_signal_target(score: float, current_weight: float, cfg: dict) -> float:
+    """Runtime first-pass target, before market, theme and step constraints."""
+    if score >= 78:
+        target = 0.20
+    elif score >= 68:
+        target = 0.14
+    elif score >= 58:
+        target = 0.07
+    elif score >= 48 and current_weight > 0:
+        target = min(current_weight, 0.05)
+    else:
+        target = 0.0
+    return min(target, float(cfg["single_fund_target_cap"]))
+
+
 class SignalService:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
@@ -229,36 +257,10 @@ class SignalService:
         forecast_score = sum(forecast_scores) / forecast_weight if forecast_weight else 50.0
 
         portfolio_fit = 60.0 if current_weight == 0 else max(20.0, 70.0 - current_weight * 150)
-        score = (
-            technical * 0.35
-            + (100 - risk_score) * 0.20
-            + theme_score * 0.20
-            + forecast_score * 0.15
-            + portfolio_fit * 0.05
-            + quality_score * 0.05
+        score = blended_signal_score(
+            technical, risk_score, theme_score, forecast_score, portfolio_fit, quality_score
         )
-        if indicator:
-            reasons.extend(indicator.values_json.get("technical_reasons", []))
-        if news_evidence:
-            reasons.append(f"近 72 小时主题新闻 {len(news_evidence)} 条")
-        one_day = forecasts.get(1)
-        if one_day and one_day.p_up is not None:
-            reasons.append(f"1日上涨概率 {one_day.p_up * 100:.1f}%（{one_day.calibration_status}）")
-        if research_input is None and quote and quote.premium_rate is not None:
-            reasons.append(f"场内溢价率 {quote.premium_rate:.2f}%")
-
-        if score >= 78:
-            raw_target = 0.20
-        elif score >= 68:
-            raw_target = 0.14
-        elif score >= 58:
-            raw_target = 0.07
-        elif score >= 48 and current_weight > 0:
-            raw_target = min(current_weight, 0.05)
-        else:
-            raw_target = 0.0
-        max_cap = float(self.strategy["signal"]["single_fund_target_cap"])
-        raw_target = min(raw_target, max_cap)
+        raw_target = raw_signal_target(score, current_weight, self.strategy["signal"])
 
         source_factor = 100.0 if quote and quote.is_realtime and not quote.degraded_reason else 55.0
         forecast_conf = sum(forecast_confidences) / len(forecast_confidences) if forecast_confidences else 25.0
@@ -514,7 +516,28 @@ class SignalService:
                 "snapshot_inputs": snapshot_inputs,
                 "strategy": self.strategy,
             }
+            from app.services.strategy_replay_contract import build_strategy_replay_contract
+            replay = build_strategy_replay_contract(
+                self.strategy,
+                status="runtime_signal_observation",
+                source=type(self).__name__,
+                feature_basis="current_snapshots",
+                as_of=(item.indicator.as_of_date.isoformat() if item.indicator else None),
+                family_scores=(
+                    (item.indicator.values_json or {}).get("strategy_family_scores")
+                    if item.indicator else None
+                ),
+                composite_score=(
+                    (item.indicator.values_json or {}).get("strategy_composite_score")
+                    if item.indicator else None
+                ),
+                action=item.state,
+                target_weight=item.target_weight,
+                first_step_target_weight=item.first_step_target_weight,
+                market_regime=market_regime,
+            )
             evidence = {
+                "strategy_replay_contract": replay,
                 "snapshot_inputs": snapshot_inputs,
                 "theme_score": item.theme_score,
                 "fund_quality_score": item.fund_quality_score,

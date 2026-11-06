@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+import math
 
 SESSION_INTRADAY_1430 = "intraday_1430_provisional"
 SESSION_SETTLED_EOD = "settled_eod"
@@ -46,6 +47,7 @@ class PitEvidenceGate:
     qualified: bool
     actionable: bool
     reasons: tuple[str, ...] = field(default_factory=tuple)
+    causal_order_verified: bool = False
 
 
 def assert_sessions_comparable(query_kind: str, neighbor_kind: str) -> None:
@@ -65,6 +67,19 @@ def assert_point_in_time_rows(cutoff: datetime, feature_rows, label_rows) -> Non
             raise PitLeakageError("label_not_strictly_after_cutoff")
 
 
+def _point_time(row: object, field_name: str) -> datetime | None:
+    value = getattr(row, field_name, None)
+    return value if isinstance(value, datetime) else None
+
+
+def _usable_time(stamp: datetime | None, cutoff: datetime) -> bool:
+    return (
+        stamp is not None
+        and stamp.tzinfo is not None and stamp.utcoffset() is not None
+        and cutoff.tzinfo is not None and cutoff.utcoffset() is not None
+    )
+
+
 def evaluate_pit_evidence(
     cutoff: datetime,
     *,
@@ -72,65 +87,71 @@ def evaluate_pit_evidence(
     execution_rows=None,
     news_rows=None,
 ) -> PitEvidenceGate:
-    """Check minimum temporal evidence needed for a historical 14:30 claim.
+    """Validate timestamp causality only. Never qualify a source or strategy.
 
-    Rows are deliberately duck-typed so this remains usable by provider probes,
-    isolated reports, and future persisted evidence models. The function checks
-    only causal ordering and presence of an executable price; it does not infer
-    missing timestamps, tradability, units, or publication rights.
+    Timestamp values must be timezone-aware; fetching data on a later day
+    cannot prove that it was published before this historical decision.
+    Bars and first executable prices need separate source-availability evidence.
     """
-
     reasons: list[str] = []
     features = list(feature_rows or ())
     executions = list(execution_rows or ())
     news = list(news_rows or ())
+    if not _usable_time(cutoff, cutoff):
+        reasons.append("cutoff_timezone_unverified")
     if not features:
         reasons.append("pit_feature_rows_missing")
-    else:
-        try:
-            assert_point_in_time_rows(cutoff, features, [])
-        except PitLeakageError as exc:
-            reasons.append(str(exc))
-        for row in features:
-            source_stamp = getattr(row, "source_timestamp", None)
-            if source_stamp is None:
-                reasons.append("feature_source_timestamp_missing")
-                break
-            if source_stamp > cutoff:
-                reasons.append("feature_source_timestamp_after_cutoff")
-                break
-
+    for row in features:
+        trade = _point_time(row, "trade_time")
+        source = _point_time(row, "source_timestamp")
+        if not _usable_time(trade, cutoff):
+            reasons.append("feature_trade_time_timezone_missing")
+        elif trade > cutoff:
+            reasons.append("feature_uses_post_cutoff_bar")
+        if not _usable_time(source, cutoff):
+            reasons.append("feature_source_timestamp_missing_or_unverified")
+        elif source > cutoff:
+            reasons.append("feature_source_timestamp_after_cutoff")
     if not executions:
         reasons.append("pit_execution_rows_missing")
     else:
-        ordered = sorted(executions, key=lambda row: getattr(row, "trade_time", cutoff))
-        first = ordered[0]
-        stamp = getattr(first, "trade_time", None)
-        if stamp is None:
-            reasons.append("execution_trade_time_missing")
-        elif stamp <= cutoff:
-            reasons.append("execution_not_strictly_after_cutoff")
-        price = getattr(first, "price", None)
-        if not isinstance(price, (int, float)) or isinstance(price, bool) or price <= 0:
-            reasons.append("execution_price_missing_or_invalid")
-        tradable = getattr(first, "is_tradable", None)
-        if tradable is not True:
-            reasons.append("execution_tradability_unverified")
-
+        # Do not silently skip an earlier untradable quote to fabricate a fill.
+        stamps = [_point_time(row, "trade_time") for row in executions]
+        if not all(_usable_time(stamp, cutoff) for stamp in stamps):
+            reasons.append("execution_trade_time_missing_or_unverified")
+        else:
+            first = min(executions, key=lambda row: row.trade_time)
+            stamp = first.trade_time
+            if stamp <= cutoff:
+                reasons.append("execution_not_strictly_after_cutoff")
+            available = _point_time(first, "source_timestamp")
+            if not _usable_time(available, cutoff):
+                reasons.append("execution_source_timestamp_missing_or_unverified")
+            elif available < stamp:
+                reasons.append("execution_source_timestamp_precedes_trade")
+            price = getattr(first, "price", None)
+            if (
+                isinstance(price, bool) or not isinstance(price, (int, float))
+                or not math.isfinite(price) or price <= 0
+            ):
+                reasons.append("execution_price_missing_or_invalid")
+            if getattr(first, "is_tradable", None) is not True:
+                reasons.append("execution_tradability_unverified")
     for row in news:
-        published_at = getattr(row, "published_at", None)
-        if published_at is None:
-            reasons.append("news_published_at_missing")
-            break
-        if published_at > cutoff:
+        published = _point_time(row, "published_at")
+        if not _usable_time(published, cutoff):
+            reasons.append("news_published_at_missing_or_unverified")
+        elif published > cutoff:
             reasons.append("news_published_after_cutoff")
-            break
-
-    unique = tuple(dict.fromkeys(reasons))
+    causal = not reasons
+    # Time-ordering by itself does not establish entitlement, retention rights,
+    # bar completeness, unaltered source history, PIT revision or honest fills.
+    reasons.append("provider_license_storage_and_pit_unverified")
     return PitEvidenceGate(
-        qualified=not unique,
+        qualified=False,
         actionable=False,
-        reasons=unique,
+        reasons=tuple(dict.fromkeys(reasons)),
+        causal_order_verified=causal,
     )
 
 

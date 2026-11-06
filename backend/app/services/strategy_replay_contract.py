@@ -14,7 +14,7 @@ from typing import Any
 from app.utils.hashing import stable_hash
 
 
-STRATEGY_REPLAY_CONTRACT_VERSION = "strategy-replay-contract-v1"
+STRATEGY_REPLAY_CONTRACT_VERSION = "strategy-replay-contract-v2"
 STRATEGY_FAMILIES = (
     "trend",
     "momentum",
@@ -28,12 +28,26 @@ STRATEGY_FAMILIES = (
 
 
 def _strategy_identity(strategy: Mapping[str, Any]) -> dict[str, Any]:
+    """Bind every input that can change the runtime decision or replay ledger.
+
+    A family-weight-only digest was unsafe: an indicator window, risk gate,
+    target cap, forecast weight or execution rule could change invisibly.
+    The digest is of frozen configuration data, not a claim of PIT provenance.
+    """
     engine = strategy.get("strategy_engine") or {}
     weights = {
         family: float((engine.get("family_weights") or {}).get(family, 0.0))
         for family in STRATEGY_FAMILIES
     }
-    signal = strategy.get("signal") or {}
+    relevant = {
+        key: strategy.get(key)
+        for key in (
+            "market_data_contract_version", "version", "indicator_version",
+            "forecast_version", "backtest_version", "strategy_replay_version",
+            "feature_schema_version", "indicator", "strategy_engine", "signal",
+            "forecast", "backtest", "intervals",
+        )
+    }
     identity = {
         "contract_version": STRATEGY_REPLAY_CONTRACT_VERSION,
         "strategy_version": strategy.get("version"),
@@ -42,14 +56,10 @@ def _strategy_identity(strategy: Mapping[str, Any]) -> dict[str, Any]:
         "family_order": list(STRATEGY_FAMILIES),
         "family_weights": weights,
         "signal_thresholds": {
-            key: signal.get(key)
-            for key in (
-                "entry_score",
-                "probe_score",
-                "reduce_score",
-                "hard_reduce_score",
-            )
+            key: (strategy.get("signal") or {}).get(key)
+            for key in ("entry_score", "probe_score", "reduce_score", "hard_reduce_score")
         },
+        "decision_config_hash": stable_hash(relevant),
     }
     identity["identity_hash"] = stable_hash(identity)
     return identity
@@ -65,6 +75,11 @@ def build_strategy_replay_contract(
     family_scores: Mapping[str, Any] | None = None,
     composite_score: float | None = None,
     reason: str | None = None,
+    not_replayed: list[str] | tuple[str, ...] | None = None,
+    action: str | None = None,
+    target_weight: float | None = None,
+    first_step_target_weight: float | None = None,
+    market_regime: str | None = None,
 ) -> dict[str, Any]:
     """Return a stable, fail-closed identity for strategy evidence."""
 
@@ -84,6 +99,11 @@ def build_strategy_replay_contract(
         "qualification": "UNKNOWN",
         "actionable": False,
         "calibration_status": "not_calibrated",
+        "not_replayed": sorted(set(not_replayed or ())),
+        "action": action,
+        "target_weight": target_weight,
+        "first_step_target_weight": first_step_target_weight,
+        "market_regime": market_regime,
     }
     if reason:
         payload["reason"] = reason

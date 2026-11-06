@@ -216,7 +216,7 @@
     "single_fund_target_cap": 0.25
   },
   "backtest_version": "rotation-v0.5.8-observed-mark-ledger",
-  "strategy_replay_version": "strategy-family-replay-v0.1.0-research",
+  "strategy_replay_version": "strategy-family-replay-v0.2.0-fail-closed-action-projection",
   "feature_schema_version": "feature-store-v0.7.6-maturity-mask",
   "strategy_engine": {
     "version": "strategy-family-v0.5.3-maturity-mask",

@@ -1,6 +1,7 @@
 """14:30 point-in-time rules: provisional observations are not EOD neighbors."""
 from datetime import date, datetime, time, timedelta
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -134,17 +135,23 @@ def test_qualify_1430_keeps_provisional_observation_unactionable():
     assert result["calibrated_eod"] is False
 
 
-def test_pit_evidence_requires_feature_execution_and_news_causality():
-    cutoff = datetime(2026, 8, 31, 14, 30)
+def test_pit_evidence_valid_temporal_chain_is_still_not_provider_qualified():
+    tz = ZoneInfo("Asia/Shanghai")
+    cutoff = datetime(2026, 8, 31, 14, 30, tzinfo=tz)
+    fill = datetime(2026, 8, 31, 14, 35, tzinfo=tz)
     result = evaluate_pit_evidence(
         cutoff,
         feature_rows=[SimpleNamespace(trade_time=cutoff, source_timestamp=cutoff)],
-        execution_rows=[SimpleNamespace(trade_time=datetime(2026, 8, 31, 14, 35), price=1.2, is_tradable=True)],
-        news_rows=[SimpleNamespace(published_at=datetime(2026, 8, 31, 14, 29))],
+        execution_rows=[SimpleNamespace(
+            trade_time=fill, source_timestamp=fill,
+            price=1.2, is_tradable=True,
+        )],
+        news_rows=[SimpleNamespace(published_at=datetime(2026, 8, 31, 14, 29, tzinfo=tz))],
     )
-    assert result.qualified is True
+    assert result.causal_order_verified is True
+    assert result.qualified is False
     assert result.actionable is False
-    assert result.reasons == ()
+    assert "provider_license_storage_and_pit_unverified" in result.reasons
 
 
 def test_pit_evidence_rejects_future_news_and_unverified_execution():
@@ -169,5 +176,27 @@ def test_pit_evidence_rejects_missing_source_timestamp_and_execution_price():
         news_rows=[],
     )
     assert result.qualified is False
-    assert "feature_source_timestamp_missing" in result.reasons
+    assert "feature_source_timestamp_missing_or_unverified" in result.reasons
     assert "execution_price_missing_or_invalid" in result.reasons
+
+
+def test_pit_evidence_rejects_naive_timestamp_and_nonfinite_first_execution():
+    tz = ZoneInfo("Asia/Shanghai")
+    cutoff = datetime(2026, 8, 31, 14, 30, tzinfo=tz)
+    later = datetime(2026, 8, 31, 14, 35, tzinfo=tz)
+    result = evaluate_pit_evidence(
+        cutoff,
+        feature_rows=[SimpleNamespace(trade_time=cutoff, source_timestamp=cutoff)],
+        execution_rows=[
+            SimpleNamespace(trade_time=later, source_timestamp=later,
+                            price=float("nan"), is_tradable=True),
+            SimpleNamespace(trade_time=later + timedelta(minutes=5),
+                            source_timestamp=later + timedelta(minutes=5),
+                            price=1.2, is_tradable=True),
+        ],
+        news_rows=[SimpleNamespace(published_at=datetime(2026, 8, 31, 14, 20))],
+    )
+    assert result.causal_order_verified is False
+    assert result.qualified is False
+    assert "execution_price_missing_or_invalid" in result.reasons
+    assert "news_published_at_missing_or_unverified" in result.reasons
