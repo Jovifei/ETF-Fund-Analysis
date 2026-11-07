@@ -59,3 +59,4 @@ frontend/responsive-results.json
 
 # Temporary downloaded image archives
 alpreflight-*/
+.omc/
