@@ -564,7 +564,7 @@ ATR_BUCKET_ZH = {
     "extreme": "极端",
 }
 STRUCTURE_PROXY_DISCLAIMER = (
-    "威科夫/道氏列为 OHLCV 代理相位（非资金流）；ATR 风险桶复用 atr14。结构影子为冻结 soft_c 权重的并行研究信号，仅展示，不参与五档分级。"
+    "威科夫/道氏列为 OHLCV 代理相位（非资金流）；ATR 风险桶复用 atr14。结构信号（冻结 soft_c 权重）自 2026-11-07 起按权重 0.5 参与五档分级：最多调整一档，不产生可加仓/减仓，基础分级见行内 structure_decision 记录；比例为暂定值。"
 )
 
 # Phase B1 bypass: frozen soft_c_strict overlay (same constants as
