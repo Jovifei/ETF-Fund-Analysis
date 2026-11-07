@@ -117,3 +117,16 @@
   （根目录 100→28、contracts 4→8、planning 已归档）。
 - §9 更新：Stage B 合并、B2（以 §11 的有界接入形式）两项已由本节与 §10/§11 关闭；
   仍待决：集成分支合回 main（所有者验收后）、结构决策比例的正式标定、review/feature 远端分支去留。
+
+## 13. 全量验证与 Stage B 顺带修复（2026-11-07 晚）
+
+- 全量本地套件（258 个测试文件，10 批断点续跑，运行环境多次重启后完成）：9 批全过；
+  第 8/9 批各剩 1 项失败——`test_sina_quote_provider` 与 `test_tencent_provider` 的
+  public_composite 注册断言，与 §7 在 pristine main 上复现的既有环境依赖失败完全一致
+  （本机 egress 环境组装不出 sina 候选），非本次改动引入，以 GitHub CI 为准。
+- 全量跑出一个真 bug 并已修复（提交 `18c11fd`）：Stage B 线的
+  `shadow_run_audit_service.py` 用了裸 `uuid4()` 而文件只有 `import uuid`，
+  未来日期拒绝路径会抛 NameError 而非预期的 ValueError；改 `uuid.uuid4().hex`，
+  `test_shadow_run_audit.py` 全文件通过。此例说明 §10 提前合入后跑全量的必要性——
+  Stage B 自带测试未覆盖该路径。
+- 推送后以本分支 GitHub CI（ci / workspace-ci / audit-platforms）为最终结论。
