@@ -48,6 +48,36 @@ from app.utils.indicators_v05 import calculate_indicators
 from app.utils.numbers import finite_or_none
 from app.utils.support_resistance import build_support_resistance
 from app.utils.horizons import DEFAULT_RESEARCH_HORIZONS
+from app.research.structure_decision import DECISION_VERSION, apply_structure_decision
+from app.research.structure_shadow import compute_structure_shadow
+from app.research.structure_v1 import resolve_structure_v1
+
+
+def _structure_shadow_for_row(*, structure_block, grade):
+    """Phase B1 bypass: frozen soft_c shadow signal beside the live grade.
+
+    The shadow dict itself remains a display/research signal; since
+    2026-11-07 its frozen score is additionally consumed by
+    structure_decision (owner instruction) to adjust the board grade
+    within one notch. It still never feeds assign_grade directly.
+    """
+    return compute_structure_shadow(structure_block, live_grade=grade)
+
+
+def _resolve_structure_v1_for_row(*, grade_row, values, ts_code, name, history):
+    """Research-only: passthrough existing block, else fill from DailyBar history."""
+    existing = None
+    if isinstance(grade_row.get("structure_v1"), dict):
+        existing = grade_row.get("structure_v1")
+    elif isinstance(values.get("structure_v1"), dict):
+        existing = values.get("structure_v1")
+    return resolve_structure_v1(
+        existing=existing,
+        ts_code=ts_code,
+        history=history,
+        name=name,
+    )
+
 
 READ_MODEL_VERSION = "decision-read-v110-flow-share-provenance"
 CURRENT_BOARD_READ_CONTRACT = "current-board-read-v1-temporal"
@@ -550,6 +580,13 @@ class DecisionBoardService:
             "rows": rows,
             "flow_share_contract": FLOW_CONTRACT,
             "flow_share_changes_grade": False,
+            "structure_shadow_changes_grade": False,
+            "structure_decision": {
+                "version": DECISION_VERSION,
+                "changes_grade": True,
+                "enabled": bool(self._structure_decision_cfg().get("enabled", False)),
+                "weight": self._structure_decision_cfg().get("weight"),
+            },
             "sector_timing": self._safe_sector_timing_observation(
                 db,
                 rows,
@@ -638,6 +675,18 @@ class DecisionBoardService:
             return evidence
         except Exception:
             return []
+
+    def _structure_decision_cfg(self) -> dict:
+        cached = getattr(self, "_structure_decision_cfg_cache", None)
+        if cached is None:
+            try:
+                strategy = self.settings.load_strategy()
+            except Exception:
+                strategy = {}
+            raw = (strategy.get("signal_grade") or {}).get("structure_decision")
+            cached = raw if isinstance(raw, dict) else {}
+            self._structure_decision_cfg_cache = cached
+        return cached
 
     def _row(self, db: Session, generated_at: datetime, instrument, grade_row, indicator, previous_values, quote, forecasts, provisional,
              *, research_input: SettledDailyInput | None = None) -> dict:
@@ -803,6 +852,26 @@ class DecisionBoardService:
             "detail": "重叠区近似，不是完整 Chan/CZSC",
             "zone": support_resistance.get("chan_zone_approx") if isinstance(support_resistance, dict) else None,
         }
+        structure_block = _resolve_structure_v1_for_row(
+            grade_row=grade_row,
+            values=values,
+            ts_code=instrument.ts_code,
+            name=instrument.name,
+            history=history,
+        )
+        # Owner instruction 2026-11-07: structure factors (Wyckoff/Dow/ATR)
+        # participate in the five-grade decision via a bounded adjustment
+        # (structure_decision_v1; provisional weight in strategy.json).
+        base_grade = grade_row.get("grade", "数据异常")
+        shadow = _structure_shadow_for_row(structure_block=structure_block, grade=base_grade)
+        decision = apply_structure_decision(base_grade, shadow, self._structure_decision_cfg())
+        final_grade = decision["final_grade"]
+        grade_reason = grade_row.get("grade_reason", "核心指标缺失，停止分级")
+        if decision["applied"]:
+            grade_reason = (
+                f"{grade_reason}；结构决策（威科夫/道氏/ATR，权重 {decision['weight']:g}）"
+                f"调整：{base_grade}→{final_grade}"
+            )
         return {
             "instrument_id": instrument.id,
             "ts_code": instrument.ts_code,
@@ -810,9 +879,10 @@ class DecisionBoardService:
             "kind": instrument.kind,
             "theme_l1": instrument.theme_l1,
             "theme_l2": instrument.theme_l2,
-            "grade": grade_row.get("grade", "数据异常"),
-            "grade_reason": grade_row.get("grade_reason", "核心指标缺失，停止分级"),
-            "display_sort_key": list(health_sort_key(grade_row.get("grade"), freshness)),
+            "grade": final_grade,
+            "grade_base": base_grade,
+            "grade_reason": grade_reason,
+            "display_sort_key": list(health_sort_key(final_grade, freshness)),
             "sort_keys": {
                 "grade_health": health_sort_key(grade_row.get("grade"), freshness)[0] * 10 + health_sort_key(grade_row.get("grade"), freshness)[1],
                 "display_only": True,
@@ -891,6 +961,9 @@ class DecisionBoardService:
             "history": history,
             "forecast_scenario": scenario,
             "support_resistance": support_resistance,
+            "structure_v1": structure_block,
+            "structure_shadow": shadow,
+            "structure_decision": decision,
             "research_only": True,
             "actionable": False,
         }
@@ -1209,6 +1282,8 @@ class DecisionBoardService:
             "rows": [],
             "flow_share_contract": FLOW_CONTRACT,
             "flow_share_changes_grade": False,
+            "structure_shadow_changes_grade": False,
+            "structure_decision": {"version": DECISION_VERSION, "changes_grade": True},
             "sector_timing": empty_sector_timing_observation(),
             "research_only": True,
             "automatic_orders": False,

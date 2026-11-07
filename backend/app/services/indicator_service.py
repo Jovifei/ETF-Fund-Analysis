@@ -11,6 +11,7 @@ from app.core.config import Settings, get_settings
 from app.models import DailyBar, IndicatorSnapshot, Instrument
 from app.services.event_service import emit_event
 from app.services.strategy_engine import evaluate_strategy_families
+from app.services.strategy_replay_contract import build_strategy_replay_contract
 from app.utils.feature_store import FEATURE_SCHEMA_VERSION
 from app.utils.hashing import stable_hash
 from app.utils.reproducibility import reproducibility_payload
@@ -143,6 +144,15 @@ class IndicatorService:
             values["strategy_family_scores"] = evaluation.family_scores
             values["strategy_signals"] = evaluation.signals
             values["strategy_risks"] = evaluation.risks
+            values["strategy_replay_contract"] = build_strategy_replay_contract(
+                self.strategy,
+                status="runtime_observation",
+                source="IndicatorService",
+                feature_basis="settled_daily_bars",
+                as_of=as_of_date.isoformat(),
+                family_scores=evaluation.family_scores,
+                composite_score=evaluation.composite_score,
+            )
             values["technical_reasons"] = list(
                 dict.fromkeys(list(values.get("technical_reasons") or []) + evaluation.reasons)
             )[:16]

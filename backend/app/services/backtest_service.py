@@ -17,6 +17,7 @@ from app.models import DailyBar, Instrument, ReportArtifact
 from app.providers.corporate_action_contract import official_corporate_actions
 from app.providers.data_contract import price_history_issue, row_units_verified
 from app.services.event_service import emit_event
+from app.services.strategy_replay_contract import build_strategy_replay_contract
 from app.utils.hashing import stable_hash
 from app.utils.historical_classification_contract import (
     current_metadata_classification_contract,
@@ -47,6 +48,15 @@ class RotationBacktestService:
         self.settings = settings or get_settings()
         self.strategy = self.settings.load_strategy()
         self.config = self.strategy.get("backtest", {})
+
+    def _strategy_replay_contract(self) -> dict[str, object]:
+        return build_strategy_replay_contract(
+            self.strategy,
+            status="factor_rotation_not_equivalent",
+            source=self.__class__.__name__,
+            feature_basis="settled_daily_bars",
+            reason="backtest_selector_uses_factor_weights; runtime_strategy_families_not_replayed",
+        )
 
     @staticmethod
     def _frame_input_hash(frame: pd.DataFrame) -> str:
@@ -271,6 +281,8 @@ class RotationBacktestService:
         positions: dict[str, Position],
         day_index: int,
         exposure_cap: float,
+        *,
+        portfolio_equity: float | None = None,
     ) -> tuple[dict[str, float], dict]:
         if features.empty:
             return {}, {"reason": "no_features"}
@@ -584,7 +596,8 @@ class RotationBacktestService:
                 features = self._feature_table(frames, trade_date)
                 regime, cap, regime_details = self._regime(benchmark, trade_date)
                 target, selection_details = self._select(
-                    features, instrument_map, positions, day_index, cap
+                    features, instrument_map, positions, day_index, cap,
+                    portfolio_equity=equity,
                 )
                 decision = {
                     "as_of_close": trade_date.isoformat(),
@@ -682,6 +695,12 @@ class RotationBacktestService:
             "decisions": decisions,
             "trades": trades,
             "audit": {
+                "strategy_replay_contract": self._strategy_replay_contract(),
+                "event_constraint_audit": (
+                    self._event_constraint_summary()
+                    if hasattr(self, "_event_constraint_summary")
+                    else {"status": "not_in_rotation_baseline"}
+                ),
                 "decision_at": "close_t",
                 "execution_at": "open_t_plus_1",
                 "lot_constraint": int(self.config.get("lot_size", 100)),

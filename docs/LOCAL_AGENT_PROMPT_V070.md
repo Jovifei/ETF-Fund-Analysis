@@ -81,7 +81,7 @@ STATUS.md
 HANDOFF.md
 VALIDATION.md
 archive/project-simplification-20261002/legacy-delivery/LOCAL_CODEX_HANDOFF_V070.md
-docs/ROADMAP_V070.md
+docs/archive/root-2026-11-07/ROADMAP_V070.md
 docs/LOCAL_AGENT_PROMPT_V070.md
 CODEX_DEPLOYMENT_TASKS.md
 ```

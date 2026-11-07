@@ -1,0 +1,1566 @@
+{
+  "header": {
+    "schema_version": "structure_v1",
+    "shadow_date": "20261105",
+    "generated_at": "2026-11-05T15:18:59.963256+08:00",
+    "timezone": "Asia/Shanghai",
+    "source_slim": "/workspace/etf_slot/email_render/fetched/20261105_1445.slim.json",
+    "slim_generated_at": "2026-11-05T06:45:34.298129+00:00",
+    "bar_source": "akshare.fund_etf_hist_em(qfq)",
+    "jovi_sqlite_note": "F:\\ETF_Data\\ETF-Fund-Analysis\\db\\research.sqlite3 ~1.8GiB exceeds CopyToBox 100MiB; used akshare",
+    "atr14_policy": "match slim top-level atr14 when present",
+    "atr_pct_policy": "atr14 / slim.price (fallback close)",
+    "atr_risk_bucket_rule_version": "atr_pct_fixed_v1",
+    "atr_risk_bucket_rule": {
+      "version": "atr_pct_fixed_v1",
+      "metric": "atr_pct = atr14 / price",
+      "bands": {
+        "low": "[0, 0.010)",
+        "mid": "[0.010, 0.020)",
+        "high": "[0.020, 0.035)",
+        "extreme": "[0.035, +inf)",
+        "unknown": "missing atr14 or price"
+      }
+    },
+    "dow_lag_n": 2,
+    "research_only": true,
+    "grades_unchanged": true,
+    "no_research_display": true,
+    "universe_target": 34,
+    "universe_emitted": 34,
+    "max_bar_as_of": "2026-11-05",
+    "errors": []
+  },
+  "rows": [
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "159819.SZ",
+      "name": "人工智能ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "range",
+      "wyckoff_score": 0.0,
+      "wyckoff_confidence": 0.4,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.063141,
+      "atr_pct": 0.04506852248394004,
+      "atr_risk_bucket": "extreme",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 1.8450->1.5100",
+          "bar_index": 433
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 1.4240->1.3860",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.39 range=0.3200",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.88 ret5=0.927%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.063141 atr_pct=0.04506852248394004 bucket=extreme rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "159828.SZ",
+      "name": "医疗ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markup",
+      "wyckoff_score": 0.7,
+      "wyckoff_confidence": 0.5775,
+      "dow_phase": "uptrend",
+      "dow_score": 0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.012351,
+      "atr_pct": 0.028656612529002323,
+      "atr_risk_bucket": "high",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 0.4260->0.4280",
+          "bar_index": 440
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 0.4000->0.4070",
+          "bar_index": 438
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=1.00 range=0.0490",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=2.02 ret5=7.748%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.012351 atr_pct=0.028656612529002323 bucket=high rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "159915.SZ",
+      "name": "创业板ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "accumulation",
+      "wyckoff_score": 0.25,
+      "wyckoff_confidence": 0.3,
+      "dow_phase": "sideways",
+      "dow_score": 0.1,
+      "dow_confidence": 0.45,
+      "atr14": 0.109588,
+      "atr_pct": 0.04279109722764545,
+      "atr_risk_bucket": "extreme",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 3.4360->3.4930",
+          "bar_index": 418
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 3.2460->2.5110",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.28 range=0.6820",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.45 ret5=1.933%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.109588 atr_pct=0.04279109722764545 bucket=extreme rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "159934.SZ",
+      "name": "黄金基金ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markup",
+      "wyckoff_score": 0.35,
+      "wyckoff_confidence": 0.35,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.130901,
+      "atr_pct": 0.015226358031871582,
+      "atr_risk_bucket": "mid",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 8.9480->8.6650",
+          "bar_index": 439
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 8.8450->8.4970",
+          "bar_index": 436
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.68 range=0.7540",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.94 ret5=2.362%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.130901 atr_pct=0.015226358031871582 bucket=mid rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "159995.SZ",
+      "name": "芯片ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "range",
+      "wyckoff_score": 0.0,
+      "wyckoff_confidence": 0.3,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.044875,
+      "atr_pct": 0.05367822966507177,
+      "atr_risk_bucket": "extreme",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 1.1980->0.9230",
+          "bar_index": 433
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 1.0770->1.0480",
+          "bar_index": 413
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.42 range=0.2600",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.85 ret5=4.000%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.044875 atr_pct=0.05367822966507177 bucket=extreme rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "510500.SH",
+      "name": "中证500ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "range",
+      "wyckoff_score": 0.0,
+      "wyckoff_confidence": 0.3,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.206624,
+      "atr_pct": 0.03101996697192614,
+      "atr_risk_bucket": "high",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 7.9600->6.9830",
+          "bar_index": 433
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 6.7310->6.4750",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.49 range=1.0120",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.31 ret5=4.530%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.206624 atr_pct=0.03101996697192614 bucket=high rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "512200.SH",
+      "name": "房地产ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "accumulation",
+      "wyckoff_score": 0.25,
+      "wyckoff_confidence": 0.3,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.035205,
+      "atr_pct": 0.03112732095490716,
+      "atr_risk_bucket": "high",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 1.3200->1.2060",
+          "bar_index": 436
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 1.1720->1.1250",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.32 range=0.2050",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.33 ret5=2.653%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.035205 atr_pct=0.03112732095490716 bucket=high rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "512400.SH",
+      "name": "有色金属ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "range",
+      "wyckoff_score": 0.0,
+      "wyckoff_confidence": 0.3,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.049621,
+      "atr_pct": 0.033778761061946896,
+      "atr_risk_bucket": "high",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 1.7500->1.6510",
+          "bar_index": 425
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 1.5010->1.4060",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.47 range=0.2940",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.71 ret5=5.130%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.049621 atr_pct=0.033778761061946896 bucket=high rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "512480.SH",
+      "name": "半导体ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "range",
+      "wyckoff_score": 0.0,
+      "wyckoff_confidence": 0.3,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.041565,
+      "atr_pct": 0.05384067357512953,
+      "atr_risk_bucket": "extreme",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 1.0790->0.8480",
+          "bar_index": 433
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 0.9720->0.9660",
+          "bar_index": 406
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.46 range=0.2260",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.62 ret5=5.548%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.041565 atr_pct=0.05384067357512953 bucket=extreme rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "512760.SH",
+      "name": "半导体设备ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "range",
+      "wyckoff_score": 0.0,
+      "wyckoff_confidence": 0.3,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.043116,
+      "atr_pct": 0.05182211538461539,
+      "atr_risk_bucket": "extreme",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 1.1410->0.9030",
+          "bar_index": 433
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 1.0280->0.9950",
+          "bar_index": 412
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.46 range=0.2330",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.93 ret5=5.166%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.043116 atr_pct=0.05182211538461539 bucket=extreme rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "512950.SH",
+      "name": "央企创新ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "range",
+      "wyckoff_score": 0.0,
+      "wyckoff_confidence": 0.4,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.021237,
+      "atr_pct": 0.014747916666666666,
+      "atr_risk_bucket": "mid",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 1.4920->1.4500",
+          "bar_index": 437
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 1.4270->1.3960",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.40 range=0.0880",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.61 ret5=0.280%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.021237 atr_pct=0.014747916666666666 bucket=mid rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "516780.SH",
+      "name": "稀土ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markup",
+      "wyckoff_score": 0.7,
+      "wyckoff_confidence": 0.5429,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.023939,
+      "atr_pct": 0.033341225626740946,
+      "atr_risk_bucket": "high",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 0.8300->0.7350",
+          "bar_index": 436
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 0.6980->0.6900",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.58 range=0.0860",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.23 ret5=4.292%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.023939 atr_pct=0.033341225626740946 bucket=high rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "518880.SH",
+      "name": "黄金ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markup",
+      "wyckoff_score": 0.35,
+      "wyckoff_confidence": 0.35,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.124999,
+      "atr_pct": 0.015190059545509784,
+      "atr_risk_bucket": "mid",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 8.5640->8.2930",
+          "bar_index": 439
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 8.4680->8.1300",
+          "bar_index": 436
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.68 range=0.7200",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=2.69 ret5=2.383%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.124999 atr_pct=0.015190059545509784 bucket=mid rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "562500.SH",
+      "name": "机器人ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markup",
+      "wyckoff_score": 0.7,
+      "wyckoff_confidence": 0.5325,
+      "dow_phase": "correction_in_uptrend",
+      "dow_score": 0.25,
+      "dow_confidence": 0.5,
+      "atr14": 0.035076,
+      "atr_pct": 0.04022477064220184,
+      "atr_risk_bucket": "extreme",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 0.9480->0.9080",
+          "bar_index": 438
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 0.7810->0.8100",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.86 range=0.1270",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.19 ret5=3.248%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.035076 atr_pct=0.04022477064220184 bucket=extreme rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "588000.SH",
+      "name": "科创50ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "range",
+      "wyckoff_score": 0.0,
+      "wyckoff_confidence": 0.3,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.064539,
+      "atr_pct": 0.04816343283582089,
+      "atr_risk_bucket": "extreme",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 1.8020->1.4470",
+          "bar_index": 433
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 1.6550->1.6010",
+          "bar_index": 411
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.45 range=0.3590",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.74 ret5=5.027%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.064539 atr_pct=0.04816343283582089 bucket=extreme rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "159865.SZ",
+      "name": "养殖ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markup",
+      "wyckoff_score": 0.7,
+      "wyckoff_confidence": 0.5524,
+      "dow_phase": "correction_in_uptrend",
+      "dow_score": 0.25,
+      "dow_confidence": 0.5,
+      "atr14": 0.011079,
+      "atr_pct": 0.020747191011235955,
+      "atr_risk_bucket": "high",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 0.5780->0.5310",
+          "bar_index": 437
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 0.5030->0.5150",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.97 range=0.0400",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.70 ret5=5.243%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.011079 atr_pct=0.020747191011235955 bucket=high rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "159869.SZ",
+      "name": "游戏ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markup",
+      "wyckoff_score": 0.7,
+      "wyckoff_confidence": 0.5823,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.038186,
+      "atr_pct": 0.03575468164794007,
+      "atr_risk_bucket": "extreme",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 1.0710->1.0460",
+          "bar_index": 433
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 1.0040->0.9370",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.97 range=0.1590",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.55 ret5=8.226%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.038186 atr_pct=0.03575468164794007 bucket=extreme rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "159870.SZ",
+      "name": "化工ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markup",
+      "wyckoff_score": 0.7,
+      "wyckoff_confidence": 0.5577,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.01824,
+      "atr_pct": 0.026131805157593124,
+      "atr_risk_bucket": "high",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 0.7630->0.6920",
+          "bar_index": 437
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 0.6810->0.6580",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.57 range=0.1000",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.36 ret5=5.769%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.01824 atr_pct=0.026131805157593124 bucket=high rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "159920.SZ",
+      "name": "恒生ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markup",
+      "wyckoff_score": 0.7,
+      "wyckoff_confidence": 0.5795,
+      "dow_phase": "correction_in_uptrend",
+      "dow_score": 0.25,
+      "dow_confidence": 0.5,
+      "atr14": 0.020372,
+      "atr_pct": 0.014572246065808299,
+      "atr_risk_bucket": "mid",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 1.4400->1.3650",
+          "bar_index": 437
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 1.3380->1.3390",
+          "bar_index": 439
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=1.00 range=0.1150",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=2.00 ret5=7.949%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.020372 atr_pct=0.014572246065808299 bucket=mid rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "159928.SZ",
+      "name": "消费ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markup",
+      "wyckoff_score": 0.7,
+      "wyckoff_confidence": 0.5712,
+      "dow_phase": "sideways",
+      "dow_score": 0.0,
+      "dow_confidence": 0.4,
+      "atr14": 0.013252,
+      "atr_pct": 0.019012912482065998,
+      "atr_risk_bucket": "mid",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 0.6760->0.6730",
+          "bar_index": 437
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 0.6500->0.6500",
+          "bar_index": 439
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.98 range=0.0580",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=2.38 ret5=7.121%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.013252 atr_pct=0.019012912482065998 bucket=mid rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "510300.SH",
+      "name": "沪深300ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "range",
+      "wyckoff_score": 0.0,
+      "wyckoff_confidence": 0.3,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.073514,
+      "atr_pct": 0.01760814371257485,
+      "atr_risk_bucket": "mid",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 4.4590->4.1920",
+          "bar_index": 437
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 4.1870->4.0310",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.44 range=0.3770",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.06 ret5=2.043%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.073514 atr_pct=0.01760814371257485 bucket=mid rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "512010.SH",
+      "name": "医药ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markup",
+      "wyckoff_score": 0.7,
+      "wyckoff_confidence": 0.5613,
+      "dow_phase": "uptrend",
+      "dow_score": 0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.01042,
+      "atr_pct": 0.026786632390745503,
+      "atr_risk_bucket": "high",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 0.3830->0.3840",
+          "bar_index": 440
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 0.3610->0.3620",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.97 range=0.0380",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.39 ret5=6.133%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.01042 atr_pct=0.026786632390745503 bucket=high rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "512170.SH",
+      "name": "医疗ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markup",
+      "wyckoff_score": 0.7,
+      "wyckoff_confidence": 0.5785,
+      "dow_phase": "uptrend",
+      "dow_score": 0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.009911,
+      "atr_pct": 0.028561959654178674,
+      "atr_risk_bucket": "high",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 0.3410->0.3430",
+          "bar_index": 440
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 0.3200->0.3260",
+          "bar_index": 438
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=1.00 range=0.0400",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.55 ret5=7.855%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.009911 atr_pct=0.028561959654178674 bucket=high rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "512690.SH",
+      "name": "白酒ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markup",
+      "wyckoff_score": 0.7,
+      "wyckoff_confidence": 0.6022,
+      "dow_phase": "sideways",
+      "dow_score": 0.1,
+      "dow_confidence": 0.45,
+      "atr14": 0.010794,
+      "atr_pct": 0.024256179775280898,
+      "atr_risk_bucket": "high",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 0.4240->0.4310",
+          "bar_index": 431
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 0.4100->0.4030",
+          "bar_index": 434
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.94 range=0.0530",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.40 ret5=10.219%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.010794 atr_pct=0.024256179775280898 bucket=high rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "512880.SH",
+      "name": "证券ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "distribution",
+      "wyckoff_score": -0.45,
+      "wyckoff_confidence": 0.4912,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.021014,
+      "atr_pct": 0.020561643835616438,
+      "atr_risk_bucket": "high",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 1.0440->1.0220",
+          "bar_index": 436
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 0.9780->0.9590",
+          "bar_index": 440
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.74 range=0.0850",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=0.82 ret5=5.036%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.021014 atr_pct=0.020561643835616438 bucket=high rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "513050.SH",
+      "name": "中概互联ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markup",
+      "wyckoff_score": 0.7,
+      "wyckoff_confidence": 0.6348,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.022707,
+      "atr_pct": 0.02328923076923077,
+      "atr_risk_bucket": "high",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 1.0350->0.9540",
+          "bar_index": 437
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 0.9270->0.9150",
+          "bar_index": 440
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=1.00 range=0.1290",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=2.60 ret5=13.478%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.022707 atr_pct=0.02328923076923077 bucket=high rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "513100.SH",
+      "name": "纳斯达克100ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markdown",
+      "wyckoff_score": -0.35,
+      "wyckoff_confidence": 0.35,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.044841,
+      "atr_pct": 0.020000446030330063,
+      "atr_risk_bucket": "high",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 2.4390->2.3150",
+          "bar_index": 438
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 2.2870->2.1960",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.20 range=0.2620",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.08 ret5=-2.664%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.044841 atr_pct=0.020000446030330063 bucket=high rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "515050.SH",
+      "name": "5G通信ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markdown",
+      "wyckoff_score": -0.7,
+      "wyckoff_confidence": 0.5596,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.045345,
+      "atr_pct": 0.06590843023255814,
+      "atr_risk_bucket": "extreme",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 1.1080->0.8450",
+          "bar_index": 433
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 0.7830->0.7340",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.18 range=0.2800",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=2.53 ret5=-5.964%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.045345 atr_pct=0.06590843023255814 bucket=extreme rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "515080.SH",
+      "name": "红利低波ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "range",
+      "wyckoff_score": 0.0,
+      "wyckoff_confidence": 0.4,
+      "dow_phase": "sideways",
+      "dow_score": 0.1,
+      "dow_confidence": 0.45,
+      "atr14": 0.022718,
+      "atr_pct": 0.014396704689480353,
+      "atr_risk_bucket": "mid",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 1.5590->1.6060",
+          "bar_index": 428
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 1.5500->1.5060",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.53 range=0.1000",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.46 ret5=-0.447%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.022718 atr_pct=0.014396704689480353 bucket=mid rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "515220.SH",
+      "name": "煤炭ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markdown",
+      "wyckoff_score": -0.7,
+      "wyckoff_confidence": 0.5464,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.031386,
+      "atr_pct": 0.02593884297520661,
+      "atr_risk_bucket": "high",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 1.3470->1.2950",
+          "bar_index": 418
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 1.2390->1.1810",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.05 range=0.1510",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.20 ret5=-4.638%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.031386 atr_pct=0.02593884297520661 bucket=high rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "515790.SH",
+      "name": "光伏ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markup",
+      "wyckoff_score": 0.7,
+      "wyckoff_confidence": 0.5955,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.020883,
+      "atr_pct": 0.028764462809917353,
+      "atr_risk_bucket": "high",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 0.7840->0.7230",
+          "bar_index": 437
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 0.7070->0.6820",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.80 range=0.1160",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=8.21 ret5=9.551%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.020883 atr_pct=0.028764462809917353 bucket=high rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "516160.SH",
+      "name": "新能源ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markup",
+      "wyckoff_score": 0.7,
+      "wyckoff_confidence": 0.6047,
+      "dow_phase": "downtrend",
+      "dow_score": -0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.058273,
+      "atr_pct": 0.02838431563565514,
+      "atr_risk_bucket": "high",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 2.2790->2.0180",
+          "bar_index": 436
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 2.1910->1.8960",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.65 range=0.3820",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=3.19 ret5=10.475%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.058273 atr_pct=0.02838431563565514 bucket=high rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "510880.SH",
+      "name": "红利ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "markdown",
+      "wyckoff_score": -0.35,
+      "wyckoff_confidence": 0.35,
+      "dow_phase": "sideways",
+      "dow_score": 0.1,
+      "dow_confidence": 0.45,
+      "atr14": 0.055889,
+      "atr_pct": 0.016327490505404618,
+      "atr_risk_bucket": "mid",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 3.5020->3.5200",
+          "bar_index": 428
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 3.3900->3.2810",
+          "bar_index": 435
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.28 range=0.2390",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=2.40 ret5=-2.105%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.055889 atr_pct=0.016327490505404618 bucket=mid rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    },
+    {
+      "schema_version": "structure_v1",
+      "ts_code": "512800.SH",
+      "name": "银行ETF",
+      "as_of": "2026-11-05",
+      "lag_n": 2,
+      "wyckoff_phase": "range",
+      "wyckoff_score": 0.0,
+      "wyckoff_confidence": 0.4,
+      "dow_phase": "uptrend",
+      "dow_score": 0.7,
+      "dow_confidence": 0.65,
+      "atr14": 0.016154,
+      "atr_pct": 0.01848283752860412,
+      "atr_risk_bucket": "mid",
+      "evidence": [
+        {
+          "kind": "dow_pivot",
+          "text": "swing highs 0.8730->0.8780",
+          "bar_index": 432
+        },
+        {
+          "kind": "dow_pivot",
+          "text": "swing lows 0.8320->0.8520",
+          "bar_index": 429
+        },
+        {
+          "kind": "wyckoff_range",
+          "text": "20d pos=0.43 range=0.0560",
+          "bar_index": 444
+        },
+        {
+          "kind": "wyckoff_volume",
+          "text": "vol_ratio=1.63 ret5=-1.804%",
+          "bar_index": 444
+        },
+        {
+          "kind": "atr",
+          "text": "atr14=0.016154 atr_pct=0.01848283752860412 bucket=mid rule=atr_pct_fixed_v1",
+          "bar_index": 444
+        }
+      ],
+      "research_only": true,
+      "proxy_disclaimer": "Wyckoff/Dow labels are OHLCV proxies; ETF volume is not underlying flow."
+    }
+  ]
+}

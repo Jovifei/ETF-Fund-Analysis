@@ -10,7 +10,7 @@
 1 / 3 / 5 / 10 trading sessions
 ```
 
-这是 `HORIZON_ALIGNMENT_20260903.md` 锁定的当前代码合同。
+这是 `archive/root-2026-11-07/HORIZON_ALIGNMENT_20260903.md` 锁定的当前代码合同。
 
 历史 v0.7 文档和已持久化旧 artifact 曾使用 `1/5/20`。20 日 feature lookup 可以为历史 artifact 复现保留，但 **20D 不属于当前新运行配置**；若以后重新启用，必须单独建立 h=20 的 purged walk-forward、校准和人工批准。
 
@@ -151,4 +151,4 @@ Forecast Corridor 不拥有 current action。
 - `research_score` 可以引用 forecast 作为排序/解释证据，但不能创造第二套“买/卖”结论；
 - Mock/stale/unverified forecast 继续受数据资格门控。
 
-详细验证路径见 `ETF_1430_VALIDATION.md` 和 `ROADMAP_TO_FINAL.md`。
+详细验证路径见 `archive/root-2026-11-07/ETF_1430_VALIDATION.md` 和 `archive/root-2026-11-07/ROADMAP_TO_FINAL.md`（均已归档）。

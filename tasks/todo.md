@@ -336,3 +336,12 @@ Review：部署仅在凭据不暴露、配置与回滚可证实、目标镜像�
 - [ ] 待处理：仓库公开可见性与既往记录不一致；同步凭据轮换；SMTP 配置与真实投递；.env 漂移修正；pyproject 依赖固定决策；HS300 清单冻结与占比任务排期。
 
 Review：收据见 docs/handoffs/PRODUCTION_DEPLOYMENT_20261031.md。演练期间在 1.8 GiB 内存服务器上并行副本恢复与两套栈触发系统 OOM，波及同机 star-photo 容器（已自愈 healthy），是本机处置失误，后续禁止此类并行。
+
+## 2026-11-06 深度项目审计与策略落地评估
+
+- [x] 完成 STATUS/HANDOFF/路线图/验证清单/策略代码/相关测试与两次指定聊天深读。
+- [x] 结论：发布链路已基本闭环，生产自然运行和科学策略资格仍未闭环。
+- [x] 结论：八族策略已接入运行链，但回测口径不一致，不能称为已封版买卖策略。
+- [x] 针对性测试 39 项通过；compileall 与 Node 语法检查通过；全量 pytest 未运行。
+
+Review：当前应优先完成真实 PIT 14:30 数据与供应商/许可确认、同口径策略回放、purged walk-forward + pristine holdout、事件驱动约束回测、至少 20 个交易日 shadow run、人工批准，以及生产自然链路/登录/手机/SMTP验收。保持 UNKNOWN/actionable=false/not_calibrated。

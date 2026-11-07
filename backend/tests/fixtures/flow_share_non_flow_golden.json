@@ -174,6 +174,18 @@
       },
       "freshness": "stale",
       "grade": "数据异常",
+      "grade_base": "数据异常",
+      "structure_decision": {
+        "version": "structure-decision-v1",
+        "enabled": true,
+        "weight": 0.4167,
+        "applied": false,
+        "base_grade": "数据异常",
+        "final_grade": "数据异常",
+        "score": null,
+        "signal": null,
+        "reason": "hard_grade_not_adjusted"
+      },
       "grade_reason": "历史价格展示；完整量价/指标资格尚未通过，不生成当前动作",
       "history": [],
       "indicator": {
@@ -334,7 +346,9 @@
         "kind": "unknown",
         "label": "量能未知",
         "ratio": null
-      }
+      },
+      "structure_v1": null,
+      "structure_shadow": null
     },
     "signal_grade_row": {
       "actionable": false,
