@@ -37,7 +37,7 @@ class ShadowRunAuditService:
         self.strategy = self.settings.load_strategy()
 
     def run(self, db: Session, run_id: str | None = None, target_date: date | None = None) -> dict[str, Any]:
-        run_id = run_id or uuid4().hex
+        run_id = run_id or uuid.uuid4().hex
         calendar = TradingCalendarService(self.settings)
         # Shadow audit dates follow the configured market timezone. Using the
         # host's local date can audit the wrong session around UTC midnight.
