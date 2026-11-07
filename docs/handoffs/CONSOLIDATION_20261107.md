@@ -51,7 +51,13 @@
 - 全量：252 个测试文件分 9 批逐批跑完（单进程整跑曾被运行环境重启打断于约 19%，改分批后完成）。8 批全绿；第 8 批 2 项失败——`test_sina_quote_provider.py::test_public_composite_registers_sina_as_quote_fallback`、`test_tencent_provider.py::test_public_composite_contains_tencent_independent_candidate`（public_composite 注册在本机环境缺 sina）。已在 pristine main（`2dd06627`，独立 worktree）复跑同两文件，**失败完全一致，属既有环境依赖，非本次改动引入**；该两项在 GitHub CI 环境的历史结论为通过，待本分支 CI 复核。
 - 结论：本次整合与邮件/文档改动零新增失败。
 
-## 8. 未完成 / 待决
+## 8. 决策记录（2026-11-07，Jovi 批准 Muse 的建议）
+
+- **Stage B 线**：等 PR #67 定稿后再合入本集成分支，不合入其进行中的版本。
+- **B2 晋升**：不晋升。结构信号维持影子并行（Phase B1），待 holdout 重新站稳后另行标定与审批。
+- **main**：不动。集成分支继续承载新代码，合回 main 须经 Jovi 验收后另行决定。
+
+## 9. 未完成 / 待决
 
 - Stage B 线（PR #67）定稿后合并进本集成分支。
 - B2 晋升：待 holdout 重新站稳 + Jovi 单独批准。
