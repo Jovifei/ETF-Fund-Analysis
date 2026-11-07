@@ -669,6 +669,29 @@ def fc_cell_text(f):
     return "，".join(b for b in bits if b)
 
 
+def levels_cell_parts(r):
+    """Main-table 支撑/压力 parts: [(label, zone_text, distance_text|None)].
+
+    Zone resolution matches the dedicated 支撑与压力 section (lvl_zone over
+    nearest_* first, then the entry/exit zone dicts). A side with no
+    resolvable zone is omitted; both missing -> [].
+    """
+    parts = []
+    for lab, near, zone in (("支", r.get("nearest_support"), r.get("support_zone")),
+                            ("压", r.get("nearest_resistance"), r.get("resistance_zone"))):
+        z = zstr(lvl_zone(near, zone))
+        if not z:
+            continue
+        dist = fmt_pct_already(near["distance_pct"]) if isinstance(near, dict) and is_num(near.get("distance_pct")) else None
+        parts.append((lab, z, dist))
+    return parts
+
+
+def next_day_forecast(r):
+    """Next-trading-day forecast dict (expected_return / p_up) or None."""
+    return fc_get(r, ("1",))
+
+
 def lvl_zone(near, zone):
     if isinstance(near, dict) and is_num(near.get("zone_low")) and is_num(near.get("zone_high")):
         return near["zone_low"], near["zone_high"]
@@ -876,6 +899,15 @@ def render_text(ctx, charts_meta):
                 bits.append(f"价格 {fmt_num(r['price'])}")
             if is_num(r.get("return_1d")) or is_num(r.get("return_5d")):
                 bits.append("当日/近5日 " + " / ".join(fmt_pct_ratio(r.get(k)) or "—" for k in ("return_1d", "return_5d")))
+            lv = levels_cell_parts(r)
+            if lv:
+                bits.append("支撑/压力 " + "，".join(f"{lab} {z}" + (f"（{d}）" if d else "") for lab, z, d in lv))
+            f1 = next_day_forecast(r)
+            if f1:
+                ftxt = f"明日预期 {fmt_pct_ratio(f1['expected_return'])}"
+                if is_num(f1.get("p_up")):
+                    ftxt += f"（上涨概率 {f1['p_up'] * 100:.0f}%）"
+                bits.append(ftxt)
             T.append(head + "：" + "；".join(bits + row_detail(r)) + "。")
     T.append("")
     cols = horizon_cols(ctx["rows"])
@@ -1154,6 +1186,7 @@ def render_html(ctx, charts):
     trs = []
     # column header for Phase A structure display
     trs.append('<tr bgcolor="#eef2f7"><td><b>标的</b></td><td align="right"><b>现价/涨跌</b></td>'
+               '<td align="center"><b>支撑/压力</b></td><td align="center"><b>明日预期</b></td>'
                '<td align="center"><b>威科夫</b></td><td align="center"><b>道氏</b></td>'
                '<td align="center"><b>ATR风险桶</b></td><td align="center"><b>结构影子</b></td><td><b>理由/信号</b></td></tr>')
     H.append(para(F(STRUCTURE_PROXY_DISCLAIMER, "#666"), "2px 20px"))
@@ -1162,7 +1195,7 @@ def render_html(ctx, charts):
         if not grp:
             continue
         # Phase A: 威科夫 / 道氏 / ATR风险桶 display columns (structure_v1; missing → —)
-        trs.append(f'<tr bgcolor="{GRADE_COLOR.get(g, OTHER_COLOR)}"><td colspan="7">{F(f"{esc(g)} · {len(grp)} 只", GRADE_TEXT_COLOR.get(g, "#fff"), True)}</td></tr>')
+        trs.append(f'<tr bgcolor="{GRADE_COLOR.get(g, OTHER_COLOR)}"><td colspan="9">{F(f"{esc(g)} · {len(grp)} 只", GRADE_TEXT_COLOR.get(g, "#fff"), True)}</td></tr>')
         for i, r in enumerate(grp):
             price = []
             if is_num(r.get("price")):
@@ -1177,8 +1210,25 @@ def render_html(ctx, charts):
             dw = esc(structure_col(r, "dow"))
             ab = esc(structure_col(r, "atr"))
             sh = esc(structure_shadow_col(r))
+            lv = levels_cell_parts(r)
+            if lv:
+                sr_html = "<br>".join(
+                    F(f"{lab} {esc(z)}", DOWN_COLOR if lab == "支" else UP_COLOR)
+                    + (F(f" {esc(d)}", "#888", small=True) if d else "")
+                    for lab, z, d in lv)
+            else:
+                sr_html = F("—", "#888")
+            f1 = next_day_forecast(r)
+            if f1:
+                fc_html = F(esc(fmt_pct_ratio(f1["expected_return"])), ret_color(f1["expected_return"]), True)
+                if is_num(f1.get("p_up")):
+                    fc_html += "<br>" + F(f"上涨 {f1['p_up'] * 100:.0f}%", "#888", small=True)
+            else:
+                fc_html = F(NA, "#888", small=True)
             trs.append(f'<tr{zebra(i)}><td valign="top"><b>{esc(r.get("name"))}</b><br>{F(esc(code6(r.get("ts_code")) + ("　" + theme if theme else "")), "#999", small=True)}</td>'
                        f'<td valign="top" align="right" nowrap>{"<br>".join(price)}</td>'
+                       f'<td valign="top" align="center" nowrap>{sr_html}</td>'
+                       f'<td valign="top" align="center" nowrap>{fc_html}</td>'
                        f'<td valign="top" align="center" nowrap>{F(wy, "#444")}</td>'
                        f'<td valign="top" align="center" nowrap>{F(dw, "#444")}</td>'
                        f'<td valign="top" align="center" nowrap>{F(ab, "#444")}</td>'
