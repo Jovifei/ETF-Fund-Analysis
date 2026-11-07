@@ -28,10 +28,32 @@ node --check backend/app/static/app.js
 5. **数据口径冲突**（复权/单位/时间）→ 停止信号生成，不做猜测；Mock 数据结果必须阻断 actionable。
 6. **Hub 报告**：阶段收尾、阻塞出现时按 AGENTS.md 的 hub 块用 `bound_report.py` 上报；连接失败保留 pending JSON、停止自动重试并明示错误。
 
+### 部署上线（每次发布按此顺序，2026-11-08 实战验证）
+
+```bash
+# 1) 前置：main CI 三 workflow 全 success；确认 alembic head 与生产库一致
+.venv/Scripts/python.exe -m alembic heads          # 对比生产 alembic_version
+
+# 2) 备份（先备份再切，不可跳过）
+#    服务器：pg_dump -Fc → sha256 → pg_restore -l 验证 TOC 条数
+
+# 3) 本机构建镜像（服务器内存小、多项目共存，不要在上面构建）
+docker build -f backend/Dockerfile -t china-fund-decision:deploy-<sha> .
+
+# 4) 镜像内验证：akshare 版本、腾讯历史测试、alembic heads/check
+# 5) 沙盘演练：独立项目/网络/副本库/独立端口跑 upgrade head + health + 401 + workspace_image_smoke
+# 6) 传输：docker save | gzip | ssh 'gunzip | docker load'
+# 7) 切换：停旧容器（保留）→ compose --env-file .env -f new.yml up -d → 等 healthy
+# 8) 上线核验：本机 8080 + 公网 health、未认证 401、CSP、api/worker 日志无 error、restarts=0
+```
+
+部署硬规则：编排文件从上一版已验证规格派生并 `diff` 留痕；身份环境变量（生产者 sha）不随应用镜像改动；旧镜像与旧容器保留到下次发布；回滚 = `compose down` + `docker start` 旧容器（零迁移时无需迁移文件旁挂）。
+
 ## 二、错误记录与解决方案（持续追加，最新在上）
 
 | 日期 | 错误现象 | 根因 | 解决方案 | 预防 |
 | --- | --- | --- | --- | --- |
+| 2026-11-08 | 沙盘演练起 API 失败：`生产环境必须配置已存在的 OCR_TRANSIENT_ROOT`，随后 `local_paddle 必须配置已存在的 OCR_LOCAL_MODEL_DIR` | `APP_ENV=production` 时配置校验要求 OCR 相关目录存在且私有；生产编排靠 tmpfs 与挂载满足 | 演练时补 tmpfs `/var/lib/china-fund-decision/ocr-transient` + `OCR_TRANSIENT_ROOT`，并显式 `OCR_MODE=disabled`（生产规格本就完整） | 本地演练若用 `APP_ENV=production`，必须一并带上生产的 OCR 环境变量与 tmpfs，否则会误判镜像有问题 |
 | 2026-11-07 | docs 重组后 `test_password_auth::test_deployment_handoffs…` 失败 | 该测试断言 6 份部署文档存在且含认证标记，其中 2 份 V070 文档在删除清单内；引用扫描输出被截断漏检 | 测试文档清单改为 4 份活文档（ALIYUN 移至 docs/guides/，已验证全部承载 6 个标记） | 引用扫描不得截断输出；删除文档前对 `backend/tests` 全量 grep 文件名 |
 | 2026-11-07 | ✅已修复：下行 PR63 timeout 守卫回归 | — | 守卫已改为 `not kwargs.get('timeout')` 并合入 main（fix/bounded-tencent-timeout-20261107）；`test_tencent_history_freshness` 恢复通过 | 同下 |
 | 2026-11-07 | 拉取 PR #63 后 `test_tencent_history_freshness` 失败（timeout 记录为 None） | akshare 1.18.94 的 `stock_zh_a_hist_tx` 内部总是显式传 `timeout=None`，而 `_BoundedTencentRequests` 的注入守卫 `'timeout' not in kwargs` 只判断键存在，导致传输层超时没注入 | 守卫改为 `not kwargs.get('timeout')`（None 视为未设置；调用者显式正值保留）——待修复 | 传输层改动后必须跑全量 pytest；注意 `akshare>=1.17.0` 无上界，函数行为随版本漂移 |
