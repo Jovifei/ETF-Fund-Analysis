@@ -1,10 +1,10 @@
 {
   "market_data_contract_version": "cn-fund-shares-cny-v1.0.11-settled-daily-research",
-  "version": "signal-v0.7.6-structure-decision",
+  "version": "signal-v0.7.7-structure-weight",
   "indicator_version": "ind-v0.7.6-maturity-mask",
   "forecast_version": "similarity-corridor-v0.7.8-h5-independence-gate",
   "signal_center_version": "signal-center-v0.3.3-current-board-contract",
-  "signal_grade_version": "signal-grade-v0.3.5-structure-decision",
+  "signal_grade_version": "signal-grade-v0.3.6-structure-weight",
   "signal_grade": {
     "j_add_cap": 90,
     "j_overbought": 100,
@@ -20,10 +20,10 @@
     "macd_approach_hist": 0.0008,
     "structure_decision": {
       "enabled": true,
-      "weight": 0.5,
+      "weight": 0.4167,
       "max_shift": 1,
       "version": "structure-decision-v1",
-      "note": "Owner instruction 2026-11-07: Wyckoff/Dow/ATR join the five-grade decision. Weight is PROVISIONAL (proportion to be fixed later); frozen soft_c score, bounded to one notch, cannot create top/bottom grades."
+      "note": "Owner instruction 2026-11-07: Wyckoff/Dow/ATR join the five-grade decision. Weight set 2026-11-07 (evening) to 0.4167: a grade shifts only when |soft_c score| >= 0.60 (weight = 0.25 / 0.60), i.e. twice the frozen signal's own directional threshold (buy_thresh 0.30). Basis: the 2026-11-06 holdout showed the standalone structure signal degraded (5d win rate 50.68%, mean -0.2344%), so only strong readings may move a base grade. This is a LIVING parameter: re-fit it as daily outcomes accumulate (4-decimal precision supported); every change bumps the signal versions and is recorded in docs/handoffs/CONSOLIDATION_20261107.md section 14."
     },
     "disclaimer": "研究提示，非操作指令",
     "board_score_weights": {

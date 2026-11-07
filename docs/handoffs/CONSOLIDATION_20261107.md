@@ -130,3 +130,19 @@
   `test_shadow_run_audit.py` 全文件通过。此例说明 §10 提前合入后跑全量的必要性——
   Stage B 自带测试未覆盖该路径。
 - 推送后以本分支 GitHub CI（ci / workspace-ci / audit-platforms）为最终结论。
+
+## 14. 结构权重定值（2026-11-07 晚，所有者指示）
+
+- 所有者指示：合并前把参与权重从暂定 0.5 改为一个有依据的推荐值；该权重是**活参数**，
+  后续由所有者安排的其他 AI 按历史数据跑权重搜索、按日况更新，精度到小数点后四位。
+- 定值 **0.4167**。推导：决策层公式为 target = floor(base + weight × score × 2 + 0.5)，
+  即移档门槛 |score| ≥ 0.25 / weight。冻结信号自身语义里 |score| ≥ 0.30（buy_thresh）
+  才算"有方向"、0.12 以内是平坦带；而 2026-11-06 holdout 显示结构信号单独使用已退化
+  （5 日胜率 50.68%、均值 −0.2344%），故参与层不应在"刚有 direction"时就改档，
+  门槛定在方向阈值的 2 倍 |score| ≥ 0.60 → weight = 0.25 / 0.60 = 0.4167。
+  暂定 0.5（门槛 0.50）据此收紧。新增测试锁定该工作点（±0.59 不动、±0.61 移一档）。
+- 版本纪律：signal-v0.7.7-structure-weight / signal-grade-v0.3.6-structure-weight；
+  相关版本断言测试已同步。后续每次改权重同样升版本并在本节追加记录（日期、新值、
+  依据数据区间与方法）。本定值是所有者设定的 interim 参数，不构成策略封版，
+  系统立场 research_only / actionable=false / not_calibrated 不变；正式 walk-forward
+  拟合由后续权重搜索完成。

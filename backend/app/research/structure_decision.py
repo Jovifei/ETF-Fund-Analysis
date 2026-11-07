@@ -16,7 +16,10 @@ participation as a bounded adjustment of the base grade from assign_grade:
 research_only / actionable=false / not_calibrated are unchanged. The
 frozen soft_c weights themselves are NOT retuned here; the only knob is
 the participation weight in config/strategy.json
-(signal_grade.structure_decision.weight, provisional 0.5).
+(signal_grade.structure_decision.weight). The weight is a living
+parameter, re-fit as daily outcomes accumulate; it was set to 0.4167 on
+2026-11-07 (grade shifts only when |score| >= 0.60 — see strategy.json
+note and CONSOLIDATION_20261107.md section 14 for the derivation).
 """
 
 from __future__ import annotations

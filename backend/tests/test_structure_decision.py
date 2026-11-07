@@ -96,4 +96,19 @@ def test_strategy_config_declares_structure_decision():
     assert cfg["enabled"] is True
     assert 0 < cfg["weight"] <= 1
     assert cfg["max_shift"] == 1
-    assert strategy["signal_grade_version"].startswith("signal-grade-v0.3.5")
+    assert strategy["signal_grade_version"].startswith("signal-grade-v0.3.6")
+
+
+def test_recommended_weight_shifts_only_on_strong_scores():
+    # Operating point set 2026-11-07 (owner): weight 0.4167 means a grade
+    # moves only when |score| >= 0.60 — twice the frozen signal's own
+    # directional threshold; merely directional readings must not move it.
+    cfg = {"enabled": True, "weight": 0.4167, "max_shift": 1}
+    mild = {"score": 0.59, "signal": "结构偏多"}
+    strong = {"score": 0.61, "signal": "结构偏多"}
+    assert apply_structure_decision("观望", mild, cfg)["final_grade"] == "观望"
+    assert apply_structure_decision("观望", strong, cfg)["final_grade"] == "可试探"
+    mild_dn = {"score": -0.59, "signal": "结构偏空"}
+    strong_dn = {"score": -0.61, "signal": "结构偏空"}
+    assert apply_structure_decision("可入场", mild_dn, cfg)["final_grade"] == "可入场"
+    assert apply_structure_decision("可入场", strong_dn, cfg)["final_grade"] == "可试探"
