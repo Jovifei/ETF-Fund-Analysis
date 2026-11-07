@@ -67,7 +67,7 @@ fix(providers): wire sector data through composite + add free-tier fallbacks and
 - 容器实测：行业 90 / 概念 175 / 全市场 1 / 大盘指数 6 / 可交易代理 1 / K线 20691 根，全部真实数据（is_mock=false）。
 - 新增单测 8 个（板块降级链、概念三级降级、K线降级、market_context index/proxy 观测）。
 
-改动：`akshare.py`、`composite.py`、`market_context.json`、`test_sector_snapshots.py`、`docs/ETF_DATA_ONBOARDING_PLAN.md`（+671/-35）。
+改动：`akshare.py`、`composite.py`、`market_context.json`、`test_sector_snapshots.py`、`docs/archive/root-2026-11-07/ETF_DATA_ONBOARDING_PLAN.md`（+671/-35）。
 ```
 
 ---

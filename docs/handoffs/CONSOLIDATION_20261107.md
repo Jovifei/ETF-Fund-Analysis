@@ -63,3 +63,57 @@
 - B2 晋升：待 holdout 重新站稳 + Jovi 单独批准。
 - review 分支与 feature 分支同指，合并已由本分支承接，远端删除与否由 Jovi 决定。
 - 本地取数节奏优化（§5）属工作站调度侧，本次未动。
+
+
+## 10. Stage B 提前合入（2026-11-07 午间，所有者新指示，取代 §8 第 1 条）
+
+- 所有者指示：「为什么要等它定稿之后再合并？你都可以做的，不用管本地。」遂将
+  `origin/codex/stage-b-pit-replay-20261106`（`7c95d54e`）以 --no-ff 合入本集成分支，
+  合并提交 `079e40c`，零冲突；其新增契约测试 `backend/tests/test_strategy_replay_contract.py` 通过。
+- PR #67（base=main，draft）本身未动，仍由其作者线维护；本集成分支已包含其内容。
+
+## 11. 威科夫/道氏/ATR 正式接入决策（2026-11-07 午间，所有者新指示，取代 §8 第 2 条）
+
+- 所有者指示：三因子「我是要求加入到我的决策当中去的，至于决策的比例是多少，那是后面再定」。
+  即：接入是现在时，比例是暂定值、后续再标定。holdout 的 KEEP_FROZEN 结论约束的是冻结权重
+  soft_c_strict 本身的晋升，本次不改动该权重，只新增一层有界调整。
+- 实现（提交 `f0f02f1`）：新增 `backend/app/research/structure_decision.py` 纯函数
+  `apply_structure_decision`，在决策板层（网站决策板与策略邮件的共同数据源）生效：
+  `final_rank = clamp(base_rank + round(weight × shadow_score × 2), ±1 档)`，暂定 weight=0.5；
+  结构不能单独造出「可加仓」（base 未到顶档时封顶「可入场」）或「减仓」（base 非减仓时下限「观望」）；
+  硬档「减仓/数据异常」不调整；影子缺失/禁用/权重 0 时完全不改变。
+- 每行新增 `grade_base`（基础五档）与 `structure_decision`（版本/权重/是否生效/前后档位/分数/理由），
+  `grade_reason` 在生效时追加说明；payload 顶层带 `structure_decision` 摘要。
+  `structure_shadow` 本身仍标注 `structure_shadow_changes_grade=false`（影子字典未变，消费它的是新层）。
+- 版本：`config/strategy.json` 新增 `signal_grade.structure_decision` 配置块；
+  顶层 version → `signal-v0.7.6-structure-decision`，`signal_grade_version` → `signal-grade-v0.3.5-structure-decision`
+  （按仓库规则：权重类改动必须升级版本）。SignalGradeService.assign_grade 本身未改（纯基础档），
+  板塊视图仍用基础档——调整面就是决策板这一官方出口。
+- 口径修正：邮件渲染的免责声明由「仅展示，不参与五档分级」改为如实说明已参与（权重 0.5、最多一档、
+  不能单独造出可加仓/减仓、比例暂定）；`PHASE_A_WIRING.md` 与 `docs/handoffs/HANDOFF_STRUCTURE_V1.md`
+  已加「方向更正（2026-11-07）」注；`research_only=true / actionable=false / not_calibrated` 立场未动。
+- 测试：新增 `backend/tests/test_structure_decision.py` 13 项（先失败后通过）；golden 夹具
+  `flow_share_non_flow_golden.json` 补 `grade_base`/`structure_decision` 两键（样本行为硬档，档位不变）；
+  决策板相关 6 个测试文件整批通过；compileall 与 node --check 通过。
+
+## 12. 文档瘦身执行记录（2026-11-07，所有者指示）
+
+- 盘点：docs/ 根目录原 100 篇 md（全仓 1269 个受控文件；无 .pyc/.bak/.tmp 类字面垃圾，
+  「垃圾」实为过期文档与旧报告）。按「代码/测试/脚本/配置是否引用」逐篇核对引用后分类：
+  - **保留现行（28 篇）**：架构、部署手册、决策工作台、预测走廊、现行语义/契约、进度台账、
+    因子目录与数据文件等（清单逻辑见 docs/README.md 分类总览）；
+  - **移入 contracts/（4 篇）**：CURRENT_DECISION_SOURCE_CONTRACT、SCHEDULER_RESILIENCE、
+    SINGLE_DECISION_SURFACE_AND_FORECAST_SEMANTICS、REFERENCE_BOARD_PARITY——内容与现行实践仍一致；
+  - **归档（68+12+4 篇）**：docs 根 67 篇 + 仓库根 VALIDATION.md → `docs/archive/root-2026-11-07/`
+    （含索引 README）；docs/planning + docs/plans → `docs/archive/planning-2026-11-07/`；
+    docs/superpowers → `docs/archive/superpowers-2026-08/`；
+  - **删除（1 篇）**：docs/CALC_DECISION_BRANCH.md（过期分支说明，内容早已并入 main）。
+  - `deployment_reports/` 虽为 2026-08 旧报告，但 scripts 的默认输出路径仍指向它，原地保留；
+    `docs/audits/`（99 篇）、`docs/versions/` 为日期证据链，原样保留。
+- 链接修复：FORECAST_CORRIDOR、PR_CHECKLIST、LOCAL_AGENT_PROMPT_V070、UI_UX_CONTRACT 中指向
+  已归档文件的 5 处引用已改指归档路径（其中 UI_UX_CONTRACT 的「当前验收」已改标「历史验收报告」）；
+  代码/测试/脚本对已归档文件零引用（已逐篇 grep 验证），移动不影响测试。
+- STATUS.md 已加 2026-11-07 当前条目；HANDOFF.md 已加当前状态指针；docs/README.md 分类总览已同步
+  （根目录 100→28、contracts 4→8、planning 已归档）。
+- §9 更新：Stage B 合并、B2（以 §11 的有界接入形式）两项已由本节与 §10/§11 关闭；
+  仍待决：集成分支合回 main（所有者验收后）、结构决策比例的正式标定、review/feature 远端分支去留。

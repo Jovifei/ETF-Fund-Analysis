@@ -5,6 +5,14 @@
 **Acceptance sibling:** `/workspace/etf_structure_features/REQUIREMENTS.md` · `docs/handoffs/REQUIREMENTS_STRUCTURE_V1.md`  
 **Timezone:** Asia/Shanghai (UTC+8) · **Updated:** 2026-11-05 ~19:10
 
+
+> **方向更正（2026-11-07，项目所有者决定）**：本文 §0 中"未经批准不得改 live 五档 / Phase A 需 ≥3 交易日
+> 并行 + holdout + 用户批准后才能进 live"的门槛，已由所有者本人于 2026-11-07 明确批准取代：威科夫/道氏/ATR
+> 正式接入决策（决策板层有界调整，暂定权重 0.5，比例后续再定），实现见
+> `backend/app/research/structure_decision.py` 与 `docs/handoffs/CONSOLIDATION_20261107.md`。
+> `actionable=false`、`research_only=true`、`not_calibrated` 立场不变。本文其余内容为 2026-11-05 交接记录。
+>
+
 > Successor AI/agent should continue from this file. Do **not** change live `assign_grade` or flip `CONFIG_HASH`. No Cursor CloudAgent / work-quota.
 
 ---

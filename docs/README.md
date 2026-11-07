@@ -33,12 +33,12 @@
 | 类别 | 位置 | 内容与规则 |
 | --- | --- | --- |
 | 现行事实（唯一口径） | 根目录 `README.md`、`STATUS.md`、`HANDOFF.md`、`QUICKSTART.md`、`CHANGELOG.md` | 当前状态与接手入口；结论只在这里更新，别处引用不复制 |
-| 契约与语义 | `docs/contracts/`（4 篇）+ 根目录 `ARCHITECTURE.md`、`*_SEMANTICS.md`、`*_CONTRACT_*.md` | 接口/数据/展示口径；变更需同步代码与测试 |
+| 契约与语义 | `docs/contracts/`（8 篇）+ 根目录 `ARCHITECTURE.md`、`*_SEMANTICS.md` | 接口/数据/展示口径；变更需同步代码与测试 |
 | 审计与证据 | `docs/audits/`（99 篇） | 带日期的发布、失败、回滚、验收原始证据；只增不改，按日期+固定源码理解 |
 | 发布与版本 | `docs/versions/`（13 篇）+ `CHANGELOG.md` 各版本节 | 版本专题与发布记录；应用版本四处一致由测试锁定 |
-| 计划与路线 | `docs/planning/`（11 篇）、`docs/plans/`、`PROJECT_MASTER_ROADMAP.md`、`tasks/` | 未落地计划与路线；落地后把结论回写现行事实层 |
+| 计划与路线 | `PROJECT_MASTER_ROADMAP.md`、`tasks/`（现行）；旧计划已归档至 `docs/archive/planning-2026-11-07/` | 未落地计划与路线；落地后把结论回写现行事实层 |
 | 研究记录 | `docs/research/`、`docs/structure_v1/`、`research/` | 因子/结构研究与影子记录；研究结论不等于生产口径 |
 | 交接 | `docs/handoffs/`（18 篇） | 跨 Agent/跨日交接；以最新一篇为准，旧篇仅作沿革 |
-| 历史归档 | `docs/archive/`（含 pre-v103、release-v1.0.0、project-simplification-20261002 等子集） | 已被取代的方案与旧收据；只读，不作为操作依据 |
+| 历史归档 | `docs/archive/`（含 pre-v103、release-v1.0.0、project-simplification-20261002 及 2026-11-07 瘦身批次 root-2026-11-07、planning-2026-11-07、superpowers-2026-08） | 已被取代的方案与旧收据；只读，不作为操作依据 |
 
-docs/ 根目录现存 100 篇按文件族归类（2026-11-07 点算）：版本专题（_V0xx/_V1xx 后缀）18、验收/测试报告（RPT/TST/ACCEPTANCE/VALIDATION）15、收据/部署凭证（RECEIPT/DEPLOYMENT）9、路线/计划 7、审计 5、语义/契约/架构 5、交接 4、开源研究 4、进度台账 2、指南 1、其他单项 30。根目录文件族只作历史沿革查找；新文档按上表入目录，根目录不再新增专题文档。本次归类的执行记录见 [handoffs/CONSOLIDATION_20261107.md](handoffs/CONSOLIDATION_20261107.md)。
+docs/ 根目录经 2026-11-07 瘦身后保留 28 篇现行文档（另有进度台账的 .json/.html 与因子数据 .csv、资格 .json）；67 篇版本专题/验收报告/收据/旧路线图已移入 `docs/archive/root-2026-11-07/`，4 篇仍现行的契约移入 `docs/contracts/`，1 篇过期分支说明（CALC_DECISION_BRANCH.md）已删除。归档内容可由 git 历史与归档目录随时找回；瘦身执行记录见 [handoffs/CONSOLIDATION_20261107.md](handoffs/CONSOLIDATION_20261107.md) §12。

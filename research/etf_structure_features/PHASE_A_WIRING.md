@@ -1,5 +1,12 @@
 # Phase A wiring status (2026-11-05, updated after review fixes)
 
+> **方向更正（2026-11-07，项目所有者决定）**：威科夫/道氏/ATR 已正式接入实时决策，不再只是并行影子展示。
+> 实现：`backend/app/research/structure_decision.py` 在决策板层以暂定权重 0.5 对基础五档做有界调整（最多一档，
+> 不能单独造出可加仓/减仓，硬档不调整）；比例由所有者后续确定。策略版本 signal-v0.7.6-structure-decision。
+> 本文其余内容记录 Phase A 接线当时的状态，凡与上述决定冲突处以本注为准。记录见
+> `docs/handoffs/CONSOLIDATION_20261107.md`。
+
+
 ## Contract
 Optional per-row flat block `structure_v1` only (NOT `research_display`).
 Schema: `schemas/structure_fund_row.schema.json` / `research/etf_structure_features/schemas/`.
