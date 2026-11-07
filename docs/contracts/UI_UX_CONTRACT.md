@@ -1,6 +1,6 @@
 # 工作站 UI/UX 合同（rc.2）
 
-本合同描述本源码包新UI，不声称远端main/生产已切换。入口开关 `WORKSPACE_UI_ENABLED=true`；旧界面原文见 [归档](archive/main-3c7bdc7/docs/UI_UX_CONTRACT.md)。
+本合同描述本源码包新UI，不声称远端main/生产已切换。入口开关 `WORKSPACE_UI_ENABLED=true`；旧界面原文见 [归档](../archive/main-3c7bdc7/docs/UI_UX_CONTRACT.md)。
 
 采用原创Kairo式暗色侧栏、顶部全局搜索、底部账户区。不是Kairo源码/素材复制。主背景深灰黑，青色为导航/操作强调，红涨绿跌，紫色为预测；状态除颜色外有文字，不把绿色运行状态当上涨。
 桌面侧栏展开/窄栏/隐藏；移动端抽屉、Escape关闭和焦点管理；账户区设置、个人中心、退出。无认证演示不能假称已登录，退出不可用且明示演示。
@@ -25,4 +25,4 @@
 S/R不是历史点位回放，预测不是实K。成本与价格基准不兼容就不叠加；分钟指标未合格不冒用日线。
 未校准预测显示历史相似样本上涨频率/占比，不生成技术指标“准确概率”。缺失显示缺失，不填0或静态行情。
 
-界面验收截图在 `evidence/screenshots/`，全部Mock。生产真实数据、真实账户登录与HTTP浏览器测试另验；[历史验收报告（2026-09-06）](archive/root-2026-11-07/TEST_REPORT_20260906.md)。
+界面验收截图在 `evidence/screenshots/`，全部Mock。生产真实数据、真实账户登录与HTTP浏览器测试另验；[历史验收报告（2026-09-06）](../archive/root-2026-11-07/TEST_REPORT_20260906.md)。

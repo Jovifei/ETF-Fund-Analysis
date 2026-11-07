@@ -12,7 +12,7 @@ Jovi于2026-10-02明确授权的新分工，优先于Codex-with-ChatGPT技能默
 
 ## 本轮执行输入
 
-以已核对的main为基线，读取总路线、STATUS/HANDOFF、进度，以及 [下一阶段输入](planning/NEXT_STAGE_REMOTE_EXECUTION.md)。WU0核F0证据/方向；WU1为S2可用性产品化；WU2并行接收当前上线S3/S4。不能假定外部F0结论或owner决定已经验证。
+以已核对的main为基线，读取总路线、STATUS/HANDOFF、进度，以及 下一阶段输入 planning/NEXT_STAGE_REMOTE_EXECUTION.md（S8-F0 旧计划已清理，git 历史可查）。WU0核F0证据/方向；WU1为S2可用性产品化；WU2并行接收当前上线S3/S4。不能假定外部F0结论或owner决定已经验证。
 
 建议远端实施分支codex/remote-stage-s8f0-s2-20261002。不要与另一个执行器在同一分支/同一范围并行覆写；若已有进展，先接收已提交内容。发现真实数据/策略/结构合同改变，单独冻结和审查，不借展示改动变更资格。
 

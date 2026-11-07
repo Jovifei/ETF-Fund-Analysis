@@ -31,4 +31,4 @@ npm run build --prefix frontend
 
 保持AUTH_ENABLED=true、持久DATABASE_URL、AUTO_CREATE_SCHEMA=false、AUTH_COOKIE_SECURE=true；保留已有用户/持仓，首次用auth-bootstrap-admin初始化管理员，浏览器正常登录。
 
-先备份、核精确源码/镜像、测试复审及回滚，再执行获准切换。`alembic current`、`alembic check`用于检查；`alembic upgrade head`仅用于获准迁移。本文不授权生产库写入、服务器备份清理或本机数据删除。详见 [部署手册](docs/ALIYUN_DEPLOYMENT.md)。
+先备份、核精确源码/镜像、测试复审及回滚，再执行获准切换。`alembic current`、`alembic check`用于检查；`alembic upgrade head`仅用于获准迁移。本文不授权生产库写入、服务器备份清理或本机数据删除。详见 [部署手册](docs/guides/ALIYUN_DEPLOYMENT.md)。

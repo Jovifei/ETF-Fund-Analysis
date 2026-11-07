@@ -1,6 +1,6 @@
 # 部署检查清单
 
-本批修复与文档整理不自动部署。最新身份和阻塞见[STATUS](STATUS.md)，完整操作见[阿里云手册](docs/ALIYUN_DEPLOYMENT.md)。
+本批修复与文档整理不自动部署。最新身份和阻塞见[STATUS](STATUS.md)，完整操作见[阿里云手册](docs/guides/ALIYUN_DEPLOYMENT.md)。
 
 1. 核精确源码/镜像、权限、测试和复审，不从版本标签或上传包推断已部署身份。
 2. 新一致备份校验且回滚可执行后，按获准范围部署；需要迁移时走受审Alembic，不能直接写生产表。

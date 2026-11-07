@@ -417,9 +417,7 @@ def test_deployment_handoffs_describe_database_browser_auth_without_legacy_beare
         root / "CODEX_DEPLOYMENT_TASKS.md",
         root / "HANDOFF.md",
         root / "QUICKSTART.md",
-        root / "docs" / "ALIYUN_DEPLOYMENT.md",
-        root / "docs" / "LOCAL_AGENT_PROMPT_V070.md",
-        root / "docs" / "QUALIFICATION_HANDOFF_V070.md",
+        root / "docs" / "guides" / "ALIYUN_DEPLOYMENT.md",
     ):
         text = path.read_text(encoding="utf-8")
         assert "AUTH_ENABLED" in text

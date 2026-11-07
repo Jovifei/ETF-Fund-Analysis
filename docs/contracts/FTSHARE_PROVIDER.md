@@ -32,7 +32,7 @@ python scripts/qualify_ftshare.py --code 510300.SH > ftshare-qualification.json
 变化时保持 `unverified`/`rejected`；应用会跳过 FTShare，继续使用已配置的公开源，不回退 Mock。
 资格报告应保存到受控的部署证据目录，禁止包含 Token、Cookie、账户号、完整响应或私人 URL。
 
-本次本地只读探测证据见 [`ftshare-qualification-2026-08-30.json`](ftshare-qualification-2026-08-30.json)。
+本次本地只读探测证据见 `ftshare-qualification-2026-08-30.json`（已随 V 时代文档清理，git 历史可查）。
 探测未取得三项有效记录，因此当前仍为 `unqualified`，不能作为生产启用依据。
 
 Skill 仓库源码未进入本项目、镜像或 API 运行时；应用只重实现固定端点契约。

@@ -23,4 +23,4 @@
 
 S0–S9旧编号保留在 [正式台账](PROJECT_PROGRESS.json)，用于证据映射，不再维护十份重复操作方案。[生成视图](PROJECT_PROGRESS.md)和HTML由脚本维护，旧PASS不追认新版本。
 
-新因子和模型排在稳定交付之后。开源吸收保留许可证/NOTICE，真实数据资格不能由算法或单次回测推导。历史取舍见 [HISTORY](HISTORY.md)；今天的身份与阻塞以 [STATUS](../STATUS.md)、[HANDOFF](../HANDOFF.md) 为准。
+新因子和模型排在稳定交付之后。开源吸收保留许可证/NOTICE，真实数据资格不能由算法或单次回测推导。历史取舍见 [HISTORY](guides/HISTORY.md)；今天的身份与阻塞以 [STATUS](../STATUS.md)、[HANDOFF](../HANDOFF.md) 为准。

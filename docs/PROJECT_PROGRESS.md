@@ -4,7 +4,7 @@
 
 更新：2026-10-25T02:30:00+08:00 · iteration 71 · 当前 v1.0.7 已发布（dcffa8e/镜像d85d40cd）：晚间结算重试槽 16:40/17:40 + 依赖安全清零；周一真实验证新槽
 
-[总阶段路线图](PROJECT_MASTER_ROADMAP.md) · [图形进度板](PROJECT_PROGRESS.html) · [维护规则](PROJECT_PROGRESS_MAINTENANCE.md)
+[总阶段路线图](PROJECT_MASTER_ROADMAP.md) · [维护规则](PROJECT_PROGRESS_MAINTENANCE.md)
 
 **当前下一步：** 10-26（周一）验证 16:40/17:40 首次实跑与当日结算落地；两个真实交易日观察；Jovi 手机实测
 

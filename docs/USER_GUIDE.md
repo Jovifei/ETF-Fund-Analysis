@@ -42,7 +42,7 @@ FTShare 不是必填 Token，也不是演示数据源。应用只重实现固定
 不执行第三方 Skill，不接受前端自定义 URL/工具名，默认 `FTSHARE_ENABLED=false`、
 `FTSHARE_QUALIFICATION=unverified`。运行有界资格探测并人工确认服务许可、额度、缓存和再分发条款后，
 才可将两项配置成 `true` / `qualified`；否则应用跳过 FTShare，失败不会静默回退 Mock。操作和当前证据见
-[`docs/FTSHARE_PROVIDER.md`](FTSHARE_PROVIDER.md)。
+[`docs/FTSHARE_PROVIDER.md`](contracts/FTSHARE_PROVIDER.md)。
 
 ### Tushare 要不要付钱
 
