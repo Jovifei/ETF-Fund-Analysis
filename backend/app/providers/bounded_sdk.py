@@ -72,7 +72,11 @@ class _BoundedTencentRequests:
         if url == _TENCENT_HISTORY_URL:
             if self._refresh and isinstance(kwargs.get('params'), dict):
                 kwargs = {**kwargs, 'params': {**kwargs['params'], 'r': uuid4().hex}}
-            if self._timeout is not None and 'timeout' not in kwargs:
+            # akshare builds differ: some omit the timeout kwarg entirely,
+            # current 1.18.x always passes timeout=None explicitly. Treat a
+            # falsy caller timeout as absent so the child deadline reaches the
+            # transport in both cases while a real caller timeout is preserved.
+            if self._timeout is not None and not kwargs.get('timeout'):
                 kwargs = {**kwargs, 'timeout': self._timeout}
         return self._client.get(url, *args, **kwargs)
 

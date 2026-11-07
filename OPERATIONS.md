@@ -33,6 +33,7 @@ node --check backend/app/static/app.js
 | 日期 | 错误现象 | 根因 | 解决方案 | 预防 |
 | --- | --- | --- | --- | --- |
 | 2026-11-07 | docs 重组后 `test_password_auth::test_deployment_handoffs…` 失败 | 该测试断言 6 份部署文档存在且含认证标记，其中 2 份 V070 文档在删除清单内；引用扫描输出被截断漏检 | 测试文档清单改为 4 份活文档（ALIYUN 移至 docs/guides/，已验证全部承载 6 个标记） | 引用扫描不得截断输出；删除文档前对 `backend/tests` 全量 grep 文件名 |
+| 2026-11-07 | ✅已修复：下行 PR63 timeout 守卫回归 | — | 守卫已改为 `not kwargs.get('timeout')` 并合入 main（fix/bounded-tencent-timeout-20261107）；`test_tencent_history_freshness` 恢复通过 | 同下 |
 | 2026-11-07 | 拉取 PR #63 后 `test_tencent_history_freshness` 失败（timeout 记录为 None） | akshare 1.18.94 的 `stock_zh_a_hist_tx` 内部总是显式传 `timeout=None`，而 `_BoundedTencentRequests` 的注入守卫 `'timeout' not in kwargs` 只判断键存在，导致传输层超时没注入 | 守卫改为 `not kwargs.get('timeout')`（None 视为未设置；调用者显式正值保留）——待修复 | 传输层改动后必须跑全量 pytest；注意 `akshare>=1.17.0` 无上界，函数行为随版本漂移 |
 | 2026-11-07 | pytest 直接收集失败 `ModuleNotFoundError: No module named 'sqlalchemy'` | 用了系统 Python 而不是项目 `.venv` | 统一用 `.venv/Scripts/python.exe -m pytest` | 见第一部分步骤 0 |
 | 2026-11-07 | 研究库 `daily_bars` 出现 ±50%~+221% 单日"收益"（512480/512200/516160/513100 等 11 只） | 份额拆分/合并未复权，provider 的 `close/pre_close/pct_change` 都带伪影 | 分析侧按交易所涨跌幅界限确定性剔除（非跨境 ±20.5%、QDII ±30%），不修复猜测；接入侧建议加价格界限校验+拆分因子修复 | 数据摄入管道加界限校验；口径冲突按 AGENTS.md 停止信号 |
