@@ -103,6 +103,10 @@ ROW_FIELDS_V2 = {
     "name",
     "kind",
     "grade",
+    "grade_base",
+    "grade_final",
+    "adjustment",
+    "qualification",
     "grade_reason",
     "freshness",
     "data_status",
@@ -173,6 +177,28 @@ def _display_row(row, *, history_source=None):
         return None
     projected = {key: value for key, value in row.items() if key in ROW_FIELDS_V2}
     projected.update(research_only=True, actionable=False)
+    if "grade_base" not in projected and "grade" in projected:
+        projected["grade_base"] = row.get("grade_base", projected["grade"])
+    if "grade_final" not in projected and "grade" in projected:
+        projected["grade_final"] = row.get("grade_final", projected["grade"])
+    if "adjustment" not in projected or projected["adjustment"] is None:
+        struct_dec = row.get("structure_decision") or row.get("adjustment")
+        if isinstance(struct_dec, dict):
+            projected["adjustment"] = {
+                "applied": bool(struct_dec.get("applied", False)),
+                "shift": int(struct_dec.get("shift", 0)),
+                "weight": float(struct_dec.get("weight", 0.0)),
+                "base_grade": struct_dec.get("base_grade", projected.get("grade_base")),
+                "final_grade": struct_dec.get("final_grade", projected.get("grade_final")),
+                "reason": struct_dec.get("reason"),
+                "score": struct_dec.get("score"),
+                "signal": struct_dec.get("signal"),
+                "rule_version": str(struct_dec.get("version", "structure_decision_v1")),
+            }
+        else:
+            projected["adjustment"] = None
+    if "qualification" not in projected:
+        projected["qualification"] = row.get("qualification", "verified" if row.get("data_status") == "verified" else "UNKNOWN")
     projected["support_resistance"] = _display_sr(row.get("support_resistance"))
     history = (history_source or row).get("history") or []
     confirmed = [item for item in history if isinstance(item, dict)
@@ -1398,6 +1424,17 @@ def export_local_v2(
                         periodic["interval"] = period
                         periodic["unsupported_intervals"] = ["5m", "15m"]
                         chart_periods[code][period] = periodic
+                    if getattr(settings, "minute_bars_enabled", False):
+                        for min_period in ("30m", "60m"):
+                            try:
+                                m_data = chart_data(db, settings, code, min_period, limit=120, as_of=generated)
+                                if m_data and m_data.get("available") and m_data.get("bars"):
+                                    m_proj = project_chart(m_data)
+                                    m_proj["as_of"] = read_as_of_val
+                                    m_proj["interval"] = min_period
+                                    chart_periods[code][min_period] = m_proj
+                            except Exception:
+                                pass
 
             # 3. Sectors part
             unavailable = set(unavailable_parts or ())
@@ -1499,6 +1536,22 @@ def export_local_v2(
                 market_context_part = {"items": [], "availability": "unavailable",
                                        "reason": reasons.get("market_context", OPTIONAL_REASON_FAILED)}
 
+            # 2.6 Optional index charts part (P3)
+            from app.workspace import index_history
+            from app.providers.index_history import INDEX_CODES
+            index_charts: dict[str, Any] = {}
+            for ctx_id, norm_code in INDEX_CODES.items():
+                try:
+                    idx_data = index_history.read(db, settings, ctx_id, limit=250)
+                    if idx_data and idx_data.get("available") and idx_data.get("bars"):
+                        proj_idx = project_chart(idx_data)
+                        proj_idx["as_of"] = read_as_of_val
+                        proj_idx["actionable"] = False
+                        proj_idx["research_only"] = True
+                        index_charts[norm_code] = proj_idx
+                except Exception:
+                    pass
+
             # Construct parts dictionary
             parts = {
                 "overview": overview_part,
@@ -1507,6 +1560,7 @@ def export_local_v2(
                 "sectors": sectors_part,
                 "market_context": market_context_part,
                 "chart_periods": chart_periods,
+                "index_charts": index_charts,
             }
             # Carried-forward panels are display context only: row-level corroboration and
             # grades keep the not-refreshed projection, exactly as before for fast slots.

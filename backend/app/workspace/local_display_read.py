@@ -595,6 +595,46 @@ class LocalDisplayReader:
             **_input_observation_metadata(bundle.get("manifest", {})),
         }
 
+    def read_index_chart(
+        self,
+        context_id: str,
+        interval: str = "1d",
+        limit: int = 500,
+        generation: str | int | None = None,
+    ) -> dict[str, Any] | None:
+        bundle = self.load_bundle(generation)
+        if not bundle:
+            return None
+        idx_charts = bundle.get("parts", {}).get("index_charts", {})
+        from app.providers.index_history import INDEX_CODES
+        candidates = [
+            context_id,
+            context_id.upper(),
+            INDEX_CODES.get(context_id),
+            INDEX_CODES.get(context_id.lower()),
+        ]
+        chart = None
+        for cand in candidates:
+            if cand and cand in idx_charts:
+                chart = idx_charts[cand]
+                break
+        if not chart:
+            return None
+        chart_copy = dict(chart)
+        bars = chart_copy.get("bars", [])
+        if len(bars) > limit:
+            bars = bars[-limit:]
+        return {
+            **chart_copy,
+            "interval": interval,
+            "bars": bars,
+            "generation": bundle.get("manifest", {}).get("sequence"),
+            "read_model_version": CONTRACT_VERSION,
+            "provider_called": False,
+            "actionable": False,
+            "research_only": True,
+        }
+
     def read_chart_data(
         self,
         code: str,
@@ -603,7 +643,7 @@ class LocalDisplayReader:
         generation: str | int | None = None,
         as_of: str | datetime | None = None,
     ) -> dict[str, Any] | None:
-        if interval not in {"1d", "1w", "1mo"}:
+        if interval not in {"1d", "1w", "1mo", "30m", "60m"}:
             raise ValueError("unsupported_chart_interval")
 
         bundle = self.load_bundle(generation)
