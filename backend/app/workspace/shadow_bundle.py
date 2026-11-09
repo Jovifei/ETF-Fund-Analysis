@@ -59,7 +59,7 @@ class ShadowStore:
             if not isinstance(blobs[key],dict) or digest(blobs[key])!=m['parts'][key]:raise ValueError('blob integrity')
         rows=blobs['board'].get('rows')
         if not isinstance(rows,list):raise ValueError('board rows required')
-        allowed_rows={'ts_code','name','kind','grade','grade_reason','freshness','data_status','price','price_basis','theme_l1','theme_l2','research_only','actionable'}
+        allowed_rows={'ts_code','name','kind','grade','grade_reason','freshness','data_status','price','price_basis','theme_l1','theme_l2','research_only','actionable','structure_v1'}
         if any(not isinstance(row,dict) or not set(row)<=allowed_rows for row in rows):raise ValueError('nonpublic row fields')
         if set(blobs['board'])-{'rows','snapshot_id','generated_at','contains_mock','actionable'}:raise ValueError('nonpublic board fields')
         if blobs['board'].get('generated_at') and timestamp(blobs['board']['generated_at'])!=generated:raise ValueError('board source time mismatch')
