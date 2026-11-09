@@ -29,12 +29,24 @@
 仍显示「—」，不回填中性/低风险。结构加权（structure_decision，权重
 0.4167）为既有已批准实现，本次未改动。
 
-### 1.3 部署报告与服务器现状不符（2026-11-10 00:5x 云端 SSH 实测）
-- ECS 实际运行的仍是 `etf-deploy-e086e83` 栈（api/worker/scheduler，
-  Up 2 days）；服务器上不存在 `deploy-0e2f888` 镜像，也不存在
-  `/opt/china-fund-decision/etf-deploy-20261109` 目录。
-- 因此「consumer 0e2f888 已部署」不成立，不要以此为前提做验收。
-- ECS 磁盘已用 89%（2026-11-08 为 81%），清理需所有者另行授权，本文不处理。
+### 1.3 部署背景复核（2026-11-10 01:16–01:20 云端 SSH 全量实测，更正版）
+- ECS 实际运行的是 **`etf-deploy-0e2f888` 栈**（api/worker/scheduler，
+  healthy，restarts=0，启动于 2026-11-09 22:18 CST，api 占用
+  127.0.0.1:8080）——所有者的部署报告（consumer `0e2f888`、镜像
+  `china-fund-decision:deploy-0e2f888`）**属实**。旧 e086e83 仅剩镜像，
+  容器已不在运行。
+- 运行中 api 的消费者期望仍为 producer `a0d52e44...` /
+  `a12c6ea1...`（SHADOW_SYNC_CODE_SHA / SHADOW_SYNC_CONFIG_HASH 实测），
+  producer/consumer 解耦成立；网站展示的仍是 11-06 的旧包。
+- 仍不可核实的两点：分支 `codex/sector-drawer-v1-20261108` 不在
+  GitHub 远端分支列表中（muse-vm 令牌可见 26 个分支，无此分支），
+  无法对 0e2f888 的代码做 diff 审查；`/opt/china-fund-decision/` 对
+  claude-ops 无读权限，部署目录名无法从云端确认。
+- ECS 磁盘已用 87%（2026-11-08 为 81%），清理需所有者另行授权，
+  本文不处理。
+- 更正说明：本节初稿曾依据一次不完整的局部观察误记为「0e2f888 未
+  部署、仍运行 e086e83、磁盘 89%」，已于 01:16 以全量容器/镜像列表
+  复核后更正；结论以本版为准。
 
 ## 2. 本机执行顺序（Jovi 本机，PowerShell 管理员）
 
