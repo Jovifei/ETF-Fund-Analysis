@@ -1,4 +1,16 @@
 # 当前项目状态
+2026-11-09：**板块研判与结构因子落地完成（0e2f888）并成功发布生产环境**。
+- 分支与镜像：基于 main（3ce3a74）的独立分支 codex/sector-drawer-v1-20261108（HEAD 0e2f888，Tree bfd9665），生产镜像 china-fund-decision:deploy-0e2f888（Config SHA sha256:251709d87ef4...）。
+- 完整闭环 P0-P6：
+  - P0/P1：修复结构因子顶档 KeyError:5、NaN/Inf/bool 防御、缺失量价累积、标的/周期/版本绑定、ATR 前缀不变性、Pivot confirmation lag 时间语义闭合；
+  - P2：落地代表 ETF 与行业/概念双向权威映射（SectorRepresentativeConfig, SectorRepresentativeService）；
+  - P3：展示包扩充指数图表与 ETF 30m/60m 周期能力，历史广度与结构事件对齐；
+  - P4：前端落地 SectorDrawer.vue 侧边抽屉并与 Overview.vue 无缝集成，图表复用 EtfChart.vue / chartAdapter.ts；
+  - P5：全量验证通过（pytest 2977 passed, vitest 234 passed, vue-tsc 0 error, vite build 干净无损, Playwright 23 passed）；
+  - P6：生产环境零迁移安全发布（alembic head 保持 b7c8d9e0f1a2），API 与 Worker 健康检查 healthy，公网 HTTPS 验证通过。
+- 资产与回滚：生产数据库切流前全量备份完成（fund_pre_0e2f888_cutover_20261109_215849.dump，sha256 c3838e3b...，TOC 478 条）；旧镜像 china-fund-decision:deploy-e086e83 与旧容器停止保留，支持秒级回滚。
+- 审计收据：见 docs/audits/PRODUCTION_DEPLOYMENT_RECEIPT_20261109.md。资格持续 UNKNOWN / actionable=false / not_calibrated。
+
 2026-11-07：工作转入集成分支 `muse/consolidate-20261107`（main 未动，仍为 `2dd06627`）。当日完成：结构线（威科夫/道氏/ATR）合入；Stage B（PR #67 的 codex/stage-b-pit-replay-20261106）已按所有者指示提前合入本集成分支（不等定稿）；**威科夫/道氏/ATR 正式接入实时决策**——决策板层有界调整，暂定权重 0.5、最多一档、不能单独造出可加仓/减仓，策略版本 signal-v0.7.6-structure-decision / signal-grade-v0.3.5-structure-decision，比例由所有者后续确定；文档瘦身完成（docs 根目录 100→28 篇，归档/删除清单见 CONSOLIDATION §12）。生产未变：生产者仍为 `a0d52e4` 一代，上述改动尚未部署、未合 main，待所有者验收。详见 `docs/handoffs/CONSOLIDATION_20261107.md` §10–§12。
 
 
