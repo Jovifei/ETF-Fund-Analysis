@@ -76,6 +76,23 @@ def test_compact_row_keeps_degraded_status_and_derived_research_fields() -> None
     assert row["theme_relative_strength"]["rank"] == 1
 
 
+def test_compact_row_preserves_structure_blocks_and_nulls_when_missing() -> None:
+    """compact_row feeds both the overview rows and the detail decision; the
+    structure blocks computed by the decision board must survive it. When a
+    row has no structure block the keys are present with None (never a
+    fabricated neutral phase or low-risk bucket)."""
+    block = {"schema_version": "structure_v1", "wyckoff_phase": "markup",
+             "dow_phase": "uptrend", "atr14": 0.096, "atr_pct": 0.0221,
+             "atr_risk_bucket": "high", "research_only": True}
+    row = compact_row({"ts_code": "510300.SH", "structure_v1": block,
+                       "structure_shadow": {"signal": "positive", "score": 0.31},
+                       "history": [{"close": 4.345, "is_forecast": False}]})
+    assert row["structure_v1"] == block
+    assert row["structure_shadow"] == {"signal": "positive", "score": 0.31}
+    missing = compact_row({"ts_code": "510300.SH", "history": []})
+    assert missing["structure_v1"] is None and missing["structure_shadow"] is None
+
+
 def test_vwap_looking_amount_never_clears_unverified_units() -> None:
     row = SimpleNamespace(
         trade_date=__import__("datetime").date(2026, 7, 20),

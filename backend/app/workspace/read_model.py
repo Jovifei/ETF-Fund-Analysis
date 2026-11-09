@@ -200,7 +200,7 @@ def search_instruments(db: Session, settings: Settings, q: str, limit: int, user
 
 
 def compact_row(row: dict) -> dict:
-    keys = ("ts_code", "name", "kind", "theme_l1", "theme_l2", "grade", "grade_reason", "freshness", "data_status", "return_1d", "return_5d", "returns", "volume", "ma", "macd", "kdj", "rsi", "td", "sector", "chan", "indicator", "indicator_as_of", "provisional", "quote", "forecasts", "research_only", "entry_exit_ref", "theme_relative_strength", "support_resistance")
+    keys = ("ts_code", "name", "kind", "theme_l1", "theme_l2", "grade", "grade_reason", "freshness", "data_status", "return_1d", "return_5d", "returns", "volume", "ma", "macd", "kdj", "rsi", "td", "sector", "chan", "indicator", "indicator_as_of", "provisional", "quote", "forecasts", "structure_v1", "structure_shadow", "research_only", "entry_exit_ref", "theme_relative_strength", "support_resistance")
     result = {key: row.get(key) for key in keys}
     history = row.get("history") or []
     result["price"] = number(history[-1].get("close")) if history else number((row.get("support_resistance") or {}).get("current_price"))

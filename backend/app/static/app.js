@@ -105,7 +105,7 @@ const DECISION_COLUMNS = Object.freeze([
   ['instrument', '标的'], ['theme', '分类'], ['today', '今日'], ['previous_day_delta', '较昨日'], ['week_1', '近1周'],
   ['volume', '量能'], ['ma', '均线'], ['macd', 'MACD'], ['kdj', 'KDJ'], ['td', '九转'], ['rsi', 'RSI'], ['chan', '缠论'],
   ['sector', '板块'], ['forecast', '预测'],
-  ['wyckoff', '威科夫'], ['dow', '道氏'], ['atr_bucket', 'ATR桶'], ['structure_shadow', '结构影子'],
+  ['wyckoff', '威科夫结构'], ['dow', '道氏趋势'], ['atr_bucket', 'ATR 波动风险'], ['structure_shadow', '结构影子'],
   ['grade', '分级'], ['health', '数据状态'], ['reason', '理由 / 风险'],
 ]);
 const STRUCTURE_WYCKOFF_ZH = Object.freeze({unknown:'未知',accumulation:'吸筹',markup:'拉升',distribution:'派发',markdown:'下跌',reaccumulation:'再吸筹',redistribution:'再派发',range:'震荡'});
@@ -119,6 +119,16 @@ function structureLabel(row, kind) {
   if (kind === 'dow') { const raw = sv.dow_phase; return raw ? (STRUCTURE_DOW_ZH[raw] || '—') : '—'; }
   if (kind === 'atr') { const raw = sv.atr_risk_bucket; return raw ? (STRUCTURE_ATR_ZH[raw] || '—') : '—'; }
   return '—';
+}
+function structureAtrHtml(row) {
+  const sv = structureV1(row);
+  const label = structureLabel(row, 'atr');
+  if (!sv) return decisionMetricHtml(label);
+  const lines = [];
+  const atr14 = Number(sv.atr14), atrPct = Number(sv.atr_pct);
+  if (Number.isFinite(atr14)) lines.push(`ATR14 ${atr14.toFixed(3)}`);
+  if (Number.isFinite(atrPct)) lines.push(`ATR ${(atrPct * 100).toFixed(2)}%`);
+  return decisionMetricHtml(label, lines);
 }
 function structureShadowLabel(row) {
   // Phase B1 bypass: frozen soft_c shadow signal; display only, never the live grade.
@@ -257,7 +267,7 @@ function decisionRowHtml(row, index, horizon = 1) {
     <td class="${escapeHtml(colorClass(forecast))}"><div>${escapeHtml(decisionPercent(forecast))}</div><div class="forecast-flag">${horizon} 日 · 研究情景</div></td>
     <td>${decisionMetricHtml(structureLabel(row, 'wyckoff'))}</td>
     <td>${decisionMetricHtml(structureLabel(row, 'dow'))}</td>
-    <td>${decisionMetricHtml(structureLabel(row, 'atr'))}</td>
+    <td>${structureAtrHtml(row)}</td>
     <td>${decisionMetricHtml(structureShadowLabel(row))}</td>
     <td><span class="badge ${escapeHtml(stateClass(row?.grade))}">${escapeHtml(row?.grade || '—')}</span>${blocked ? '<div class="decision-block-note">已阻断</div>' : ''}</td>
     <td><span class="health-badge ${healthClass}">${escapeHtml(health)}</span></td>

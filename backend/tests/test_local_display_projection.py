@@ -81,3 +81,50 @@ def test_legacy_numeric_support_levels_preserve_values():
 def test_invalid_numeric_support_level_cannot_enter_projection(value):
     with pytest.raises(ValueError):
         local_compute._display_row({"support_resistance": {"levels": [], "nearest_support": value}})
+
+
+def _structure_block():
+    return {"schema_version": "structure_v1", "ts_code": "510300.SH", "as_of": "2026-11-06",
+            "wyckoff_phase": "markup", "wyckoff_score": 0.42, "wyckoff_confidence": 0.7,
+            "dow_phase": "uptrend", "dow_score": 0.5, "dow_confidence": 0.8,
+            "atr14": 0.096, "atr_pct": 0.0221, "atr_risk_bucket": "high",
+            "evidence": [{"kind": "atr",
+                          "text": "atr14=0.096 atr_pct=0.0221 bucket=high rule=atr_pct_fixed_v1"}],
+            "research_only": True}
+
+
+def test_row_projection_preserves_structure_v1_and_shadow_blocks():
+    """Board rows carry structure_v1/structure_shadow (decision_board_service);
+    the display-bundle projection must not strip them, or the website's three
+    structure columns can only ever render the missing marker."""
+    row = source_row()
+    row["structure_v1"] = _structure_block()
+    row["structure_shadow"] = {"signal": "positive", "score": 0.31, "research_only": True}
+    projected = local_compute._display_row(row)
+    assert projected["structure_v1"] == row["structure_v1"]
+    assert projected["structure_v1"]["atr_risk_bucket"] == "high"
+    assert projected["structure_v1"]["atr_pct"] == 0.0221
+    assert projected["structure_shadow"] == row["structure_shadow"]
+
+
+def test_row_projection_without_structure_blocks_keeps_them_absent():
+    """Missing structure data must stay absent (UI renders —), never be
+    backfilled with a neutral/low-risk placeholder by the projection."""
+    projected = local_compute._display_row(source_row())
+    assert "structure_v1" not in projected
+    assert "structure_shadow" not in projected
+
+
+def test_producer_chain_board_row_to_bundle_row_keeps_structure_v1():
+    """End-to-end producer chain: decision-board row -> read-model compact_row
+    -> display projection -> bundle overview row. Both projections used to
+    strip structure_v1, which is why published bundles never carried it."""
+    from app.workspace.read_model import compact_row
+    board_row = source_row()
+    board_row["structure_v1"] = _structure_block()
+    board_row["structure_shadow"] = {"signal": "positive", "score": 0.31, "research_only": True}
+    bundle_row = local_compute._display_row(compact_row(board_row))
+    assert bundle_row["structure_v1"]["wyckoff_phase"] == "markup"
+    assert bundle_row["structure_v1"]["dow_phase"] == "uptrend"
+    assert bundle_row["structure_v1"]["atr_risk_bucket"] == "high"
+    assert bundle_row["structure_shadow"]["signal"] == "positive"

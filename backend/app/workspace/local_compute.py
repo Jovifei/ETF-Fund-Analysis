@@ -114,6 +114,8 @@ ROW_FIELDS_V2 = {
     "actionable",
     "forecasts",
     "indicators",
+    "structure_v1",
+    "structure_shadow",
     "returns",
     "return_1d",
     "return_5d",
