@@ -1,4 +1,14 @@
 # 当前项目状态
+2026-11-10：**结构因子（威科夫/道氏/ATR）主表三列、2026-11-09 真实行情数据与五期限预测落地完成（98ba055）并成功发布生产环境**。
+- 分支与镜像：基于 main（3ce3a74）的独立分支 codex/sector-drawer-v1-20261108（HEAD 98ba055），生产镜像 china-fund-decision:deploy-98ba055（Image ID 2cb3e62e52a0）。
+- 完整闭环阶段 1-5：
+  - 阶段 1：排查修复 Windows 定时任务 0x8007010B 退出码，\ETF-Local-Live-Compute 恢复 Exit 0；
+  - 阶段 2/3：后端 local_compute.py 与 read_model.py 保持 ROW_FIELDS_V2 导出 structure_v1/structure_shadow；前端 WorkBuddy 与 Vue Matrix 落地「威科夫结构」「道氏趋势」「ATR 波动风险」三列，支持缺失向后兼容与极高/高/中/低风险档；
+  - 阶段 4：收盘后补取 34/34 真实 2026-11-09 行情，重算技术指标、三项结构因子及五期限预测（1/3/7/20/60）；
+  - 阶段 5：导出 Signed Display Bundle（Sequence 1794246476660，Bundle ID 4d12c49f8b...），生产 Accepted 接收并持久化；生产镜像无迁移安全发布（Alembic Head b7c8d9e0f1a2），API 认证请求 5 期限全部 200 OK 且 100% 具备结构因子。
+- 资产与回滚：切流前全量备份完成（fund_pre_98ba055_cutover_20261110_013325.dump，424MB，TOC 478 条）；旧镜像与旧容器停止保留，支持秒级回滚。
+- 审计收据：见 docs/audits/PRODUCTION_DEPLOYMENT_RECEIPT_20261110.md。资格持续 UNKNOWN / actionable=false / not_calibrated。
+
 2026-11-09：**板块研判与结构因子落地完成（0e2f888）并成功发布生产环境**。
 - 分支与镜像：基于 main（3ce3a74）的独立分支 codex/sector-drawer-v1-20261108（HEAD 0e2f888，Tree bfd9665），生产镜像 china-fund-decision:deploy-0e2f888（Config SHA sha256:251709d87ef4...）。
 - 完整闭环 P0-P6：

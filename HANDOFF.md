@@ -1,5 +1,7 @@
 # 当前工程交接
 
+> **2026-11-10 状态更新**：结构因子主表三列（威科夫/道氏/ATR）、2026-11-09 真实收盘行情与五期限预测已全部闭环，生产已部署镜像 china-fund-decision:deploy-98ba055。展示包 1794246476660 已公网 accepted 接收并同代读回，零迁移安全切流，API/Worker healthy，认证端点 5 期限 34 只 ETF 100% 返回结构因子，旧容器与镜像完整保留支持秒级回滚。详见 docs/audits/PRODUCTION_DEPLOYMENT_RECEIPT_20261110.md。
+
 > **2026-11-09 状态更新**：板块研判与结构因子落地（P0-P6）已全部闭环，生产已部署镜像 china-fund-decision:deploy-0e2f888。零迁移安全切流，API/Worker healthy，公网 HTTPS 及 Vue 前端正常，旧容器与镜像完整保留支持秒级回滚。详见 docs/audits/PRODUCTION_DEPLOYMENT_RECEIPT_20261109.md。
 
 
