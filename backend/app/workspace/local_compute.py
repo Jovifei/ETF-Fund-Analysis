@@ -133,6 +133,8 @@ ROW_FIELDS_V2 = {
     "support_resistance",
     "entry_exit_ref",
     "theme_relative_strength",
+    "structure_v1",
+    "structure_shadow",
 }
 
 BAR_FIELDS = {"date", "open", "high", "low", "close", "volume", "amount", "source"}
