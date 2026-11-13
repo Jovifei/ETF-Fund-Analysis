@@ -23,6 +23,21 @@ TZ=ZoneInfo("Asia/Shanghai")
 MAIL_SLOTS=("11:40","14:30","14:45","18:00")
 
 
+def _force_utf8_stdio():
+    """Pin CLI stdio to UTF-8 so captured/redirected output is always valid UTF-8.
+
+    The dispatcher prints JSON carrying Chinese text. On Windows the console
+    code page (GBK on Chinese systems) otherwise decides the bytes of any
+    output a caller captures to a file, and a UTF-8 reader then fails with an
+    encoding error. Best effort: streams without reconfigure keep working.
+    """
+    for stream in (sys.stdout,sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError,ValueError,OSError):
+            pass
+
+
 def owned_root(root):
     root=Path(root).absolute()
     if not (root/".local-live").is_file() or root.is_symlink() or (hasattr(root,"is_junction") and root.is_junction()):
@@ -160,6 +175,7 @@ def dispatch(root,*,now,code_sha,config_hash,dry_run=False,recipient_id=None,slo
 
 
 def main(argv=None):
+    _force_utf8_stdio()
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command",choices=("configure","status","dispatch","preview","enable","disable"))
     parser.add_argument("--root",required=True)
