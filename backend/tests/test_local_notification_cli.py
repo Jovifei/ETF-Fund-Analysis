@@ -106,3 +106,49 @@ def test_enable_and_disable_subcommands(cli,tmp_path):
     assert rc==0
     _,policy=load_smtp_config(tmp_path)
     assert policy["enabled"] is False
+
+
+class _RecordingStream:
+    def __init__(self,*,fail=False):
+        self.reconfigure_calls=[]
+        self.fail=fail
+        self.written=[]
+    def reconfigure(self,**kwargs):
+        self.reconfigure_calls.append(kwargs)
+        if self.fail:
+            raise ValueError("stream does not support reconfigure")
+    def write(self,text):
+        self.written.append(text)
+    def flush(self):
+        pass
+
+
+def test_stdio_is_pinned_to_utf8(cli,monkeypatch):
+    cli=cli()
+    out,err=_RecordingStream(),_RecordingStream()
+    monkeypatch.setattr(sys,"stdout",out)
+    monkeypatch.setattr(sys,"stderr",err)
+    cli._force_utf8_stdio()
+    assert out.reconfigure_calls==[{"encoding":"utf-8"}]
+    assert err.reconfigure_calls==[{"encoding":"utf-8"}]
+
+
+def test_stdio_pinning_survives_streams_without_reconfigure(cli,monkeypatch):
+    cli=cli()
+    out,err=_RecordingStream(fail=True),_RecordingStream(fail=True)
+    monkeypatch.setattr(sys,"stdout",out)
+    monkeypatch.setattr(sys,"stderr",err)
+    cli._force_utf8_stdio()
+
+
+def test_main_forces_utf8_stdio_before_printing(cli,tmp_path,monkeypatch):
+    cli=cli()
+    (tmp_path/".local-live").touch()
+    out,err=_RecordingStream(),_RecordingStream()
+    monkeypatch.setattr(sys,"stdout",out)
+    monkeypatch.setattr(sys,"stderr",err)
+    rc=cli.main(["status","--root",str(tmp_path)])
+    assert rc==1
+    assert out.reconfigure_calls==[{"encoding":"utf-8"}]
+    assert err.reconfigure_calls==[{"encoding":"utf-8"}]
+    assert "CONFIG_REQUIRED" in "".join(out.written)
