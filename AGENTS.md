@@ -87,3 +87,17 @@ node --check backend/app/static/app.js
 - Full contract/commands: `E:\project\codex-project-hub\reports\etf-fund-analysis-INTEGRATION.md`. Reporting does not expand the project's execution permissions or start/continue another Agent session.
 - This block applies after the Agent actually reads this file; old sessions are not assumed to reload it. Independent worktree copies must be checked separately.
 <!-- END:codex-project-hub:etf-fund-analysis:v1 -->
+
+
+## Token-consumption control (mandatory)
+
+Adopted 2026-11-07 from MateLink playbook. Summary rules for this repository:
+
+- One stage, one session; close the stage, summarize to tasks/todo.md, then open a fresh conversation.
+- Turn cap ~150 tool turns or 2 hours per stage; at ~120 turns warn Jovi to open a new conversation to avoid token waste.
+- Screenshot budget 2-3 per verification stage; recapture only when the screen changed.
+- Filter all command outputs (rg, Select-String, --stat, -Last N, head); >10k chars requires task-level justification.
+- Use fewer, longer subagent waits; no repeated short polling.
+- Prefer targeted codegraph/rg lookups over broad reads; do not reprint large content already seen.
+- Android release gates: focused tests + lintDebug first; full unit tests only before Release or after cross-cutting data changes.
+- Measurement: token_count events are not human turns; dedupe rollout files by session id before comparing projects.
