@@ -8,8 +8,8 @@ import pytest
 from app.workspace import bundle_identity
 
 ROOT = Path(__file__).resolve().parents[2]
-CURRENT_CODE_SHA = "a0d52e44ba58f34e0ed335d7bcb6409a3ecd7362"
-CURRENT_CONFIG_HASH = "a12c6ea1c812d2cd4b5365c3fa383dbd6c6e4296e004806897d9545008b8e5c8"
+CURRENT_CODE_SHA = "98ba055f6e5be99ff949e62822b9714c7ec1894c"
+CURRENT_CONFIG_HASH = "9efe8845e2e26406de22b30b08d0697f3c52b979f6d3e06b7a1398bcca21285b"
 
 
 def load_cli(name):
