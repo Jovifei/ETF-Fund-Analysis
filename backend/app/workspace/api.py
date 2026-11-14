@@ -239,6 +239,20 @@ from app.workspace.ai_api import router as ai_router  # noqa: E402
 private_router.include_router(ai_router)
 private_router.include_router(member_router)
 
+@private_router.get("/workspace/us-markets-research")
+def us_markets_research(settings: Config, response: Response, user: User, generation: str | None = Query(default=None)) -> dict:
+    """Research-only US CPO/memory baskets and US indices; never fetches data, never graded."""
+    from app.us_markets_research import store
+    response.headers["Cache-Control"] = "private, no-store"
+    if settings.workspace_research_source == "local_bundle":
+        return _local_reader(settings).read_us_markets_research_view(generation=generation)
+    path = store.configured_path()
+    if path is None:
+        return store.read_envelope(None, "us_markets_research_not_published", extra={"research_source": "none"})
+    part, reason = store.load_snapshot_file(path)
+    return store.read_envelope(part, reason, extra={"research_source": "snapshot_file"})
+
+
 @private_router.get("/workspace/market-context")
 def context_read_view(db: DB, settings: Config, response: Response, user: User, generation: str | None = Query(default=None)) -> dict:
     from datetime import datetime

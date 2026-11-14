@@ -16,6 +16,7 @@ import OutlookPanel from '../components/OutlookPanel.vue'
 import PageState from '../components/PageState.vue'
 import DataHealth from '../components/DataHealth.vue'
 import ContextReadStatus from '../components/ContextReadStatus.vue'
+import UsMarketsResearchCard, { type UsMarketsReadView } from '../components/UsMarketsResearchCard.vue'
 import type { ChartData, ContextReadView, DataJob } from '../lib/types'
 defineOptions({ name: 'MarketOverview' })
 type IndexChart = ChartData & {summary?:{price:number|null;change_ratio:number|null;source_time:string|null}}
@@ -29,6 +30,7 @@ const localMode = computed(() => snapshot.data.value?.research_source === 'local
 const snapshotReady = computed(() => snapshot.data.value != null && (!localMode.value || generation.value != null))
 const captured=(path:string)=>snapshotReady.value?withGeneration(path,generation.value):null
 const market = useQuery<ContextReadView>(()=>captured('/api/workspace/market-context'))
+const usMarkets = useQuery<UsMarketsReadView>(()=>captured('/api/workspace/us-markets-research'))
 const hs300Ratio = useQuery<{status:string;reason?:string;items?:Record<string,unknown>[];research_only?:boolean;actionable?:boolean;changes_grade?:boolean;qualification?:string;calibration_status?:string}>(()=>snapshotReady.value ? '/api/workspace/hs300-ratio' : null)
 const sectors = useQuery<Record<string, unknown>>(()=>captured('/api/workspace/sectors'))
 const discovery = useQuery<Record<string, unknown>>(()=>snapshot.data.value&&!localMode.value?'/api/workspace/discovery':null)
@@ -88,8 +90,8 @@ async function syncDiscovery() {
   try { const result=await api<{jobs:{job_id:string;created:boolean}[]}>('/api/workspace/discovery/refresh', { method: 'POST' });activeTasks.value=result.jobs.map(j=>j.job_id); notice.value = result.jobs.some(j=>j.created)?'目录与板块已受理，下面显示进度；完成后自动重新读取。':'已找到现有任务（运行中或5分钟防重复窗口）；显示其实际状态，未重复发起采集。'; await discovery.reload() }
   catch (e) { error.value = errorText(e) } finally { busy.value = false }
 }
-async function reload() { await snapshot.reload(); await Promise.all([market.reload(), hs300Ratio.reload(), sectors.reload(), discovery.reload(), board.value?.reload(), contextHistory.reload(), indexCache.reload(), dataHealth.value?.reload()]) }
-async function refreshVisible() { await snapshot.refresh(); return Promise.all([market.refresh(), hs300Ratio.refresh(), sectors.refresh(), discovery.refresh(), board.value?.refresh(), contextHistory.refresh(), indexCache.refresh(), dataHealth.value?.reload()]) }
+async function reload() { await snapshot.reload(); await Promise.all([market.reload(), usMarkets.reload(), hs300Ratio.reload(), sectors.reload(), discovery.reload(), board.value?.reload(), contextHistory.reload(), indexCache.reload(), dataHealth.value?.reload()]) }
+async function refreshVisible() { await snapshot.refresh(); return Promise.all([market.refresh(), usMarkets.refresh(), hs300Ratio.refresh(), sectors.refresh(), discovery.refresh(), board.value?.refresh(), contextHistory.refresh(), indexCache.refresh(), dataHealth.value?.reload()]) }
 useVisibleRefresh(refreshVisible)
 let scrollY = 0
 onActivated(async () => {
@@ -109,6 +111,7 @@ async function recompute(){if(busy.value)return;busy.value=true;error.value='';t
   <p v-if="localMode && !snapshotReady" class="notice" role="status">尚无可消费批次；请在本机更新后主动重新读取。</p>
   <p v-if="market.error.value" data-testid="market-context-read-error" class="notice warning-notice" role="alert">市场上下文读取失败，保留同批次上次结果：{{market.error.value}}</p>
   <ContextReadStatus v-if="market.data.value?.read_contract" data-testid="market-context-status" :view="market.data.value"/>
+  <UsMarketsResearchCard :view="usMarkets.data.value" :error="usMarkets.error.value"/>
   <section class="card section hs300-ratio-card" data-testid="hs300-ratio-card" aria-labelledby="hs300-ratio-heading"><div class="card-header"><div><h2 id="hs300-ratio-heading">沪深300 被动配置比例</h2><p>研究快照：ETF 市值 / 沪深300 成分股流通市值。仅用于研究上下文。</p></div><span class="small-note">不进入评分或仓位</span></div><div class="card-body"><div v-if="hs300Ratio.data.value?.status==='available'" class="hs300-ratio-grid"><article v-for="item in hs300Ratio.data.value.items" :key="String(item.numerator_basis)" class="hs300-ratio-item"><strong>{{ item.numerator_basis === 'aum_at_nav' ? '单位净值口径' : '收盘口径' }}</strong><span class="value">{{ typeof item.ratio === 'number' ? (item.ratio * 100).toFixed(3) + '%' : '—' }}</span><small>{{ item.trade_date }} · 滞后 {{ item.lag_days }} 天 · {{ item.observation_kind ?? '研究快照' }}</small></article></div><p v-else class="muted">{{ hs300Ratio.data.value?.reason === 'research_ratio_not_published' ? '本机展示包未发布该研究快照。' : '尚无可用研究快照；清单确认和收盘后采集完成后才会显示。' }}</p><small class="small-note">research_only=true · actionable=false · qualification=UNKNOWN · 未完成校准</small></div></section>
   <div class="cards market-context-cards"><article v-for="item in contextCards" :key="String(item.context_id)" class="stat-card market-context-card" :class="{interactive:indexHistoryAvailable || item.is_tradable_proxy && item.display_code}" :role="indexHistoryAvailable || item.is_tradable_proxy && item.display_code ? 'button' : undefined" :tabindex="indexHistoryAvailable || item.is_tradable_proxy && item.display_code ? 0 : undefined" :aria-label="indexHistoryAvailable || item.is_tradable_proxy && item.display_code ? `查看${item.label}历史数据` : undefined" @click="openContext(item)" @keydown.enter="openContext(item)"><div class="label">{{ item.label }}</div><div class="value">{{ num(item.observed_value) }} <span class="delta" :class="direction(numeric(item.today_pct_change))">{{ pct(numeric(item.today_pct_change) == null ? null : Number(item.today_pct_change)/100) }}</span></div><small>{{item.freshness==='historical'?(item.is_partial?'盘中日线未收盘':'最近历史收盘'):'最近观测'}} · {{ item.source ?? '尚未取得指数数据' }} · {{ record(item.display_time).precision === 'date_assumed' ? record(item.display_time).date_label : item.freshness === 'historical' && item.source_timestamp ? String(item.source_timestamp).slice(0,10) : stamp(item.source_timestamp) }} · {{ displayStatus(item) }}<small v-if="record(item.display_time).note">{{record(item.display_time).note}}</small></small><span class="small-note">{{ item.is_tradable_proxy && item.display_code ? '打开对应 ETF K 线' : indexHistoryAvailable ? '查看指数 K 线' : '本地展示包未发布指数历史' }}</span></article>
     <article v-if="!contextCards.length" class="stat-card"><div class="label">市场指数上下文</div><div class="value">{{ localMode ? '无上下文观察' : '待同步' }}</div><small>{{ market.error.value || '使用原有市场数据接入，不使用 ETF 样本冒充指数。' }}</small></article></div>

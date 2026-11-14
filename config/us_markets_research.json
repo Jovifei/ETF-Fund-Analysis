@@ -1,0 +1,49 @@
+{
+  "schema_version": "us_markets_research_config_v1",
+  "config_version": "2026-11-14.1",
+  "research_only": true,
+  "actionable": false,
+  "calibration_status": "not_calibrated",
+  "start_date": "2018-01-01",
+  "min_basket_members": 3,
+  "weighting": "equal_weight_daily_rebalanced",
+  "disclaimer": "研究自定义篮子与代理指标，不是官方指数，也不是交易建议或已校准信号；不进入评分、分级、仓位或策略邮件。",
+  "groups": [
+    {"group_id": "cpo_optical", "label": "美股 CPO / 光模块", "order": 1},
+    {"group_id": "memory_storage", "label": "美股存储", "order": 2},
+    {"group_id": "us_index", "label": "美股指数", "order": 3}
+  ],
+  "baskets": [
+    {
+      "series_id": "us-cpo-optical-broad-ew",
+      "group_id": "cpo_optical",
+      "label": "美股 CPO/光模块（宽口径等权）",
+      "members": ["COHR", "LITE", "FN", "AAOI", "CIEN", "ANET", "AVGO", "MRVL", "CRDO"],
+      "rationale": "光模块/激光/代工/光网络设备，加上数据中心交换与光互连硅（ANET、AVGO、MRVL、CRDO）。研究自定义，非官方 CPO 指数；等权避免 AVGO 吞噬篮子。"
+    },
+    {
+      "series_id": "us-cpo-optical-narrow-ew",
+      "group_id": "cpo_optical",
+      "label": "美股 光硬件（窄口径等权）",
+      "members": ["COHR", "LITE", "FN", "AAOI", "CIEN"],
+      "rationale": "仅含光模块/激光/光通信制造/光网络设备，用于对照宽口径中交换与硅公司的影响。"
+    },
+    {
+      "series_id": "us-memory-storage-ew",
+      "group_id": "memory_storage",
+      "label": "美股 存储（等权）",
+      "members": ["MU", "WDC", "STX", "SNDK"],
+      "rationale": "DRAM/NAND 与硬盘存储，不含服务器整机。SNDK 自 2025-02 独立交易，历史序列自其上市日起扩容；WDC 分拆前价格已含闪存业务。"
+    }
+  ],
+  "indices": [
+    {"series_id": "us-sp500", "group_id": "us_index", "label": "标普 500", "yahoo_symbol": "^GSPC", "market_context_id": "us-sp500", "benchmark_role": "spx"},
+    {"series_id": "us-nasdaq-100", "group_id": "us_index", "label": "纳斯达克 100", "yahoo_symbol": "^NDX", "market_context_id": "us-nasdaq-100", "benchmark_role": "ndx"},
+    {"series_id": "us-nasdaq-composite", "group_id": "us_index", "label": "纳斯达克综合", "yahoo_symbol": "^IXIC", "market_context_id": "us-nasdaq-composite", "benchmark_role": null}
+  ],
+  "member_names": {
+    "COHR": "Coherent", "LITE": "Lumentum", "FN": "Fabrinet", "AAOI": "Applied Optoelectronics",
+    "CIEN": "Ciena", "ANET": "Arista Networks", "AVGO": "Broadcom", "MRVL": "Marvell", "CRDO": "Credo Technology",
+    "MU": "Micron", "WDC": "Western Digital", "STX": "Seagate", "SNDK": "SanDisk"
+  }
+}
