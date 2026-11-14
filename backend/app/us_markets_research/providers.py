@@ -57,7 +57,7 @@ def _normalize_index(index: pd.Index) -> pd.DatetimeIndex:
 def adjust_frame(raw: pd.DataFrame) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
     """Raw OHLC + Close/Adj Close (+Volume) -> internal adjusted frame.
 
-    Rows whose Close and Adj Close are both missing are dropped. Returns
+    Rows with missing Close OR Adj Close, invalid OHLC or adjustment factors are dropped. Returns
     ``(frame, dropped_rows)`` where dropped rows are described for the audit.
     """
     if raw is None or raw.empty:
@@ -67,7 +67,7 @@ def adjust_frame(raw: pd.DataFrame) -> tuple[pd.DataFrame, list[dict[str, Any]]]
     df.index = _normalize_index(df.index)
     df = df[~df.index.duplicated(keep="last")].sort_index()
     if "adj_close" not in df.columns:
-        df["adj_close"] = df.get("close")
+        df["adj_close"] = np.nan  # never silently treat an unadjusted price as adjusted
     if "close_source" not in df.columns:
         df["close_source"] = CLOSE_SOURCE_OFFICIAL
     for column in ("open", "high", "low", "close", "adj_close", "volume"):
@@ -76,12 +76,16 @@ def adjust_frame(raw: pd.DataFrame) -> tuple[pd.DataFrame, list[dict[str, Any]]]
         df[column] = pd.to_numeric(df[column], errors="coerce")
     with np.errstate(divide="ignore", invalid="ignore"):
         factor = (df["adj_close"] / df["close"]).replace([np.inf, -np.inf], np.nan)
-    factor = factor.ffill().bfill().fillna(1.0)
+    # No forward/backfill of adjustment factors (corporate actions must not leak).
+    factor = factor.where(factor > 0)
     out = pd.DataFrame({
         "open": df["open"] * factor, "high": df["high"] * factor, "low": df["low"] * factor,
         "close": df["adj_close"], "volume": df["volume"], "close_source": df["close_source"],
     }, index=df.index)
-    missing = out["close"].isna() | (out["close"] <= 0)
+    prices = out[["open", "high", "low", "close"]]
+    missing = (~np.isfinite(prices).all(axis=1) | (prices <= 0).any(axis=1)
+               | ~np.isfinite(df["close"]) | (df["close"] <= 0)
+               | (out["high"] < prices.max(axis=1)) | (out["low"] > prices.min(axis=1)))
     dropped = [{"date": str(idx.date()), "reason": "missing_or_nonpositive_close"} for idx in out.index[missing]]
     out = out[~missing]
     out.index.name = "date"
@@ -91,6 +95,7 @@ def adjust_frame(raw: pd.DataFrame) -> tuple[pd.DataFrame, list[dict[str, Any]]]
 def fill_provisional_close(raw: pd.DataFrame, last_price: float | None) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
     """Fill a session row that has OHLC but no official close from ``last_price``.
 
+    Legacy diagnostic helper ONLY, never used by YFinanceProvider/build metrics.
     Only when ``low <= last_price <= high``; the row is flagged with
     ``close_source=provider_last_price_provisional`` so it is never mistaken for
     an official close.
@@ -142,13 +147,9 @@ class YFinanceProvider:
                 if raw.empty:
                     result.audit.append(_audit(self.name, "download", ticker, started, 0, False, "no_rows_returned"))
                     continue
-                last_price = None
-                if raw["Close"].isna().any():
-                    try:
-                        last_price = getattr(yf.Ticker(ticker).fast_info, "last_price", None)
-                    except Exception:
-                        last_price = None
-                raw, fills = fill_provisional_close(raw, last_price)
+                # No last_price fallback: a live quote cannot establish a session Close,
+                # much less an adjusted close. Retain only actual provider daily bars.
+                fills = []
                 frame, dropped = adjust_frame(raw)
                 for fill in fills:
                     result.provisional.append({"ticker": ticker, **fill})

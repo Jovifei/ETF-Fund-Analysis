@@ -10,7 +10,7 @@ from app.workspace.shadow_bundle import digest
 from app.workspace.shadow_projection import CODE_RE, validate_public_chart
 
 CONTRACT_VERSION = "local-display-v2"
-VALIDATION_VERSION = "local-display-validation-v2.3"
+VALIDATION_VERSION = "local-display-validation-v2.4"
 MAX_BUNDLE_BYTES = 64 * 1024 * 1024  # 64 MiB bounded quota
 REQUIRED_PARTS = {"overview", "details", "charts", "sectors"}
 OPTIONAL_PARTS = {"market_context", "chart_periods", "us_markets_research"}

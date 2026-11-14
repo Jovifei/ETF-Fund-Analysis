@@ -60,6 +60,8 @@ def validate_series(series: Any, index: int = 0) -> list[str]:
         if not isinstance(series.get("reason"), str) or not series["reason"]:
             problems.append(f"{where}.reason: unavailable series must say why")
         return problems
+    if series.get("provisional_last_close") is True:
+        problems.append(f"{where}.provisional_last_close: prohibited in confirmed metrics")
     for key in ("level", "atr_pct"):
         if not _finite_or_none(series.get(key)):
             problems.append(f"{where}.{key}: finite number or null")
@@ -84,6 +86,10 @@ def validate_part(part: Any) -> list[str]:
     if not isinstance(part, dict):
         return ["part: must be an object"]
     problems: list[str] = []
+    if part.get("price_policy") != "provider_adjusted_daily_OHLC_only; provisional_excluded; no_factor_fill":
+        problems.append("price_policy: confirmed adjusted daily observations required")
+    if part.get("provisional_closes"):
+        problems.append("provisional_closes: must be excluded, not used in metrics")
     if part.get("schema_version") != SCHEMA_VERSION:
         problems.append(f"schema_version: must be {SCHEMA_VERSION}")
     if part.get("research_only") is not True:
@@ -101,7 +107,7 @@ def validate_part(part: Any) -> list[str]:
         return problems
     if len(part["series"]) > MAX_SERIES:
         problems.append(f"series: more than {MAX_SERIES} entries")
-    if part["availability"] != "unavailable" and not isinstance(part.get("as_of"), str):
+    if part.get("availability") != "unavailable" and not isinstance(part.get("as_of"), str):
         problems.append("as_of: required unless unavailable")
     if not isinstance(part.get("groups", []), list):
         problems.append("groups: must be a list")

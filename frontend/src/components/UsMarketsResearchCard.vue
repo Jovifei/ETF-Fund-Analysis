@@ -66,9 +66,11 @@ const members = (s: Record<string, unknown>) => (Array.isArray(s.members) ? s.me
         研究数据截至 {{ part.as_of }}，距今 {{ view?.source_age_days ?? '未知' }} 天；不是最新美股收盘。
       </p>
       <p v-if="provisional.length" class="notice warning-notice" data-testid="us-markets-provisional">
-        含暂代收盘价：{{ provisional.map(p => `${p.ticker} ${p.date}`).join('、') }}（数据源尚未给出正式收盘，用最新价暂代，收益含此暂代值）。
+        含暂代收盘价：{{ provisional.map(p => `${p.ticker} ${p.date}`).join('、') }}（旧快照数据，不具备确认资格；请重新生成无暂代值的研究包）。
       </p>
       <p v-if="failed.length" class="notice warning-notice" data-testid="us-markets-failed">以下代码本次未取得行情，未用其他数据代替：{{ failed.join('、') }}。</p>
+      <p v-if="part.membership_warning" class="notice warning-notice" data-testid="us-membership-warning">{{ part.membership_warning }}</p>
+      <p v-if="Array.isArray(part.excluded_provisional_observations) && part.excluded_provisional_observations.length" class="notice warning-notice" data-testid="us-excluded-provisional">暂代报价已排除，不参与收益/ATR；各序列截止日可能不同。</p>
       <div v-for="group in grouped" :key="group.id" class="us-group" :data-testid="`us-group-${group.id}`">
         <h3>{{ group.label }}</h3>
         <div class="table-scroll">
@@ -77,8 +79,8 @@ const members = (s: Record<string, unknown>) => (Array.isArray(s.members) ? s.me
             <tbody>
               <template v-for="s in group.rows" :key="String(s.series_id)">
                 <tr :data-testid="`us-row-${s.series_id}`">
-                  <td><strong>{{ s.label }}</strong><small v-if="s.kind === 'basket'" class="muted"> 等权篮子</small>
-                    <small v-if="s.provisional_last_close" class="muted"> · 含暂代收盘</small></td>
+                  <td><strong>{{ s.label }}</strong><small class="muted"> · {{ s.as_of }}</small><small v-if="s.kind === 'basket'" class="muted"> 等权篮子</small>
+                    <small v-for="(rs, role) in record(s.rs)" :key="role" class="muted" :title="`${role}: ${record(rs).first_overlap} ~ ${record(rs).last_overlap}; prices=${record(rs).n_price_pairs}; daily=${record(rs).n_daily_return_pairs}; missing=${record(rs).n_missing_sessions}`"> · {{role}} 样本 {{record(rs).n_daily_return_pairs}}</small><small v-if="s.first_gap_date" class="muted"> · {{s.first_gap_date}} 起缺口，指标未跨缺口拼接</small><small v-if="s.provisional_last_close" class="muted"> · 旧快照含暂代值，不具备确认资格</small></td>
                   <template v-if="s.available !== false">
                     <td class="numeric">{{ num(s.level) }}</td>
                     <td v-for="k in ['1w', '1m', '3m', 'ytd', '1y']" :key="k" class="numeric" :class="direction(ret(s, k))">{{ pct(ret(s, k)) }}</td>
@@ -99,6 +101,8 @@ const members = (s: Record<string, unknown>) => (Array.isArray(s.members) ? s.me
         <details v-for="s in group.rows.filter(r => r.kind === 'basket' && r.available !== false)" :key="`d-${s.series_id}`" class="us-details" :data-testid="`us-details-${s.series_id}`">
           <summary>{{ s.label }} · 成分与口径</summary>
           <p class="muted">{{ s.rationale }}</p>
+          <p class="muted">{{s.synthetic_ohlc_warning}}</p>
+          <p v-for="(rs, role) in record(s.rs)" :key="role" class="muted">{{role}}：共同窗口 {{record(rs).first_overlap}} ～ {{record(rs).last_overlap}}；价格对 {{record(rs).n_price_pairs}}，相邻日收益对 {{record(rs).n_daily_return_pairs}}，缺失交易日 {{record(rs).n_missing_sessions}}。</p>
           <p v-if="s.coverage_note" class="muted">{{ s.coverage_note }}</p>
           <div class="table-scroll"><table><thead><tr><th>代码</th><th>名称</th><th>1周</th><th>1月</th><th>3月</th><th>今年</th><th>起点</th></tr></thead><tbody>
             <tr v-for="m in members(s)" :key="String(m.ticker)"><td>{{ m.ticker }}</td><td>{{ m.name }}</td>
@@ -108,6 +112,7 @@ const members = (s: Record<string, unknown>) => (Array.isArray(s.members) ? s.me
         </details>
       </div>
       <p v-if="!grouped.length && !note" class="muted">尚无美股研究数据，缺失项不填零。</p>
+      <p v-if="part.common_samples" class="muted">全部当前成分共同日收益窗口：{{ record(record(part.common_samples).all_current_members_adjacent_return_overlap).first }} ～ {{ record(record(part.common_samples).all_current_members_adjacent_return_overlap).last }}，{{record(record(part.common_samples).all_current_members_adjacent_return_overlap).n_sessions}} 个观察交易日（非 PIT 验证）。</p>
       <div v-if="view?.research" class="table-footer" data-testid="us-markets-source">
         <span>截至美股交易日 {{ part.as_of ?? '未知' }} · 数据源 {{ source.label ?? '未知' }}。{{ source.note }}</span>
       </div>

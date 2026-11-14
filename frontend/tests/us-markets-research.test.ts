@@ -93,3 +93,41 @@ describe('Overview integration', () => {
     expect(wrapper.get('[data-testid="us-row-us-sp500"]').text()).toContain('7,561.67')
   })
 })
+
+describe('independent research page', () => {
+  it('renders the same research block on /research with pinned generation', async () => {
+    const Research = (await import('../src/views/Research.vue')).default
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/research', component: Research }, { path: '/settings', component: { template: '<div />' } }] })
+    const paths: string[] = []
+    vi.mocked(api).mockReset()
+    vi.mocked(api).mockImplementation(async (path: string) => {
+      paths.push(path)
+      return path.includes('/overview?') ? { research_source: 'local_bundle', generation: 11 } : view
+    })
+    await router.push('/research'); await router.isReady()
+    const wrapper = mount(Research, { global: { plugins: [createPinia(), router], stubs: { ResearchPanel: true, AISetupGuide: true, ManualReview: true } } })
+    cleanup.push(() => wrapper.unmount())
+    await flushPromises()
+    expect(paths.some(p => p.includes('/us-markets-research') && p.includes('generation=11'))).toBe(true)
+    expect(wrapper.find('[data-testid="us-markets-research-section"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('标普 500')
+  })
+
+  it('never requests an unpinned local research batch if overview generation is missing', async () => {
+    const Section = (await import('../src/components/UsMarketsResearchSection.vue')).default
+    const paths: string[] = []
+    vi.mocked(api).mockReset()
+    vi.mocked(api).mockImplementation(async (path: string) => { paths.push(path); return { research_source: 'local_bundle' } })
+    const wrapper = mount(Section)
+    cleanup.push(() => wrapper.unmount())
+    await flushPromises()
+    expect(paths.filter(p => p.includes('/us-markets-research'))).toEqual([])
+  })
+
+  it('explains excluded provisional data and current-membership bias', () => {
+    const wrapper = mount(UsMarketsResearchCard, { props: { view: { ...view, research: { ...view.research, membership_warning: '非历史时点成分表', excluded_provisional_observations: [{ticker:'LITE',date:'2026-11-13'}] } } } })
+    expect(wrapper.get('[data-testid="us-excluded-provisional"]').text()).toContain('不参与收益/ATR')
+    expect(wrapper.get('[data-testid="us-membership-warning"]').text()).toContain('非历史时点')
+    wrapper.unmount()
+  })
+})

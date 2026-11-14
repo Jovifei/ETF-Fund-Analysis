@@ -64,7 +64,12 @@ def equal_weight_basket(frames: dict[str, pd.DataFrame], members: list[str],
     close_df = pd.DataFrame(close).sort_index()
     valid = close_df.notna() & close_df.shift(1).notna()
     n_members = valid.sum(axis=1)
-    enough = n_members >= min_members
+    expected = pd.DataFrame({m: close_df.index > close_df[m].first_valid_index()
+                             for m in close_df.columns}, index=close_df.index).sum(axis=1)
+    enough = (n_members >= min_members) & (n_members == expected)
+    # Missing an entire requested member is not permission to invent a smaller basket.
+    if set(members) - set(close_df.columns):
+        return pd.DataFrame(), {"error": "missing_requested_members", "missing_members": sorted(set(members) - set(close_df.columns))}
 
     def mean_ret(column: str) -> pd.Series:
         parts = []
@@ -78,9 +83,16 @@ def equal_weight_basket(frames: dict[str, pd.DataFrame], members: list[str],
     first = ret_close.first_valid_index()
     if first is None:
         return pd.DataFrame(), {"error": "fewer_than_min_members_overlap", "min_members": min_members}
-    level = (1.0 + ret_close.fillna(0.0).where(ret_close.index >= first, 0.0)).cumprod()
-    level = level / level.loc[first] * 100.0
-    level = level[level.index >= first]
+    # A gap cannot be interpreted as a 0% return. Publish only the contiguous
+    # prefix before it; never silently reweight around a missing quote or chain
+    # the next day's return across a missing day.
+    usable = ret_close.loc[first:]
+    gaps = usable[usable.isna()]
+    gap_date = str(gaps.index[0].date()) if not gaps.empty else None
+    if not gaps.empty:
+        usable = usable.loc[usable.index < gaps.index[0]]
+    level = (1.0 + usable).cumprod()
+    level = level / level.iloc[0] * 100.0
     prev = level.shift(1)
     out = pd.DataFrame({"close": level, "n_members": n_members.reindex(level.index)})
     for column in ("open", "high", "low"):
@@ -97,7 +109,8 @@ def equal_weight_basket(frames: dict[str, pd.DataFrame], members: list[str],
                     "last": str(close_df[m].last_valid_index().date()) if close_df[m].notna().any() else None,
                     "rows": int(close_df[m].notna().sum())} for m in close_df.columns}
     missing = [m for m in members if m not in close_df.columns]
-    return out, {"presence": presence, "missing_members": missing, "min_members": min_members}
+    return out, {"presence": presence, "missing_members": missing, "min_members": min_members,
+                 "first_gap_date": gap_date, "published_through": str(out.index[-1].date())}
 
 
 def period_return(close: pd.Series, bars: int) -> float | None:
@@ -139,20 +152,29 @@ def ma_gap(close: pd.Series, window: int) -> float | None:
 
 
 def relative_strength(series: pd.Series, bench: pd.Series) -> dict[str, Any] | None:
-    a, b = series.dropna().align(bench.dropna(), join="inner")
-    if len(a) < RS_MIN_OVERLAP:
+    # Prices align on common dates; daily correlation uses adjacent UNION sessions,
+    # not pct_change after dropping unmatched dates (which creates multi-day returns).
+    union = pd.concat([series.rename("series"), bench.rename("benchmark")], axis=1).sort_index()
+    common = union.dropna()
+    if len(common) < RS_MIN_OVERLAP:
         return None
-    excess: dict[str, Any] = {}
+    start, end = common.index[0], common.index[-1]
+    window = union.loc[start:end]
+    pair = window.pct_change(fill_method=None).dropna()
+    a, b = common.iloc[:, 0], common.iloc[:, 1]
+    excess = {}
     for key, bars in WINDOWS.items():
-        if key == "1w":
-            continue
-        excess[key] = clean(period_return(a, bars) - period_return(b, bars)) \
-            if period_return(a, bars) is not None and period_return(b, bars) is not None else None
+        # Fixed session horizons only when all union sessions in the window exist.
+        w = window.tail(bars + 1)
+        excess[key] = clean(float(w.iloc[-1,0]/w.iloc[0,0] - w.iloc[-1,1]/w.iloc[0,1])) if len(w) == bars + 1 and w.notna().all().all() else None
     ya, yb = ytd_return(a), ytd_return(b)
-    excess["ytd"] = clean(ya - yb) if ya is not None and yb is not None else None
-    pair = pd.concat([a.pct_change(), b.pct_change()], axis=1).dropna()
-    corr = float(pair.iloc[:, 0].corr(pair.iloc[:, 1])) if len(pair) >= RS_MIN_OVERLAP else None
-    return {"excess": excess, "daily_return_corr": clean(corr, 4), "n_overlap": int(len(a))}
+    excess["ytd"] = clean(ya-yb) if ya is not None and yb is not None else None
+    corr = pair.iloc[:,0].corr(pair.iloc[:,1]) if len(pair) >= RS_MIN_OVERLAP else None
+    return {"excess": excess, "daily_return_corr": clean(corr,4), "n_overlap": len(common),
+            "first_overlap": str(start.date()), "last_overlap": str(end.date()),
+            "n_price_pairs": len(common), "n_daily_return_pairs": len(pair),
+            "n_union_sessions": len(window), "n_missing_sessions": int(window.isna().any(axis=1).sum()),
+            "sample_policy": "common_prices; daily_returns_on_adjacent_union_sessions_no_fill"}
 
 
 def structure_columns(df: pd.DataFrame, *, with_volume: bool) -> dict[str, Any]:

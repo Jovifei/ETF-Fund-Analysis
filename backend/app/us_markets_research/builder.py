@@ -53,8 +53,42 @@ def build(config: dict[str, Any], provider: DailyProvider, *, today: date | None
     end = (as_of or today) + timedelta(days=1)
     tickers = required_tickers(config)
     fetched = provider.fetch(tickers, start, end)
-    frames = {t: (f[f.index <= pd.Timestamp(as_of)] if as_of else f) for t, f in fetched.frames.items()}
-    frames = {t: f for t, f in frames.items() if not f.empty}
+    frames = {}
+    quality_audit = []
+    excluded_provisional = []
+    for ticker, frame in fetched.frames.items():
+        frame = frame.copy()
+        if as_of:
+            frame = frame[frame.index <= pd.Timestamp(as_of)]
+        provisional = frame["close_source"].astype(str).str.contains("provisional", case=False)
+        for day in frame.index[provisional]:
+            excluded_provisional.append({"ticker": ticker, "date": str(day.date()), "excluded_from_metrics": True})
+        regular_start = config.get("regular_trading_start", {}).get(ticker)
+        before_regular = frame.index < pd.Timestamp(regular_start) if regular_start else pd.Series(False, index=frame.index)
+        quality_audit.append({"ticker": ticker, "input_rows": len(frame),
+                              "excluded_provisional_rows": int(provisional.sum()),
+                              "excluded_pre_regular_rows": int(sum(before_regular)),
+                              "regular_trading_start": regular_start,
+                              "observed_first": str(frame.index[0].date()) if len(frame) else None,
+                              "observed_last": str(frame.index[-1].date()) if len(frame) else None})
+        # Keep excluded dates as NaN so missing internal sessions cannot disappear.
+        price_cols = ["open", "high", "low", "close", "volume"]
+        frame.loc[provisional, price_cols] = float("nan")
+        frame = frame.loc[~before_regular]
+        if frame["close"].notna().any():
+            frames[ticker] = frame
+    # Observed union-session calendar (not an exchange-certified calendar).
+    # Restore missing dates within each name's listed interval before computing.
+    if frames:
+        calendar = pd.DatetimeIndex(sorted(set().union(*(set(f.index) for f in frames.values()))))
+        for ticker, frame in list(frames.items()):
+            first = frame["close"].first_valid_index()
+            if first is not None:
+                frames[ticker] = frame.reindex(calendar[calendar >= first])
+                audit = next(q for q in quality_audit if q["ticker"] == ticker)
+                audit["missing_observed_calendar_sessions"] = int(frames[ticker]["close"].isna().sum())
+                audit["confirmed_first"] = str(first.date())
+                audit["confirmed_last"] = str(frame["close"].last_valid_index().date())
     min_members = int(config.get("min_basket_members", 3))
     source_label = fetched.source_label
     index_close = {item["benchmark_role"]: frames[item["yahoo_symbol"]]["close"]
@@ -74,7 +108,10 @@ def build(config: dict[str, Any], provider: DailyProvider, *, today: date | None
             continue
         extra = {"members": _member_rows(config, frames, members, meta), "weighting": config.get("weighting"),
                  "rationale": basket["rationale"], "official_index": False,
-                 "coverage_note": _coverage_note(meta, members)}
+                 "coverage_note": _coverage_note(meta, members), "first_gap_date": meta.get("first_gap_date"),
+                 "membership_policy": config.get("membership_policy"),
+                 "membership_warning": config.get("membership_warning"),
+                 "synthetic_ohlc_warning": "等权成分日高低的组合包络，不是同时可成交篮子高低；ATR/道氏仅合成代理。"}
         entry = series_entry(series_id=basket["series_id"], label=basket["label"], group_id=basket["group_id"],
                              kind="basket", df=df, with_volume=False, benchmarks=bench_for(basket["series_id"]),
                              source_label=source_label, extra=extra)
@@ -85,7 +122,16 @@ def build(config: dict[str, Any], provider: DailyProvider, *, today: date | None
         if frame is None:
             series.append(_unavailable(item, kind="index", reason="provider_returned_no_data", meta={}))
             continue
-        df = frame.assign(provisional=frame["close_source"] == CLOSE_SOURCE_PROVISIONAL)
+        df = frame.assign(provisional=False)
+        # Refuse compression over missing internal sessions for ATR and returns.
+        first = df["close"].first_valid_index()
+        df = df.loc[first:]
+        missing = df["close"].isna()
+        if missing.any():
+            df = df.loc[df.index < df.index[missing][0]]
+        if df.empty:
+            series.append(_unavailable(item, kind="index", reason="no_confirmed_close", meta={}))
+            continue
         extra = {"official_index": True, "market_context_id": item.get("market_context_id"),
                  "coverage_note": "官方指数；此处为研究对照序列，首页指数卡片读数以原有新浪通道为准。"}
         series.append(series_entry(series_id=item["series_id"], label=item["label"], group_id=item["group_id"],
@@ -95,7 +141,7 @@ def build(config: dict[str, Any], provider: DailyProvider, *, today: date | None
 
     available = [s for s in series if s.get("available")]
     dates = [s["as_of"] for s in available]
-    availability = "unavailable" if not available else ("available" if len(available) == len(series) else "partial")
+    availability = "unavailable" if not available else ("available" if len(available) == len(series) and not excluded_provisional and len(set(dates)) <= 1 and not any(s.get("first_gap_date") for s in available) else "partial")
     part: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION, "research_only": True, "actionable": False, "changes_grade": False,
         "calibration_status": "not_calibrated", "availability": availability,
@@ -106,10 +152,32 @@ def build(config: dict[str, Any], provider: DailyProvider, *, today: date | None
                    "provider": getattr(provider, "name", "unknown"), "note": SOURCE_NOTE},
         "disclaimer": config["disclaimer"],
         "weighting": config.get("weighting"),
-        "provisional_closes": fetched.provisional,
+        "provisional_closes": [],
+        "excluded_provisional_observations": excluded_provisional,
+        "quality_audit": quality_audit,
+        "membership_policy": config.get("membership_policy"),
+        "listing_sources": config.get("listing_sources", []),
+        "membership_warning": config.get("membership_warning"),
+        "price_policy": "provider_adjusted_daily_OHLC_only; provisional_excluded; no_factor_fill",
+        "corporate_action_validation": "vendor_adjustment_not_independently_reconciled",
         "failed_tickers": sorted({a["ticker"] for a in fetched.audit if not a["ok"] and a.get("ticker")}),
         "groups": config["groups"], "series": series,
     }
+    # Explicit cross-series and full-current-constituent common samples.
+    available_history = [h for h in history_parts if not h.empty]
+    common_levels = sorted(set.intersection(*(set(h["date"]) for h in available_history))) if available_history else []
+    required = required_tickers(config)
+    common_member_returns = []
+    if all(t in frames for t in required):
+        date_sets = [set(frames[t].index[frames[t]["close"].notna() & frames[t]["close"].shift(1).notna()]) for t in required]
+        common_member_returns = sorted(set.intersection(*date_sets))
+    def span(days):
+        return {"first": str(days[0].date()) if days else None,
+                "last": str(days[-1].date()) if days else None, "n_sessions": len(days)}
+    part["common_samples"] = {
+        "available_series_level_overlap": span(common_levels),
+        "all_current_members_adjacent_return_overlap": span(common_member_returns),
+        "note": "后一窗口要求全部当前成分与指数有同日和前一观察交易日的有效价格；不是 PIT 成分验证。"}
     problems = validate_part(part)
     history = pd.concat(history_parts) if history_parts else pd.DataFrame()
     return BuildResult(part=part, history=history, audit=fetched.audit, problems=problems)
@@ -139,10 +207,17 @@ def _member_rows(config: dict[str, Any], frames: dict[str, pd.DataFrame], member
         if frame is None or frame.empty:
             rows.append({"ticker": ticker, "name": config["member_names"].get(ticker, ticker), "available": False})
             continue
-        close = frame["close"]
+        values = frame["close"]
+        first_valid = values.first_valid_index()
+        values = values.loc[first_valid:] if first_valid is not None else values.iloc[:0]
+        gaps = values[values.isna()]
+        close = values.loc[values.index < gaps.index[0]] if not gaps.empty else values
+        if close.empty:
+            rows.append({"ticker": ticker, "name": ticker, "available": False})
+            continue
         rows.append({
             "ticker": ticker, "name": config["member_names"].get(ticker, ticker), "available": True,
-            "first_date": presence.get("first"), "as_of": presence.get("last"),
+            "first_date": str(close.index[0].date()), "as_of": str(close.index[-1].date()),
             "provisional_last_close": bool(frame["close_source"].iloc[-1] == CLOSE_SOURCE_PROVISIONAL),
             "returns": {"1w": clean(period_return(close, 5)), "1m": clean(period_return(close, 21)),
                         "3m": clean(period_return(close, 63)), "ytd": clean(ytd_return(close))},
@@ -173,6 +248,9 @@ def write_outputs(result: BuildResult, out_dir: Path | str) -> dict[str, str]:
     }
     files["snapshot"].write_bytes((json.dumps(result.part, ensure_ascii=False, indent=1, allow_nan=False) + "\n").encode("utf-8"))
     result.history.to_csv(files["history"], index=False, encoding="utf-8", lineterminator="\n")
-    files["audit"].write_bytes((json.dumps({"audit": result.audit, "problems": result.problems},
+    files["audit"].write_bytes((json.dumps({"audit": result.audit, "problems": result.problems,
+                                           "quality_audit": result.part.get("quality_audit", []),
+                                           "excluded_provisional_observations": result.part.get("excluded_provisional_observations", []),
+                                           "listing_sources": result.part.get("listing_sources", [])},
                                            ensure_ascii=False, indent=1) + "\n").encode("utf-8"))
     return {name: str(path) for name, path in files.items()}

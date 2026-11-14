@@ -146,7 +146,7 @@ def test_basket_flags_provisional_days_and_reports_missing_members():
     frames = {m: make_frame(growth(30, 0.01), index=DAYS[:30]) for m in "ABC"}
     frames["C"] = make_frame(growth(30, 0.01), index=DAYS[:30], provisional_last=True)
     df, meta = compute.equal_weight_basket(frames, ["A", "B", "C", "Z"], 3)
-    assert bool(df["provisional"].iloc[-1]) and not bool(df["provisional"].iloc[-2])
+    assert df.empty and meta["error"] == "missing_requested_members"
     assert meta["missing_members"] == ["Z"]
 
 
@@ -257,12 +257,12 @@ def test_build_reports_partial_failed_tickers_and_short_baskets(config, all_fram
     part = result.part
     assert part["availability"] == "partial" and part["failed_tickers"] == ["SNDK", "^IXIC"]
     memory = next(s for s in part["series"] if s["series_id"] == "us-memory-storage-ew")
-    assert memory["available"] is True and "SNDK" in memory["coverage_note"]
+    assert memory["available"] is False and memory["reason"] == "missing_requested_members"
     ixic = next(s for s in part["series"] if s["series_id"] == "us-nasdaq-composite")
     assert ixic["available"] is False and ixic["reason"] == "provider_returned_no_data"
     result2 = builder.build(config, FakeProvider(all_frames, failed={"SNDK", "STX"}), today=date(2026, 11, 14), now=NOW)
     short = next(s for s in result2.part["series"] if s["series_id"] == "us-memory-storage-ew")
-    assert short["available"] is False and short["reason"] == "fewer_than_min_members_overlap"
+    assert short["available"] is False and short["reason"] == "missing_requested_members"
     assert result2.problems == []
 
 
@@ -278,8 +278,10 @@ def test_build_marks_provisional_close_and_as_of_truncates(config, all_frames):
     prov = [{"ticker": "LITE", "date": "2026-11-13"}]
     result = builder.build(config, FakeProvider(frames, provisional=prov), today=date(2026, 11, 14), now=NOW)
     broad = result.part["series"][0]
-    assert broad["provisional_last_close"] is True and result.part["provisional_closes"] == prov
-    assert next(m for m in broad["members"] if m["ticker"] == "LITE")["provisional_last_close"] is True
+    assert broad["provisional_last_close"] is False and result.part["provisional_closes"] == []
+    assert broad["as_of"] == "2026-11-12"
+    assert result.part["excluded_provisional_observations"] == [{**prov[0], "excluded_from_metrics": True}]
+    assert next(m for m in broad["members"] if m["ticker"] == "LITE")["as_of"] == "2026-11-12"
     older = builder.build(config, FakeProvider(frames), today=date(2026, 11, 14), as_of=date(2026, 6, 30), now=NOW)
     assert older.part["as_of"] <= "2026-06-30" and older.part["series"][0]["provisional_last_close"] is False
 
@@ -432,3 +434,99 @@ def test_api_file_mode_is_unpublished_by_default_and_serves_a_valid_file(monkeyp
         bad = client.get("/api/workspace/us-markets-research").json()
         assert bad["available"] is False and bad["reason"] == "us_markets_research_contract_invalid"
     engine.dispose()
+
+
+def test_provisional_close_excluded_even_when_it_would_change_atr_and_returns(config, all_frames):
+    a = builder.build(config, FakeProvider(all_frames), as_of=date(2026,11,12), now=NOW)
+    bad = deepcopy(all_frames)
+    bad['LITE'].loc[DAYS[-1], ['open','high','low','close']] = [9999,19999,1,9999]
+    bad['LITE'].loc[DAYS[-1], 'close_source'] = CLOSE_SOURCE_PROVISIONAL
+    b = builder.build(config, FakeProvider(bad), today=date(2026,11,14), now=NOW)
+    for index in [0,1]:
+        for key in ['as_of','returns','atr_pct','drawdown','level']:
+            assert a.part['series'][index][key] == b.part['series'][index][key]
+
+
+def test_regular_sndk_start_excludes_when_issued_and_no_prior_entity_history(config, all_frames):
+    result = builder.build(config, FakeProvider(all_frames), today=date(2026,11,14), now=NOW)
+    audit = next(q for q in result.part['quality_audit'] if q['ticker']=='SNDK')
+    assert audit['regular_trading_start']=='2025-02-24'
+    assert audit['excluded_pre_regular_rows'] > 0
+    mem = result.part['series'][2]
+    sndk = next(m for m in mem['members'] if m['ticker']=='SNDK')
+    assert sndk['first_date'] == '2025-02-24'
+    assert mem['membership_policy'].endswith('not_point_in_time')
+
+
+def test_missing_internal_session_does_not_create_zero_return_or_reweight():
+    frames={m:make_frame(growth(30,.01), index=DAYS[:30]) for m in 'ABC'}
+    frames['C'].loc[DAYS[20],'close']=float('nan')
+    out, meta=compute.equal_weight_basket(frames,list('ABC'),3)
+    assert out.index[-1]==DAYS[19]
+    assert meta['first_gap_date']==str(DAYS[20].date())
+
+
+def test_common_window_counts_adjacent_daily_pairs_not_compressed_returns():
+    idx=pd.bdate_range('2026-01-01',periods=40)
+    a=pd.Series(np.arange(100.,140.),index=idx)
+    b=pd.Series(np.arange(200.,240.),index=idx).drop(idx[20])
+    x=compute.relative_strength(a,b)
+    assert x['n_price_pairs']==39
+    assert x['n_union_sessions']==40 and x['n_missing_sessions']==1
+    assert x['n_daily_return_pairs']==37
+    assert x['first_overlap']==str(idx[0].date()) and x['last_overlap']==str(idx[-1].date())
+    assert x['excess']['1m'] is None
+
+
+def test_no_adjustment_factor_fill_or_missing_adjusted_close_fallback():
+    raw=_raw(12.5)
+    raw.loc[raw.index[1],'Adj Close']=float('nan')
+    frame,dropped=adjust_frame(raw)
+    assert len(dropped)==1 and len(frame)==2
+    frame,dropped=adjust_frame(raw.drop(columns=['Adj Close']))
+    assert frame.empty and len(dropped)==3
+
+
+def test_yfinance_never_accesses_live_quote_to_replace_missing_close(monkeypatch):
+    from types import SimpleNamespace
+    import sys
+    def forbidden_quote(*args, **kwargs):
+        raise AssertionError("live quote must never be accessed")
+    monkeypatch.setitem(sys.modules, 'yfinance', SimpleNamespace(
+        download=lambda *a, **k: _raw(), Ticker=forbidden_quote, __version__='test'))
+    result=providers.YFinanceProvider().fetch(['AAA'],date(2026,11,1),date(2026,11,14))
+    assert result.frames['AAA'].index[-1] == pd.Timestamp('2026-11-12')
+    assert result.provisional==[] and result.audit[0]['reason']=='dropped_rows=1'
+
+
+def test_old_snapshot_without_confirmed_price_policy_is_rejected(part):
+    old=deepcopy(part)
+    old.pop('price_policy')
+    assert any('price_policy' in x for x in contracts.validate_part(old))
+    bad=deepcopy(part)
+    bad['series'][0]['provisional_last_close']=True
+    assert any('provisional_last_close' in x for x in contracts.validate_part(bad))
+
+
+def test_producer_opt_in_attaches_confirmed_research_part(bootstrapped, db_session, part, tmp_path, monkeypatch):
+    from app.workspace.local_compute import export_local_v2
+    from app.core.config import get_settings
+    path=tmp_path/'confirmed.json'
+    path.write_text(json.dumps(part,ensure_ascii=False),encoding='utf-8')
+    monkeypatch.setenv(store.ENV_SNAPSHOT_PATH,str(path))
+    from app.services.task_service import TaskService
+    TaskService(get_settings()).run(db_session, 'refresh_decision_board')
+    db_session.commit()
+    result=export_local_v2(get_settings(), sequence=19,code_sha='b'*40,
+                           universe=['510300.SH'], private_research=True,
+                           unavailable_parts=['sectors','market_context'])
+    assert 'us_markets_research' in result['parts']
+    assert verify_bundle_integrity(result)
+    assert result['parts']['us_markets_research']['price_policy'].startswith('provider_adjusted')
+
+
+def test_whole_group_common_samples_do_not_claim_full_membership_since_2018(config, all_frames):
+    result=builder.build(config,FakeProvider(all_frames),today=date(2026,11,14),now=NOW)
+    samples=result.part['common_samples']
+    assert samples['all_current_members_adjacent_return_overlap']['first']=='2025-02-25'
+    assert samples['all_current_members_adjacent_return_overlap']['n_sessions'] < samples['available_series_level_overlap']['n_sessions']
