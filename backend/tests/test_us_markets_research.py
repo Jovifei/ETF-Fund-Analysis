@@ -508,21 +508,41 @@ def test_old_snapshot_without_confirmed_price_policy_is_rejected(part):
     assert any('provisional_last_close' in x for x in contracts.validate_part(bad))
 
 
-def test_producer_opt_in_attaches_confirmed_research_part(bootstrapped, db_session, part, tmp_path, monkeypatch):
-    from app.workspace.local_compute import export_local_v2
-    from app.core.config import get_settings
-    path=tmp_path/'confirmed.json'
-    path.write_text(json.dumps(part,ensure_ascii=False),encoding='utf-8')
-    monkeypatch.setenv(store.ENV_SNAPSHOT_PATH,str(path))
-    from app.services.task_service import TaskService
-    TaskService(get_settings()).run(db_session, 'refresh_decision_board')
-    db_session.commit()
-    result=export_local_v2(get_settings(), sequence=19,code_sha='b'*40,
-                           universe=['510300.SH'], private_research=True,
-                           unavailable_parts=['sectors','market_context'])
-    assert 'us_markets_research' in result['parts']
-    assert verify_bundle_integrity(result)
-    assert result['parts']['us_markets_research']['price_policy'].startswith('provider_adjusted')
+def test_producer_opt_in_attaches_confirmed_research_part(part, tmp_path):
+    # Real producer, isolated process + DB. Never mutate pytest's session-scoped
+    # bootstrap/board state: that corrupts unrelated snapshot/job tests later.
+    import os
+    import subprocess
+    import sys
+    repo = Path(__file__).resolve().parents[2]
+    snapshot = tmp_path / 'confirmed.json'
+    snapshot.write_text(json.dumps(part, ensure_ascii=False), encoding='utf-8')
+    code = """
+import json,sys
+from app.core.config import get_settings
+from app.db.session import init_db,session_scope
+from app.services.task_service import TaskService
+from app.workspace.local_compute import export_local_v2
+from app.workspace.local_display_contract import verify_bundle_integrity
+init_db()
+settings=get_settings()
+with session_scope() as db:
+    TaskService(settings).run(db,'bootstrap',lookback_days=60,report=False)
+    TaskService(settings).run(db,'refresh_decision_board')
+result=export_local_v2(settings,sequence=19,code_sha='b'*40,
+    universe=['510300.SH'],private_research=True,unavailable_parts=['sectors','market_context'])
+assert verify_bundle_integrity(result)
+assert result['parts']['us_markets_research']['price_policy'].startswith('provider_adjusted')
+"""
+    env = {**os.environ, 'PYTHONPATH': str(repo / 'backend'), 'PYTHONUTF8': '1',
+           'APP_ENV': 'test', 'AUTH_ENABLED': 'false', 'MARKET_PROVIDER': 'mock',
+           'ALLOW_MOCK_FALLBACK': 'false', 'AUTO_CREATE_SCHEMA': 'true',
+           'LLM_ENABLED': 'false', 'ANALYSIS_ENABLED': 'false',
+           'DATABASE_URL': 'sqlite:///' + (tmp_path / 'producer.sqlite3').as_posix(),
+           'REPORTS_DIR': str(tmp_path / 'reports'), store.ENV_SNAPSHOT_PATH: str(snapshot)}
+    run = subprocess.run([sys.executable, '-c', code], cwd=repo, env=env,
+                         capture_output=True, text=True, timeout=90)
+    assert run.returncode == 0, run.stderr[-1500:]
 
 
 def test_whole_group_common_samples_do_not_claim_full_membership_since_2018(config, all_frames):
