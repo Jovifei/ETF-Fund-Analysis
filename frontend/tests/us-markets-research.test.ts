@@ -131,3 +131,23 @@ describe('independent research page', () => {
     wrapper.unmount()
   })
 })
+
+
+describe('production router US research entry', () => {
+  it('resolves and renders /research/us-markets without the legacy research redirect', async () => {
+    const { makeRouter } = await import('../src/routerFactory')
+    const { RouterView } = await import('vue-router')
+    const router = makeRouter(createMemoryHistory())
+    vi.stubGlobal('scrollTo', vi.fn())
+    vi.mocked(api).mockReset()
+    vi.mocked(api).mockImplementation(async (path:string) => path.includes('/overview?') ? {research_source:'local_bundle',generation:23} : view)
+    await router.push('/research/us-markets'); await router.isReady()
+    const wrapper=mount(RouterView,{global:{plugins:[createPinia(),router]}})
+    cleanup.push(()=>wrapper.unmount())
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/research/us-markets')
+    expect(wrapper.find('h1').text()).toBe('美股市场研究')
+    expect(wrapper.find('[data-testid="us-markets-research-section"]').exists()).toBe(true)
+    expect(vi.mocked(api).mock.calls.some(([p])=>p.includes('us-markets-research') && p.includes('generation=23'))).toBe(true)
+  })
+})

@@ -58,7 +58,7 @@ const members = (s: Record<string, unknown>) => (Array.isArray(s.members) ? s.me
         <h2 id="us-markets-heading">美股 CPO · 存储 · 指数（研究）</h2>
         <p>美股光模块/CPO 篮子、存储篮子与纳斯达克、标普 500 的收益、回撤、波动与相对强度。篮子是自定义等权研究口径，不是官方指数。</p>
       </div>
-      <span class="small-note" data-testid="us-markets-flags">research_only · 不可操作 · 未校准 · 不进入评分/分级/邮件</span>
+      <div><RouterLink class="text-button" to="/research/us-markets">打开独立美股研究页 →</RouterLink><span class="small-note" data-testid="us-markets-flags">research_only · 不可操作 · 未校准 · 不进入评分/分级/邮件</span></div>
     </div>
     <div class="card-body">
       <p v-if="note" class="notice" role="status" data-testid="us-markets-note">{{ note }}</p>

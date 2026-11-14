@@ -21,6 +21,7 @@ const router = createRouter({ history, scrollBehavior: (to, from, saved) => {
   { path: '/holdings', component: () => import('./views/Holdings.vue'), meta: { title: '我的持仓' } },
   { path: '/ai', component: archive, meta: { title: 'AI 研究' } },
   { path: '/research', redirect: '/history' },
+  { path: '/research/us-markets', component: () => import('./views/UsMarkets.vue'), meta: { title: '美股市场研究' } },
   { path: '/review', component: archive, meta: { title: '每日复盘' } },
   { path: '/history', component: archive, meta: { title: '研究档案' } },
   { path: '/research/news', component: () => import('./views/News.vue'), meta: { title: '新闻线索' } },

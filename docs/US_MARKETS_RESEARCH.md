@@ -88,6 +88,7 @@ $env:US_MARKETS_RESEARCH_SNAPSHOT_PATH = "<out-dir>\us_markets_research_snapshot
 - RS 的 `first_overlap / last_overlap / n_price_pairs / n_daily_return_pairs / n_union_sessions / n_missing_sessions`
   区分价格对和相邻日收益对。相关在 union calendar 的连续日收益上计算（no-fill），而不是把缺失日 drop 后跨日拼接。
 - 合成篮子 high/low 是各成分单日高低的组合包络，不是同时可交易篮子的实际高低；ATR 与道氏仅合成代理，威科夫不算。
+- 原 `/research` 仍保留跳转 `/history`；新增真实路由 `/research/us-markets`，入口在卡片标题区。AI 与研究档案面板也复用同一研究卡片。
 - 旧报告中美股 D→下个 A 股交易日的相关数值与样本数未在本分支重审，不随本模块上线；旧研究结论撤回，不沿用。
 
 ### 原始证据（2026-11-14 本轮打开/检索）
@@ -112,8 +113,8 @@ export REPORTS_DIR=/tmp/etf-us-quality-reports WORKSPACE_UI_ENABLED=true
 export US_MARKETS_RESEARCH_SNAPSHOT_PATH=/workspace/etf_us_markets_20261114/corrected_fresh/us_markets_research_snapshot.json
 /workspace/etf-display-venv/bin/python scripts/workspace_smoke_seed.py
 /workspace/etf-display-venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 18093
-# 打开 / 与 /research；仅测试隔离库，无生产登录、无上传、无定时任务变更。
+# 打开 / 与 /research/us-markets；仅测试隔离库，无生产登录、无上传、无定时任务变更。
 ```
 
-独立研究页 `/research` 与总览复用同一卡片；本地展示模式先捕获 overview generation 后再读同批研究数据。
+独立研究页 `/research/us-markets` 与总览复用同一卡片；本地展示模式先捕获 overview generation 后再读同批研究数据。
 缺批次时不发未固定批次的请求。本文演示命令由使用者显式运行，本轮不启动持久服务器。
