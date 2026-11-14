@@ -31,7 +31,7 @@ BASELINE_SHA = "1ec6f38281598d76f6208c96c85704ff9aab8a82"
 KNOWN_SEEN_THROUGH = "2026-11-10"
 FROZEN_FORMULA_SHA256 = {
     "structure_shadow.py": "4cf4a0c59823d5c1e83068ae49e77b7e4d07254e204bc3e0085c02cb688a674c",
-    "structure_decision.py": "9fe3b22b3493a42c4290b3f3c818e04512c5eb8074cfc1aa324a9385977d6183",
+    "structure_decision.py": "cf2f8c75318b8fdacb678bbddced5b70f21f425eb027a158b37bcf838512872b",
 }
 CANDIDATES = (("R0", 0.0), ("R1", 0.3125), ("R2", 0.4167))
 STRATEGIES = ("R0", "R1", "R2", "always_long", "momentum_5d")
@@ -633,9 +633,13 @@ def _split_report(data: dict, calendar: list[str]) -> dict:
 
 
 def _source_hashes() -> dict[str, str]:
+    # Hash LF-normalized source bytes: the frozen values are recorded from the
+    # committed (LF) blobs, so a Windows CRLF checkout must not read as drift.
     modules = (structure_shadow, structure_decision)
     return {
-        Path(module.__file__).name: hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest()
+        Path(module.__file__).name: hashlib.sha256(
+            Path(module.__file__).read_bytes().replace(b"\r\n", b"\n")
+        ).hexdigest()
         for module in modules
     }
 
@@ -887,8 +891,15 @@ def write_report(report: dict, target: Path) -> None:
         (temporary / "checksums.json").write_text(_json(hashes) + "\n", encoding="utf-8")
         (temporary / "INCOMPLETE").unlink()
         # Renaming onto the directory we exclusively reserved is atomic on
-        # supported local filesystems; never replace a pre-existing user run.
-        os.replace(temporary, target)
+        # POSIX; Windows forbids renaming a directory onto an existing one,
+        # so drop our own (verified-empty) reservation first. A pre-existing
+        # user run is never touched: mkdir above already raised for it, and
+        # rmdir below cannot succeed on a non-empty directory.
+        try:
+            os.replace(temporary, target)
+        except PermissionError:
+            os.rmdir(target)
+            os.rename(temporary, target)
     except BaseException:
         shutil.rmtree(temporary, ignore_errors=True)
         # Leave the reservation visibly incomplete rather than claim success.

@@ -5,6 +5,7 @@ import copy
 import hashlib
 import json
 import sqlite3
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 
@@ -199,7 +200,10 @@ def test_out_of_order_archive_never_changes_live_pointers_or_ledger(tmp_path):
     assert before == after
 
 
-@pytest.mark.parametrize("relation", ["same", "child", "parent", "symlink"])
+@pytest.mark.parametrize("relation", ["same", "child", "parent", pytest.param(
+    "symlink", marks=pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="directory symlinks need Windows privileges; refusal path is exercised on POSIX"))])
 def test_store_refuses_overlap_and_symlinks(tmp_path, relation):
     protected = tmp_path / "live"
     protected.mkdir()
