@@ -1510,6 +1510,11 @@ def export_local_v2(
                 "market_context": market_context_part,
                 "chart_periods": chart_periods,
             }
+            # Optional research-only block; absent unless US_MARKETS_RESEARCH_SNAPSHOT_PATH is set.
+            from app.us_markets_research.store import load_for_bundle as _us_markets_part
+            _us_part = _us_markets_part()
+            if _us_part is not None:
+                parts["us_markets_research"] = _us_part
             # Carried-forward panels are display context only: row-level corroboration and
             # grades keep the not-refreshed projection, exactly as before for fast slots.
             parts = _project_unavailable_optional(parts, unavailable | set(carried), original.get("rows", []), generated)

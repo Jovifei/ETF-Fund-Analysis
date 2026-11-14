@@ -10,10 +10,10 @@ from app.workspace.shadow_bundle import digest
 from app.workspace.shadow_projection import CODE_RE, validate_public_chart
 
 CONTRACT_VERSION = "local-display-v2"
-VALIDATION_VERSION = "local-display-validation-v2.3"
+VALIDATION_VERSION = "local-display-validation-v2.4"
 MAX_BUNDLE_BYTES = 64 * 1024 * 1024  # 64 MiB bounded quota
 REQUIRED_PARTS = {"overview", "details", "charts", "sectors"}
-OPTIONAL_PARTS = {"market_context", "chart_periods"}
+OPTIONAL_PARTS = {"market_context", "chart_periods", "us_markets_research"}
 CONTEXT_AVAILABILITY = {"available", "partial", "carried_forward", "unavailable", "unpublished"}
 FORBIDDEN_PRIVATE_FIELDS = {"avg_cost", "holdings", "cost", "trades", "account_id", "user_id", "accounts", "cookie", "cookies", "token", "password", "authorization"}
 HEX_HASH_RE = re.compile(r"^[0-9a-fA-F]{64}$")
@@ -186,6 +186,10 @@ def verify_bundle_integrity(bundle: dict[str, Any], *, now: datetime | None = No
                 availability = context["availability"]
                 if not isinstance(availability, str) or availability not in CONTEXT_AVAILABILITY:
                     return False
+        if "us_markets_research" in parts:
+            from app.us_markets_research.contracts import validate_part as validate_us_markets_part
+            if validate_us_markets_part(parts["us_markets_research"]):
+                return False
         for code, detail in parts["details"].items():
             if code not in universe or not isinstance(detail, dict):
                 return False

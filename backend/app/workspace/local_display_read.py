@@ -674,6 +674,30 @@ class LocalDisplayReader:
             return None
         return list(part["items"])
 
+    def read_us_markets_research_view(
+        self, generation: str | int | None = None, *, now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Research-only US markets block published in the pinned bundle (never a provider call)."""
+        from app.us_markets_research.store import read_envelope
+        now = now or datetime.now(timezone.utc)
+        bundle = self.load_bundle(generation)
+        manifest = bundle.get("manifest", {}) if bundle else {}
+        part = bundle.get("parts", {}).get("us_markets_research") if bundle else None
+        if not bundle:
+            reason = "local_display_generation_unavailable" if generation is not None else "local_bundle_unavailable"
+        elif not isinstance(part, dict):
+            reason = "us_markets_research_not_published"
+        else:
+            reason = None
+        expired = bundle_expired(bundle, now=now)
+        historical = bool(bundle and bundle.get("historical_identity"))
+        return read_envelope(part if isinstance(part, dict) else None, reason, now=now, extra={
+            "generation": manifest.get("sequence"), "requested_generation": generation,
+            "generated_at": manifest.get("generated_at"), "expires_at": manifest.get("expires_at"),
+            "is_expired": expired, "historical_identity": historical,
+            "is_stale": not bundle or historical or bool(expired),
+            "research_source": "local_bundle", "read_model_version": CONTRACT_VERSION})
+
     def read_market_context_view(
         self, generation: str | int | None = None, *, now: datetime | None = None,
     ) -> dict[str, Any]:
