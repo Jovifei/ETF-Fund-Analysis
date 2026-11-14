@@ -345,3 +345,19 @@ Review：收据见 docs/handoffs/PRODUCTION_DEPLOYMENT_20261031.md。演练期�
 - [x] 针对性测试 39 项通过；compileall 与 Node 语法检查通过；全量 pytest 未运行。
 
 Review：当前应优先完成真实 PIT 14:30 数据与供应商/许可确认、同口径策略回放、purged walk-forward + pristine holdout、事件驱动约束回测、至少 20 个交易日 shadow run、人工批准，以及生产自然链路/登录/手机/SMTP验收。保持 UNKNOWN/actionable=false/not_calibrated。
+
+## 2026-11-15 ZCode 会话：B 档切换完成 + 伪影修复 + 清理（待周一自然交付）
+
+**已完成：**
+- 身份链第 6 条已登记（df340e3/9efe8845，approved 2026-11-15）；ECS env 三件套与生产任务 pin 同步切到 df340e3；门禁 approved。
+- integrate 分支新增 df340e3：冻结公式哈希平台无关化（CRLF 归一）、structure_decision 重冻结（us-markets 合并遗漏）、replay 原子写 Windows 兼容、archive symlink Windows skip —— Windows 全量两处伪影清零（61 passed + 1 skip）。
+- ECS 清理完成：85%→77%，保留现行栈+上一代栈+最近 2 备份。
+- 6442c7e（时钟解耦）审阅结论：编排层已由 research_input.base 驱动，服务层下沉改动当前不显化（槽全在 16:00 后）；基于旧 main 有冲突风险 → 建议原状保留，未来若加"09:00 前上一 session"槽再吸收。
+
+**待办（周一 11-16 优先）：**
+1. 周一自然槽（14:55–17:40）应交付首个 df340e3 包（34/34 + US 卡片真数据）——若未交付，检查 api 日志与 attempts 表。
+2. 交付成功后：integrate 分支补登记表 append 提交 → 合并 integrate/us-markets-20261114 到 main（owner 已批"B 后一次合并"）。
+3. 方案 A（周末空窗改合同：非交易日映射上一交易日）= 新会话新阶段，合同版本升级 + 失败测试先行。
+4. 登录态浏览器验收：结构三列有值 + 美股卡片数据（owner）。
+
+**回滚（B 档）：** ECS env 三件套指回 98ba055/9efe8845 + 重启（登记表 append-only，旧条目仍在）；任务 pin 指回 etf-live-98ba055 工作树 + --expected-sha 98ba055（XML 备份在 F:\ETF_Data\ETF-Fund-Analysis\state\）。
