@@ -196,13 +196,30 @@ def index_summaries(db: DB, settings: Config, user: User, response: Response, ge
 def index_chart(context_id: str, db: DB, settings: Config, user: User,
                 limit: int = Query(default=500, ge=30, le=1500), interval: Literal["1d","1w","1mo"]="1d"):
     if settings.workspace_research_source == "local_bundle":
-        raise HTTPException(404, "index_chart_not_published_in_local_bundle")
+        reader = _local_reader(settings)
+        chart = reader.read_index_chart(context_id, interval=interval, limit=limit)
+        if chart is None:
+            raise HTTPException(404, "local_display_index_not_published")
+        return chart
     from app.workspace.index_history import read
     result = read(db, settings, context_id, 1500)
     if result is None:
         raise HTTPException(404, "index not registered")
     from app.workspace.candle_periods import transform_chart
     return transform_chart(result,interval,settings.load_strategy()["indicator"],limit)
+
+
+@private_router.get("/workspace/sectors/representatives")
+def sector_representatives(db: DB, settings: Config, user: User, as_of: Annotated[str | None, Query()] = None) -> dict:
+    from app.services.sector_representative_service import SectorRepresentativeService
+    srv = SectorRepresentativeService()
+    mappings = srv.list_mappings(as_of=as_of)
+    return {
+        "mappings": mappings,
+        "total": len(mappings),
+        "actionable": False,
+        "research_only": True,
+    }
 
 
 @private_router.get("/workspace/storage")

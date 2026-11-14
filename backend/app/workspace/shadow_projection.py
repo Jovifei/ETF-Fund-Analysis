@@ -170,14 +170,15 @@ def validate_public_chart(chart, *, code=None, generated_at=None, partial=False,
     """Sparse legacy charts inherit identity/cutoff from their enclosing manifest."""
     if not isinstance(chart,dict) or set(chart)-CHART:
         raise ValueError("nonpublic chart fields")
-    if code is not None and (not isinstance(code,str) or not CODE_RE.fullmatch(code)):
+    INDEX_RE = re.compile(r"^([0-9]{6}\.(SH|SZ|BJ|CSI)|[A-Za-z0-9_.-]+\.US|(sh|sz)[0-9]{6})$", re.IGNORECASE)
+    if code is not None and (not isinstance(code,str) or not (CODE_RE.fullmatch(code) or INDEX_RE.fullmatch(code))):
         raise ValueError("invalid chart universe code")
     if "ts_code" in chart:
-        if not isinstance(chart["ts_code"],str) or not CODE_RE.fullmatch(chart["ts_code"]):
+        if not isinstance(chart["ts_code"],str) or not (CODE_RE.fullmatch(chart["ts_code"]) or INDEX_RE.fullmatch(chart["ts_code"])):
             raise ValueError("invalid chart code")
         if code is not None and chart["ts_code"]!=code:
             raise ValueError("chart code mismatch")
-    if expected_interval not in {"1d", "1w", "1mo"} or chart.get("interval","1d") != expected_interval:
+    if expected_interval not in {"1d", "1w", "1mo", "30m", "60m"} or chart.get("interval","1d") != expected_interval:
         raise ValueError("chart scope violation")
     for key,expected in (("actionable",False),("research_only",True),("cost_overlay_allowed",False),("research_cost_overlay_allowed",False)):
         if key in chart and chart[key] is not expected:
@@ -210,9 +211,22 @@ def validate_public_chart(chart, *, code=None, generated_at=None, partial=False,
         for bar in rows:
             if not isinstance(bar,dict) or set(bar)-BAR:
                 raise ValueError("nonpublic bar fields")
-            day=_daily_date(bar.get("date"))
-            if cutoff is not None and day>cutoff:
-                raise ValueError("future chart bar")
+            if expected_interval in {"30m", "60m"}:
+                bar_d_str = str(bar.get("date") or "")
+                try:
+                    dt_val = datetime.fromisoformat(bar_d_str)
+                    if dt_val.tzinfo is None:
+                        dt_val = dt_val.replace(tzinfo=MARKET_TZ)
+                    day = dt_val.astimezone(MARKET_TZ)
+                except ValueError:
+                    day = _daily_date(bar_d_str)
+                cutoff_dt = as_of.astimezone(MARKET_TZ) if as_of is not None else None
+                if cutoff_dt is not None and isinstance(day, datetime) and day > cutoff_dt:
+                    raise ValueError("future chart bar")
+            else:
+                day=_daily_date(bar.get("date"))
+                if cutoff is not None and day>cutoff:
+                    raise ValueError("future chart bar")
             if dates and day<=dates[-1]:
                 raise ValueError("duplicate or out-of-order chart date")
             dates.append(day)

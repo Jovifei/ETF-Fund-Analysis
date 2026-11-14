@@ -37,7 +37,13 @@ def confirmed_pivots(
         for i in _swings(series, is_high=is_high, k=swing_k):
             confirmed_at = i + swing_k
             if confirmed_at <= last_usable:
-                pivots.append({"side": side, "index": i, "price": series[i], "confirmed_index": confirmed_at})
+                pivots.append({
+                    "side": side,
+                    "index": i,
+                    "price": series[i],
+                    "confirmed_index": confirmed_at,
+                    "available_at_index": confirmed_at + lag_n,
+                })
     pivots.sort(key=lambda p: (p["confirmed_index"], p["side"]))
     return pivots
 
@@ -49,9 +55,23 @@ def dow_phase_from_pivots(
     lows_p = [p for p in pivots if p["side"] == "low"]
     evidence: list[dict[str, Any]] = []
     if len(highs_p) >= 2:
-        evidence.append({"kind": "dow_pivot", "text": f"swing highs {highs_p[-2]['price']:.4f}->{highs_p[-1]['price']:.4f}", "bar_index": highs_p[-1]["index"]})
+        last = highs_p[-1]
+        prev = highs_p[-2]
+        avail = last.get("available_at_index", last["confirmed_index"])
+        evidence.append({
+            "kind": "dow_pivot",
+            "text": f"swing highs {prev['price']:.4f}->{last['price']:.4f} (occ={last['index']}, conf={last['confirmed_index']}, avail={avail})",
+            "bar_index": last["index"],
+        })
     if len(lows_p) >= 2:
-        evidence.append({"kind": "dow_pivot", "text": f"swing lows {lows_p[-2]['price']:.4f}->{lows_p[-1]['price']:.4f}", "bar_index": lows_p[-1]["index"]})
+        last = lows_p[-1]
+        prev = lows_p[-2]
+        avail = last.get("available_at_index", last["confirmed_index"])
+        evidence.append({
+            "kind": "dow_pivot",
+            "text": f"swing lows {prev['price']:.4f}->{last['price']:.4f} (occ={last['index']}, conf={last['confirmed_index']}, avail={avail})",
+            "bar_index": last["index"],
+        })
     if len(highs_p) < 2 or len(lows_p) < 2:
         evidence.append({"kind": "note", "text": "insufficient confirmed pivots", "bar_index": None})
         return "unknown", 0.0, 0.2, evidence

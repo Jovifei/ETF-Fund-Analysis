@@ -16,6 +16,7 @@ import OutlookPanel from '../components/OutlookPanel.vue'
 import PageState from '../components/PageState.vue'
 import DataHealth from '../components/DataHealth.vue'
 import ContextReadStatus from '../components/ContextReadStatus.vue'
+import SectorDrawer, { type SectorItem } from '../components/SectorDrawer.vue'
 import UsMarketsResearchCard, { type UsMarketsReadView } from '../components/UsMarketsResearchCard.vue'
 import type { ChartData, ContextReadView, DataJob } from '../lib/types'
 defineOptions({ name: 'MarketOverview' })
@@ -71,6 +72,12 @@ const breadth = computed(() => allBoards.value.filter(x => x.board_type === 'mar
 const sectorKind = ref('industry'), sectorFilter = ref(''), showAll = ref(false)
 const filtered = computed(() => allBoards.value.filter(x => x.board_type === sectorKind.value && (!sectorFilter.value || String(x.sector_name).includes(sectorFilter.value))).sort((a,b) => (numeric(b.sector_pct_change) ?? -Infinity) - (numeric(a.sector_pct_change) ?? -Infinity)))
 const sectorItems = computed(() => filtered.value.slice(0, showAll.value ? 2000 : 12))
+const drawerOpen = ref(false)
+const selectedSector = ref<SectorItem | null>(null)
+function openSectorDrawer(s: unknown) {
+  selectedSector.value = (s as SectorItem) ?? null
+  drawerOpen.value = true
+}
 const dataHealth=ref<InstanceType<typeof DataHealth>|null>(null)
 const activeTasks=ref<string[]>([]),prepareLimit=ref(10),prepareScale=ref(0),plan=ref<{codes:string[];items:{ts_code:string;name:string;bars:number;market_cap_cny:number|null}[];note:string}|null>(null)
 const busy = ref(false), notice = ref(''), error = ref('')
@@ -123,12 +130,32 @@ async function recompute(){if(busy.value)return;busy.value=true;error.value='';t
     <div class="toolbar"><button class="button" :class="{primary:sectorKind==='industry'}" @click="sectorKind='industry';showAll=false">行业板块</button><button class="button" :class="{primary:sectorKind==='concept'}" @click="sectorKind='concept';showAll=false">概念板块</button><input v-model="sectorFilter" aria-label="筛选板块" placeholder="筛选板块名称"/><small>{{ filtered.length }} 个板块 · 可搜索基金 {{ discovery.data.value?.catalog_count ?? '—' }} 个</small></div>
     <p v-if="notice" class="notice" role="status">{{ notice }}</p><p v-if="error" class="notice warning-notice" role="alert">{{ error }}</p>
     <div v-if="!localMode" class="card-body"><p v-if="discovery.data.value?.catalog_warning" class="warning-notice">{{discovery.data.value?.catalog_warning}}</p><small>工作器最近心跳：{{stamp(discovery.data.value?.worker_last_seen_at)}}。无心跳时任务只会排队，需启动同版本 worker。</small><TaskProgress v-for="id in activeTasks" :key="id" :id="id" @finished="jobFinished"/></div><div v-if="!sectorItems.length" class="card-body muted">{{ sectors.error.value || '该类别尚无数据。同步任务完成后会显示；其他类别的数据不会被一起隐藏。' }}<span v-if="localMode"> 请在本机更新后重新读取。</span><span v-else-if="!canSync"> 请管理员在总览同步。</span></div>
-    <div class="sector-grid"><article v-for="s in sectorItems" :key="String(s.board_type)+String(s.sector_name)" class="sector-tile" :class="direction(s.sector_pct_change)"><strong>{{ s.sector_name }}</strong><span class="numeric">{{ pct(numeric(s.sector_pct_change)==null?null:Number(s.sector_pct_change)/100) }}</span><small>{{ s.source }} · {{ s.source_as_of }} · {{ s.is_mock ? '演示' : '源时间未验证' }}</small><RouterLink class="text-button" :to="{path:'/analysis',query:{q:String(s.sector_name)}}">查找相关 ETF →</RouterLink></article></div>
+    <div class="sector-grid">
+      <article
+        v-for="s in sectorItems"
+        :key="String(s.board_type)+String(s.sector_name)"
+        class="sector-tile interactive"
+        :class="direction(s.sector_pct_change)"
+        tabindex="0"
+        :aria-label="`打开${s.sector_name}板块研判抽屉`"
+        @click="openSectorDrawer(s)"
+        @keydown.enter="openSectorDrawer(s)"
+      >
+        <strong>{{ s.sector_name }}</strong>
+        <span class="numeric">{{ pct(numeric(s.sector_pct_change)==null?null:Number(s.sector_pct_change)/100) }}</span>
+        <small>{{ s.source }} · {{ s.source_as_of }} · {{ s.is_mock ? '演示' : '源时间未验证' }}</small>
+        <div class="tile-actions">
+          <button type="button" class="button small primary sector-analyze-btn" @click.stop="openSectorDrawer(s)">研判 / K线 →</button>
+          <RouterLink class="text-button" :to="{path:'/analysis',query:{q:String(s.sector_name)}}" @click.stop>查找相关 ETF →</RouterLink>
+        </div>
+      </article>
+    </div>
     <div class="table-footer"><span>板块快照日期 {{ sectors.data.value?.source_as_of ?? '未知' }}；匹配 ETF 按名称 / 主题检索，不冒充成分映射。</span><button v-if="filtered.length>12" class="button small" @click="showAll=!showAll">{{ showAll?'收起':'显示全部板块' }}</button></div>
     <div v-if="!localMode" class="card-body"><span v-for="job in (Array.isArray(discovery.data.value?.jobs)?discovery.data.value!.jobs:[])" :key="String(record(job).task)" class="small-note">{{ record(job).task }}：<Badge :value="String(record(job).status)"/> {{ stamp(record(job).finished_at ?? record(job).created_at) }}　</span><RouterLink to="/settings">查看采集步骤和失败原因</RouterLink></div>
   </section>
   <div v-if="!localMode" class="toolbar"><button v-if="canSync" class="button" :disabled="busy" @click="recompute">重算已存历史指标</button><span class="small-note">已有 K 线但决策快照为空：可先离线重算。单只基金数据不全，不影响其他标的；无历史时在 ETF 详情补齐。</span></div>
   <details v-if="canSync" class="card section"><summary class="card-header">优先准备 ETF 历史与存储检查</summary><div class="card-body"><p>目录可搜索不等于历史已下载。先预览最多30只，再确认加入研究池；按已知市场市值/成交额优先，未知规模排后。不会下载所有市场基金。</p><div class="toolbar"><label>每批 <input v-model.number="prepareLimit" type="number" min="1" max="30" style="width:80px"/></label><label>已知市值至少 <input v-model.number="prepareScale" type="number" min="0" max="1000" style="width:90px"/>亿元</label><button class="button" @click="previewHistory">预览历史准备清单</button></div><div v-if="plan"><p>{{plan.note}}</p><p v-for="item in plan.items" :key="item.ts_code">{{item.name}} {{item.ts_code}} · 已存 {{item.bars}} 根 · {{item.market_cap_cny==null?'市值未知':num(item.market_cap_cny/1e8)+'亿元'}}</p><button class="button primary" :disabled="!plan.codes.length" @click="prepareHistory">确认准备 {{plan.codes.length}} 只历史</button></div><p>当前数据库 {{bytes(storage.data.value?.database_bytes)}} · 已存日线 {{storage.data.value?.daily_bar_rows??'—'}} 条 · 应用所在文件系统可用 {{bytes(storage.data.value?.application_disk_free_bytes)}}</p><small>{{storage.data.value?.note}}。E盘归档使用 docs/HISTORY_STORAGE_V103.md 中的只读导出流程；不会同步正在运行的SQLite文件。</small></div></details><OriginalDecisionBoard ref="board" :generation="generation" :ready="snapshotReady"/><details class="card section"><summary class="card-header">日／周／月预测的计算与边界</summary><div class="card-body"><OutlookPanel/></div></details>
+  <SectorDrawer v-if="drawerOpen" v-model="drawerOpen" :sector="selectedSector" :generation="generation" />
 </section></template>
 <style scoped>
 .market-context-card.interactive { cursor: pointer; }
@@ -142,4 +169,9 @@ async function recompute(){if(busy.value)return;busy.value=true;error.value='';t
 .hs300-ratio-item strong { font-size: 13px; color: var(--text, #c9d1d9); }
 .hs300-ratio-item .value { font-size: 20px; font-weight: 600; color: var(--accent, #27c5d8); }
 .hs300-ratio-item small { color: var(--muted, #8b949e); font-size: 11px; }
+.sector-tile.interactive { cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease; }
+.sector-tile.interactive:hover { border-color: var(--accent, #27c5d8); }
+.sector-tile.interactive:focus-visible { outline: 2px solid var(--accent, #27c5d8); outline-offset: 2px; }
+.tile-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.sector-analyze-btn { font-size: 11px; padding: 2px 8px; }
 </style>
