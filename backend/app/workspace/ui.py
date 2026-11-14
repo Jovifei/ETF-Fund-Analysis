@@ -10,7 +10,7 @@ from app.workspace.config import workspace_settings
 from app.workspace.original_board import original_board_frame
 
 DIST = Path(__file__).resolve().parents[1] / "workspace_dist"
-UI_PATHS = frozenset({"/login", "/register", "/", "/matrix", "/boards", "/analysis", "/watchlist", "/holdings", "/ai", "/research", "/research/news", "/review", "/factors", "/history", "/settings", "/profile", "/system", "/decision/1430", "/legacy", "/workbench/1430", "/workbench/kline"})
+UI_PATHS = frozenset({"/login", "/register", "/", "/matrix", "/boards", "/analysis", "/watchlist", "/holdings", "/ai", "/research", "/research/us-markets", "/research/news", "/review", "/factors", "/history", "/settings", "/profile", "/system", "/decision/1430", "/legacy", "/workbench/1430", "/workbench/kline"})
 
 
 class WorkspaceMiddleware:
