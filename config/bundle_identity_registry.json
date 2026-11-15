@@ -53,6 +53,19 @@
       ]
     },
     {
+      "code_sha": "11071fe654f92851d73376d89a5dc79459519067",
+      "config_hash": "9efe8845e2e26406de22b30b08d0697f3c52b979f6d3e06b7a1398bcca21285b",
+      "approved_at": "2026-11-15",
+      "approved_scope": "v1.0.13 producer: real adapters, 34/34 settled daily inputs, structure_v1 factors (Wyckoff/Dow/ATR), 5-horizon forecasts, and us-markets research snapshot (integration 129840e/11071fe). Mirrors the server-mounted registry entry.",
+      "evidence_ref": "docs/audits/PRODUCTION_DEPLOYMENT_RECEIPT_20261114.md",
+      "superseded": [
+        {
+          "code_sha": "98ba055f6e5be99ff949e62822b9714c7ec1894c",
+          "note": "Previous producer kept for controlled rollback; do not switch only one side of the pair."
+        }
+      ]
+    },
+    {
       "code_sha": "df340e3fbbc64dac7b5d9429dadeb1108ebf3604",
       "config_hash": "9efe8845e2e26406de22b30b08d0697f3c52b979f6d3e06b7a1398bcca21285b",
       "approved_at": "2026-11-15",
@@ -60,8 +73,8 @@
       "evidence_ref": "docs/audits/RE_FREEZE_DF340E3_20261115.md",
       "superseded": [
         {
-          "code_sha": "98ba055f6e5be99ff949e62822b9714c7ec1894c",
-          "note": "Previous producer registered for controlled rollback; do not switch only one side of the consumer/producer identity pair."
+          "code_sha": "11071fe654f92851d73376d89a5dc79459519067",
+          "note": "Immediate predecessor; rollback target for the platform-independent frozen-formula change."
         }
       ]
     }
