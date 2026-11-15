@@ -361,3 +361,24 @@ Review：当前应优先完成真实 PIT 14:30 数据与供应商/许可确认�
 4. 登录态浏览器验收：结构三列有值 + 美股卡片数据（owner）。
 
 **回滚（B 档）：** ECS env 三件套指回 98ba055/9efe8845 + 重启（登记表 append-only，旧条目仍在）；任务 pin 指回 etf-live-98ba055 工作树 + --expected-sha 98ba055（XML 备份在 F:\ETF_Data\ETF-Fund-Analysis\state\）。
+
+## 2026-11-15 Antigravity 阶段：首个 df340e3 生产展示包闭环验收
+
+**已完成：**
+1. **快照就位与验证**：解压并核验权威快照数据至 `F:\ETF_Data\ETF-Fund-Analysis\state\us-markets-snapshot\`，包含完整 3 组 6 系列美股研究快照（`us_markets_research_snapshot.json`）、历史 CSV（`us_markets_research_history.csv`）及来源审计（`us_markets_research_source_audit.json`）。
+2. **本地全量计算与导出**：以已登记生产者身份 `df340e3fbbc64dac7b5d9429dadeb1108ebf3604` / 配置 hash `9efe8845e2e26406de22b30b08d0697f3c52b979f6d3e06b7a1398bcca21285b` 成功生成本地展示包 `bundle_1794722204253.json`。
+3. **服务端接收回执**：成功向 ECS 生产服务器（`https://etf.joviluma.com/api/shadow/sync`）投递该包，取得 accepted 回执：
+   - `bundle_id`: `b90469607b54b757363b8188f83f760127015e50b9a46b9b6ec2edc16cda1bda`
+   - `sequence`: 1794722204253
+   - 生产环境 `latest.json` 已实时切至该包。
+4. **服务器 Reader 消费验证**：在生产容器 `etf-deploy-129840e-api-1` 内调用 `_local_reader` 实测：
+   - 34 只 A 股 ETF 行情与威科夫、道氏、ATR 结构三列完整输出。
+   - 美股研究 3 组（美股 CPO/光模块、美股存储、美股指数）及全部 6 个序列完整可用，`available: true`，数据截止日 `as_of: 2026-11-13`。
+   - 前端代码包已内含对应组件（`UsMarkets-BcDLofKZ.js`、`UsMarketsResearchCard-BTNS1upd.js`）。
+5. **合规边界锁定**：严格维持 `research_only=true`、`actionable=false`、`calibration_status=not_calibrated`，零自动交易、无券商连接；策略邮件槽（11:40/14:30/14:45）不受研究模块影响。
+6. **Hub 报告记录**：通过 `bound_report.py` 向 Codex Project Hub 提交事件 `3734d805-210a-4230-82d4-0970ead46dc9`（revision 34 接收）。
+
+**待办（周一 11-16 观察）：**
+1. 用户在浏览器端登录后即可正常查看美股研究页及总览卡片。
+2. 周一首个交易日自然槽启动时，观察 Windows 自然定时任务自动化调度。
+3. 待周一自然调度首包稳定后，在适当节点合并 `integrate/us-markets-20261114` 至 `main`。
