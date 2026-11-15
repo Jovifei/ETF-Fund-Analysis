@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from statistics import median
 from typing import Any
 
@@ -24,11 +25,26 @@ def wyckoff_from_ohlcv(
         return "unknown", 0.0, 0.0, [{"kind": "note", "text": "insufficient bars for wyckoff proxy", "bar_index": None}]
 
     w = slice(-range_lookback, None)
+    w_vols = volumes[w]
+    has_valid_vol = all(
+        v is not None
+        and not isinstance(v, bool)
+        and isinstance(v, (int, float))
+        and math.isfinite(v)
+        and v > 0
+        for v in w_vols
+    )
+    if not has_valid_vol:
+        return "unknown", 0.0, 0.0, [{"kind": "note", "text": "missing or zero volume for wyckoff proxy", "bar_index": as_of_index}]
+
     hi, lo = max(highs[w]), min(lows[w])
     rng = hi - lo
     close = closes[-1]
     pos = 0.5 if rng <= 0 else (close - lo) / rng
-    vol_med = median(volumes[w]) or 1.0
+    vol_med = median(w_vols)
+    if vol_med <= 0 or volumes[-1] <= 0:
+        return "unknown", 0.0, 0.0, [{"kind": "note", "text": "non-positive volume for wyckoff proxy", "bar_index": as_of_index}]
+
     vol_ratio = volumes[-1] / vol_med
     ret5 = (closes[-1] / closes[-6] - 1.0) if n >= 6 and closes[-6] else 0.0
     evidence = [

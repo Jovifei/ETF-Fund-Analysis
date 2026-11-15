@@ -16,7 +16,7 @@ import IndicatorReadings from '../components/IndicatorReadings.vue'
 import AvailabilityMatrix from '../components/AvailabilityMatrix.vue'
 import { availabilityReason } from '../lib/availability'
 import {withGeneration} from '../lib/generation'
-const route=useRoute(),code=computed(()=>String(route.params.code??'').toUpperCase()),interval=ref('1d'),tab=ref(route.query.tab==='ai'?'ai':'chart')
+const route=useRoute(),code=computed(()=>String(route.params.code??'').toUpperCase()),interval=ref('1d'),tab=ref<'chart'|'forecast'|'ai'>(route.query.tab==='ai'?'ai':route.query.tab==='forecast'?'forecast':'chart')
 const latestLocation=computed(()=>{const query={...route.query};delete query.generation;return{path:route.path,query,hash:route.hash}})
 const q=useQuery<Detail & {research_source?:'database'|'local_bundle'}>(()=>withGeneration('/api/workspace/instruments/'+encodeURIComponent(code.value),typeof route.query.generation==='string'?route.query.generation:undefined))
 const chartUrl=computed(()=>q.data.value?.read_as_of?withGeneration('/api/workspace/instruments/'+encodeURIComponent(code.value)+'/chart?interval='+interval.value+'&limit=500&as_of='+encodeURIComponent(q.data.value.read_as_of),q.data.value.generation):null)
@@ -41,12 +41,59 @@ function zoneText(level:SupportLevel|number|null|undefined){
 function distance(value:unknown){const p=typeof value==='number'?value:null;return p!=null&&q.data.value?.quote.price? p/q.data.value.quote.price-1:null}
 </script>
 <template><div v-if="typeof route.query.generation==='string'" class="toolbar"><span class="small-note">当前查看固定批次；批次过期或已回收时可主动读取最新数据。</span><RouterLink class="button" data-testid="read-latest-generation" :to="latestLocation">读取最新批次</RouterLink></div><PageState :loading="q.loading.value&&!q.data.value" :error="q.data.value?'':q.error.value" :empty="!q.data.value" @retry="q.reload"><template v-if="q.data.value"><div v-if="q.error.value" class="notice warning-notice" role="status">详情刷新失败，下面保留上次成功读取的数据：{{q.error.value}}</div><div class="page-heading"><div><p class="eyebrow">{{q.data.value.instrument.kind}} / {{code}} / {{q.data.value.instrument.theme_l1}}</p><h1>{{q.data.value.instrument.name}} <span class="grade" :data-grade="q.data.value.decision?.grade">{{q.data.value.decision?.grade??'研究决策未生成'}}</span></h1><p>决策快照 {{stamp(q.data.value.decision_time)}} · 指标 {{q.data.value.indicator_as_of??'缺失'}}</p></div><div class="heading-actions"><FavoriteButton :code="code"/><RouterLink class="button" :to="{path:'/holdings',query:{code}}">录入持仓</RouterLink><button class="button primary" @click="tab='ai'">AI 研究</button></div></div><div v-if="q.data.value.instrument.enabled===false" class="notice" role="status">{{reasonLabel(q.data.value.availability?.instrument.reason_code)}}</div><div v-if="q.data.value.quote.is_mock||q.data.value.quote.status==='mock'" class="notice warning-notice" role="status">演示/Mock 报价，不可操作。</div>
- <p v-if="q.data.value.is_stale" class="notice warning-notice" data-testid="local-bundle-status" role="status">本地展示包已过期或属于历史版本；仅供历史查看，等待本机更新。</p><p class="small-note" data-testid="detail-freshness">报价源时间 {{q.data.value.quote.source_time??'未知'}} · 抓取 {{q.data.value.quote.fetched_at??'未知'}} · 指标截至 {{q.data.value.indicator_as_of??'未知'}} · 快照 {{q.data.value.snapshot_id??'未生成'}} · 详情读取 {{q.data.value.read_as_of??'未知'}} · K线源日期 {{chart.data.value?.source_as_of??'未知'}} · K线读取 {{chart.data.value?.as_of??'未知'}} · 计算完成 {{chart.data.value?.computed_at??'未知'}} · 显示口径 {{chart.data.value?.display_price_basis??'未知'}} · 研究口径 {{chart.data.value?.research_price_basis??'未知'}} · 指标口径 {{chart.data.value?.indicator_basis??'未知'}} · 输入 {{chart.data.value?.input_hash??'未知'}} · 序列 {{chart.data.value?.series_id??'未知'}}</p>
- <section v-if="decisionExplanation" class="card" data-testid="decision-explanation"><div class="card-header"><h2>研究决策说明</h2></div><div class="card-body"><p><strong>当前结论：</strong>{{decisionExplanation.conclusion??'研究决策未生成'}}</p><p><strong>依据：</strong>{{decisionExplanation.primary_basis??reasonLabel(q.data.value.availability?.decision.reason_code)}}</p><p><strong>与上次：</strong>{{decisionDeltaText()}}</p><p><strong>数据限制：</strong>{{evidenceCaveatText()}}</p><small>计算截止 {{stamp(decisionExplanation.computed_at)}} · actionable=false</small></div></section>
- <AvailabilityMatrix :availability="q.data.value.availability" />
- <div v-if="q.data.value.history_issue" class="notice warning-notice" role="status">历史资格阻断：{{q.data.value.history_issue}}。原始 K 线未改写。</div>
+ <p v-if="q.data.value.is_stale" class="notice warning-notice" data-testid="local-bundle-status" role="status">本地展示包已过期或属于历史版本；仅供历史查看，等待本机更新。</p>
+  <details class="detail-meta-toggle">
+    <summary class="meta-toggle-summary">
+      <span>ℹ️ 数据溯源与计算口径</span>
+      <small class="muted">（点击展开 13 项快照元数据）</small>
+    </summary>
+    <p class="small-note" data-testid="detail-freshness">报价源时间 {{q.data.value.quote.source_time??'未知'}} · 抓取 {{q.data.value.quote.fetched_at??'未知'}} · 指标截至 {{q.data.value.indicator_as_of??'未知'}} · 快照 {{q.data.value.snapshot_id??'未生成'}} · 详情读取 {{q.data.value.read_as_of??'未知'}} · K线源日期 {{chart.data.value?.source_as_of??'未知'}} · K线读取 {{chart.data.value?.as_of??'未知'}} · 计算完成 {{chart.data.value?.computed_at??'未知'}} · 显示口径 {{chart.data.value?.display_price_basis??'未知'}} · 研究口径 {{chart.data.value?.research_price_basis??'未知'}} · 指标口径 {{chart.data.value?.indicator_basis??'未知'}} · 输入 {{chart.data.value?.input_hash??'未知'}} · 序列 {{chart.data.value?.series_id??'未知'}}</p>
+  </details>
+  <section v-if="decisionExplanation" class="card" data-testid="decision-explanation"><div class="card-header"><h2>研究决策说明</h2></div><div class="card-body"><p><strong>当前结论：</strong>{{decisionExplanation.conclusion??'研究决策未生成'}}</p><p><strong>依据：</strong>{{decisionExplanation.primary_basis??reasonLabel(q.data.value.availability?.decision.reason_code)}}</p><p><strong>与上次：</strong>{{decisionDeltaText()}}</p><p><strong>数据限制：</strong>{{evidenceCaveatText()}}</p><small>计算截止 {{stamp(decisionExplanation.computed_at)}} · actionable=false</small></div></section>
+  <AvailabilityMatrix :availability="q.data.value.availability" />
+  <div v-if="q.data.value.history_issue" class="notice warning-notice" role="status">历史资格阻断：{{q.data.value.history_issue}}。原始 K 线未改写。</div>
 <div v-if="['stale','degraded','unverified','historical_close'].includes(String(q.data.value.quote.status))" class="notice" role="status">报价状态 {{q.data.value.quote.status}}，不是实时可操作行情。</div>
 <div v-if="q.data.value.availability?.history.status==='unavailable'" class="notice" role="status">{{reasonLabel(q.data.value.availability.history.reason_code)}}</div>
 <div v-if="q.data.value.availability?.forecasts.status==='unavailable'" class="notice" role="status">{{reasonLabel(q.data.value.availability.forecasts.reason_code)}}</div>
-<div class="cards"><article class="stat-card"><div class="label">最后观测价格<Badge :value="q.data.value.quote.status"/></div><div class="value" :class="direction(q.data.value.quote.change_ratio)">{{num(q.data.value.quote.price,3)}}<span class="delta">{{pct(q.data.value.quote.change_ratio)}}</span></div><small>{{stamp(q.data.value.quote.source_time)}} · {{q.data.value.quote.source??'无报价'}}</small></article><article class="stat-card"><div class="label">支撑带 · 聚类价格区</div><div class="value">{{zoneText(sr?.nearest_support)}}</div><small>相对现价 {{pct(distance(levelPrice(sr?.nearest_support)))}} · {{String(entry.position??'unknown')}}</small></article><article class="stat-card"><div class="label">压力带 · 聚类价格区</div><div class="value">{{zoneText(sr?.nearest_resistance)}}</div><small>相对现价 {{pct(distance(levelPrice(sr?.nearest_resistance)))}} · {{String(themeRank.label??'主题相对强弱不足')}}</small></article><article class="stat-card"><div class="label">我的每份成本</div><div class="value">{{num(q.data.value.holding?.cost_price,3)}}</div><small>持仓盈亏 <span :class="direction(q.data.value.holding?.pnl_ratio)">{{pct(q.data.value.holding?.pnl_ratio)}}</span> · 未录入不估算</small></article></div><div class="section-tabs"><button :class="{active:tab==='chart'}" @click="tab='chart'">技术图表</button><button :class="{active:tab==='ai'}" @click="tab='ai'">AI 研究与证据</button></div><template v-if="tab==='chart'"><div class="card"><div class="card-header"><div><h2>K 线与技术指标</h2><p>统一 Python 公式 · 已确认日 K 支撑压力快照，与最新报价可能不同步</p></div></div><HistoryLoader :code="code" :read-only="q.data.value.research_source==='local_bundle'" @updated="q.reload();chart.reload()"/><div v-if="!chart.data.value?.available" class="toolbar" aria-label="切换K线周期"><button class="button" v-for="p in chartPeriods" :key="p.id" @click="interval=p.id">{{p.name}}</button></div><PageState :loading="chart.loading.value" :error="chart.error.value" :empty="!chart.data.value?.available" title="该周期暂无合格数据" :description="chart.data.value?.reason??'日线不会冒充分钟线；请检查数据同步状态。'" @retry="chart.reload"><EtfChart v-if="chart.data.value?.available" :data="chart.data.value" :cost="q.data.value.holding?.cost_price" :allow-minutes="q.data.value.research_source!=='local_bundle'" @period="interval=$event"/></PageState></div><div v-if="chart.data.value?.core_snapshot_match===false||chart.data.value?.history_truncated" class="notice warning-notice">图表历史与最新指标快照未完全对齐或历史已截断，请核对数据版本；不能把它当作决策快照的精确历史回放。</div>
-<div v-if="chart.data.value?.history_issue||chart.data.value?.qualification==='mock'" class="notice warning-notice">{{chart.data.value?.history_issue?`价格连续性/单位问题：${chart.data.value.history_issue}`:'图表来源为 Mock'}}。未用于操作级信号。</div><div v-if="chart.data.value?.indicator_note" class="notice" role="status">{{chart.data.value.indicator_note}}</div><div v-if="q.data.value.holding&&!chart.data.value?.cost_overlay_allowed" class="notice">当前价格基准不允许直接叠加持仓成本线，避免复权口径混淆。</div><div class="card"><div class="card-header"><div><h2>指标快照数值</h2><p>{{q.data.value.indicator_version}} · {{q.data.value.indicator_as_of}} · 不由 AI 计算</p></div></div><div class="card-body"><IndicatorReadings :readings="chart.data.value?.studies?.readings??[]"/></div></div><div class="card"><div class="card-header"><div><h2>未来研究情景</h2><p>预测与真实 K 线分离；区间不代表承诺，历史频率不等于校准概率。</p></div></div><div class="card-body"><OutlookPanel :code="code" :forecasts="q.data.value.forecasts"/></div></div></template><ResearchPanel v-else :code="code"/></template></PageState></template>
+<div class="cards"><article class="stat-card"><div class="label">最后观测价格<Badge :value="q.data.value.quote.status"/></div><div class="value" :class="direction(q.data.value.quote.change_ratio)">{{num(q.data.value.quote.price,3)}}<span class="delta">{{pct(q.data.value.quote.change_ratio)}}</span></div><small>{{stamp(q.data.value.quote.source_time)}} · {{q.data.value.quote.source??'无报价'}}</small></article><article class="stat-card"><div class="label">支撑带 · 聚类价格区</div><div class="value">{{zoneText(sr?.nearest_support)}}</div><small>相对现价 {{pct(distance(levelPrice(sr?.nearest_support)))}} · {{String(entry.position??'unknown')}}</small></article><article class="stat-card"><div class="label">压力带 · 聚类价格区</div><div class="value">{{zoneText(sr?.nearest_resistance)}}</div><small>相对现价 {{pct(distance(levelPrice(sr?.nearest_resistance)))}} · {{String(themeRank.label??'主题相对强弱不足')}}</small></article><article class="stat-card"><div class="label">我的每份成本</div><div class="value">{{num(q.data.value.holding?.cost_price,3)}}</div><small>持仓盈亏 <span :class="direction(q.data.value.holding?.pnl_ratio)">{{pct(q.data.value.holding?.pnl_ratio)}}</span> · 未录入不估算</small></article></div>
+<div class="section-tabs" aria-label="详情内容分栏">
+  <button :class="{active:tab==='chart'}" @click="tab='chart'">📈 技术图表与指标</button>
+  <button :class="{active:tab==='forecast'}" @click="tab='forecast'">🎯 未来情景预测</button>
+  <button :class="{active:tab==='ai'}" @click="tab='ai'">🤖 AI 研究与证据</button>
+</div>
+<template v-if="tab==='chart'">
+  <div class="card"><div class="card-header"><div><h2>K 线与技术指标</h2><p>统一 Python 公式 · 已确认日 K 支撑压力快照，与最新报价可能不同步</p></div></div><HistoryLoader :code="code" :read-only="q.data.value.research_source==='local_bundle'" @updated="q.reload();chart.reload()"/><div v-if="!chart.data.value?.available" class="toolbar" aria-label="切换K线周期"><button class="button" v-for="p in chartPeriods" :key="p.id" @click="interval=p.id">{{p.name}}</button></div><PageState :loading="chart.loading.value" :error="chart.error.value" :empty="!chart.data.value?.available" title="该周期暂无合格数据" :description="chart.data.value?.reason??'日线不会冒充分钟线；请检查数据同步状态。'" @retry="chart.reload"><EtfChart v-if="chart.data.value?.available" :data="chart.data.value" :cost="q.data.value.holding?.cost_price" :allow-minutes="q.data.value.research_source!=='local_bundle'" @period="interval=$event"/></PageState></div>
+  <div v-if="chart.data.value?.core_snapshot_match===false||chart.data.value?.history_truncated" class="notice warning-notice">图表历史与最新指标快照未完全对齐或历史已截断，请核对数据版本；不能把它当作决策快照的精确历史回放。</div>
+  <div v-if="chart.data.value?.history_issue||chart.data.value?.qualification==='mock'" class="notice warning-notice">{{chart.data.value?.history_issue?`价格连续性/单位问题：${chart.data.value.history_issue}`:'图表来源为 Mock'}}。未用于操作级信号。</div><div v-if="chart.data.value?.indicator_note" class="notice" role="status">{{chart.data.value.indicator_note}}</div><div v-if="q.data.value.holding&&!chart.data.value?.cost_overlay_allowed" class="notice">当前价格基准不允许直接叠加持仓成本线，避免复权口径混淆。</div>
+  <div class="card"><div class="card-header"><div><h2>指标快照数值</h2><p>{{q.data.value.indicator_version}} · {{q.data.value.indicator_as_of}} · 不由 AI 计算</p></div></div><div class="card-body"><IndicatorReadings :readings="chart.data.value?.studies?.readings??[]"/></div></div>
+</template>
+<template v-else-if="tab==='forecast'">
+  <div class="card"><div class="card-header"><div><h2>未来研究情景</h2><p>预测与真实 K 线分离；区间不代表承诺，历史频率不等于校准概率。</p></div></div><div class="card-body"><OutlookPanel :code="code" :forecasts="q.data.value.forecasts"/></div></div>
+</template>
+<ResearchPanel v-else :code="code"/></template></PageState></template>
+<style scoped>
+.detail-meta-toggle {
+  margin: 8px 0 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border, #24292f);
+  border-radius: 6px;
+  padding: 6px 12px;
+}
+.meta-toggle-summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted, #8b949e);
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.meta-toggle-summary:hover {
+  color: var(--text, #c9d1d9);
+}
+.detail-meta-toggle[open] .meta-toggle-summary {
+  margin-bottom: 6px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+  padding-bottom: 4px;
+}
+</style>

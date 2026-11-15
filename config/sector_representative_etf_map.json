@@ -1,0 +1,407 @@
+{
+  "schema_version": "sector_representative_map_v1",
+  "contract": "representative_etf_relation_v1",
+  "updated_at": "2026-11-08",
+  "notes": "板块/指数与代表ETF对应关系映射表：具备明确依据(basis)、有效期(effective_from/to)、映射类型(mapping_type)与资质判定。优先覆盖华泰柏瑞、南方基金等头部公募主力标的。",
+  "mappings": [
+    {
+      "sector_name": "沪深300",
+      "theme_l1": "宽基",
+      "theme_l2": "大盘核心",
+      "representative_etf": {
+        "ts_code": "510300.SH",
+        "symbol": "510300",
+        "name": "沪深300ETF",
+        "fund_company": "华泰柏瑞基金"
+      },
+      "tracking_index": {
+        "code": "000300.SH",
+        "name": "沪深300指数"
+      },
+      "mapping_type": "primary_tracker",
+      "basis": "华泰柏瑞沪深300ETF为全市场规模最大流动性最好核心基准标的，首只3000亿级股票ETF",
+      "effective_from": "2024-01-01",
+      "effective_to": "2027-12-31",
+      "qualification": "verified",
+      "status": "active"
+    },
+    {
+      "sector_name": "半导体",
+      "theme_l1": "科技",
+      "theme_l2": "半导体",
+      "representative_etf": {
+        "ts_code": "512480.SH",
+        "symbol": "512480",
+        "name": "半导体ETF",
+        "fund_company": "国联安基金"
+      },
+      "tracking_index": {
+        "code": "399971.SZ",
+        "name": "中证全指半导体产品与设备指数"
+      },
+      "mapping_type": "primary_tracker",
+      "basis": "半导体全行业规模与成交量主力ETF，跟踪中证全指半导体指数",
+      "effective_from": "2024-01-01",
+      "effective_to": "2027-12-31",
+      "qualification": "verified",
+      "status": "active"
+    },
+    {
+      "sector_name": "光伏",
+      "theme_l1": "制造",
+      "theme_l2": "光伏",
+      "representative_etf": {
+        "ts_code": "515790.SH",
+        "symbol": "515790",
+        "name": "光伏ETF",
+        "fund_company": "华泰柏瑞基金"
+      },
+      "tracking_index": {
+        "code": "931151.CSI",
+        "name": "中证光伏产业指数"
+      },
+      "mapping_type": "primary_tracker",
+      "basis": "华泰柏瑞旗舰新能源产业ETF，光伏产业规模最大主力跟踪标的",
+      "effective_from": "2024-01-01",
+      "effective_to": "2027-12-31",
+      "qualification": "verified",
+      "status": "active"
+    },
+    {
+      "sector_name": "有色金属",
+      "theme_l1": "资源能源",
+      "theme_l2": "有色",
+      "representative_etf": {
+        "ts_code": "512400.SH",
+        "symbol": "512400",
+        "name": "有色金属ETF",
+        "fund_company": "南方基金"
+      },
+      "tracking_index": {
+        "code": "000819.CSI",
+        "name": "中证申万有色金属期货及现货指数"
+      },
+      "mapping_type": "primary_tracker",
+      "basis": "南方基金头部工业金属与贵金属代表标的，有色板块规模最大主力ETF",
+      "effective_from": "2024-01-01",
+      "effective_to": "2027-12-31",
+      "qualification": "verified",
+      "status": "active"
+    },
+    {
+      "sector_name": "原油",
+      "theme_l1": "资源能源",
+      "theme_l2": "原油",
+      "representative_etf": {
+        "ts_code": "159980.SZ",
+        "symbol": "159980",
+        "name": "原油ETF",
+        "fund_company": "南方基金"
+      },
+      "tracking_index": {
+        "code": "159980.SZ",
+        "name": "大宗商品原油资产"
+      },
+      "mapping_type": "primary_tracker",
+      "basis": "南方基金商品类旗舰标的，境内流动性最强原油现货与期货跟踪工具",
+      "effective_from": "2024-01-01",
+      "effective_to": "2027-12-31",
+      "qualification": "verified",
+      "status": "active"
+    },
+    {
+      "sector_name": "房地产",
+      "theme_l1": "地产建筑",
+      "theme_l2": "地产",
+      "representative_etf": {
+        "ts_code": "512200.SH",
+        "symbol": "512200",
+        "name": "房地产ETF",
+        "fund_company": "南方基金"
+      },
+      "tracking_index": {
+        "code": "399393.SZ",
+        "name": "中证全指房地产指数"
+      },
+      "mapping_type": "primary_tracker",
+      "basis": "南方基金地产行业主力标的，跟踪中证全指房地产龙头",
+      "effective_from": "2024-01-01",
+      "effective_to": "2027-12-31",
+      "qualification": "verified",
+      "status": "active"
+    },
+    {
+      "sector_name": "白酒",
+      "theme_l1": "消费",
+      "theme_l2": "白酒",
+      "representative_etf": {
+        "ts_code": "512690.SH",
+        "symbol": "512690",
+        "name": "酒ETF",
+        "fund_company": "鹏华基金"
+      },
+      "tracking_index": {
+        "code": "399987.SZ",
+        "name": "中证酒指数"
+      },
+      "mapping_type": "primary_tracker",
+      "basis": "中证酒指数主力流动性ETF，覆盖白酒龙头企业",
+      "effective_from": "2024-01-01",
+      "effective_to": "2027-12-31",
+      "qualification": "verified",
+      "status": "active"
+    },
+    {
+      "sector_name": "银行",
+      "theme_l1": "金融",
+      "theme_l2": "银行",
+      "representative_etf": {
+        "ts_code": "512800.SH",
+        "symbol": "512800",
+        "name": "银行ETF",
+        "fund_company": "华宝基金"
+      },
+      "tracking_index": {
+        "code": "399986.SZ",
+        "name": "中证银行指数"
+      },
+      "mapping_type": "primary_tracker",
+      "basis": "银行板块规模最大、流动性最充裕的核心配置标的",
+      "effective_from": "2024-01-01",
+      "effective_to": "2027-12-31",
+      "qualification": "verified",
+      "status": "active"
+    },
+    {
+      "sector_name": "证券",
+      "theme_l1": "金融",
+      "theme_l2": "证券",
+      "representative_etf": {
+        "ts_code": "512880.SH",
+        "symbol": "512880",
+        "name": "证券ETF",
+        "fund_company": "国泰基金"
+      },
+      "tracking_index": {
+        "code": "399975.SZ",
+        "name": "中证全指证券公司指数"
+      },
+      "mapping_type": "primary_tracker",
+      "basis": "证券板块高贝塔主力ETF，场内交投最活跃券商标的",
+      "effective_from": "2024-01-01",
+      "effective_to": "2027-12-31",
+      "qualification": "verified",
+      "status": "active"
+    },
+    {
+      "sector_name": "医药",
+      "theme_l1": "医药",
+      "theme_l2": "化学制药",
+      "representative_etf": {
+        "ts_code": "512010.SH",
+        "symbol": "512010",
+        "name": "医药ETF",
+        "fund_company": "易方达基金"
+      },
+      "tracking_index": {
+        "code": "000913.SH",
+        "name": "沪深300医药卫生指数"
+      },
+      "mapping_type": "primary_tracker",
+      "basis": "医药卫生核心蓝筹龙头ETF，易方达核心产业基金",
+      "effective_from": "2024-01-01",
+      "effective_to": "2027-12-31",
+      "qualification": "verified",
+      "status": "active"
+    },
+    {
+      "sector_name": "医疗",
+      "theme_l1": "医药",
+      "theme_l2": "医疗",
+      "representative_etf": {
+        "ts_code": "512170.SH",
+        "symbol": "512170",
+        "name": "医疗ETF",
+        "fund_company": "华宝基金"
+      },
+      "tracking_index": {
+        "code": "399989.SZ",
+        "name": "中证医疗指数"
+      },
+      "mapping_type": "primary_tracker",
+      "basis": "中证医疗器械与服务主力流动性标的",
+      "effective_from": "2024-01-01",
+      "effective_to": "2027-12-31",
+      "qualification": "verified",
+      "status": "active"
+    },
+    {
+      "sector_name": "军工",
+      "theme_l1": "制造",
+      "theme_l2": "国防军工",
+      "representative_etf": {
+        "ts_code": "512660.SH",
+        "symbol": "512660",
+        "name": "军工ETF",
+        "fund_company": "国泰基金"
+      },
+      "tracking_index": {
+        "code": "399959.SZ",
+        "name": "中证军工指数"
+      },
+      "mapping_type": "primary_tracker",
+      "basis": "国防军工板块代表性主力ETF，持仓涵盖航空航天与高端制造",
+      "effective_from": "2024-01-01",
+      "effective_to": "2027-12-31",
+      "qualification": "verified",
+      "status": "active"
+    },
+    {
+      "sector_name": "黄金",
+      "theme_l1": "资源能源",
+      "theme_l2": "黄金",
+      "representative_etf": {
+        "ts_code": "518880.SH",
+        "symbol": "518880",
+        "name": "黄金ETF",
+        "fund_company": "华安基金"
+      },
+      "tracking_index": {
+        "code": "AU9999.SGE",
+        "name": "上海黄金交易所Au99.99现货实盘"
+      },
+      "mapping_type": "primary_tracker",
+      "basis": "国内规模最大实物黄金现货合约跟踪ETF，避险资产主力代理",
+      "effective_from": "2024-01-01",
+      "effective_to": "2027-12-31",
+      "qualification": "verified",
+      "status": "active"
+    },
+    {
+      "sector_name": "煤炭",
+      "theme_l1": "资源能源",
+      "theme_l2": "煤炭",
+      "representative_etf": {
+        "ts_code": "515220.SH",
+        "symbol": "515220",
+        "name": "煤炭ETF",
+        "fund_company": "国泰基金"
+      },
+      "tracking_index": {
+        "code": "399998.SZ",
+        "name": "中证煤炭指数"
+      },
+      "mapping_type": "primary_tracker",
+      "basis": "高股息红利与煤炭开采龙头行业代表性主力ETF",
+      "effective_from": "2024-01-01",
+      "effective_to": "2027-12-31",
+      "qualification": "verified",
+      "status": "active"
+    },
+    {
+      "sector_name": "人工智能",
+      "theme_l1": "科技",
+      "theme_l2": "人工智能",
+      "representative_etf": {
+        "ts_code": "159819.SZ",
+        "symbol": "159819",
+        "name": "人工智能ETF",
+        "fund_company": "易方达基金"
+      },
+      "tracking_index": {
+        "code": "931071.CSI",
+        "name": "中证人工智能主题指数"
+      },
+      "mapping_type": "theme_proxy",
+      "basis": "易方达AI算力与模型产业链主题代表标的",
+      "effective_from": "2024-01-01",
+      "effective_to": "2027-12-31",
+      "qualification": "verified",
+      "status": "active"
+    },
+    {
+      "sector_name": "通信",
+      "theme_l1": "科技",
+      "theme_l2": "通信",
+      "representative_etf": {
+        "ts_code": "515880.SH",
+        "symbol": "515880",
+        "name": "通信ETF",
+        "fund_company": "国泰基金"
+      },
+      "tracking_index": {
+        "code": "931160.CSI",
+        "name": "中证全指通信设备指数"
+      },
+      "mapping_type": "primary_tracker",
+      "basis": "通信设备与光模块产业规模主力ETF",
+      "effective_from": "2024-01-01",
+      "effective_to": "2027-12-31",
+      "qualification": "verified",
+      "status": "active"
+    },
+    {
+      "sector_name": "机器人",
+      "theme_l1": "制造",
+      "theme_l2": "机器人",
+      "representative_etf": {
+        "ts_code": "562500.SH",
+        "symbol": "562500",
+        "name": "机器人ETF",
+        "fund_company": "华夏基金"
+      },
+      "tracking_index": {
+        "code": "H30590.CSI",
+        "name": "中证机器人指数"
+      },
+      "mapping_type": "theme_proxy",
+      "basis": "具身智能与工业母机自动化核心主题ETF",
+      "effective_from": "2024-01-01",
+      "effective_to": "2027-12-31",
+      "qualification": "verified",
+      "status": "active"
+    },
+    {
+      "sector_name": "新能源车",
+      "theme_l1": "制造",
+      "theme_l2": "新能源车",
+      "representative_etf": {
+        "ts_code": "515030.SH",
+        "symbol": "515030",
+        "name": "新能源车ETF",
+        "fund_company": "华夏基金"
+      },
+      "tracking_index": {
+        "code": "399976.SZ",
+        "name": "CS新能车指数"
+      },
+      "mapping_type": "primary_tracker",
+      "basis": "整车与动力电池产业链规模主力ETF",
+      "effective_from": "2024-01-01",
+      "effective_to": "2027-12-31",
+      "qualification": "verified",
+      "status": "active"
+    },
+    {
+      "sector_name": "电力",
+      "theme_l1": "公用事业",
+      "theme_l2": "电力",
+      "representative_etf": {
+        "ts_code": "159611.SZ",
+        "symbol": "159611",
+        "name": "电力ETF",
+        "fund_company": "广发基金"
+      },
+      "tracking_index": {
+        "code": "399990.SZ",
+        "name": "中证全指电力公用事业指数"
+      },
+      "mapping_type": "primary_tracker",
+      "basis": "绿色电力与传统公用事业高分红防御主力标的",
+      "effective_from": "2024-01-01",
+      "effective_to": "2027-12-31",
+      "qualification": "verified",
+      "status": "active"
+    }
+  ]
+}

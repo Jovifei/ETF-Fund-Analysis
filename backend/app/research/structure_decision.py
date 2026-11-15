@@ -49,15 +49,27 @@ def apply_structure_decision(
     """
     cfg = cfg or {}
     enabled = bool(cfg.get("enabled", False))
-    try:
-        weight = float(cfg.get("weight", 0.0))
-    except (TypeError, ValueError):
+    raw_weight = cfg.get("weight", 0.0)
+    if isinstance(raw_weight, bool) or raw_weight is None:
         weight = 0.0
+    else:
+        try:
+            f = float(raw_weight)
+            weight = f if math.isfinite(f) else 0.0
+        except (TypeError, ValueError, OverflowError):
+            weight = 0.0
     weight = min(1.0, max(0.0, weight))
-    try:
-        max_shift = int(cfg.get("max_shift", 1))
-    except (TypeError, ValueError):
+
+    raw_shift = cfg.get("max_shift", 1)
+    if isinstance(raw_shift, bool):
         max_shift = 1
+    else:
+        try:
+            max_shift = int(raw_shift)
+        except (TypeError, ValueError):
+            max_shift = 1
+    max_shift = max(0, max_shift)
+
     detail: dict[str, Any] = {
         "version": DECISION_VERSION,
         "enabled": enabled,
@@ -75,10 +87,23 @@ def apply_structure_decision(
     if base_grade in _HARD_GRADES or base_grade not in GRADE_RANK:
         detail["reason"] = "hard_grade_not_adjusted"
         return detail
-    if not isinstance(shadow, dict) or not isinstance(shadow.get("score"), (int, float)):
+    if not isinstance(shadow, dict):
         detail["reason"] = "no_structure"
         return detail
-    score = float(shadow["score"])
+    raw_score = shadow.get("score")
+    if isinstance(raw_score, bool) or not isinstance(raw_score, (int, float)):
+        detail["reason"] = "no_structure"
+        return detail
+    try:
+        f_score = float(raw_score)
+        if not math.isfinite(f_score):
+            detail["reason"] = "no_structure"
+            return detail
+    except (TypeError, ValueError, OverflowError):
+        detail["reason"] = "no_structure"
+        return detail
+
+    score = f_score
     detail["score"] = shadow["score"]
     detail["signal"] = shadow.get("signal")
     if weight <= 0:
@@ -87,7 +112,8 @@ def apply_structure_decision(
     base_rank = GRADE_RANK[base_grade]
     target = math.floor(base_rank + weight * score * 2.0 + 0.5)
     shift = max(-max_shift, min(max_shift, target - base_rank))
-    final_rank = base_rank + shift
+    candidate_rank = base_rank + shift
+    final_rank = max(_BOTTOM, min(_TOP, candidate_rank))
     if final_rank >= _TOP and base_rank < _TOP:
         final_rank = _TOP - 1
     if final_rank <= _BOTTOM and base_rank > _BOTTOM:

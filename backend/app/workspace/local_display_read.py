@@ -595,6 +595,46 @@ class LocalDisplayReader:
             **_input_observation_metadata(bundle.get("manifest", {})),
         }
 
+    def read_index_chart(
+        self,
+        context_id: str,
+        interval: str = "1d",
+        limit: int = 500,
+        generation: str | int | None = None,
+    ) -> dict[str, Any] | None:
+        bundle = self.load_bundle(generation)
+        if not bundle:
+            return None
+        idx_charts = bundle.get("parts", {}).get("index_charts", {})
+        from app.providers.index_history import INDEX_CODES
+        candidates = [
+            context_id,
+            context_id.upper(),
+            INDEX_CODES.get(context_id),
+            INDEX_CODES.get(context_id.lower()),
+        ]
+        chart = None
+        for cand in candidates:
+            if cand and cand in idx_charts:
+                chart = idx_charts[cand]
+                break
+        if not chart:
+            return None
+        chart_copy = dict(chart)
+        bars = chart_copy.get("bars", [])
+        if len(bars) > limit:
+            bars = bars[-limit:]
+        return {
+            **chart_copy,
+            "interval": interval,
+            "bars": bars,
+            "generation": bundle.get("manifest", {}).get("sequence"),
+            "read_model_version": CONTRACT_VERSION,
+            "provider_called": False,
+            "actionable": False,
+            "research_only": True,
+        }
+
     def read_chart_data(
         self,
         code: str,
@@ -603,7 +643,7 @@ class LocalDisplayReader:
         generation: str | int | None = None,
         as_of: str | datetime | None = None,
     ) -> dict[str, Any] | None:
-        if interval not in {"1d", "1w", "1mo"}:
+        if interval not in {"1d", "1w", "1mo", "30m", "60m"}:
             raise ValueError("unsupported_chart_interval")
 
         bundle = self.load_bundle(generation)
@@ -673,6 +713,30 @@ class LocalDisplayReader:
         if not part or not isinstance(part.get("items"), list) or not part["items"]:
             return None
         return list(part["items"])
+
+    def read_us_markets_research_view(
+        self, generation: str | int | None = None, *, now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Research-only US markets block published in the pinned bundle (never a provider call)."""
+        from app.us_markets_research.store import read_envelope
+        now = now or datetime.now(timezone.utc)
+        bundle = self.load_bundle(generation)
+        manifest = bundle.get("manifest", {}) if bundle else {}
+        part = bundle.get("parts", {}).get("us_markets_research") if bundle else None
+        if not bundle:
+            reason = "local_display_generation_unavailable" if generation is not None else "local_bundle_unavailable"
+        elif not isinstance(part, dict):
+            reason = "us_markets_research_not_published"
+        else:
+            reason = None
+        expired = bundle_expired(bundle, now=now)
+        historical = bool(bundle and bundle.get("historical_identity"))
+        return read_envelope(part if isinstance(part, dict) else None, reason, now=now, extra={
+            "generation": manifest.get("sequence"), "requested_generation": generation,
+            "generated_at": manifest.get("generated_at"), "expires_at": manifest.get("expires_at"),
+            "is_expired": expired, "historical_identity": historical,
+            "is_stale": not bundle or historical or bool(expired),
+            "research_source": "local_bundle", "read_model_version": CONTRACT_VERSION})
 
     def read_market_context_view(
         self, generation: str | int | None = None, *, now: datetime | None = None,

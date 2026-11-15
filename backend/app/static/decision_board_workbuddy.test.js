@@ -56,3 +56,69 @@ test('audit: cached iframe state cannot hide a failed refresh',()=>{
   emit('connection_failed');assert.equal(ctx.state.connectionError,true);
   emit('');assert.equal(ctx.state.connectionError,false);
 });
+
+test('tableHead includes structure columns and colspan is 15', () => {
+  assert.match(source, /<th>威科夫结构<\/th><th>道氏趋势<\/th><th>ATR 波动风险<\/th>/);
+  assert.match(source, /colspan="15"/);
+});
+
+test('wyckoffHtml, dowHtml, atrHtml backward compatibility: missing structure_v1 shows em-dash and does not crash', () => {
+  const ui = load();
+  const emptyRow = { ts_code: '510300.SH' };
+  const nullRow = { ts_code: '510300.SH', structure_v1: null };
+
+  for (const r of [emptyRow, nullRow, {}]) {
+    assert.match(ui.wyckoffHtml(r), />—<\/span>/);
+    assert.match(ui.wyckoffHtml(r), /未包含结构因子|样本不足/);
+    assert.match(ui.dowHtml(r), />—<\/span>/);
+    assert.match(ui.atrHtml(r), />—<\/span>/);
+    assert.doesNotMatch(ui.atrHtml(r), /低波/);
+    assert.doesNotMatch(ui.wyckoffHtml(r), /吸筹/);
+    assert.doesNotMatch(ui.dowHtml(r), /上升趋势/);
+  }
+});
+
+test('wyckoffHtml and dowHtml render Chinese labels and scores correctly', () => {
+  const ui = load();
+  const row = {
+    ts_code: '510300.SH',
+    structure_v1: {
+      schema_version: 'structure_v1',
+      as_of: '2026-11-09',
+      wyckoff_phase: 'accumulation',
+      wyckoff_score: 0.45,
+      wyckoff_confidence: 0.65,
+      dow_phase: 'uptrend',
+      dow_score: 0.7,
+      dow_confidence: 0.65,
+    }
+  };
+  const wy = ui.wyckoffHtml(row);
+  assert.match(wy, /吸筹/);
+  assert.match(wy, /score \+0\.45/);
+  assert.match(wy, /2026-11-09/);
+
+  const dow = ui.dowHtml(row);
+  assert.match(dow, /上升趋势/);
+  assert.match(dow, /score \+0\.7/);
+});
+
+test('atrHtml formats risk bucket, percentage, and atr_pct_fixed_v1 metadata', () => {
+  const ui = load();
+  const row = {
+    ts_code: '510300.SH',
+    structure_v1: {
+      schema_version: 'structure_v1',
+      as_of: '2026-11-09',
+      atr14: 0.0456,
+      atr_pct: 0.0125,
+      atr_risk_bucket: 'mid',
+    }
+  };
+  const html = ui.atrHtml(row);
+  assert.match(html, /中波/);
+  assert.match(html, /1\.25%/);
+  assert.match(html, /ATR14: 0\.0456/);
+  assert.match(html, /规则: atr_pct_fixed_v1/);
+  assert.match(html, /class="atr-mid"/);
+});

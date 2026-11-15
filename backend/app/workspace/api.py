@@ -196,13 +196,30 @@ def index_summaries(db: DB, settings: Config, user: User, response: Response, ge
 def index_chart(context_id: str, db: DB, settings: Config, user: User,
                 limit: int = Query(default=500, ge=30, le=1500), interval: Literal["1d","1w","1mo"]="1d"):
     if settings.workspace_research_source == "local_bundle":
-        raise HTTPException(404, "index_chart_not_published_in_local_bundle")
+        reader = _local_reader(settings)
+        chart = reader.read_index_chart(context_id, interval=interval, limit=limit)
+        if chart is None:
+            raise HTTPException(404, "local_display_index_not_published")
+        return chart
     from app.workspace.index_history import read
     result = read(db, settings, context_id, 1500)
     if result is None:
         raise HTTPException(404, "index not registered")
     from app.workspace.candle_periods import transform_chart
     return transform_chart(result,interval,settings.load_strategy()["indicator"],limit)
+
+
+@private_router.get("/workspace/sectors/representatives")
+def sector_representatives(db: DB, settings: Config, user: User, as_of: Annotated[str | None, Query()] = None) -> dict:
+    from app.services.sector_representative_service import SectorRepresentativeService
+    srv = SectorRepresentativeService()
+    mappings = srv.list_mappings(as_of=as_of)
+    return {
+        "mappings": mappings,
+        "total": len(mappings),
+        "actionable": False,
+        "research_only": True,
+    }
 
 
 @private_router.get("/workspace/storage")
@@ -238,6 +255,20 @@ from app.workspace.ai_api import router as ai_router  # noqa: E402
 
 private_router.include_router(ai_router)
 private_router.include_router(member_router)
+
+@private_router.get("/workspace/us-markets-research")
+def us_markets_research(settings: Config, response: Response, user: User, generation: str | None = Query(default=None)) -> dict:
+    """Research-only US CPO/memory baskets and US indices; never fetches data, never graded."""
+    from app.us_markets_research import store
+    response.headers["Cache-Control"] = "private, no-store"
+    if settings.workspace_research_source == "local_bundle":
+        return _local_reader(settings).read_us_markets_research_view(generation=generation)
+    path = store.configured_path()
+    if path is None:
+        return store.read_envelope(None, "us_markets_research_not_published", extra={"research_source": "none"})
+    part, reason = store.load_snapshot_file(path)
+    return store.read_envelope(part, reason, extra={"research_source": "snapshot_file"})
+
 
 @private_router.get("/workspace/market-context")
 def context_read_view(db: DB, settings: Config, response: Response, user: User, generation: str | None = Query(default=None)) -> dict:

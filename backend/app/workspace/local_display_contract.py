@@ -10,10 +10,10 @@ from app.workspace.shadow_bundle import digest
 from app.workspace.shadow_projection import CODE_RE, validate_public_chart
 
 CONTRACT_VERSION = "local-display-v2"
-VALIDATION_VERSION = "local-display-validation-v2.3"
+VALIDATION_VERSION = "local-display-validation-v2.4"
 MAX_BUNDLE_BYTES = 64 * 1024 * 1024  # 64 MiB bounded quota
 REQUIRED_PARTS = {"overview", "details", "charts", "sectors"}
-OPTIONAL_PARTS = {"market_context", "chart_periods"}
+OPTIONAL_PARTS = {"market_context", "chart_periods", "index_charts", "us_markets_research"}
 CONTEXT_AVAILABILITY = {"available", "partial", "carried_forward", "unavailable", "unpublished"}
 FORBIDDEN_PRIVATE_FIELDS = {"avg_cost", "holdings", "cost", "trades", "account_id", "user_id", "accounts", "cookie", "cookies", "token", "password", "authorization"}
 HEX_HASH_RE = re.compile(r"^[0-9a-fA-F]{64}$")
@@ -171,13 +171,22 @@ def verify_bundle_integrity(bundle: dict[str, Any], *, now: datetime | None = No
         if not isinstance(period_charts, dict):
             return False
         for code, intervals in period_charts.items():
-            if code not in universe or not isinstance(intervals, dict) or set(intervals) - {"1w", "1mo"}:
+            if code not in universe or not isinstance(intervals, dict) or set(intervals) - {"1w", "1mo", "30m", "60m"}:
                 return False
             for interval, chart in intervals.items():
                 if not isinstance(chart, dict) or chart.get("interval") != interval:
                     return False
                 validate_public_chart(chart, code=code, generated_at=generated, partial=True,
                                       expected_interval=interval)
+        if "index_charts" in parts:
+            idx_charts = parts["index_charts"]
+            if not isinstance(idx_charts, dict):
+                return False
+            for idx_code, chart in idx_charts.items():
+                if not isinstance(chart, dict):
+                    return False
+                validate_public_chart(chart, code=idx_code, generated_at=generated, partial=True,
+                                      expected_interval=chart.get("interval", "1d"))
         if "market_context" in parts:
             context = parts["market_context"]
             if not isinstance(context, dict) or not isinstance(context.get("items"), list):
@@ -186,6 +195,10 @@ def verify_bundle_integrity(bundle: dict[str, Any], *, now: datetime | None = No
                 availability = context["availability"]
                 if not isinstance(availability, str) or availability not in CONTEXT_AVAILABILITY:
                     return False
+        if "us_markets_research" in parts:
+            from app.us_markets_research.contracts import validate_part as validate_us_markets_part
+            if validate_us_markets_part(parts["us_markets_research"]):
+                return False
         for code, detail in parts["details"].items():
             if code not in universe or not isinstance(detail, dict):
                 return False
