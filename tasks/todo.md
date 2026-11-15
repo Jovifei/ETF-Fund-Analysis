@@ -382,3 +382,15 @@ Review：当前应优先完成真实 PIT 14:30 数据与供应商/许可确认�
 1. 用户在浏览器端登录后即可正常查看美股研究页及总览卡片。
 2. 周一首个交易日自然槽启动时，观察 Windows 自然定时任务自动化调度。
 3. 待周一自然调度首包稳定后，在适当节点合并 `integrate/us-markets-20261114` 至 `main`。
+
+## 2026-11-15 生产变更：模型 API 通道受控启用（用户明确授权）
+- **背景**：用户在网站前端管理页核验时发现模型 API 通道提示管理员尚未启用。
+- **操作**：
+  1. 在 ECS 宿主机私有目录 /opt/china-fund-decision/ai-key/ 创建合规主密钥 master.key（权限 0700/0600，属主 10001:10001 ppuser）。
+  2. 备份生产 Compose 配置为 
+ew.yml.bak_20261115_ai_enable。
+  3. 更新 
+ew.yml：挂载 /opt/china-fund-decision/ai-key:/var/lib/etf-private/ai:ro，注入 WORKSPACE_AI_API_ENABLED=true 与 WORKSPACE_AI_KEY_FILE=/var/lib/etf-private/ai/master.key。
+  4. 重启生产容器并通过健康检查：pi-1 (healthy), worker-1 (healthy), scheduler-1 (Up)。
+  5. 实测 i_profiles.capabilities() 返回 vailable: true、locked_reason: null，允许域名 pi.deepseek.com 与 pi.openai.com。
+  6. 宿主机同机其他容器（jourvolt, medbox, star-photo 等）运行正常未受波及。
