@@ -51,6 +51,19 @@
           "note": "Previous producer registered for controlled rollback; do not switch only one side of the consumer/producer identity pair."
         }
       ]
+    },
+    {
+      "code_sha": "df340e3fbbc64dac7b5d9429dadeb1108ebf3604",
+      "config_hash": "9efe8845e2e26406de22b30b08d0697f3c52b979f6d3e06b7a1398bcca21285b",
+      "approved_at": "2026-11-15",
+      "approved_scope": "Producer at df340e3 (us-markets A-phase integration tip): LF-normalized frozen-formula hashing and Windows atomic report publication. Qualification evidence: the accepted bundle sequence 1794722204253 (2026-11-15T05:59:10Z) carries this exact code_sha/config_hash with 34/34 settled A-share rows plus the six research-only US series (as_of 2026-11-13). research_only/actionable=false/not_calibrated unchanged.",
+      "evidence_ref": "docs/audits/RE_FREEZE_DF340E3_20261115.md",
+      "superseded": [
+        {
+          "code_sha": "98ba055f6e5be99ff949e62822b9714c7ec1894c",
+          "note": "Previous producer registered for controlled rollback; do not switch only one side of the consumer/producer identity pair."
+        }
+      ]
     }
   ]
 }

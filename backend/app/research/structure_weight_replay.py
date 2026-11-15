@@ -903,5 +903,11 @@ def write_report(report: dict, target: Path) -> None:
     except BaseException:
         shutil.rmtree(temporary, ignore_errors=True)
         # Leave the reservation visibly incomplete rather than claim success.
-        (target / "INCOMPLETE").write_text("Artifact publication failed. Inspect before removal.\n")
+        # This marker write must never mask the original failure: if a concurrent
+        # writer replaced our reservation with a file, writing into it raises and
+        # would otherwise hide the real error (see T4 fault-injection evidence).
+        try:
+            (target / "INCOMPLETE").write_text("Artifact publication failed. Inspect before removal.\n")
+        except OSError:
+            pass
         raise
