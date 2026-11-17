@@ -134,7 +134,7 @@ async function recompute(){if(busy.value)return;busy.value=true;error.value='';t
 
   <!-- 3. 市场宽度与沪深300被动比例 -->
   <section class="card section hs300-ratio-card" data-testid="hs300-ratio-card" aria-labelledby="hs300-ratio-heading"><div class="card-header"><div><h2 id="hs300-ratio-heading">沪深300 被动配置比例</h2><p>研究快照：ETF 市值 / 沪深300 成分股流通市值。仅用于研究上下文。</p></div><span class="small-note">不进入评分或仓位</span></div><div class="card-body"><div v-if="hs300Ratio.data.value?.status==='available'" class="hs300-ratio-grid"><article v-for="item in hs300Ratio.data.value.items" :key="String(item.numerator_basis)" class="hs300-ratio-item"><strong>{{ item.numerator_basis === 'aum_at_nav' ? '单位净值口径' : '收盘口径' }}</strong><span class="value">{{ typeof item.ratio === 'number' ? (item.ratio * 100).toFixed(3) + '%' : '—' }}</span><small>{{ item.trade_date }} · 滞后 {{ item.lag_days }} 天 · {{ item.observation_kind ?? '研究快照' }}</small></article></div><p v-else class="muted">{{ hs300Ratio.data.value?.reason === 'research_ratio_not_published' ? '本机展示包未发布该研究快照。' : '尚无可用研究快照；清单确认和收盘后采集完成后才会显示。' }}</p><small class="small-note">research_only=true · actionable=false · qualification=UNKNOWN · 未完成校准</small></div></section>
-  <div class="card section" data-testid="full-market-breadth"><div class="card-header"><h2>全市场涨跌宽度</h2><small>独立 A 股快照，非 ETF 样本</small></div><div class="card-body"><div v-for="item in breadth" :key="String(item.sector_name)" class="actions"><strong>{{ item.sector_name }}</strong><span class="bull">上涨 {{ num(record(item.breadth).up,0) }}</span><span class="bear">下跌 {{ num(record(item.breadth).down,0) }}</span><span>平盘 {{ num(record(item.breadth).flat,0) }}</span><small>{{ item.source }} · {{ item.source_as_of }}</small></div><p v-if="!breadth.length" class="muted">尚无全市场宽度快照，缺失项不填零。</p></div></div>
+  <div class="card section" data-testid="full-market-breadth"><div class="card-header"><h2>全市场涨跌宽度</h2><small>独立 A 股快照，非 ETF 样本</small></div><div class="card-body"><div v-for="item in breadth" :key="String(item.sector_name)" class="actions"><strong>{{ item.sector_name }}</strong><span class="bull">上涨 {{ num(record(item.breadth).up,0) }}</span><span class="bear">下跌 {{ num(record(item.breadth).down,0) }}</span><span>平盘 {{ num(record(item.breadth).flat,0) }}</span><small>{{ item.source_as_of }}</small></div><p v-if="!breadth.length" class="muted">尚无全市场宽度快照，缺失项不填零。</p></div></div>
 
   <!-- 4. 行业与概念板块 -->
   <section id="market-boards" class="card section" aria-labelledby="boards-heading"><div class="card-header"><div><h2 id="boards-heading">行业与概念板块</h2><p>读取原有行业 / 概念 / 全市场快照；每类数据独立显示。</p></div><button v-if="canSync" class="button" :disabled="busy" @click="syncDiscovery">同步市场目录与板块</button></div>
@@ -156,14 +156,14 @@ async function recompute(){if(busy.value)return;busy.value=true;error.value='';t
       >
         <strong>{{ s.sector_name }}</strong>
         <span class="numeric">{{ pct(numeric(s.sector_pct_change)==null?null:Number(s.sector_pct_change)/100) }}</span>
-        <small>{{ s.source }} · {{ s.source_as_of }} · {{ s.is_mock ? '演示' : '源时间未验证' }}</small>
+        <small>{{ s.is_mock ? '演示数据' : '板块日期 ' + (s.source_as_of ?? '未知') }} · 来源核验状态未发布</small>
         <div class="tile-actions">
           <button type="button" class="button small primary sector-analyze-btn" @click.stop="openSectorDrawer(s)">研判 / K线 →</button>
           <RouterLink class="text-button" :to="{path:'/analysis',query:{q:String(s.sector_name)}}" @click.stop>查找相关 ETF →</RouterLink>
         </div>
       </article>
     </div>
-    <div class="table-footer"><span>板块快照日期 {{ sectors.data.value?.source_as_of ?? '未知' }}；匹配 ETF 按名称 / 主题检索，不冒充成分映射。</span><button v-if="filtered.length>12" class="button small" @click="showAll=!showAll">{{ showAll?'收起':'显示全部板块' }}</button></div>
+    <div class="table-footer"><span>板块快照日期 {{ sectors.data.value?.source_as_of ?? '未知' }}；匹配 ETF 按名称 / 主题检索，不冒充成分映射。板块数据未含来源核验字段，来源状态待核，不默认已验证。</span><button v-if="filtered.length>12" class="button small" @click="showAll=!showAll">{{ showAll?'收起':'显示全部板块' }}</button></div>
     <div v-if="!localMode" class="card-body"><span v-for="job in (Array.isArray(discovery.data.value?.jobs)?discovery.data.value!.jobs:[])" :key="String(record(job).task)" class="small-note">{{ record(job).task }}：<Badge :value="String(record(job).status)"/> {{ stamp(record(job).finished_at ?? record(job).created_at) }}　</span><RouterLink to="/settings">查看采集步骤和失败原因</RouterLink></div>
   </section>
 

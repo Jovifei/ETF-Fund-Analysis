@@ -6,7 +6,7 @@ import { useQuery } from '../lib/query'
 import { useFavorites } from '../stores/favorites'
 import { errorText } from '../lib/api'
 import { num, pct, direction, wyckoffLabel, dowLabel, atrRiskLabel, wyckoffDetail, dowDetail, atrDetail, record } from '../lib/format'
-import { decisionRows, historicalClose } from '../lib/decisionSummary'
+import { decisionRows, historicalClose, explainStatus, shortStatus } from '../lib/decisionSummary'
 import DecisionSummary from './DecisionSummary.vue'
 import { withGeneration } from '../lib/generation'
 
@@ -17,7 +17,15 @@ const horizon = ref(1), filter = ref(''), revision = ref(0), ready = ref(false)
 const showIframe = ref(false), selectedGrade = ref('all'), onlyFavorites = ref(false)
 
 const outlook = useQuery<{items: Record<string, {forecasts: Record<string, unknown>}>}>('/api/workspace/research-outlook')
-const q = useQuery<Record<string, unknown>>(() => props.ready === false ? null : withGeneration(`/api/decision-board?horizon=${horizon.value === 20 && props.generation == null ? 1 : horizon.value}`, props.generation))
+// Query the horizon the user actually selected. The response carries decision_horizon
+// (the batch's captured horizon) — when they differ, rows arrive with grade=数据异常
+// and grade_reason=selected_horizon_grade_not_published; the UI explains that openly
+// instead of silently substituting another horizon.
+const q = useQuery<Record<string, unknown>>(() => props.ready === false ? null : withGeneration(`/api/decision-board?horizon=${horizon.value}`, props.generation))
+const horizonMismatch = computed(() => {
+  const captured = (q.data.value as Record<string, unknown> | null)?.decision_horizon
+  return typeof captured === 'number' && captured !== horizon.value
+})
 const displayed = computed(() => q.data.value ? {
   ...q.data.value,
   rows: ((q.data.value.rows ?? []) as Record<string, unknown>[]).map(row => ({
@@ -131,6 +139,9 @@ defineExpose({
     </div>
   </div>
   <p v-if="q.error.value" class="notice warning-notice" role="alert">{{ q.error.value }}</p>
+  <p v-if="horizonMismatch" class="notice warning-notice" role="status" data-testid="horizon-mismatch-notice">
+    所选 {{ horizon }} 日期限的分级未发布：本批次分级为 {{ (q.data.value as Record<string, unknown>)?.decision_horizon }} 日档采集，下表「决策分级」列按批次口径显示为数据异常；「{{ horizon }}日研究收益」列为该期限真实预测。不把其他期限顶替成分级。
+  </p>
   <DecisionSummary :board="displayed" :filter="filter" :horizon="horizon" @controls="mobileControls"/>
   <p v-if="favoriteError" class="notice" role="alert">{{favoriteError}}</p>
 
@@ -212,12 +223,15 @@ defineExpose({
               <strong>{{ row.name }}</strong>
               <small class="mono">{{ row.ts_code }} · {{ record(row.sector).label ?? row.theme_l1 ?? '' }}</small>
             </td>
-            <td class="numeric mono">{{ num(historicalClose(row).price, 3) }}</td>
+            <td class="numeric mono">
+              {{ num(historicalClose(row).price, 3) }}<small class="muted mono"> · {{ historicalClose(row).date ?? '无日期' }}</small>
+            </td>
             <td class="numeric mono" :class="direction(record(row.returns).today)">
               {{ pct(record(row.returns).today) }}
             </td>
             <td>
-              <span class="grade" :data-grade="row.grade">{{ row.grade ?? '未知' }}</span>
+              <span class="grade" :data-grade="row.grade" :title="explainStatus(row)">{{ row.grade ?? '未知' }}</span>
+              <small class="row-status" :title="explainStatus(row)">{{ shortStatus(row) }}</small>
             </td>
             <td class="mono">
               {{ num(record(row.macd).dif, 3) }} / {{ num(record(row.macd).dea, 3) }}
@@ -228,19 +242,22 @@ defineExpose({
               {{ pct(forecast(row).expected_return) }}
             </td>
             <td>
-              <span class="structure-badge wyckoff" :title="wyckoffDetail(row.structure_v1 as any)">
-                {{ wyckoffLabel(row.structure_v1 as any) }}
-              </span>
+              <details class="structure-detail">
+                <summary class="structure-badge wyckoff" :title="wyckoffDetail(row.structure_v1 as any)">{{ wyckoffLabel(row.structure_v1 as any) }}</summary>
+                <div class="structure-detail-body">{{ wyckoffDetail(row.structure_v1 as any) }}</div>
+              </details>
             </td>
             <td>
-              <span class="structure-badge dow" :title="dowDetail(row.structure_v1 as any)">
-                {{ dowLabel(row.structure_v1 as any) }}
-              </span>
+              <details class="structure-detail">
+                <summary class="structure-badge dow" :title="dowDetail(row.structure_v1 as any)">{{ dowLabel(row.structure_v1 as any) }}</summary>
+                <div class="structure-detail-body">{{ dowDetail(row.structure_v1 as any) }}</div>
+              </details>
             </td>
             <td>
-              <span class="structure-badge atr" :class="String((row.structure_v1 as any)?.atr_risk_bucket ?? '')" :title="atrDetail(row.structure_v1 as any)">
-                {{ atrRiskLabel(row.structure_v1 as any) }}
-              </span>
+              <details class="structure-detail" :class="String((row.structure_v1 as any)?.atr_risk_bucket ?? '')">
+                <summary class="structure-badge atr" :class="String((row.structure_v1 as any)?.atr_risk_bucket ?? '')" :title="atrDetail(row.structure_v1 as any)">{{ atrRiskLabel(row.structure_v1 as any) }}</summary>
+                <div class="structure-detail-body">{{ atrDetail(row.structure_v1 as any) }}</div>
+              </details>
             </td>
           </tr>
           <tr v-if="!filteredRows.length">
@@ -258,3 +275,13 @@ defineExpose({
   <iframe v-else ref="frame" title="原版 ETF 决策快照" src="/internal/decision-board-frame" :style="{ height: height + 'px' }"
     style="width:100%;border:0;display:block" @load="ready=true;deliver()"/>
 </section></template>
+<style scoped>
+.row-status { display: block; font-size: 10px; color: var(--muted, #8b949e); margin-top: 2px; }
+.structure-detail { display: inline-block; }
+.structure-detail > summary { list-style: none; cursor: help; }
+.structure-detail > summary::-webkit-details-marker { display: none; }
+.structure-detail[open] .structure-detail-body { position: absolute; z-index: 30; min-width: 220px; max-width: 320px;
+  background: var(--bg, #161b22); color: var(--text, #c9d1d9); border: 1px solid var(--border, #24292f);
+  border-radius: 6px; padding: 8px 10px; font-size: 11px; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+.structure-detail:focus-within { outline: 2px solid var(--accent, #27c5d8); outline-offset: 1px; }
+</style>
