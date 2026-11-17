@@ -140,7 +140,7 @@ defineExpose({
   </div>
   <p v-if="q.error.value" class="notice warning-notice" role="alert">{{ q.error.value }}</p>
   <p v-if="horizonMismatch" class="notice warning-notice" role="status" data-testid="horizon-mismatch-notice">
-    所选 {{ horizon }} 日期限的分级未发布：本批次分级为 {{ (q.data.value as Record<string, unknown>)?.decision_horizon }} 日档采集，下表「决策分级」列按批次口径显示为数据异常；「{{ horizon }}日研究收益」列为该期限真实预测。不把其他期限顶替成分级。
+    所选期限（{{ horizon }} 日）的分级在本批次未发布：批次分级按 {{ (q.data.value as Record<string, unknown>)?.decision_horizon }} 日档采集，因此下表「决策分级」列显示为数据异常；「{{ horizon }} 日研究收益」列为该期限的真实预测值。不用其他期限顶替分级。
   </p>
   <DecisionSummary :board="displayed" :filter="filter" :horizon="horizon" @controls="mobileControls"/>
   <p v-if="favoriteError" class="notice" role="alert">{{favoriteError}}</p>
@@ -230,8 +230,12 @@ defineExpose({
               {{ pct(record(row.returns).today) }}
             </td>
             <td>
-              <span class="grade" :data-grade="row.grade" :title="explainStatus(row)">{{ row.grade ?? '未知' }}</span>
-              <small class="row-status" :title="explainStatus(row)">{{ shortStatus(row) }}</small>
+              <span class="grade" :data-grade="row.grade">{{ row.grade ?? '未知' }}</span>
+              <small class="row-status">{{ shortStatus(row) }}</small>
+              <details class="reason-detail">
+                <summary>原因</summary>
+                <div class="reason-detail-body">{{ explainStatus(row) }}</div>
+              </details>
             </td>
             <td class="mono">
               {{ num(record(row.macd).dif, 3) }} / {{ num(record(row.macd).dea, 3) }}
@@ -276,7 +280,17 @@ defineExpose({
     style="width:100%;border:0;display:block" @load="ready=true;deliver()"/>
 </section></template>
 <style scoped>
+.decision-table td { position: relative; }
 .row-status { display: block; font-size: 10px; color: var(--muted, #8b949e); margin-top: 2px; }
+.reason-detail { margin-top: 2px; font-size: 10px; }
+.reason-detail > summary { color: var(--muted, #8b949e); cursor: pointer; }
+.reason-detail > summary::-webkit-details-marker { display: none; }
+.reason-detail > summary::before { content: '▸ '; }
+.reason-detail[open] > summary::before { content: '▾ '; }
+.reason-detail[open] > summary { color: var(--text, #c9d1d9); }
+.reason-detail-body { position: absolute; z-index: 30; left: 4px; min-width: 220px; max-width: 320px;
+  background: var(--bg, #161b22); color: var(--text, #c9d1d9); border: 1px solid var(--border, #24292f);
+  border-radius: 6px; padding: 8px 10px; font-size: 11px; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
 .structure-detail { display: inline-block; }
 .structure-detail > summary { list-style: none; cursor: help; }
 .structure-detail > summary::-webkit-details-marker { display: none; }

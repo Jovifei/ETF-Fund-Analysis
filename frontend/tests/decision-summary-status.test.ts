@@ -30,6 +30,23 @@ describe('shortStatus (P5 inline machine-state label)', () => {
   it('marks mock data explicitly', () => {
     expect(shortStatus({ ...baseRow, data_status: 'mock', quote: { is_mock: true } })).toBe('演示数据')
   })
+
+  it('labels verified healthy rows as 已核验 — not 待核验 (review finding)', () => {
+    const healthy = { ...baseRow,
+      data_status: 'confirmed_indicator_with_verified_quote',
+      grade_reason: 'J < 90 · KDJ有余量 · 结构向好',
+      quote: { is_mock: false, status: 'fresh' } }
+    expect(shortStatus(healthy)).toBe('已核验')
+    expect(explainStatus(healthy)).toContain('已核验：完整报价 + 指标')
+    expect(explainStatus(healthy)).not.toContain('待核验')
+  })
+
+  it('maps quote_source_time_missing and quote_future states', () => {
+    expect(shortStatus({ ...baseRow, data_status: 'quote_source_time_missing' })).toBe('源时间缺失')
+    expect(shortStatus({ ...baseRow, data_status: 'quote_future_at_snapshot_generation' })).toBe('报价时间异常')
+    expect(explainStatus({ ...baseRow, data_status: 'quote_future_at_snapshot_generation' }))
+      .toContain('报价时间晚于快照生成')
+  })
 })
 
 describe('explainStatus (P5 full detail, incl. selected_horizon_grade_not_published)', () => {
