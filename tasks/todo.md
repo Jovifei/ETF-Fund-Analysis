@@ -394,3 +394,48 @@ ew.yml：挂载 /opt/china-fund-decision/ai-key:/var/lib/etf-private/ai:ro，注
   4. 重启生产容器并通过健康检查：pi-1 (healthy), worker-1 (healthy), scheduler-1 (Up)。
   5. 实测 i_profiles.capabilities() 返回 vailable: true、locked_reason: null，允许域名 pi.deepseek.com 与 pi.openai.com。
   6. 宿主机同机其他容器（jourvolt, medbox, star-photo 等）运行正常未受波及。
+
+## 2026-11-17 规划：B 加权买卖因子引擎（B-c 软约束 + B-III 演进）【规划待执行，未开工】
+
+> 经 /grill-me 与 Jovi 逐点确认的完整规划。A 部分已实现，B 部分待执行。数据/链路现状见本 section 的「链路核账」。
+
+### 目标
+用现成的六类指标（MACD/KDJ/RSI/威科夫结构/道氏趋势/ATR 波动）在窄区间内随历史 IC 缓慢加权更新，合成 0-100 综合买卖强度分 `trade_score`，映射成「可加/观望/可减」买卖档位并叠加到 K 线；全程 `research_only=true / actionable=false / not_calibrated`，达标才允许「转正」。
+
+### 已确认决策（Jovi 拍板）
+- **B-c 更新哲学**：软约束自适应——权重仅在窄区间（默认基线 ±20%）内随历史 IC 缓慢摆动，总权归一，全程不标 calibrated；自动累积 IC 记录，达到样本+walk-forward 门槛才可转正。
+- **B-III 产物流向**：先做前端研究标注买卖点（B-I，今天就有）+ 每天累积历史信号事件（B-II，为转正攒证据）。
+- **B-X 权重存储**：版本化 JSON 配置（新权重+版本号+IC 证据哈希，幂等写盘，可审计可回滚）。
+- **B-P 落地顺序**：先前端读现有 bundle 数据现算画买卖点；B-Q（bundle 携带 trade_score、服务器也展示）作后续演进。
+- **不用 GPU**：34 只×百根K线的因子加权+IC 是 CPU 秒级纯数学，4070S 不参与初始阶段。
+
+### 已有基础（代码核实，勿重复造）
+- 35 因子值已算好：`backend/app/utils/feature_store.build_feature_frame`（含 macd_norm/kdj_j/rsi14/atr_pct/volume_ratio/obv_slope/mfi14/cmf20/adx14/cci20/wr14/roc12/rsrs_zscore/rps20/60/120/chip_concentration）
+- IC 评估引擎已存在：`backend/app/services/factor_analysis_service.py` 的 `factor_metric()`（IC/rank_IC/ICIR/spread/turnover），定位已是「diagnostic_only_not_strategy_promotion / UNKNOWN / walk-forward required」
+- 前端结构因子标签已有：`frontend/src/lib/format.ts` 的 `wyckoffLabel/dowLabel/atrRiskLabel`
+- 固定启发式权重已有：`signal_center_service.py` 的 sector_weights / heat(0.5/0.3/0.2) / coefficient
+- **缺口（B 要新建的）**：1) 六类指标→trade_score 综合因子与窄区间加权；2) 权重随 IC 软约束更新的闭环（评估结果→更新版本化 JSON）；3) 买卖档位映射+阈值；4) 历史信号事件累积序列；5) 与现有 19:07 计算链的每日调度捆绑。
+
+### 链路核账（2026-11-17 实测）
+- 本地 19:07 生成 34 只决策 bundle（含五期限预测），当日 19:11 已 accepted 并落盘服务器 `/app/.local/display-v113-a0d52e4/`。
+- 服务器生产配置 `workspace_research_source=local_bundle`，页面读该磁盘 bundle；`LocalDisplayReader.read_overview()` 实测返回 34 只、`generated_at=2026-11-17T11:07:57Z`。
+- 结论：数据→决策→服务器→页面链路通；`decision_board_snapshots` 等 PostgreSQL 老表停在 10 月与本页面无关（非本链路数据源）。34/34 标记 `stale/unverified/research_only/actionable=false` 是公开源的诚实设计，非故障。
+- 邮件推送仍缺 SMTP 配置（CONFIG_REQUIRED），按 Jovi 指示搁置。
+
+### 待执行任务（开工时逐条勾选）
+- [x] **(B 前奏 A)** 前端历史买卖点标注（P2-3 折衷）：历史段读 bars[].indicators 的 MACD/KDJ/RSI/ATR_pct 逐K线画买卖箭头；当前最新一根叠加威科夫/道氏/ATR 结构的 trade_score 锚点（structure_v1 作为 prop 传入 EtfChart）；结构因子自 B-II 起逐日累积。纯展示不动 bundle 契约。
+- [x] (A-1) 基线触发规则 v0：买点(超卖金叉/超卖) + 卖点(超买见顶/死叉/TD9) + ATR p95 警示，research_only
+- [x] (A-2) `frontend/src/lib/tradeSignal.ts`：signalSeries/classifyBar/tradeScore（六因子加权 0-100）
+- [x] (A-3) chartAdapter 注册 tradeSignalPoint + tradeAnchorText overlay，历史 K 线买卖箭头 + 当前端锚点
+- [x] (A-4) EtfChart 默认叠加 signalSeries；Detail.vue 传 structure_v1 算 tradeScore 锚点
+- [x] (A-5) 验证：258 全量测试过 + vue-tsc 干净 + vite build 成功 + 真实 bundle 数据信号量合理（~7买/15卖/34只）
+- [ ] (A-6 待办) 浏览器实际目检：图片里看到买卖点/锚点渲染效果，确认无视觉问题
+- [ ] (A-7 待办) 提交/受控部署（等 Jovi 确认后）
+- [ ] (B-1) 设计 trade_score 合成与归一化（六类子分→0-100）【A 已完成基线 v0，B-c 演进遗留】
+- [ ] (B-2) 版本化权重 JSON 方案 + 幂等写盘 + 审计哈希
+- [ ] (B-3) 软约束自适应：权重在 ±20%/总权归一内随 IC 更新（B-c）
+- [ ] (B-4) 买卖档位（可加/观望/可减）映射 + 阈值
+- [ ] (B-5) 历史信号事件每日累积序列（B-II 证据，含 walk-forward 门槛判定）
+- [ ] (B-6) 每日调度与现有 19:07 计算链捆绑
+- [ ] (B 门禁) 全程 research_only/not_calibrated 标注；任何转正需双审查+人工批准 + walk-forward 报告
+- [ ] (B-Q 后续) bundle 携带 trade_score，服务器页面同步展示
