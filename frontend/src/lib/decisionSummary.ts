@@ -20,11 +20,14 @@ const names: Record<string,string>={
   quote_stale_at_snapshot_generation:'报价在生成快照时已过期',
   quote_unverified_or_degraded:'报价源时间未核验或来源降级',
   quote_missing_using_confirmed_history:'无报价，使用已确认历史',
+  quote_source_time_missing:'报价源时间缺失',
+  quote_future_at_snapshot_generation:'报价时间晚于快照生成（数据异常）',
   indicator_missing:'指标尚未形成',
   legacy_snapshot_requires_rebuild:'旧快照需要任务重算',
   provisional_unverified_research_only:'临时盘中观察，源时间未核验',
   provisional_research_only:'临时盘中观察，不是已结算预测',
   mock:'演示数据，不可操作',
+  confirmed_indicator_with_verified_quote:'已核验：完整报价 + 指标（数据新鲜）',
   selected_horizon_grade_not_published:'所选期限的分级未发布（本批次分级为实际采集档位）',
 }
 export function explainStatus(row: Record<string, unknown>): string {
@@ -42,10 +45,13 @@ const shortNames: Record<string,string>={
   quote_stale_at_snapshot_generation:'收盘快照·非实时',
   quote_unverified_or_degraded:'报价未核验',
   quote_missing_using_confirmed_history:'无报价·用历史',
+  quote_source_time_missing:'源时间缺失',
+  quote_future_at_snapshot_generation:'报价时间异常',
   indicator_missing:'指标未形成',
   legacy_snapshot_requires_rebuild:'旧快照待重算',
   provisional_unverified_research_only:'临时观察未核验',
   provisional_research_only:'临时观察',
+  confirmed_indicator_with_verified_quote:'已核验',
   mock:'演示数据',
 }
 /** Short machine-state label for inline display: readable without hover,
