@@ -395,6 +395,12 @@ ew.yml：挂载 /opt/china-fund-decision/ai-key:/var/lib/etf-private/ai:ro，注
   5. 实测 i_profiles.capabilities() 返回 vailable: true、locked_reason: null，允许域名 pi.deepseek.com 与 pi.openai.com。
   6. 宿主机同机其他容器（jourvolt, medbox, star-photo 等）运行正常未受波及。
 
+## 2026-11-18 ETF 分支合并（业主拍板后执行）
+- 决策：研究标注合入 main；显示修复用 1827e79（两条 diff 相同只合其一）；structure-v1 Phase B1 暂不进 main；已含 main 的 5 条分支暂不删除。
+- 合并：1578e1a（trade-signal + 收据）→ 5575395（UI 显示修复 1827e79），已推送 origin/main（5964c22..5575395）。
+- 验证：vitest 33 文件/270 用例、vue-tsc、vite build、pytest 全量 exit 0。
+- 生产：仍运行 deploy-eb259ee（研究标注版本）；显示修复尚未部署生产，待业主确认。ETF 群公告 #26；hub revision 37。
+
 ## 2026-11-17 规划：B 加权买卖因子引擎（B-c 软约束 + B-III 演进）【规划待执行，未开工】
 
 > 经 /grill-me 与 Jovi 逐点确认的完整规划。A 部分已实现，B 部分待执行。数据/链路现状见本 section 的「链路核账」。
