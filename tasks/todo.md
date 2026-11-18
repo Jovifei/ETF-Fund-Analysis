@@ -429,8 +429,8 @@ ew.yml：挂载 /opt/china-fund-decision/ai-key:/var/lib/etf-private/ai:ro，注
 - [x] (A-3) chartAdapter 注册 tradeSignalPoint + tradeAnchorText overlay，历史 K 线买卖箭头 + 当前端锚点
 - [x] (A-4) EtfChart 默认叠加 signalSeries；Detail.vue 传 structure_v1 算 tradeScore 锚点
 - [x] (A-5) 验证：258 全量测试过 + vue-tsc 干净 + vite build 成功 + 真实 bundle 数据信号量合理（~7买/15卖/34只）
-- [ ] (A-6 待办) 浏览器实际目检：图片里看到买卖点/锚点渲染效果，确认无视觉问题
-- [ ] (A-7 待办) 提交/受控部署（等 Jovi 确认后）
+- [x] (A-6) 生产验证：公网 200；新容器 api/worker healthy；页面读取 34 只；线上 chunk 含 tradeSignalPoint（浏览器目检待 Jovi 自行登录确认）
+- [x] (A-7) 提交/受控部署：分支 feature/trade-signal-annotations-20261118（eb259ee）；镜像 deploy-eb259ee；cutover 成功，旧容器保留可回滚；收据 docs/audits/PRODUCTION_DEPLOYMENT_RECEIPT_20261118.md
 - [ ] (B-1) 设计 trade_score 合成与归一化（六类子分→0-100）【A 已完成基线 v0，B-c 演进遗留】
 - [ ] (B-2) 版本化权重 JSON 方案 + 幂等写盘 + 审计哈希
 - [ ] (B-3) 软约束自适应：权重在 ±20%/总权归一内随 IC 更新（B-c）
