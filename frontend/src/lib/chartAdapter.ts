@@ -104,6 +104,27 @@ function register() {
       ...(right - left >= 150 ? [{ type: 'text', attrs: { x: left + 5, y: top + 15, text: extra.label, align: 'left', baseline: 'bottom' }, styles: { color: extra.color, size: 11, backgroundColor: 'transparent', borderSize: 0 } }] : []),
     ]
   } })
+registerOverlay({ name: 'tradeSignalPoint', totalStep: 1, needDefaultPointFigure: false, needDefaultXAxisFigure: false, needDefaultYAxisFigure: false, createPointFigures: ({ coordinates, bounding, overlay }) => {
+    if (!coordinates.length) return []
+    const p = coordinates[0]
+    const extra = overlay.extendData as { kind: 'buy' | 'sell' | 'atr_warning'; reason: string }
+    const color = extra.kind === 'buy' ? '#3fb950' : extra.kind === 'sell' ? '#f85149' : '#d4a72c'
+    const marker = extra.kind === 'buy' ? '▲' : extra.kind === 'sell' ? '▼' : '◆'
+    const label = extra.kind === 'buy' ? '研究买点' : extra.kind === 'sell' ? '研究卖点' : '高波动'
+    const offset = extra.kind === 'sell' ? 14 : -16
+    const clampY = (value: number) => Math.max(14, Math.min(value, bounding.height - 14))
+    const x = Math.max(30, Math.min(p.x, bounding.width - 30))
+    const y = clampY(p.y + offset)
+    return [
+      { type: 'text', attrs: { x, y, text: marker, align: 'center', baseline: 'middle' }, styles: { color, size: 12, backgroundColor: 'transparent', borderSize: 0 } },
+      { type: 'text', attrs: { x, y: clampY(y + (extra.kind === 'sell' ? 12 : -12)), text: label, align: 'center', baseline: 'middle' }, styles: { color, size: 10, backgroundColor: '#11181e', borderSize: 0 } },
+    ]
+  } })
+  registerOverlay({ name: 'tradeAnchorText', totalStep: 1, needDefaultPointFigure: false, needDefaultXAxisFigure: false, needDefaultYAxisFigure: false, createPointFigures: ({ coordinates, bounding, overlay }) => {
+    if (!coordinates.length) return []
+    const p = coordinates[0], extra = overlay.extendData as { color: string; label: string }
+    return [{ type: 'text', attrs: { x: Math.min(p.x + 8, bounding.width - 8), y: Math.max(12, p.y - 20), text: extra.label, align: 'left', baseline: 'top' }, styles: { color: extra.color, size: 11, backgroundColor: '#11181e', borderSize: 0.5, borderColor: extra.color } }]
+  } })
 }
 export class ChartAdapter {
   readonly chart: Chart
@@ -111,7 +132,7 @@ export class ChartAdapter {
   private data: ChartData
   private activeIndicators = new Set<string>()
   private listener: (event: { dataIndex?: number }) => void
-  constructor(private el: HTMLElement, data: ChartData, cost: number | null, onCursor: (bar: ChartBar | undefined) => void, selected: string[] = ["MA","MACD","KDJ","RSI","PIVOT"]) {
+  constructor(private el: HTMLElement, data: ChartData, cost: number | null, onCursor: (bar: ChartBar | undefined) => void, selected: string[] = ["MA","MACD","KDJ","RSI","PIVOT"], signals: Array<{ date: string; kind: 'buy' | 'sell' | 'atr_warning'; reason: string }> = []) {
     register()
     this.data=data
     const chart = init(el, { timezone: 'Asia/Shanghai', locale: 'zh-CN', styles: { grid: { horizontal: { color: '#242b32' }, vertical: { color: '#1b2228' } }, candle: { bar: { upColor: '#f3737c', downColor: '#4dba90', upBorderColor: '#f3737c', downBorderColor: '#4dba90', upWickColor: '#f3737c', downWickColor: '#4dba90' } }, xAxis: { tickText: { color: '#82919f' } }, yAxis: { tickText: { color: '#82919f' } }, separator: { color: '#2a3038' }, crosshair: { horizontal: { line: { color: '#71818e' } }, vertical: { line: { color: '#71818e' } } } } })
@@ -121,6 +142,7 @@ export class ChartAdapter {
     chart.applyNewData(projectBars(data.bars), false)
     this.setIndicatorSelection(selected, true)
     this.setStudySelection(selected)
+    this.tradeSignals(signals)
     const lastTime = projectBars(data.bars.slice(-1))[0]?.timestamp
     if (lastTime) {
       if (data.cost_overlay_allowed && cost != null && cost > 0) chart.createOverlay({ name: 'priceLine', lock: true, points: [{ timestamp: lastTime, value: cost }], styles: { line: { color: '#d8b776', size: 1, style: 'dashed' }, text: { color: '#d8b776', backgroundColor: '#29271f', borderSize: 0 } } } as OverlayCreate)
@@ -285,6 +307,40 @@ export class ChartAdapter {
     this.chart.createOverlay({ name: 'priceLine', groupId:'server_research_studies', lock: true, points: [{ timestamp, value: price }], styles: { line: { color, size: 1, style: 'dashed', dashedValue: [5, 3] }, text: { color, backgroundColor: `${color}22`, borderSize: 0 } } } as OverlayCreate)
   }
   range(bars: number) { this.chart.setBarSpace(Math.max(2, Math.min(30, (this.el.clientWidth - 65) / bars))); this.chart.scrollToRealTime(); }
+  /** 在历史 K 线上叠加研究用买卖点/警示标注。仅日/周/月线；清除旧标注后重画。 */
+  tradeSignals(signals: Array<{ date: string; kind: 'buy' | 'sell' | 'atr_warning'; reason: string }>) {
+    this.chart.removeOverlay({ groupId: 'server_trade_signals' })
+    if (!Array.isArray(signals) || !['1d', '1w', '1mo'].includes(this.data.interval)) return
+    const lastTime = projectBars(this.data.bars.slice(-1))[0]?.timestamp
+    if (!lastTime) return
+    for (const sig of signals) {
+      const day = candleDay(sig.date)
+      if (!day) continue
+      // 同日多根属歧义，不任选其一冒充满足证据（与 fractals() 同口径）。
+      const candles = this.data.bars.filter(b => candleDay(b.date) === day)
+      if (candles.length !== 1) continue
+      const ts = projectBars(candles)[0].timestamp
+      if (!Number.isFinite(ts)) continue
+      this.chart.createOverlay({ name: 'tradeSignalPoint', groupId: 'server_trade_signals', lock: true,
+        points: [{ timestamp: ts, value: candles[0].low }], extendData: { kind: sig.kind, reason: sig.reason } })
+    }
+  }
   reset() { this.range(100) }
+  /** 在当前最新 K 线右侧画综合买卖强度锚点。 */
+  tradeAnchor(score?: { score: number; tier: string; components?: Record<string, number>; label?: string }) {
+    this.chart.removeOverlay({ groupId: 'server_trade_anchor' })
+    if (!score || typeof score.score !== 'number') return
+    const last = projectBars(this.data.bars.slice(-1))[0]
+    if (!last) return
+    const color = score.tier === '可加' ? '#3fb950' : score.tier === '可减' ? '#f85149' : '#d4a72c'
+    // projectBars 展开的 KLineData 只有 close，没有 value 字段。
+    this.chart.createOverlay({ name: 'priceLine', groupId: 'server_trade_anchor', lock: true,
+      points: [{ timestamp: last.timestamp, value: last.close }],
+      styles: { line: { color, size: 1.5, style: 'dashed', dashedValue: [4, 3] }, text: { color, backgroundColor: `${color}1f`, borderSize: 0 } } } as OverlayCreate)
+    // 图例文本：在 K 线末端上方用近端文字标注强度
+    this.chart.createOverlay({ name: 'tradeAnchorText', groupId: 'server_trade_anchor', lock: true,
+      points: [{ timestamp: last.timestamp, value: last.close }],
+      extendData: { color, label: score.label ?? `trade_score ${score.score}` } })
+  }
   destroy() { this.resizeObserver.disconnect(); this.chart.unsubscribeAction(ActionType.OnCrosshairChange, this.listener); dispose(this.el) }
 }

@@ -16,6 +16,7 @@ import IndicatorReadings from '../components/IndicatorReadings.vue'
 import AvailabilityMatrix from '../components/AvailabilityMatrix.vue'
 import { availabilityReason } from '../lib/availability'
 import {withGeneration} from '../lib/generation'
+import {tradeScore} from '../lib/tradeSignal'
 const route=useRoute(),code=computed(()=>String(route.params.code??'').toUpperCase()),interval=ref('1d'),tab=ref<'chart'|'forecast'|'ai'>(route.query.tab==='ai'?'ai':route.query.tab==='forecast'?'forecast':'chart')
 const latestLocation=computed(()=>{const query={...route.query};delete query.generation;return{path:route.path,query,hash:route.hash}})
 const q=useQuery<Detail & {research_source?:'database'|'local_bundle'}>(()=>withGeneration('/api/workspace/instruments/'+encodeURIComponent(code.value),typeof route.query.generation==='string'?route.query.generation:undefined))
@@ -28,6 +29,12 @@ const sr=computed(()=>chart.data.value?.support_resistance??q.data.value?.suppor
 const entry=computed(()=>record(q.data.value?.decision?.entry_exit_ref))
 const themeRank=computed(()=>record(q.data.value?.decision?.theme_relative_strength))
 const decisionExplanation=computed(()=>q.data.value?.decision_explanation)
+const chartLastBar=computed(()=>chart.data.value?.bars?.at(-1))
+const tradeScoreValue=computed(()=>{
+  const bar=chartLastBar.value
+  if(!bar)return null
+  return tradeScore(bar, q.data.value?.decision?.structure_v1 ?? null)
+})
 const reasonLabels:Record<string,string>={instrument_disabled:'该标的未启用研究池，仍可查看已有数据。',history_not_prepared:'尚未准备历史行情；需要时可点击下方按钮明确发起。',history_qualification_blocked:'历史数据资格未通过，受影响指标与决策保持阻断。',unexplained_price_discontinuity:'历史价格有无法解释的断点，研究指标与决策保持阻断。',invalid_ohlc:'历史 OHLC 不合法，图表不使用该记录。',ambiguous_price_basis:'历史记录混用了不同价格口径。',price_basis_mismatch:'原始行情与调整研究口径不同，无法映射的叠加线已隐藏。',indicator_values_unavailable:'当前没有可用的指标值。',indicator_snapshot_after_read_time:'指标快照晚于本次读取时点，未用于本次展示。',forecast_snapshot_after_read_time:'预测快照晚于本次读取时点，未用于本次展示。',forecast_not_generated:'当前没有可用预测；这不会隐藏价格和图表。',decision_snapshot_after_read_time:'决策快照晚于本次读取时点，未用于本次展示。',decision_not_generated:'当前没有生成研究决策快照。',quote_unavailable:'当前没有可显示的报价。',no_previous_snapshot:'暂无上一次决策快照可比较。',instrument_absent_from_previous_snapshot:'该标的不在上一次决策快照中。',volume_missing_or_unverified:'成交量缺失或单位未核验；量能相关研究不可用。'}
 function reasonLabel(code:unknown){return typeof code==='string'?reasonLabels[code]??availabilityReason(code):'原因未记录'}
 function decisionDeltaText(){const delta=record(decisionExplanation.value?.comparison);if(delta.status==='available'){if(delta.grade_changed)return `结论由 ${String(delta.previous_grade??'未知')} 变为 ${String(delta.current_grade??'未知')}`;if(delta.data_status_changed)return `研究数据状态由 ${String(delta.previous_data_status??'未知')} 变为 ${String(delta.current_data_status??'未知')}`;return '结论与数据状态均未变化'}return reasonLabel(delta.reason_code)}
@@ -62,7 +69,7 @@ function distance(value:unknown){const p=typeof value==='number'?value:null;retu
   <button :class="{active:tab==='ai'}" @click="tab='ai'">🤖 AI 研究与证据</button>
 </div>
 <template v-if="tab==='chart'">
-  <div class="card"><div class="card-header"><div><h2>K 线与技术指标</h2><p>统一 Python 公式 · 已确认日 K 支撑压力快照，与最新报价可能不同步</p></div></div><HistoryLoader :code="code" :read-only="q.data.value.research_source==='local_bundle'" @updated="q.reload();chart.reload()"/><div v-if="!chart.data.value?.available" class="toolbar" aria-label="切换K线周期"><button class="button" v-for="p in chartPeriods" :key="p.id" @click="interval=p.id">{{p.name}}</button></div><PageState :loading="chart.loading.value" :error="chart.error.value" :empty="!chart.data.value?.available" title="该周期暂无合格数据" :description="chart.data.value?.reason??'日线不会冒充分钟线；请检查数据同步状态。'" @retry="chart.reload"><EtfChart v-if="chart.data.value?.available" :data="chart.data.value" :cost="q.data.value.holding?.cost_price" :allow-minutes="q.data.value.research_source!=='local_bundle'" @period="interval=$event"/></PageState></div>
+  <div class="card"><div class="card-header"><div><h2>K 线与技术指标</h2><p>统一 Python 公式 · 已确认日 K 支撑压力快照，与最新报价可能不同步</p></div></div><HistoryLoader :code="code" :read-only="q.data.value.research_source==='local_bundle'" @updated="q.reload();chart.reload()"/><div v-if="!chart.data.value?.available" class="toolbar" aria-label="切换K线周期"><button class="button" v-for="p in chartPeriods" :key="p.id" @click="interval=p.id">{{p.name}}</button></div><PageState :loading="chart.loading.value" :error="chart.error.value" :empty="!chart.data.value?.available" title="该周期暂无合格数据" :description="chart.data.value?.reason??'日线不会冒充分钟线；请检查数据同步状态。'" @retry="chart.reload"><EtfChart v-if="chart.data.value?.available" :data="chart.data.value" :cost="q.data.value.holding?.cost_price" :trade-score="tradeScoreValue" :allow-minutes="q.data.value.research_source!=='local_bundle'" @period="interval=$event"/></PageState></div>
   <div v-if="chart.data.value?.core_snapshot_match===false||chart.data.value?.history_truncated" class="notice warning-notice">图表历史与最新指标快照未完全对齐或历史已截断，请核对数据版本；不能把它当作决策快照的精确历史回放。</div>
   <div v-if="chart.data.value?.history_issue||chart.data.value?.qualification==='mock'" class="notice warning-notice">{{chart.data.value?.history_issue?`价格连续性/单位问题：${chart.data.value.history_issue}`:'图表来源为 Mock'}}。未用于操作级信号。</div><div v-if="chart.data.value?.indicator_note" class="notice" role="status">{{chart.data.value.indicator_note}}</div><div v-if="q.data.value.holding&&!chart.data.value?.cost_overlay_allowed" class="notice">当前价格基准不允许直接叠加持仓成本线，避免复权口径混淆。</div>
   <div class="card"><div class="card-header"><div><h2>指标快照数值</h2><p>{{q.data.value.indicator_version}} · {{q.data.value.indicator_as_of}} · 不由 AI 计算</p></div></div><div class="card-body"><IndicatorReadings :readings="chart.data.value?.studies?.readings??[]"/></div></div>
