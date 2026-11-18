@@ -395,6 +395,11 @@ ew.yml：挂载 /opt/china-fund-decision/ai-key:/var/lib/etf-private/ai:ro，注
   5. 实测 i_profiles.capabilities() 返回 vailable: true、locked_reason: null，允许域名 pi.deepseek.com 与 pi.openai.com。
   6. 宿主机同机其他容器（jourvolt, medbox, star-photo 等）运行正常未受波及。
 
+## 2026-11-19 生产部署 main（e542273）
+- `deploy-e542273` 切流成功：api/worker healthy、公网 200、页面读取 34 只、线上 index-CC4X85TY.js 与本地 main 构建一致。
+- 切流前备份 `fund_pre_e542273_cutover_20261118_233617.dump`（TOC 463 校验通过）；旧项目 `etf-deploy-eb259ee` 容器停止保留可回滚。
+- 收据：`docs/audits/PRODUCTION_DEPLOYMENT_RECEIPT_20261119.md`。
+
 ## 2026-11-18 ETF 分支合并（业主拍板后执行）
 - 决策：研究标注合入 main；显示修复用 1827e79（两条 diff 相同只合其一）；structure-v1 Phase B1 暂不进 main；已含 main 的 5 条分支暂不删除。
 - 合并：1578e1a（trade-signal + 收据）→ 5575395（UI 显示修复 1827e79），已推送 origin/main（5964c22..5575395）。
