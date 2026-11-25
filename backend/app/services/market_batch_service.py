@@ -15,6 +15,7 @@ from app.models import DailyBar, Instrument
 from app.providers.base import ProviderError
 from app.services.audit_service import AuditTimer, record_provider_audit
 from app.services.event_service import emit_event
+from app.services.settlement import settled_session
 from app.utils.hashing import stable_hash
 
 
@@ -27,7 +28,13 @@ def refresh_daily_bars(service, db, lookback_days=900, codes=None, run_id=None):
     ids = [row.id for row in instruments]
     bounds = {row[0]: (row[1], row[2]) for row in db.execute(select(DailyBar.instrument_id, func.min(DailyBar.trade_date), func.max(DailyBar.trade_date)).where(DailyBar.instrument_id.in_(ids)).group_by(DailyBar.instrument_id))} if ids else {}
     end_date = datetime.now(service.settings.timezone).date()
-    totals = {"inserted": 0, "updated": 0, "unchanged": 0, "instruments": 0, "failures": []}
+    # Only settled sessions may enter the settled-history store. Before the
+    # settlement cutoff the current session is still open, so an intraday or
+    # provisional daily bar must never be persisted as settled history: the
+    # settled base rejects any bar dated after the settled session.
+    settled_end = settled_session(service.settings)
+    totals = {"inserted": 0, "updated": 0, "unchanged": 0, "instruments": 0, "failures": [],
+              "deferred_unsettled": 0}
     for instrument in instruments:
         start_date = end_date - timedelta(days=lookback_days)
         earliest, latest = bounds.get(instrument.id, (None, None))
@@ -42,6 +49,9 @@ def refresh_daily_bars(service, db, lookback_days=900, codes=None, run_id=None):
             for item in records:
                 if item.ts_code != instrument.ts_code or not start_date <= item.trade_date <= end_date:
                     raise ProviderError("daily bar identity or date mismatch")
+                if item.trade_date > settled_end:
+                    totals["deferred_unsettled"] += 1
+                    continue
                 prices = (item.open, item.high, item.low, item.close)
                 if not all(isinstance(value, (int, float)) and math.isfinite(value) and value > 0 for value in prices) or item.low > min(prices) or item.high < max(prices):
                     raise ProviderError("daily bar OHLC invalid")
