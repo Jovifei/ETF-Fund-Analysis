@@ -121,6 +121,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     if args.profile == "mock" and not args.no_upload:
         raise ValueError("mock profile cannot upload")
     cfg, settings, execution, original_config = read_execution(args)
+    # Sample the settled-session clock exactly once per run. base_validation and
+    # base preparation each used to call datetime.now() on their own, so a run
+    # that straddled SETTLEMENT_CUTOFF (15:15) validated against one trade date
+    # and stamped the base with the next one. Every base_manifest call below
+    # shares this single sample, keeping one run on one settled session.
+    run_now = datetime.now(settings.timezone)
     universe = cfg["universe"]
     admission = cfg.get("provider_admission")
     private_research = getattr(args, "private_research", False)
@@ -181,7 +187,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             try:
                 with phase_diagnostic(args, 'base_validation'):
                     base = json.loads(base_path.read_text(encoding='utf-8'))
-                    validate_base_manifest(settings, universe, base, code_sha=sha, execution_hash=execution['execution_hash'])
+                    validate_base_manifest(settings, universe, base, code_sha=sha, execution_hash=execution['execution_hash'],
+                                           now=run_now)
                 mode = 'fast'
             except (OSError, ValueError, TypeError):
                 if mode == 'fast':
@@ -213,12 +220,14 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(json.dumps({"status": "completed", "tasks": results}, indent=2, ensure_ascii=False))
         if mode == 'full' and getattr(args, 'prepare_base', False):
             with phase_diagnostic(args, 'base_validation'):
-                base = create_base_manifest(settings, universe, code_sha=sha, execution_hash=execution['execution_hash'])
+                base = create_base_manifest(settings, universe, code_sha=sha, execution_hash=execution['execution_hash'],
+                                           now=run_now)
                 write_json_atomic(base_path, base)
         def validate_fast():
             if mode in {'fast', 'auto'}:
                 with phase_diagnostic(args, 'base_validation'):
-                    validate_base_manifest(settings, universe, base, code_sha=sha, execution_hash=execution['execution_hash'])
+                    validate_base_manifest(settings, universe, base, code_sha=sha, execution_hash=execution['execution_hash'],
+                                           now=run_now)
                     validate_fast_result(settings, universe, results)
         validate_fast()
         if getattr(args, "compute_only", False):
