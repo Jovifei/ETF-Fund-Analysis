@@ -220,8 +220,11 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(json.dumps({"status": "completed", "tasks": results}, indent=2, ensure_ascii=False))
         if mode == 'full' and getattr(args, 'prepare_base', False):
             with phase_diagnostic(args, 'base_validation'):
-                base = create_base_manifest(settings, universe, code_sha=sha, execution_hash=execution['execution_hash'],
-                                           now=run_now)
+                # Creation must observe its own publish time, exactly as df340e3 did.
+                # Pinning creation to the run-start sample would rank every freshly
+                # refreshed bar as "finished after the anchor" and reject it.
+                base = create_base_manifest(settings, universe, code_sha=sha,
+                                            execution_hash=execution['execution_hash'])
                 write_json_atomic(base_path, base)
         def validate_fast():
             if mode in {'fast', 'auto'}:
