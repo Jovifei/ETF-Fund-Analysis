@@ -5,6 +5,7 @@ test('API profiles save encrypted without calling a model; tiers and account rem
  await page.goto('/login');await page.getByLabel('账户',{exact:true}).fill('browser-admin');await page.getByLabel('密码',{exact:true}).fill('test-only-browser-pass')
  await page.getByRole('button',{name:'登录并进入总览'}).click();await expect(page.locator('.account-text')).toContainText('browser-admin')
  await page.goto('/settings')
+ await page.getByRole('tab',{name:'AI 模型服务',exact:true}).click()
  const manager=page.getByTestId('ai-profile-manager')
  await manager.getByRole('button',{name:'新增模型配置'}).click()
  await manager.getByLabel('模型名称',{exact:true}).fill('test-model-no-calls')

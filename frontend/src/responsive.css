@@ -35,7 +35,7 @@
 @media (max-width:680px) {
   body.mobile-navigation-open { overflow:hidden; }
   .main-shell { width:100%; margin-left:0; }
-  .main-content { padding:16px 12px; }
+  .main-content { padding:16px 12px; min-height:calc(100vh - 60px); }
   .workspace .topbar { padding-left:max(12px,env(safe-area-inset-left)); padding-right:max(12px,env(safe-area-inset-right)); }
   .sidebar { max-width:calc(100% - 44px); height:100dvh; }
   .icon-button { min-width:44px; min-height:44px; }

@@ -13,6 +13,7 @@ import os
 import re
 from datetime import date, datetime
 from functools import partial
+from time import monotonic
 from types import FunctionType
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -187,12 +188,17 @@ def _child(conn, module, name, params, token, timeout):
 def bounded_call(module, name, params, *, timeout=20.0, token=None):
     allowed=TUSHARE_APIS if module=='tushare' else AKSHARE_APIS if module=='akshare' else ()
     if name not in allowed: raise CapabilityUnavailable('endpoint_not_allowlisted')
+    deadline = monotonic() + timeout
     ctx=mp.get_context('spawn')
     receiver,sender=ctx.Pipe(duplex=False)
     process=ctx.Process(target=_child,args=(sender,module,name,params,token,timeout),daemon=True)
+    timed_out = False
     try:
         process.start();sender.close()
-        if not receiver.poll(timeout): raise ProviderTimeout('provider_deadline_exceeded')
+        remaining = deadline - monotonic()
+        timed_out = remaining <= 0 or not receiver.poll(remaining)
+        if timed_out:
+            raise ProviderTimeout('provider_deadline_exceeded')
         try:
             payload=json.loads(receiver.recv_bytes(MAX_BYTES))
         except (EOFError,OSError,ValueError):
@@ -207,7 +213,8 @@ def bounded_call(module, name, params, *, timeout=20.0, token=None):
     finally:
         sender.close();receiver.close()
         if process.pid is not None:
-            process.join(timeout=0.05)
+            if not timed_out:
+                process.join(timeout=0.05)
             if process.is_alive(): process.terminate();process.join(timeout=1)
             if process.is_alive(): process.kill();process.join(timeout=1)
             process.close()

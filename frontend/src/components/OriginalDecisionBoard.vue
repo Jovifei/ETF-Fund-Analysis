@@ -21,7 +21,7 @@ const outlook = useQuery<{items: Record<string, {forecasts: Record<string, unkno
 // (the batch's captured horizon) — when they differ, rows arrive with grade=数据异常
 // and grade_reason=selected_horizon_grade_not_published; the UI explains that openly
 // instead of silently substituting another horizon.
-const q = useQuery<Record<string, unknown>>(() => props.ready === false ? null : withGeneration(`/api/decision-board?horizon=${horizon.value}`, props.generation))
+const q = useQuery<Record<string, unknown>>(() => props.ready === false ? null : withGeneration(`/api/decision-board?horizon=${horizon.value}&view=matrix`, props.generation))
 const horizonMismatch = computed(() => {
   const captured = (q.data.value as Record<string, unknown> | null)?.decision_horizon
   return typeof captured === 'number' && captured !== horizon.value

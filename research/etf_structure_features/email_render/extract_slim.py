@@ -41,12 +41,12 @@ def _structure_v1(row, det=None, sidecar_index=None):
         block = det.get("structure_v1")
     elif isinstance(sidecar_index, dict):
         key = (str(row.get("ts_code") or ""), str(
-            (row.get("support_resistance") or {}).get("snapshot_as_of_date")
-            or (row.get("support_resistance") or {}).get("source_as_of_date")
+            _g(row, "support_resistance", "snapshot_as_of_date")
+            or _g(row, "support_resistance", "source_as_of_date")
             or row.get("as_of")
             or ""
         ))
-        hit = sidecar_index.get(key) or sidecar_index.get((key[0], ""))
+        hit = sidecar_index.get(key) if all(key) else None
         if isinstance(hit, dict):
             block = hit
     if not isinstance(block, dict):
@@ -73,12 +73,11 @@ def _structure_v1(row, det=None, sidecar_index=None):
     }
     if block.get("proxy_disclaimer"):
         out["proxy_disclaimer"] = block.get("proxy_disclaimer")
-    # Prefer same atr14 as top-level SR when present and block atr missing
     return out
 
 
 def _load_structure_sidecar(path):
-    """Sidecar JSON: list of structure_v1 rows, or {ts_code: row} / {"rows":[...]}. Keyed by ts_code(+as_of)."""
+    """Sidecar rows must identify both the ticker and the observation date."""
     if not path:
         return None
     from pathlib import Path as _P
@@ -103,10 +102,9 @@ def _load_structure_sidecar(path):
             continue
         ts = str(r.get("ts_code") or "")
         as_of = str(r.get("as_of") or "")
-        if not ts:
+        if not ts or not as_of:
             continue
         index[(ts, as_of)] = r
-        index.setdefault((ts, ""), r)
     return index
 
 
@@ -188,6 +186,9 @@ def slim_bundle(b, structure_sidecar=None):
             "last_bar": {k: last_bar.get(k) for k in ("date", "open", "high", "low", "close")} if last_bar else None,
             "actionable": r.get("actionable"),
         })
+        structure = _structure_v1(r, det, structure_sidecar)
+        if structure is not None:
+            rows[-1]["structure_v1"] = structure
     st = ov.get("sector_timing") or {}
     themes = []
     for t in st.get("themes") or []:
@@ -212,14 +213,6 @@ def slim_bundle(b, structure_sidecar=None):
 
 
 if __name__ == "__main__":
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    sidecar = None
-    for a in sys.argv[1:]:
-        if a.startswith("--structure-sidecar="):
-            sidecar = a.split("=", 1)[1]
-        elif a == "--structure-sidecar" and args:
-            # handled below via explicit flag scan
-            pass
     # positional: bundle [out] ; flag --structure-sidecar PATH
     argv = sys.argv[1:]
     sidecar = None
@@ -237,7 +230,7 @@ if __name__ == "__main__":
         positional.append(argv[i])
         i += 1
     with open(positional[0], encoding="utf-8") as f:
-        data = slim_bundle(json.load(f), structure_sidecar=sidecar)
+        data = slim_bundle(json.load(f), structure_sidecar=_load_structure_sidecar(sidecar))
     txt = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
     if len(positional) > 1:
         with open(positional[1], "w", encoding="utf-8") as f:

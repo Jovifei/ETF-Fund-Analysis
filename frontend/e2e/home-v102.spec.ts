@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { openLegacyDecisionBoard } from './legacy-decision-board'
 
 test('original report lives in home; ETF navigation preserves shell and filter', async ({ page }, info) => {
   const errors: string[] = [], forbidden: string[] = []
@@ -7,7 +8,7 @@ test('original report lives in home; ETF navigation preserves shell and filter',
   await page.goto('/')
   await expect(page.getByRole('heading', {name:'市场总览',exact:true})).toBeVisible()
   await expect(page.getByRole('heading', {name:'行业与概念板块'})).toBeVisible()
-  const report = page.frameLocator('iframe[title="原版 ETF 决策快照"]')
+  const report = await openLegacyDecisionBoard(page)
   await expect(report.locator('.decision-data-row').first()).toBeVisible()
   expect(await report.locator('#horizonSelect option').evaluateAll(options =>
     options.map(option => (option as HTMLOptionElement).value),
@@ -24,6 +25,7 @@ test('original report lives in home; ETF navigation preserves shell and filter',
   await expect(page.getByTestId('etf-chart')).toBeVisible()
   await page.goBack()
   await expect(page).toHaveURL(/\/$/)
+  await openLegacyDecisionBoard(page)
   await expect(report.locator('#searchInput')).toHaveValue('512480')
   await expect(report.locator('#horizonSelect')).toHaveValue('7')
   await expect(report.locator('.decision-data-row')).toHaveCount(1)
@@ -51,6 +53,8 @@ test('market context cards expose persisted history and catalog rows open the sa
   await expect(page.locator('.market-context-card').first()).toBeVisible()
   await page.locator('.market-context-card').first().click()
   await expect(page.locator('.market-context-detail')).toBeVisible()
+  await page.getByText('日／周／月预测的计算与边界', { exact: true }).click()
+  await expect(page.getByRole('button', { name: '计算日 / 周 / 月研究' })).toBeVisible()
 
   await page.goto('/analysis?q=512480')
   const row = page.locator('tbody tr').first()
@@ -69,7 +73,7 @@ test('slow embedded scripts cannot lose early search and horizon edits', async (
     await route.continue()
   })
   await page.goto('/', {waitUntil:'commit'})
-  const frame = page.frameLocator('iframe[title="原版 ETF 决策快照"]')
+  const frame = await openLegacyDecisionBoard(page)
   try {
     await expect(frame.locator('#searchInput')).toBeDisabled()
     await expect(frame.locator('#horizonSelect')).toBeDisabled()

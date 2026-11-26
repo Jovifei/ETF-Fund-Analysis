@@ -34,6 +34,7 @@ def ret_color(x):
     return UP_COLOR if x > 0 else DOWN_COLOR
 SLOT_TAG = {"11:40": "1140", "14:30": "1430", "14:45": "1445", "收盘复核": "close"}
 STRATEGY_SLOTS = ("11:40", "14:30", "14:45")
+STRATEGY_GATES = tuple(f"G{i}" for i in range(1, 8))
 WEEKDAY = "一二三四五六日"
 GATE_DESC = OrderedDict([
     ("G1", "上一交易日完整日线"),
@@ -157,9 +158,14 @@ def load_prev(path):
 def load_gates(path):
     if not path:
         return None
-    with open(path, encoding="utf-8") as f:
-        d = json.load(f)
+    try:
+        with open(path, encoding="utf-8") as f:
+            d = json.load(f)
+    except (OSError, ValueError):
+        return {}
     g = d.get("gates", d) if isinstance(d, dict) else {}
+    if not isinstance(g, dict):
+        return {}
     out = OrderedDict()
     for k in sorted(g, key=lambda s: (len(s), s)):
         if not str(k).upper().startswith("G"):
@@ -168,7 +174,8 @@ def load_gates(path):
         if isinstance(v, bool):
             out[k] = {"pass": v, "note": None}
         elif isinstance(v, dict) and "pass" in v:
-            out[k] = {"pass": bool(v["pass"]), "note": v.get("note")}
+            note = v.get("note") if isinstance(v["pass"], bool) else "闸门结果必须是布尔值"
+            out[k] = {"pass": v["pass"] is True, "note": note}
     return out
 
 
@@ -1327,8 +1334,13 @@ def main():
     attach = Path(a.attach_dir)
     attach.mkdir(parents=True, exist_ok=True)
     gates = load_gates(a.gates)
+    if a.slot in STRATEGY_SLOTS and not (a.allow_missing_gates and gates is None):
+        gates = gates if gates is not None else {}
+        for name in STRATEGY_GATES:
+            gates.setdefault(name, {"pass": False, "note": "缺少闸门结果"})
 
-    if a.recheck_g4 and a.input and gates is not None and a.slot in ("14:30", "14:45") \
+    if a.recheck_g4 and a.input and gates and all(v["pass"] for v in gates.values()) \
+            and not a.not_ready and a.slot in ("14:30", "14:45") \
             and gates.get("G4", {}).get("pass"):
         qts = [r.get("quote_source_time") for r in load_data(a.input)["rows"] if r.get("quote_source_time")]
         if qts:
@@ -1337,9 +1349,7 @@ def main():
             if age > a.g4_max_age_min:
                 gates["G4"] = {"pass": False, "note": f"渲染时（{dt.datetime.now(CST):%H:%M:%S} 北京时间）最旧报价"
                                f" {oldest:%H:%M:%S} 已过 {age:.1f} 分钟，超过 {a.g4_max_age_min:g} 分钟闸门"}
-    failed = gates is not None and not all(v["pass"] for v in gates.values())
-    if a.slot in STRATEGY_SLOTS and gates is None and not a.not_ready and not a.allow_missing_gates:
-        raise SystemExit("策略时段必须提供 --gates（或 --not-ready）；测试请加 --allow-missing-gates")
+    failed = gates is not None and (not gates or not all(v["pass"] for v in gates.values()))
     if a.not_ready or failed or not a.input:
         subject, txt, htm = render_not_ready(a.slot, a.date, gates, a.reason)
         (out / "body.txt").write_text(txt, encoding="utf-8")

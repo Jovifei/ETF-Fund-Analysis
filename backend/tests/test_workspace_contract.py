@@ -68,6 +68,29 @@ def test_workspace_unknown_api_is_not_a_successful_spa_page():
         assert client.get('/workspace-assets/does-not-exist.js').status_code == 404
 
 
+def test_workspace_assets_compress_full_reads_and_preserve_ranges(monkeypatch, tmp_path):
+    from app.workspace import ui
+
+    monkeypatch.setattr(ui, 'DIST', tmp_path)
+    folder = tmp_path / 'workspace-assets'
+    folder.mkdir()
+    body = b'const sample = "synthetic asset";\n' * 100
+    (folder / 'test.js').write_bytes(body)
+    with TestClient(app) as client:
+        compressed = client.get('/workspace-assets/test.js', headers={'Accept-Encoding': 'gzip'})
+        identity = client.get('/workspace-assets/test.js', headers={'Accept-Encoding': 'identity'})
+        partial = client.get('/workspace-assets/test.js', headers={'Accept-Encoding': 'gzip', 'Range': 'bytes=0-9'})
+    assert compressed.status_code == identity.status_code == 200
+    assert compressed.content == identity.content == body
+    assert compressed.headers['Content-Encoding'] == 'gzip'
+    assert 'accept-encoding' in compressed.headers['Vary'].lower()
+    assert 'immutable' in compressed.headers['Cache-Control']
+    assert 'Content-Encoding' not in identity.headers
+    assert partial.status_code == 206
+    assert partial.content == body[:10]
+    assert 'Content-Encoding' not in partial.headers
+
+
 def test_detail_and_chart_errors_have_stable_reason_codes(bootstrapped):
     with TestClient(app) as client:
         missing = client.get('/api/workspace/instruments/999999.SH')

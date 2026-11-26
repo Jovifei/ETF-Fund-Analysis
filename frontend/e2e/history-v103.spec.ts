@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test'
+import { openLegacyDecisionBoard } from './legacy-decision-board'
 
 test('index cards open actual cached OHLC candles, not point history',async({page,request},info)=>{
  const r=await request.get('/api/workspace/indexes/cn-csi300/chart');expect(r.ok()).toBeTruthy()
@@ -36,7 +37,7 @@ test('favorites work in catalog and original decision template without navigatio
  await expect(page).toHaveURL(/analysis/)
  await expect(page.getByRole('button',{name:'取消收藏 '+code,exact:true})).toBeVisible()
  await page.goto('/watchlist');await expect(page.locator('tbody')).toContainText(code)
- await page.goto('/');const frame=page.frameLocator('iframe[title="原版 ETF 决策快照"]')
+ await page.goto('/');const frame=await openLegacyDecisionBoard(page)
  await frame.locator('#searchInput').fill(code)
  await expect(frame.locator('[data-favorite="'+code+'"]').first()).toHaveAttribute('aria-pressed','true')
  await frame.locator('[data-favorite="'+code+'"]').first().click()

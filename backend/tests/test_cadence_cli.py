@@ -1,5 +1,6 @@
-"""CLI integration preserves the execution lock and actual input checks."""
+﻿"""CLI integration preserves the execution lock and actual input checks."""
 import importlib.util
+from datetime import date
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -29,19 +30,24 @@ def run_args(tmp_path):
         closed_session_research=False, no_upload=True, compute_only=False, skip_trade_day_check=True,
         board_only=False, cadence_mode='auto', prepare_base=True)
 
+def _base_on_completion(settings, universe, *, now, **kwargs):
+    from app.services.settlement import settled_session
+    return {'validated': True, 'target_trade_date': settled_session(settings, now).isoformat()}
+
 
 def test_auto_recovers_missing_base_with_full_pipeline(cli, run_args, monkeypatch):
     calls = []
     monkeypatch.setattr(cli, 'get_current_git_sha', lambda: 'b' * 40)
     monkeypatch.setattr(cli, 'compute_local', lambda *a, **k: calls.append('full') or [{'status': 'succeeded'}])
     monkeypatch.setattr(cli, 'compute_local_fast', lambda *a, **k: pytest.fail('no valid base'))
-    monkeypatch.setattr(cli, 'create_base_manifest', lambda *a, **k: {'validated': True})
+    monkeypatch.setattr(cli, 'create_base_manifest', _base_on_completion)
     monkeypatch.setattr(cli, 'build_execution_lineage', lambda *a, **k: {'mode': k['mode'],
         'execution_hash': k['execution_hash'], 'config_file_hash': k['config_file_hash']})
     monkeypatch.setattr(cli, 'export_local_v2', lambda *a, **k: {'manifest': {'sequence': k['sequence']}})
     assert cli.cmd_run(run_args) == 0
     assert calls == ['full']
-    assert json.loads((Path(run_args.root) / 'state' / 'settled_base.json').read_text()) == {'validated': True}
+    base = json.loads((Path(run_args.root) / 'state' / 'settled_base.json').read_text())
+    assert base['validated'] is True and date.fromisoformat(base['target_trade_date'])
 
 
 def test_fast_refuses_invalid_base_without_silent_recompute(cli, run_args, monkeypatch):
@@ -128,7 +134,7 @@ def test_full_mode_keeps_partial_market_context_and_flags_failed_sectors(cli, ru
         {'status': 'partial', 'task_name': 'refresh_market_context', 'required': False, 'observed': 6},
         {'status': 'failed', 'task_name': 'refresh_sector_snapshots', 'required': False},
         {'status': 'succeeded', 'task_name': 'refresh_decision_board'}])
-    monkeypatch.setattr(cli, 'create_base_manifest', lambda *a, **k: {'validated': True})
+    monkeypatch.setattr(cli, 'create_base_manifest', _base_on_completion)
     monkeypatch.setattr(cli, 'build_execution_lineage', lambda *a, **k: {'mode': k['mode'],
         'execution_hash': k['execution_hash'], 'config_file_hash': k['config_file_hash']})
     def export(*a, **k):
@@ -148,7 +154,7 @@ def test_upload_failure_reports_actual_safe_diagnostic(cli, run_args, monkeypatc
     run_args._on_diagnostic = lambda phase, **event: events.append({'phase': phase, **event})
     monkeypatch.setattr(cli, 'get_current_git_sha', lambda: 'b' * 40)
     monkeypatch.setattr(cli, 'compute_local', lambda *a, **k: [{'status': 'succeeded'}])
-    monkeypatch.setattr(cli, 'create_base_manifest', lambda *a, **k: {'validated': True})
+    monkeypatch.setattr(cli, 'create_base_manifest', _base_on_completion)
     checks = []
     original_read = cli.read_execution
     def read(args):
@@ -190,7 +196,7 @@ def test_dispatch_cli_persists_first_upload_error_through_real_ledger(cli, run_a
     run_args.cadence_mode = 'full'
     monkeypatch.setattr(cli, 'get_current_git_sha', lambda: 'b' * 40)
     monkeypatch.setattr(cli, 'compute_local', lambda *a, **k: [{'status': 'succeeded'}])
-    monkeypatch.setattr(cli, 'create_base_manifest', lambda *a, **k: {'validated': True})
+    monkeypatch.setattr(cli, 'create_base_manifest', _base_on_completion)
     monkeypatch.setattr(cli, 'build_execution_lineage', lambda *a, **k: {
         'contract_version': 'local-execution-lineage-v1', 'mode': k['mode'],
         'execution_hash': k['execution_hash'], 'config_file_hash': k['config_file_hash'],

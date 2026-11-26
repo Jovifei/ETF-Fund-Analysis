@@ -1,7 +1,7 @@
 import pytest
 from datetime import datetime, timezone, date
 from types import SimpleNamespace
-from fastapi import FastAPI
+from fastapi import Response
 from fastapi.testclient import TestClient
 from app.workspace.local_display_contract import CONTRACT_VERSION, compute_parts_hashes
 from app.workspace.local_display_read import LocalDisplayStore, LocalDisplayReader
@@ -72,6 +72,25 @@ def test_local_display_reader_decision_board(tmp_path):
     assert board["rows"][0]["grade"] == "可入场"
     assert board["rows"][0]["price"] == 4.345
     assert board["counts"] == {"可入场": 1}
+
+    from app.api.router import decision_board
+
+    settings = SimpleNamespace(
+        workspace_research_source="local_bundle",
+        local_display_v2_store_root=tmp_path,
+        local_display_v2_max_bytes=store.max_bytes,
+        shadow_sync_code_sha="a" * 40,
+        shadow_sync_config_hash="c" * 64,
+    )
+    matrix = decision_board(
+        None, settings, Response(), horizon=7, snapshot_id="snap-1013",
+        generation=str(bundle["manifest"]["sequence"]), view="matrix",
+    )
+    assert matrix["generation"] == board["generation"]
+    assert matrix["snapshot_id"] == board["snapshot_id"]
+    assert matrix["decision_horizon"] == 1
+    assert matrix["selected_horizon"] == 7
+    assert matrix["rows"][0]["grade_reason"] == "selected_horizon_grade_not_published"
 
 
 def test_corporate_action_splits_registered():

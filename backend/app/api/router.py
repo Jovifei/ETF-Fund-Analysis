@@ -403,6 +403,30 @@ def bootstrap(
 
 
 
+def _project_decision_matrix(payload: dict) -> dict:
+    matrix = {key: value for key, value in payload.items() if key not in {"rows", "groups"}}
+    matrix_rows = []
+    for row in payload.get("rows", []):
+        item = {key: value for key, value in row.items() if key != "forecast_scenario"}
+        history = row.get("history")
+        if isinstance(history, list):
+            item["history"] = []
+            for value in reversed(history):
+                bar = value if isinstance(value, dict) else {}
+                if any(bar.get(flag) is True for flag in ("is_forecast", "not_actual", "is_provisional")):
+                    continue
+                item["history"] = [{key: bar[key] for key in ("date", "close") if key in bar}]
+                break
+        levels = row.get("support_resistance")
+        if isinstance(levels, dict):
+            item["support_resistance"] = {
+                key: levels[key] for key in ("nearest_support", "nearest_resistance") if key in levels
+            }
+        matrix_rows.append(item)
+    matrix["rows"] = matrix_rows
+    return matrix
+
+
 @private_router.get("/decision-board")
 def decision_board(
     db: Annotated[Session, Depends(get_db)],
@@ -411,6 +435,7 @@ def decision_board(
     horizon: int = Query(default=1),
     snapshot_id: str | None = Query(default=None, min_length=1, max_length=64),
     generation: str | None = Query(default=None, max_length=64),
+    view: Literal["full", "matrix"] = Query(default="full"),
 ) -> dict:
     response.headers["Cache-Control"] = "private, no-store"
     if settings.workspace_research_source == "local_bundle":
@@ -422,14 +447,14 @@ def decision_board(
             raise HTTPException(422, "unsupported horizon") from None
         if payload is None:
             raise HTTPException(404, "local decision-board generation not found")
-        return payload
-    try:
-        payload = DecisionBoardService(settings).read_latest(db, horizon=horizon, snapshot_id=snapshot_id)
-    except ValueError:
-        raise HTTPException(status_code=422, detail="horizon must be one of 1, 3, 7, 20, 60") from None
-    if payload is None:
-        raise HTTPException(status_code=404, detail="decision-board snapshot not found")
-    return payload
+    else:
+        try:
+            payload = DecisionBoardService(settings).read_latest(db, horizon=horizon, snapshot_id=snapshot_id)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="horizon must be one of 1, 3, 7, 20, 60") from None
+        if payload is None:
+            raise HTTPException(status_code=404, detail="decision-board snapshot not found")
+    return _project_decision_matrix(payload) if view == "matrix" else payload
 
 
 @private_router.get("/decision-board/{ts_code}")

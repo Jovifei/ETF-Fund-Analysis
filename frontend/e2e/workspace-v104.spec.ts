@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test'
+import { openLegacyDecisionBoard } from './legacy-decision-board'
 
 test('calendar candles and fullscreen leave a path back when hourly data is missing',async({page,request},info)=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message))
@@ -29,7 +30,7 @@ test('sector alias searches retain original home and show the matching basis',as
  await expect(page.getByText('关联词：',{exact:false})).toBeVisible()
  await expect(page.locator('tbody')).toContainText('512480')
  await page.goto('/')
- const frame=page.frameLocator('iframe[title="原版 ETF 决策快照"]')
+ const frame=await openLegacyDecisionBoard(page)
  await frame.locator('#horizonSelect').selectOption('20')
  await frame.locator('#searchInput').fill('512480')
  await expect(frame.locator('.decision-data-row')).toHaveCount(1)

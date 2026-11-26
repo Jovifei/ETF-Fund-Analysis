@@ -1,12 +1,18 @@
 import { test, expect } from '@playwright/test'
+import { openLegacyDecisionBoard } from './legacy-decision-board'
 
 test('original ETF matrix, source status and light data queue share the canonical backend', async ({ page, request }, info) => {
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
+  const matrixResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/decision-board' && url.searchParams.get('view') === 'matrix'
+  })
   await page.goto('/matrix')
   await expect(page).toHaveURL(/\/#etf-decisions$/)
-  await expect(page.getByRole('heading', { name: 'ETF 决策快照', exact: true })).toBeVisible()
-  const original = page.frameLocator('iframe[title="原版 ETF 决策快照"]')
+  expect((await matrixResponse).ok()).toBeTruthy()
+  await expect(page.getByRole('heading', { name: 'ETF 决策研判矩阵', exact: true })).toBeVisible()
+  const original = await openLegacyDecisionBoard(page)
   await expect(original.locator('.decision-data-row').first()).toBeVisible()
   await expect(original.locator('script[src="/assets/decision_board_workbuddy.js"]')).toHaveCount(1)
   await expect(original.locator('.app-topbar')).toHaveCount(0)
@@ -16,8 +22,10 @@ test('original ETF matrix, source status and light data queue share the canonica
   await page.goto('/classic/etf-board')
   await expect(page).toHaveURL(/\/#etf-decisions$/)
   await expect(page.locator('.sidebar')).toHaveCount(1)
-  await expect(original.locator('.decision-data-row').first()).toBeVisible()
+  const classic = await openLegacyDecisionBoard(page)
+  await expect(classic.locator('.decision-data-row').first()).toBeVisible()
   await page.goto('/settings')
+  await page.getByRole('tab', { name: '数据与设备', exact: true }).click()
   await expect(page.getByRole('heading', { name: '后端数据接入', exact: true })).toBeVisible()
   await expect(page.getByTestId('data-connections')).toContainText('未配置 Token')
   await page.screenshot({ path: info.outputPath('v101-data-connections.png'), fullPage: true })

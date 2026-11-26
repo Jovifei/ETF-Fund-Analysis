@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed,ref} from 'vue'
+import {computed,defineAsyncComponent,ref} from 'vue'
 import {useRoute} from 'vue-router'
 import {useQuery} from '../lib/query'
 import {useVisibleRefresh} from '../lib/useVisibleRefresh'
@@ -7,9 +7,6 @@ import {num,pct,direction,stamp,levelPrice,record,numeric} from '../lib/format'
 import type {Detail,ChartData,SupportLevel} from '../lib/types'
 import PageState from '../components/PageState.vue'
 import Badge from '../components/Badge.vue'
-import EtfChart from '../components/EtfChart.vue'
-import OutlookPanel from '../components/OutlookPanel.vue'
-import ResearchPanel from '../components/ResearchPanel.vue'
 import FavoriteButton from '../components/FavoriteButton.vue'
 import HistoryLoader from '../components/HistoryLoader.vue'
 import IndicatorReadings from '../components/IndicatorReadings.vue'
@@ -17,6 +14,9 @@ import AvailabilityMatrix from '../components/AvailabilityMatrix.vue'
 import { availabilityReason } from '../lib/availability'
 import {withGeneration} from '../lib/generation'
 import {tradeScore} from '../lib/tradeSignal'
+const EtfChart = defineAsyncComponent(() => import('../components/EtfChart.vue'))
+const OutlookPanel = defineAsyncComponent(() => import('../components/OutlookPanel.vue'))
+const ResearchPanel = defineAsyncComponent(() => import('../components/ResearchPanel.vue'))
 const route=useRoute(),code=computed(()=>String(route.params.code??'').toUpperCase()),interval=ref('1d'),tab=ref<'chart'|'forecast'|'ai'>(route.query.tab==='ai'?'ai':route.query.tab==='forecast'?'forecast':'chart')
 const latestLocation=computed(()=>{const query={...route.query};delete query.generation;return{path:route.path,query,hash:route.hash}})
 const q=useQuery<Detail & {research_source?:'database'|'local_bundle'}>(()=>withGeneration('/api/workspace/instruments/'+encodeURIComponent(code.value),typeof route.query.generation==='string'?route.query.generation:undefined))
