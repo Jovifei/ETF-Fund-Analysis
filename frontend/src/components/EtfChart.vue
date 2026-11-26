@@ -5,9 +5,10 @@ import { acquireDialogScrollLock, releaseDialogScrollLock } from '../lib/dialogS
 import { serverStudies, studyAvailable, volumeAvailable } from '../lib/chartStudies'
 import { ChartAdapter, chanOverlay, groupsForLevel } from '../lib/chartAdapter'
 import { num, levelDirection, levelDirectionLabel, levelPrice } from '../lib/format'
+import { signalSeries, type TradeSignal } from '../lib/tradeSignal'
 import type { ChartBar, ChartData } from '../lib/types'
 import ChanEvidenceCard from './ChanEvidenceCard.vue'
-const props=defineProps<{data:ChartData;cost?:number|null;label?:string;allowMinutes?:boolean}>()
+const props=defineProps<{data:ChartData;cost?:number|null;label?:string;allowMinutes?:boolean;tradeSignals?:TradeSignal[];tradeScore?:{score:number;tier:string;components?:Record<string,number>;label?:string}|null}>()
 const emit=defineEmits<{period:[value:string]}>()
 const root=ref<HTMLElement|null>(null),host=ref<HTMLElement|null>(null),cursor=ref<ChartBar>(),failed=ref(''),range=ref(100),expanded=ref(false),expandButton=ref<HTMLButtonElement|null>(null)
 const priceBasis=ref<'raw'|'research'>('raw')
@@ -96,7 +97,7 @@ const boxState:Record<string,string>={candidate:'候选',confirmed:'已确认',b
 const intradaySide:Record<string,string>={upper:'上沿',lower:'下沿',both:'上下沿'}
 let adapter:ChartAdapter|null=null,mountRevision=0,returnFocus:HTMLElement|null=null,scrollLockToken:symbol|null=null
 let compactPointerOrigin:{x:number;y:number}|null=null,compactPointerDragged=false
-async function mount(){const revision=++mountRevision;await nextTick();if(revision!==mountRevision)return;adapter?.destroy();adapter=null;failed.value='';cursor.value=displayData.value.bars.at(-1);if(!host.value||!displayData.value.available)return;try{adapter=new ChartAdapter(host.value,displayData.value,props.cost??null,b=>cursor.value=b,selected.value);adapter.setIndicatorSelection(activeIndicators.value,showVolume.value);adapter.range(range.value)}catch{failed.value='图表初始化失败，请重新读取。数值仍可在下方查看。'}}
+async function mount(){const revision=++mountRevision;await nextTick();if(revision!==mountRevision)return;adapter?.destroy();adapter=null;failed.value='';cursor.value=displayData.value.bars.at(-1);if(!host.value||!displayData.value.available)return;try{adapter=new ChartAdapter(host.value,displayData.value,props.cost??null,b=>cursor.value=b,selected.value, props.tradeSignals ?? signalSeries(displayData.value.bars));adapter.setIndicatorSelection(activeIndicators.value,showVolume.value);adapter.range(range.value);if(props.tradeScore)adapter.tradeAnchor(props.tradeScore)}catch{failed.value='图表初始化失败，请重新读取。数值仍可在下方查看。'}}
 function reset(){range.value=100;adapter?.reset()}
 function dialogFocusable(){
  if(!root.value)return [] as HTMLElement[]
@@ -145,7 +146,7 @@ function key(event:KeyboardEvent){
  else if(!event.shiftKey&&active===last){event.preventDefault();first.focus()}
 }
 onMounted(()=>{void mount();document.addEventListener('keydown',key);document.addEventListener('pointerdown',outside);window.addEventListener('resize',positionIndicators);window.addEventListener('scroll',positionIndicators,true);window.visualViewport?.addEventListener('resize',positionIndicators);window.visualViewport?.addEventListener('scroll',positionIndicators)})
-watch(()=>[props.data,props.cost,priceBasis.value],mount)
+watch(()=>[props.data,props.cost,priceBasis.value,props.tradeScore?.score],mount)
 watch(()=>selected.value.join(','),()=>adapter?.setStudySelection(selected.value))
 watch(()=>[activeIndicators.value.join(','),showVolume.value],()=>adapter?.setIndicatorSelection(activeIndicators.value,showVolume.value))
 onBeforeUnmount(()=>{++mountRevision;adapter?.destroy();adapter=null;releaseDialogScrollLock(scrollLockToken);scrollLockToken=null;document.removeEventListener('keydown',key);document.removeEventListener('pointerdown',outside);window.removeEventListener('resize',positionIndicators);window.removeEventListener('scroll',positionIndicators,true);window.visualViewport?.removeEventListener('resize',positionIndicators);window.visualViewport?.removeEventListener('scroll',positionIndicators)})

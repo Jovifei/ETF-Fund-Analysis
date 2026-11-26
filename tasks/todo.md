@@ -345,3 +345,108 @@ Review：收据见 docs/handoffs/PRODUCTION_DEPLOYMENT_20261031.md。演练期�
 - [x] 针对性测试 39 项通过；compileall 与 Node 语法检查通过；全量 pytest 未运行。
 
 Review：当前应优先完成真实 PIT 14:30 数据与供应商/许可确认、同口径策略回放、purged walk-forward + pristine holdout、事件驱动约束回测、至少 20 个交易日 shadow run、人工批准，以及生产自然链路/登录/手机/SMTP验收。保持 UNKNOWN/actionable=false/not_calibrated。
+
+## 2026-11-15 ZCode 会话：B 档切换完成 + 伪影修复 + 清理（待周一自然交付）
+
+**已完成：**
+- 身份链第 6 条已登记（df340e3/9efe8845，approved 2026-11-15）；ECS env 三件套与生产任务 pin 同步切到 df340e3；门禁 approved。
+- integrate 分支新增 df340e3：冻结公式哈希平台无关化（CRLF 归一）、structure_decision 重冻结（us-markets 合并遗漏）、replay 原子写 Windows 兼容、archive symlink Windows skip —— Windows 全量两处伪影清零（61 passed + 1 skip）。
+- ECS 清理完成：85%→77%，保留现行栈+上一代栈+最近 2 备份。
+- 6442c7e（时钟解耦）审阅结论：编排层已由 research_input.base 驱动，服务层下沉改动当前不显化（槽全在 16:00 后）；基于旧 main 有冲突风险 → 建议原状保留，未来若加"09:00 前上一 session"槽再吸收。
+
+**待办（周一 11-16 优先）：**
+1. 周一自然槽（14:55–17:40）应交付首个 df340e3 包（34/34 + US 卡片真数据）——若未交付，检查 api 日志与 attempts 表。
+2. 交付成功后：integrate 分支补登记表 append 提交 → 合并 integrate/us-markets-20261114 到 main（owner 已批"B 后一次合并"）。
+3. 方案 A（周末空窗改合同：非交易日映射上一交易日）= 新会话新阶段，合同版本升级 + 失败测试先行。
+4. 登录态浏览器验收：结构三列有值 + 美股卡片数据（owner）。
+
+**回滚（B 档）：** ECS env 三件套指回 98ba055/9efe8845 + 重启（登记表 append-only，旧条目仍在）；任务 pin 指回 etf-live-98ba055 工作树 + --expected-sha 98ba055（XML 备份在 F:\ETF_Data\ETF-Fund-Analysis\state\）。
+
+## 2026-11-15 Antigravity 阶段：首个 df340e3 生产展示包闭环验收
+
+**已完成：**
+1. **快照就位与验证**：解压并核验权威快照数据至 `F:\ETF_Data\ETF-Fund-Analysis\state\us-markets-snapshot\`，包含完整 3 组 6 系列美股研究快照（`us_markets_research_snapshot.json`）、历史 CSV（`us_markets_research_history.csv`）及来源审计（`us_markets_research_source_audit.json`）。
+2. **本地全量计算与导出**：以已登记生产者身份 `df340e3fbbc64dac7b5d9429dadeb1108ebf3604` / 配置 hash `9efe8845e2e26406de22b30b08d0697f3c52b979f6d3e06b7a1398bcca21285b` 成功生成本地展示包 `bundle_1794722204253.json`。
+3. **服务端接收回执**：成功向 ECS 生产服务器（`https://etf.joviluma.com/api/shadow/sync`）投递该包，取得 accepted 回执：
+   - `bundle_id`: `b90469607b54b757363b8188f83f760127015e50b9a46b9b6ec2edc16cda1bda`
+   - `sequence`: 1794722204253
+   - 生产环境 `latest.json` 已实时切至该包。
+4. **服务器 Reader 消费验证**：在生产容器 `etf-deploy-129840e-api-1` 内调用 `_local_reader` 实测：
+   - 34 只 A 股 ETF 行情与威科夫、道氏、ATR 结构三列完整输出。
+   - 美股研究 3 组（美股 CPO/光模块、美股存储、美股指数）及全部 6 个序列完整可用，`available: true`，数据截止日 `as_of: 2026-11-13`。
+   - 前端代码包已内含对应组件（`UsMarkets-BcDLofKZ.js`、`UsMarketsResearchCard-BTNS1upd.js`）。
+5. **合规边界锁定**：严格维持 `research_only=true`、`actionable=false`、`calibration_status=not_calibrated`，零自动交易、无券商连接；策略邮件槽（11:40/14:30/14:45）不受研究模块影响。
+6. **Hub 报告记录**：通过 `bound_report.py` 向 Codex Project Hub 提交事件 `3734d805-210a-4230-82d4-0970ead46dc9`（revision 34 接收）。
+
+**待办（周一 11-16 观察）：**
+1. 用户在浏览器端登录后即可正常查看美股研究页及总览卡片。
+2. 周一首个交易日自然槽启动时，观察 Windows 自然定时任务自动化调度。
+3. 待周一自然调度首包稳定后，在适当节点合并 `integrate/us-markets-20261114` 至 `main`。
+
+## 2026-11-15 生产变更：模型 API 通道受控启用（用户明确授权）
+- **背景**：用户在网站前端管理页核验时发现模型 API 通道提示管理员尚未启用。
+- **操作**：
+  1. 在 ECS 宿主机私有目录 /opt/china-fund-decision/ai-key/ 创建合规主密钥 master.key（权限 0700/0600，属主 10001:10001 ppuser）。
+  2. 备份生产 Compose 配置为 
+ew.yml.bak_20261115_ai_enable。
+  3. 更新 
+ew.yml：挂载 /opt/china-fund-decision/ai-key:/var/lib/etf-private/ai:ro，注入 WORKSPACE_AI_API_ENABLED=true 与 WORKSPACE_AI_KEY_FILE=/var/lib/etf-private/ai/master.key。
+  4. 重启生产容器并通过健康检查：pi-1 (healthy), worker-1 (healthy), scheduler-1 (Up)。
+  5. 实测 i_profiles.capabilities() 返回 vailable: true、locked_reason: null，允许域名 pi.deepseek.com 与 pi.openai.com。
+  6. 宿主机同机其他容器（jourvolt, medbox, star-photo 等）运行正常未受波及。
+
+## 2026-11-19 生产部署 main（e542273）
+- `deploy-e542273` 切流成功：api/worker healthy、公网 200、页面读取 34 只、线上 index-CC4X85TY.js 与本地 main 构建一致。
+- 切流前备份 `fund_pre_e542273_cutover_20261118_233617.dump`（TOC 463 校验通过）；旧项目 `etf-deploy-eb259ee` 容器停止保留可回滚。
+- 收据：`docs/audits/PRODUCTION_DEPLOYMENT_RECEIPT_20261119.md`。
+
+## 2026-11-18 ETF 分支合并（业主拍板后执行）
+- 决策：研究标注合入 main；显示修复用 1827e79（两条 diff 相同只合其一）；structure-v1 Phase B1 暂不进 main；已含 main 的 5 条分支暂不删除。
+- 合并：1578e1a（trade-signal + 收据）→ 5575395（UI 显示修复 1827e79），已推送 origin/main（5964c22..5575395）。
+- 验证：vitest 33 文件/270 用例、vue-tsc、vite build、pytest 全量 exit 0。
+- 生产：仍运行 deploy-eb259ee（研究标注版本）；显示修复尚未部署生产，待业主确认。ETF 群公告 #26；hub revision 37。
+
+## 2026-11-17 规划：B 加权买卖因子引擎（B-c 软约束 + B-III 演进）【规划待执行，未开工】
+
+> 经 /grill-me 与 Jovi 逐点确认的完整规划。A 部分已实现，B 部分待执行。数据/链路现状见本 section 的「链路核账」。
+
+### 目标
+用现成的六类指标（MACD/KDJ/RSI/威科夫结构/道氏趋势/ATR 波动）在窄区间内随历史 IC 缓慢加权更新，合成 0-100 综合买卖强度分 `trade_score`，映射成「可加/观望/可减」买卖档位并叠加到 K 线；全程 `research_only=true / actionable=false / not_calibrated`，达标才允许「转正」。
+
+### 已确认决策（Jovi 拍板）
+- **B-c 更新哲学**：软约束自适应——权重仅在窄区间（默认基线 ±20%）内随历史 IC 缓慢摆动，总权归一，全程不标 calibrated；自动累积 IC 记录，达到样本+walk-forward 门槛才可转正。
+- **B-III 产物流向**：先做前端研究标注买卖点（B-I，今天就有）+ 每天累积历史信号事件（B-II，为转正攒证据）。
+- **B-X 权重存储**：版本化 JSON 配置（新权重+版本号+IC 证据哈希，幂等写盘，可审计可回滚）。
+- **B-P 落地顺序**：先前端读现有 bundle 数据现算画买卖点；B-Q（bundle 携带 trade_score、服务器也展示）作后续演进。
+- **不用 GPU**：34 只×百根K线的因子加权+IC 是 CPU 秒级纯数学，4070S 不参与初始阶段。
+
+### 已有基础（代码核实，勿重复造）
+- 35 因子值已算好：`backend/app/utils/feature_store.build_feature_frame`（含 macd_norm/kdj_j/rsi14/atr_pct/volume_ratio/obv_slope/mfi14/cmf20/adx14/cci20/wr14/roc12/rsrs_zscore/rps20/60/120/chip_concentration）
+- IC 评估引擎已存在：`backend/app/services/factor_analysis_service.py` 的 `factor_metric()`（IC/rank_IC/ICIR/spread/turnover），定位已是「diagnostic_only_not_strategy_promotion / UNKNOWN / walk-forward required」
+- 前端结构因子标签已有：`frontend/src/lib/format.ts` 的 `wyckoffLabel/dowLabel/atrRiskLabel`
+- 固定启发式权重已有：`signal_center_service.py` 的 sector_weights / heat(0.5/0.3/0.2) / coefficient
+- **缺口（B 要新建的）**：1) 六类指标→trade_score 综合因子与窄区间加权；2) 权重随 IC 软约束更新的闭环（评估结果→更新版本化 JSON）；3) 买卖档位映射+阈值；4) 历史信号事件累积序列；5) 与现有 19:07 计算链的每日调度捆绑。
+
+### 链路核账（2026-11-17 实测）
+- 本地 19:07 生成 34 只决策 bundle（含五期限预测），当日 19:11 已 accepted 并落盘服务器 `/app/.local/display-v113-a0d52e4/`。
+- 服务器生产配置 `workspace_research_source=local_bundle`，页面读该磁盘 bundle；`LocalDisplayReader.read_overview()` 实测返回 34 只、`generated_at=2026-11-17T11:07:57Z`。
+- 结论：数据→决策→服务器→页面链路通；`decision_board_snapshots` 等 PostgreSQL 老表停在 10 月与本页面无关（非本链路数据源）。34/34 标记 `stale/unverified/research_only/actionable=false` 是公开源的诚实设计，非故障。
+- 邮件推送仍缺 SMTP 配置（CONFIG_REQUIRED），按 Jovi 指示搁置。
+
+### 待执行任务（开工时逐条勾选）
+- [x] **(B 前奏 A)** 前端历史买卖点标注（P2-3 折衷）：历史段读 bars[].indicators 的 MACD/KDJ/RSI/ATR_pct 逐K线画买卖箭头；当前最新一根叠加威科夫/道氏/ATR 结构的 trade_score 锚点（structure_v1 作为 prop 传入 EtfChart）；结构因子自 B-II 起逐日累积。纯展示不动 bundle 契约。
+- [x] (A-1) 基线触发规则 v0：买点(超卖金叉/超卖) + 卖点(超买见顶/死叉/TD9) + ATR p95 警示，research_only
+- [x] (A-2) `frontend/src/lib/tradeSignal.ts`：signalSeries/classifyBar/tradeScore（六因子加权 0-100）
+- [x] (A-3) chartAdapter 注册 tradeSignalPoint + tradeAnchorText overlay，历史 K 线买卖箭头 + 当前端锚点
+- [x] (A-4) EtfChart 默认叠加 signalSeries；Detail.vue 传 structure_v1 算 tradeScore 锚点
+- [x] (A-5) 验证：258 全量测试过 + vue-tsc 干净 + vite build 成功 + 真实 bundle 数据信号量合理（~7买/15卖/34只）
+- [x] (A-6) 生产验证：公网 200；新容器 api/worker healthy；页面读取 34 只；线上 chunk 含 tradeSignalPoint（浏览器目检待 Jovi 自行登录确认）
+- [x] (A-7) 提交/受控部署：分支 feature/trade-signal-annotations-20261118（eb259ee）；镜像 deploy-eb259ee；cutover 成功，旧容器保留可回滚；收据 docs/audits/PRODUCTION_DEPLOYMENT_RECEIPT_20261118.md
+- [ ] (B-1) 设计 trade_score 合成与归一化（六类子分→0-100）【A 已完成基线 v0，B-c 演进遗留】
+- [ ] (B-2) 版本化权重 JSON 方案 + 幂等写盘 + 审计哈希
+- [ ] (B-3) 软约束自适应：权重在 ±20%/总权归一内随 IC 更新（B-c）
+- [ ] (B-4) 买卖档位（可加/观望/可减）映射 + 阈值
+- [ ] (B-5) 历史信号事件每日累积序列（B-II 证据，含 walk-forward 门槛判定）
+- [ ] (B-6) 每日调度与现有 19:07 计算链捆绑
+- [ ] (B 门禁) 全程 research_only/not_calibrated 标注；任何转正需双审查+人工批准 + walk-forward 报告
+- [ ] (B-Q 后续) bundle 携带 trade_score，服务器页面同步展示

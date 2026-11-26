@@ -53,6 +53,7 @@ docker build -f backend/Dockerfile -t china-fund-decision:deploy-<sha> .
 
 | 日期 | 错误现象 | 根因 | 解决方案 | 预防 |
 | --- | --- | --- | --- | --- |
+| 2026-11-14 | Windows 全量 pytest 两处预存失败：`test_structure_weight_replay` 多用例（代码抛 `frozen_formula_source_changed_review_required`，测试期望 `source_code_identity_mismatch`）、`test_historical_archive[symlink]` | 前者高度疑似 CRLF 检出改变冻结公式文件哈希（CI ubuntu 绿、Windows 挂）；后者为 Windows 符号链接权限。均已在 main `1c0fd6d` 上复现 = 预存，非新改动引入 | 未改（语义裁决留 structure 负责人）；部署判读按"CI 绿 + Windows 环境类"放行并记录 | Windows 涉及文件哈希/符号链接的测试失败先与 main 对照定性，再决定是否阻断 |
 | 2026-11-08 | 沙盘演练起 API 失败：`生产环境必须配置已存在的 OCR_TRANSIENT_ROOT`，随后 `local_paddle 必须配置已存在的 OCR_LOCAL_MODEL_DIR` | `APP_ENV=production` 时配置校验要求 OCR 相关目录存在且私有；生产编排靠 tmpfs 与挂载满足 | 演练时补 tmpfs `/var/lib/china-fund-decision/ocr-transient` + `OCR_TRANSIENT_ROOT`，并显式 `OCR_MODE=disabled`（生产规格本就完整） | 本地演练若用 `APP_ENV=production`，必须一并带上生产的 OCR 环境变量与 tmpfs，否则会误判镜像有问题 |
 | 2026-11-07 | docs 重组后 `test_password_auth::test_deployment_handoffs…` 失败 | 该测试断言 6 份部署文档存在且含认证标记，其中 2 份 V070 文档在删除清单内；引用扫描输出被截断漏检 | 测试文档清单改为 4 份活文档（ALIYUN 移至 docs/guides/，已验证全部承载 6 个标记） | 引用扫描不得截断输出；删除文档前对 `backend/tests` 全量 grep 文件名 |
 | 2026-11-07 | ✅已修复：下行 PR63 timeout 守卫回归 | — | 守卫已改为 `not kwargs.get('timeout')` 并合入 main（fix/bounded-tencent-timeout-20261107）；`test_tencent_history_freshness` 恢复通过 | 同下 |
