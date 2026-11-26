@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
+import { openLegacyDecisionBoard } from './legacy-decision-board'
 
 async function paneHeight(chart: Locator) {
   const canvas = chart.locator('canvas').first()
@@ -84,7 +85,7 @@ test('global search to ETF Detail retains chart-surface modal entry', async ({ p
 
 test('original-board row uses its real parent navigation contract then opens the shared chart dialog', async ({ page }, info) => {
   await page.goto('/')
-  const frame = page.frameLocator('iframe[title="原版 ETF 决策快照"]')
+  const frame = await openLegacyDecisionBoard(page)
   await frame.locator('#searchInput').fill('512480')
   const row = frame.locator('.decision-data-row[data-code="512480.SH"]').first()
   await expect(row).toBeVisible()

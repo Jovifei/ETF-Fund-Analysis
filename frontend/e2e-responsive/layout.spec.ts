@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { openLegacyDecisionBoard } from '../e2e/legacy-decision-board'
 
 const screens = [[320, 720], [390, 844], [430, 932], [768, 1024],
   [1024, 768], [1440, 1050], [1920, 1080], [3840, 1920]] as const
@@ -23,7 +24,9 @@ for (const [width, height] of screens) {
           await expect(page.getByTestId('mobile-decision-row').first()).toContainText('历史收盘')
           await page.getByTestId('mobile-decision-row').first().screenshot({path:info.outputPath(`summary-${width}.png`)})
         } else {
-          const frame = page.frameLocator('iframe[title="原版 ETF 决策快照"]')
+          await expect(page.locator('#etf-decisions .decision-row').first()).toBeVisible()
+          await noPageOverflow(page)
+          const frame = await openLegacyDecisionBoard(page)
           await expect(frame.locator('.decision-data-row').first()).toBeVisible()
           await expect.poll(() => frame.locator('html').evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1)
         }
@@ -86,7 +89,10 @@ test('mobile and original table share filters, horizons, actions and safe explan
   )).toEqual(['1', '3', '7', '20', '60'])
   await mobile.getByLabel('研究期限').selectOption('7')
   await page.setViewportSize({ width: 1440, height: 1050 })
-  const frame = page.frameLocator('iframe[title="原版 ETF 决策快照"]')
+  const native = page.locator('#etf-decisions .native-decision-wrapper')
+  await expect(native.getByLabel('搜索决策标的')).toHaveValue('512480')
+  await expect(native.getByLabel('研究期限')).toHaveValue('7')
+  const frame = await openLegacyDecisionBoard(page)
   await expect(frame.locator('#searchInput')).toHaveValue('512480')
   await expect(frame.locator('#horizonSelect')).toHaveValue('7')
   await page.setViewportSize({ width: 390, height: 844 })
