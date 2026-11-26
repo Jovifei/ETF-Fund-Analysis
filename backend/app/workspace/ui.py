@@ -4,6 +4,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from starlette.datastructures import Headers
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import FileResponse, JSONResponse, RedirectResponse
 
 from app.workspace.config import workspace_settings
@@ -11,16 +13,32 @@ from app.workspace.original_board import original_board_frame
 
 DIST = Path(__file__).resolve().parents[1] / "workspace_dist"
 UI_PATHS = frozenset({"/login", "/register", "/", "/matrix", "/boards", "/analysis", "/watchlist", "/holdings", "/ai", "/research", "/research/us-markets", "/research/news", "/review", "/factors", "/history", "/settings", "/profile", "/system", "/decision/1430", "/legacy", "/workbench/1430", "/workbench/kline"})
+COMPRESSIBLE_MARKET_READS = frozenset({
+    "/api/decision-board", "/api/workspace/overview", "/api/workspace/us-markets-research",
+})
+INSTRUMENT_CHART_READ = re.compile(r"/api/workspace/instruments/\d{6}\.(?:SH|SZ|BJ)/chart", re.IGNORECASE)
 
 
 class WorkspaceMiddleware:
     def __init__(self, app):
         self.app = app
+        self.compressed_read = GZipMiddleware(self._serve_http, minimum_size=1024, compresslevel=4)
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+        path = scope.get("path", "")
+        if scope.get("method") == "GET" and (
+            path.startswith("/workspace-assets/")
+            or path in COMPRESSIBLE_MARKET_READS
+            or INSTRUMENT_CHART_READ.fullmatch(path)
+        ) and "range" not in Headers(scope=scope):
+            await self.compressed_read(scope, receive, send)
+            return
+        await self._serve_http(scope, receive, send)
+
+    async def _serve_http(self, scope, receive, send):
         path, method = scope.get("path", ""), scope.get("method", "GET")
         protected_response = path.startswith(("/api/workspace/", "/api/bridge/", "/api/search/"))
 

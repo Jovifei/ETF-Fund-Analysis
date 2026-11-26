@@ -4,8 +4,13 @@ import { openLegacyDecisionBoard } from './legacy-decision-board'
 test('original ETF matrix, source status and light data queue share the canonical backend', async ({ page, request }, info) => {
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
+  const matrixResponse = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/decision-board' && url.searchParams.get('view') === 'matrix'
+  })
   await page.goto('/matrix')
   await expect(page).toHaveURL(/\/#etf-decisions$/)
+  expect((await matrixResponse).ok()).toBeTruthy()
   await expect(page.getByRole('heading', { name: 'ETF 决策研判矩阵', exact: true })).toBeVisible()
   const original = await openLegacyDecisionBoard(page)
   await expect(original.locator('.decision-data-row').first()).toBeVisible()

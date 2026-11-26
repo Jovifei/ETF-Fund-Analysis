@@ -439,20 +439,58 @@ def test_task_run_returns_controlled_busy_when_decision_board_refresh_is_running
 
 
 def test_private_api_reads_snapshot_and_queues_refresh(db_session, bootstrapped) -> None:
-    DecisionBoardService().refresh(db_session, generated_at=datetime(2026, 8, 31, 10, 30, tzinfo=SHANGHAI))
+    built = DecisionBoardService().refresh(db_session, generated_at=datetime(2026, 8, 31, 10, 30, tzinfo=SHANGHAI))
+    history = [
+        {"date": "2026-08-27", "close": 1.15},
+        {"date": "2026-08-28", "close": 1.20, "open": 1.17},
+        {"date": "2026-08-31", "close": 1.24, "is_provisional": True},
+        {"date": "2026-09-01", "close": 1.32, "not_actual": True},
+        {"date": "2026-09-02", "close": 1.39, "is_forecast": True},
+    ]
+    payload = built.snapshot.payload_json
+    built.snapshot.payload_json = {
+        **payload,
+        "rows": [
+            {**row, "history": history} if row["ts_code"] == "510300.SH" else row
+            for row in payload["rows"]
+        ],
+    }
     db_session.commit()
 
     client = TestClient(app)
-    response = client.get("/api/decision-board?horizon=7")
-    detail = client.get("/api/decision-board/510300.SH?horizon=7")
+    selection = {"horizon": 7, "snapshot_id": built.snapshot.snapshot_id}
+    response = client.get("/api/decision-board", params=selection)
+    matrix_response = client.get("/api/decision-board", params={**selection, "view": "matrix"})
+    detail = client.get("/api/decision-board/510300.SH", params=selection)
     queued = client.post("/api/decision-board/refresh")
 
     assert response.status_code == 200
     assert response.json()["selected_forecast_horizon"] == 7
     assert response.json()["selected_horizon"] == 7
     assert all(isinstance(group, list) for group in response.json()["groups"].values())
+    assert matrix_response.status_code == 200
+    assert matrix_response.headers["cache-control"] == "private, no-store"
+    assert matrix_response.headers["content-encoding"] == "gzip"
+    matrix = matrix_response.json()
+    full = response.json()
+    assert matrix["snapshot_id"] == full["snapshot_id"]
+    assert matrix["selected_horizon"] == full["selected_horizon"]
+    assert matrix["counts"] == full["counts"]
+    assert "groups" not in matrix
+    assert [row["ts_code"] for row in matrix["rows"]] == [row["ts_code"] for row in full["rows"]]
+    for row, original in zip(matrix["rows"], full["rows"], strict=True):
+        assert row["grade_reason"] == original["grade_reason"]
+        assert row["forecasts"] == original["forecasts"]
+        assert row["structure_v1"] == original["structure_v1"]
+        assert "forecast_scenario" not in row
+        assert "support_resistance" not in row or set(row["support_resistance"]) <= {
+            "nearest_support", "nearest_resistance",
+        }
+    target = next(row for row in matrix["rows"] if row["ts_code"] == "510300.SH")
+    assert target["history"] == [{"date": "2026-08-28", "close": 1.20}]
     assert detail.status_code == 200
     assert detail.json()["ts_code"] == "510300.SH"
+    assert detail.json()["history"] == history
     assert queued.status_code == 202
     assert queued.json()["task_id"]
 

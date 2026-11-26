@@ -15,16 +15,16 @@ function horizonInput(event:Event){emit('controls',{filter:props.filter,horizon:
 </script>
 <template>
   <section class="mobile-decision-board" data-testid="mobile-decision-board" aria-label="ETF 决策快照窄屏摘要">
-    <p v-if="sectorTiming.available" class="small-note" data-testid="sector-timing-strip" role="status">
-      板块观察（研究向）· {{ sectorTiming.headline }}
-      <span v-if="sectorTiming.calibrationStatus"> · {{ sectorTiming.calibrationStatus }}</span>
-    </p>
     <p class="small-note">与完整指标表使用同一快照；点标的查看完整指标。研究状态不是交易授权。</p>
     <div class="mobile-decision-controls">
       <label>筛选决策标的<input :value="filter" maxlength="128" aria-label="筛选决策标的" placeholder="代码、名称或分级" @input="filterInput"/></label>
       <label>研究期限<select :value="horizon" aria-label="研究期限" @change="horizonInput"><option v-for="h in (board?.read_model_version==='local-display-v2'?[1,3,7,20,60]:[1,3,7,20,60])" :key="h" :value="h">{{h}} 个交易日</option></select></label>
     </div>
     <p class="small-note">快照 {{stamp(board?.generated_at)}} · {{rows.length}} 个标的 · {{board?.freshness??'missing'}}</p>
+    <p v-if="sectorTiming.available" class="small-note" data-testid="sector-timing-strip" role="status">
+      板块观察（研究向）· {{ sectorTiming.headline }}
+      <span v-if="sectorTiming.calibrationStatus"> · {{ sectorTiming.calibrationStatus }}</span>
+    </p>
     <p v-if="!board" role="status">等待决策快照。</p><p v-else-if="!rows.length" role="status">没有匹配标的。</p>
     <section v-for="group in groups" :key="group.grade" class="mobile-decision-group">
       <h3>{{group.grade}} <small>{{group.rows.length}} 个</small></h3>

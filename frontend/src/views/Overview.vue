@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onActivated, onDeactivated, ref, nextTick } from 'vue'
+import { computed, defineAsyncComponent, onActivated, onDeactivated, ref, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { RefreshCw } from 'lucide-vue-next'
 import { useQuery } from '../lib/query'
@@ -10,16 +10,21 @@ import { num, pct, direction, stamp, record, numeric } from '../lib/format'
 import { useSession } from '../stores/session'
 import OriginalDecisionBoard from '../components/OriginalDecisionBoard.vue'
 import Badge from '../components/Badge.vue'
-import EtfChart from '../components/EtfChart.vue'
 import TaskProgress from '../components/TaskProgress.vue'
-import OutlookPanel from '../components/OutlookPanel.vue'
 import PageState from '../components/PageState.vue'
 import DataHealth from '../components/DataHealth.vue'
 import ContextReadStatus from '../components/ContextReadStatus.vue'
-import SectorDrawer, { type SectorItem } from '../components/SectorDrawer.vue'
+import type { SectorItem } from '../components/SectorDrawer.vue'
 import UsMarketsResearchCard, { type UsMarketsReadView } from '../components/UsMarketsResearchCard.vue'
 import type { ChartData, ContextReadView, DataJob } from '../lib/types'
 defineOptions({ name: 'MarketOverview' })
+const EtfChart = defineAsyncComponent(() => import('../components/EtfChart.vue'))
+const OutlookPanel = defineAsyncComponent(() => import('../components/OutlookPanel.vue'))
+const SectorDrawer = defineAsyncComponent(() => import('../components/SectorDrawer.vue'))
+const outlookOpened = ref(false)
+function openOutlook(event: Event) {
+  if ((event.currentTarget as HTMLDetailsElement).open) outlookOpened.value = true
+}
 type IndexChart = ChartData & {summary?:{price:number|null;change_ratio:number|null;source_time:string|null}}
 // Keep this list aligned with the bounded index-history provider contract.
 const INDEX_HISTORY_CONTEXTS = new Set(['cn-shanghai-composite', 'cn-csi300', 'cn-csi-all'])
@@ -114,7 +119,6 @@ async function recompute(){if(busy.value)return;busy.value=true;error.value='';t
   <p v-if="snapshot.error.value" class="notice" role="alert">{{snapshot.error.value}}</p><nav class="section-tabs" aria-label="总览内容"><a href="#etf-decisions">ETF 决策快照</a><a href="#market-pulse">宏观与美股</a><a href="#market-boards">行业与概念</a><RouterLink to="/analysis">搜索全部 ETF / LOF</RouterLink></nav>
   <div v-if="route.query.mode === '1430'" class="notice warning-notice">14:30 为同一总览的研究模式，不是另一套动作。历史分钟验证尚未取得资格。</div>
   <p v-if="localMode" class="notice" data-testid="local-bundle-generation">网站只读展示 · 批次 {{generation??'尚未收到'}}{{snapshot.data.value?.is_stale?' · 已过期或历史版本':''}}；采集和计算在本机完成。<span v-if="!snapshotReady">尚无可消费批次，未回退其他数据源。</span></p>
-  <DataHealth v-if="canSync" ref="dataHealth"/>
   <p v-if="localMode && !snapshotReady" class="notice" role="status">尚无可消费批次；请在本机更新后主动重新读取。</p>
   <p v-if="market.error.value" data-testid="market-context-read-error" class="notice warning-notice" role="alert">市场上下文读取失败，保留同批次上次结果：{{market.error.value}}</p>
   <ContextReadStatus v-if="market.data.value?.read_contract" data-testid="market-context-status" :view="market.data.value"/>
@@ -123,6 +127,7 @@ async function recompute(){if(busy.value)return;busy.value=true;error.value='';t
   <section id="etf-decisions" class="etf-decisions-section">
     <OriginalDecisionBoard ref="board" :generation="generation" :ready="snapshotReady"/>
   </section>
+  <DataHealth v-if="canSync" ref="dataHealth"/>
 
   <!-- 2. 大盘与美股研究联动 -->
   <section id="market-pulse" class="market-pulse-section">
@@ -169,7 +174,7 @@ async function recompute(){if(busy.value)return;busy.value=true;error.value='';t
 
   <!-- 5. 离线工具与预测边界 (Collapsible) -->
   <details v-if="canSync" class="card section"><summary class="card-header">优先准备 ETF 历史与存储检查</summary><div class="card-body"><p>目录可搜索不等于历史已下载。先预览最多30只，再确认加入研究池；按已知市场市值/成交额优先，未知规模排后。不会下载所有市场基金。</p><div class="toolbar"><label>每批 <input v-model.number="prepareLimit" type="number" min="1" max="30" style="width:80px"/></label><label>已知市值至少 <input v-model.number="prepareScale" type="number" min="0" max="1000" style="width:90px"/>亿元</label><button class="button" @click="previewHistory">预览历史准备清单</button></div><div v-if="plan"><p>{{plan.note}}</p><p v-for="item in plan.items" :key="item.ts_code">{{item.name}} {{item.ts_code}} · 已存 {{item.bars}} 根 · {{item.market_cap_cny==null?'市值未知':num(item.market_cap_cny/1e8)+'亿元'}}</p><button class="button primary" :disabled="!plan.codes.length" @click="prepareHistory">确认准备 {{plan.codes.length}} 只历史</button></div><p>当前数据库 {{bytes(storage.data.value?.database_bytes)}} · 已存日线 {{storage.data.value?.daily_bar_rows??'—'}} 条 · 应用所在文件系统可用 {{bytes(storage.data.value?.application_disk_free_bytes)}}</p><small>{{storage.data.value?.note}}。E盘归档使用 docs/HISTORY_STORAGE_V103.md 中的只读导出流程；不会同步正在运行的SQLite文件。</small><div v-if="!localMode" class="toolbar" style="margin-top: 12px;"><button class="button" :disabled="busy" @click="recompute">重算已存历史指标</button><span class="small-note">已有 K 线但决策快照为空：可先离线重算。单只基金数据不全，不影响其他标的；无历史时在 ETF 详情补齐。</span></div></div></details>
-  <details class="card section"><summary class="card-header">日／周／月预测的计算与边界</summary><div class="card-body"><OutlookPanel/></div></details>
+  <details class="card section" @toggle="openOutlook"><summary class="card-header">日／周／月预测的计算与边界</summary><div class="card-body"><OutlookPanel v-if="outlookOpened"/></div></details>
   <SectorDrawer v-if="drawerOpen" v-model="drawerOpen" :sector="selectedSector" :generation="generation" />
 </section></template>
 <style scoped>

@@ -53,6 +53,8 @@ test('market context cards expose persisted history and catalog rows open the sa
   await expect(page.locator('.market-context-card').first()).toBeVisible()
   await page.locator('.market-context-card').first().click()
   await expect(page.locator('.market-context-detail')).toBeVisible()
+  await page.getByText('日／周／月预测的计算与边界', { exact: true }).click()
+  await expect(page.getByRole('button', { name: '计算日 / 周 / 月研究' })).toBeVisible()
 
   await page.goto('/analysis?q=512480')
   const row = page.locator('tbody tr').first()

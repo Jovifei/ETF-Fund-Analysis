@@ -54,7 +54,7 @@ function escape(event: KeyboardEvent) {
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
 }
 watch(() => route.fullPath, () => { mobileOpen.value = false; notice.value = '' })
-watch(() => session.authenticated, value => { if (value) { void readStatus(); void loadPreferences() } })
+watch(() => session.authenticated, value => { if (value) { void readStatus(); void loadPreferences() } }, { immediate: true })
 watch([() => session.ready, () => session.authenticated, () => route.path], () => {
   if (!session.ready) return
   const isAuth = ['/login','/register'].includes(route.path)
@@ -68,7 +68,7 @@ let timer: ReturnType<typeof setInterval> | undefined
 onMounted(async () => { if (typeof window.matchMedia==='function') {
   narrowQuery=window.matchMedia('(max-width:680px)');breakpointChanged(narrowQuery)
   narrowQuery.addEventListener('change',breakpointChanged)
-} try { const saved = localStorage.getItem('etf-workspace-sidebar'); if (saved && ['expanded', 'compact', 'hidden'].includes(saved)) sidebar.value = saved } catch {} window.addEventListener('workspace-preferences', applyPreferences); window.addEventListener('session-expired', expire); window.addEventListener('keydown', escape); await session.load(); await readStatus(); timer = setInterval(() => { if (!document.hidden) void readStatus() }, 60000) })
+} try { const saved = localStorage.getItem('etf-workspace-sidebar'); if (saved && ['expanded', 'compact', 'hidden'].includes(saved)) sidebar.value = saved } catch {} window.addEventListener('workspace-preferences', applyPreferences); window.addEventListener('session-expired', expire); window.addEventListener('keydown', escape); await session.load(); timer = setInterval(() => { if (!document.hidden) void readStatus() }, 60000) })
 onBeforeUnmount(() => { narrowQuery?.removeEventListener('change',breakpointChanged);document.body.classList.remove('mobile-navigation-open'); clearInterval(timer); window.removeEventListener('workspace-preferences', applyPreferences); window.removeEventListener('session-expired', expire); window.removeEventListener('keydown', escape) })
 </script>
 <template>

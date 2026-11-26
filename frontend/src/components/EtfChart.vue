@@ -117,7 +117,6 @@ async function closeExpanded(){
  expanded.value=false
  releaseDialogScrollLock(scrollLockToken);scrollLockToken=null
  await nextTick()
- adapter?.chart.resize()
  returnFocus?.focus()
  returnFocus=null
 }
@@ -127,7 +126,6 @@ async function toggleExpanded(){
  expanded.value=true
  scrollLockToken??=acquireDialogScrollLock()
  await nextTick()
- adapter?.chart.resize()
  expandButton.value?.focus()
 }
 function key(event:KeyboardEvent){
