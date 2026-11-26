@@ -109,6 +109,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     import time
     from datetime import datetime
     from zoneinfo import ZoneInfo
+    from app.services.settlement import settled_session
 
     root = Path(args.root)
     config_path = Path(args.config) if args.config else root / "config" / "live.json"
@@ -220,11 +221,15 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(json.dumps({"status": "completed", "tasks": results}, indent=2, ensure_ascii=False))
         if mode == 'full' and getattr(args, 'prepare_base', False):
             with phase_diagnostic(args, 'base_validation'):
-                # Creation must observe its own publish time, exactly as df340e3 did.
-                # Pinning creation to the run-start sample would rank every freshly
-                # refreshed bar as "finished after the anchor" and reject it.
+                # Use completion time for freshness, but never change trade date.
+                completed_at = datetime.now(settings.timezone)
+                locked_session = settled_session(settings, run_now)
+                if settled_session(settings, completed_at) != locked_session:
+                    raise ValueError('settled session changed during base preparation')
                 base = create_base_manifest(settings, universe, code_sha=sha,
-                                            execution_hash=execution['execution_hash'])
+                                            now=completed_at, execution_hash=execution['execution_hash'])
+                if base.get('target_trade_date') != locked_session.isoformat():
+                    raise ValueError('base manifest has missing or mismatched settled session')
                 write_json_atomic(base_path, base)
         def validate_fast():
             if mode in {'fast', 'auto'}:
