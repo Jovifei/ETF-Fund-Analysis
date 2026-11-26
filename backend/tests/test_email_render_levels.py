@@ -6,6 +6,8 @@ reader sees levels and expected move without jumping to the later sections.
 Missing data must degrade to an empty/placeholder cell, never raise.
 """
 import importlib.util
+import json
+import subprocess
 import sys
 import types
 from pathlib import Path
@@ -93,3 +95,101 @@ def test_render_text_row_surfaces_levels_and_forecast(mod):
     text = mod.render_text(_ctx(mod, [ROW]), {})
     assert "明日预期" in text
     assert "3.8" in text
+
+
+@pytest.mark.parametrize("bad", [None, "false", 1, False])
+@pytest.mark.parametrize("slot", ["11:40", "14:30", "14:45"])
+def test_strategy_renderer_refuses_incomplete_or_untyped_gate(mod, monkeypatch, tmp_path, bad, slot):
+    gates = {f"G{i}": {"pass": True} for i in range(1, 8)}
+    if bad is None:
+        del gates["G7"]
+    else:
+        gates["G7"]["pass"] = bad
+    gate_path = tmp_path / "gates.json"
+    gate_path.write_text(json.dumps(gates), encoding="utf-8")
+    out = tmp_path / "out"
+    monkeypatch.setattr(mod, "setup_matplotlib", lambda: pytest.fail("strategy must be rejected before rendering"))
+    monkeypatch.setattr(sys, "argv", [
+        "render_strategy_email.py", "--input", str(tmp_path / "unused.json"),
+        "--date", "2026-11-26", "--slot", slot, "--gates", str(gate_path),
+        "--out", str(out), "--attach-dir", str(tmp_path / "png"),
+    ])
+
+    mod.main()
+
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["variant"] == "not_ready"
+    assert manifest["attachments"] == []
+
+
+@pytest.mark.parametrize("gate_text", [None, "{", "{}"])
+def test_close_renderer_refuses_unreadable_or_empty_gate_report(mod, monkeypatch, tmp_path, gate_text):
+    gate_path = tmp_path / "gates.json"
+    if gate_text is not None:
+        gate_path.write_text(gate_text, encoding="utf-8")
+    out = tmp_path / "out"
+    monkeypatch.setattr(sys, "argv", [
+        "render_strategy_email.py", "--input", str(tmp_path / "unused.json"),
+        "--date", "2026-11-26", "--slot", "收盘复核", "--gates", str(gate_path),
+        "--out", str(out), "--attach-dir", str(tmp_path / "png"),
+    ])
+
+    mod.main()
+
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["variant"] == "not_ready"
+    assert manifest["attachments"] == []
+
+
+def test_extract_cli_preserves_structure_into_rendered_rows(mod, tmp_path):
+    matching_date = '2026-11-26'
+    structure = {
+        'schema_version': 'structure_v1',
+        'as_of': matching_date,
+        'wyckoff_phase': 'accumulation',
+        'dow_phase': 'uptrend',
+        'atr_risk_bucket': 'high',
+        'atr14': 0.3,
+    }
+    codes = ('510300.SH', '512480.SH', '159915.SZ', '512000.SH', '510500.SH')
+    rows = [
+        {**ROW, 'ts_code': code, 'support_resistance': {
+            'snapshot_as_of_date': matching_date, 'atr14': 0.2,
+        }}
+        for code in codes
+    ]
+    rows[0]['structure_v1'] = structure
+    bundle = tmp_path / 'bundle.json'
+    bundle.write_text(json.dumps({
+        'manifest': {'sequence': 42},
+        'parts': {
+            'overview': {'rows': rows},
+            'details': {
+                codes[0]: {'structure_v1': {**structure, 'atr_risk_bucket': 'low'}},
+                codes[1]: {'structure_v1': structure},
+            },
+        },
+    }), encoding='utf-8')
+    sidecar = tmp_path / 'sidecar.json'
+    sidecar.write_text(json.dumps([
+        {**structure, 'ts_code': codes[2], 'as_of': '2026-11-25'},
+        {**structure, 'ts_code': codes[4], 'as_of': None},
+        {**structure, 'ts_code': codes[3]},
+    ]), encoding='utf-8')
+
+    result = subprocess.run(
+        [sys.executable, '-I', '-B', '-X', 'utf8', str(_RENDERER.with_name('extract_slim.py')),
+         str(bundle), '--structure-sidecar', str(sidecar)],
+        check=True, capture_output=True,
+    )
+    slim = json.loads(result.stdout)
+    assert slim['manifest']['sequence'] == 42
+    for i in (0, 1, 3):
+        assert slim['rows'][i]['structure_v1']['atr_risk_bucket'] == 'high'
+        assert slim['rows'][i]['structure_v1']['atr14'] == 0.3
+        assert slim['rows'][i]['atr14'] == 0.2
+    for i in (2, 4):
+        assert 'structure_v1' not in slim['rows'][i]
+    assert slim['rows'][0]['structure_v1']['research_only'] is True
+    html = mod.render_html(_ctx(mod, slim['rows']), [])
+    assert all(label in html for label in ('吸筹', '上升趋势', '高波'))

@@ -124,6 +124,41 @@ def test_network_timeout_is_hard_and_process_is_reaped():
     assert {p.pid for p in multiprocessing.active_children()}==before
 
 
+@pytest.mark.parametrize("startup,expected_waits", [(4.0, [1.0]), (6.0, [])])
+def test_provider_deadline_includes_worker_startup(monkeypatch, startup, expected_waits):
+    from app.providers import bounded_sdk
+
+    now = 0.0
+    events = []
+    waits = []
+
+    def start():
+        nonlocal now
+        now += startup
+        events.append("start")
+
+    def poll(seconds):
+        waits.append(seconds)
+        return False
+
+    worker = SimpleNamespace(
+        pid=10, start=start, is_alive=lambda: "terminate" not in events,
+        terminate=lambda: events.append("terminate"), join=lambda **kw: events.append("join"),
+        close=lambda: events.append("close"),
+    )
+    receiver = SimpleNamespace(close=lambda: None, poll=poll)
+    sender = SimpleNamespace(close=lambda: None)
+    context = SimpleNamespace(Pipe=lambda **kw: (receiver, sender), Process=lambda **kw: worker)
+    monkeypatch.setattr(bounded_sdk, "monotonic", lambda: now, raising=False)
+    monkeypatch.setattr(bounded_sdk.mp, "get_context", lambda method: context)
+
+    with pytest.raises(bounded_sdk.ProviderTimeout):
+        bounded_sdk.bounded_call("akshare", "fund_etf_spot_em", {}, timeout=5)
+
+    assert waits == expected_waits
+    assert events == ["start", "terminate", "join", "close"]
+
+
 def test_default_akshare_budget_covers_paged_public_spot_endpoint():
     assert Settings(_env_file=None).akshare_timeout_seconds == 60
 
