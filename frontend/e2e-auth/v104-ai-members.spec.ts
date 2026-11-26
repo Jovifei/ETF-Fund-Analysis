@@ -18,7 +18,7 @@ test('API profiles save encrypted without calling a model; tiers and account rem
  const data=await(await page.request.get('/api/workspace/ai/profiles')).text()
  expect(data).not.toContain('fixture-key-browser-only');expect(data).not.toContain('ciphertext')
  await page.screenshot({path:info.outputPath('v104-ai-profiles.png'),fullPage:true})
- await page.getByRole('tab',{name:'系统管理',exact:true}).click()
+ await page.goto('/profile')
  await page.getByLabel('新成员用户名',{exact:true}).fill('browser-tier-member')
  await page.getByLabel('新成员密码',{exact:true}).fill('test-only-tier-member-pass')
  await page.getByLabel('确认新成员密码',{exact:true}).fill('test-only-tier-member-pass')
